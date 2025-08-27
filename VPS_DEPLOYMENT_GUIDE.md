@@ -67,8 +67,13 @@ cd saas-bonus-system
 ```bash
 # Создание .env.production
 cat > .env.production << 'EOF'
+# Runtime
+NODE_ENV="production"
+PORT="3000"
+NEXT_PUBLIC_APP_URL="https://your-domain.com"
+
 # Database
-DATABASE_URL="postgresql://bonus_user:STRONG_PASSWORD_HERE@postgres:5432/bonus_system"
+DATABASE_URL="postgresql://bonus_user:STRONG_PASSWORD_HERE@postgres:5432/bonus_system?schema=public"
 
 # Redis
 REDIS_URL="redis://redis:6379"
@@ -76,23 +81,19 @@ REDIS_HOST="redis"
 REDIS_PORT="6379"
 
 # Clerk (получите production ключи)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_live_..."
-CLERK_SECRET_KEY="sk_live_..."
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
+CLERK_SECRET_KEY=""
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/auth/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_UP_URL="/auth/sign-up"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/dashboard"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/dashboard"
 
-# Application
-NEXT_PUBLIC_APP_URL="https://your-domain.com"
-NODE_ENV="production"
-
 # Security
-CRON_SECRET="$(openssl rand -base64 32)"
 JWT_SECRET="$(openssl rand -base64 32)"
+CRON_SECRET="$(openssl rand -base64 32)"
 
-# Sentry (опционально)
-NEXT_PUBLIC_SENTRY_DSN="https://..."
+# Sentry
+NEXT_PUBLIC_SENTRY_DISABLED="true"
 EOF
 ```
 
