@@ -37,16 +37,27 @@ export async function initializeAllBots() {
     }
 
     logger.info(`🤖 Найдено ${activeBotSettings.length} активных ботов`, {
-      bots: activeBotSettings.map((s) => ({
-        projectId: s.projectId,
-        username: s.botUsername,
-        projectName: s.project.name
-      })),
+      bots: activeBotSettings.map(
+        (s: {
+          projectId: string;
+          botUsername: string | null;
+          project: { name: string };
+        }) => ({
+          projectId: s.projectId,
+          username: s.botUsername,
+          projectName: s.project.name
+        })
+      ),
       component: 'bot-startup'
     });
 
     // Инициализируем боты с задержками для избежания rate limiting
-    const results = [];
+    const results: Array<{
+      projectId: string;
+      success: boolean;
+      username?: string;
+      error?: string;
+    }> = [];
     for (const botSettings of activeBotSettings) {
       try {
         logger.info(
@@ -94,8 +105,12 @@ export async function initializeAllBots() {
       }
     }
 
-    const successCount = results.filter((r) => r.success).length;
-    const failureCount = results.filter((r) => !r.success).length;
+    const successCount = results.filter(
+      (r: { success: boolean }) => r.success
+    ).length;
+    const failureCount = results.filter(
+      (r: { success: boolean }) => !r.success
+    ).length;
 
     logger.info(`🎉 Инициализация ботов завершена`, {
       total: activeBotSettings.length,

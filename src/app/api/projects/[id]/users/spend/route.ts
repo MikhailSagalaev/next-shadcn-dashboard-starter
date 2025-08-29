@@ -138,7 +138,7 @@ const rateLimitedPOST = withRateLimit(
   {
     limit: 30, // 30 запросов
     window: 60, // в минуту
-    keyGenerator: (req) => {
+    keyGenerator: (req: NextRequest) => {
       // Используем IP + projectId для ключа
       const forwarded = req.headers.get('x-forwarded-for');
       const ip = forwarded ? forwarded.split(',')[0] : 'unknown';

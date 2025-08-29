@@ -101,7 +101,8 @@ async function migrateUsersToLevels(): Promise<MigrationStats> {
           try {
             // Рассчитываем общую сумму покупок на основе транзакций EARN
             const totalPurchases = user.transactions.reduce(
-              (sum, transaction) => sum + Number(transaction.amount),
+              (sum: number, transaction: { amount: any }) =>
+                sum + Number(transaction.amount),
               0
             );
 
