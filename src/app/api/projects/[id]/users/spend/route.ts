@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { UserService, BonusService } from '@/lib/services/user.service';
 import { logger } from '@/lib/logger';
-import { withRateLimit } from '@/lib/with-rate-limit-redis';
+import { withRateLimit } from '@/lib';
 import {
   SpendBonusesSchema,
   validateRequest

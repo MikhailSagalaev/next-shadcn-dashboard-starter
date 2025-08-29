@@ -7,11 +7,13 @@
  * @author: AI Assistant + User
  */
 
-import { PrismaClient } from '@prisma/client';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - используем локальный обёрнутый клиент
+import { db } from '../src/lib/db';
 import { BonusLevelService } from '../src/lib/services/bonus-level.service';
 import { logger } from '../src/lib/logger';
 
-const db = new PrismaClient();
+// Используем общий экземпляр Prisma из приложения
 
 interface MigrationStats {
   totalUsers: number;
