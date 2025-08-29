@@ -1,3 +1,18 @@
+## [2025-08-13] - Унификация rate limiting, валидация и безопасность
+### 🎯 Добавлено
+- Единый модуль rate limiting с автоматическим выбором: Redis в production (REDIS_URL), in-memory в development (`src/lib/index.ts`)
+- Zod-валидация на уровне middleware для `GET /api/projects/{id}/users` и `POST /api/projects/{id}/notifications`
+- Security headers (CSP/Referrer/Permissions) распространены на страницы, не только `/api/*`
+
+### 🔄 Изменено
+- `GET /api/projects/{id}/users`: добавлены `page`, `limit`, `search`; ответ теперь `{ success, users, pagination }`
+- Импорты оберток лимитера унифицированы на `@/lib`
+- Улучшены заголовки для in-memory лимитера: корректный `X-RateLimit-Limit`
+
+### 🐛 Исправлено
+- Удалён устаревший endpoint `/api/projects/{id}/users/bulk-notification` и ссылки; используется `/api/projects/{id}/notifications`
+- Обновлена OpenAPI (`docs/openapi.yaml`): добавлен `/api/projects/{id}/notifications`, уточнены параметры `users` и ответы 429
+
 ## [2025-08-13] - Критические фиксы бонусов, безопасностью и типизацией Telegram
 ### 🎯 Добавлено
 - Защита API в `middleware.ts` для `/api/admin/*` и `/api/projects/*`
