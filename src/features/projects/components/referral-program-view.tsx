@@ -115,23 +115,26 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
 
   return (
     <div className='flex flex-1 flex-col space-y-6'>
+      {/* Back Button */}
+      <div>
+        <Button
+          variant='ghost'
+          size='sm'
+          onClick={() => router.push('/dashboard/projects')}
+          className='mb-4'
+        >
+          <ArrowLeft className='mr-2 h-4 w-4' />
+          Назад к проектам
+        </Button>
+      </div>
+
       {/* Header */}
       <div className='flex items-center justify-between'>
-        <div className='flex items-center space-x-4'>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={() => router.push('/dashboard/projects')}
-          >
-            <ArrowLeft className='mr-2 h-4 w-4' />
-            Назад к проектам
-          </Button>
-          <div>
-            <Heading
-              title={`Реферальная программа: ${project?.name || 'Проект'}`}
-              description='Настройка и статистика привлечения новых пользователей'
-            />
-          </div>
+        <div>
+          <Heading
+            title={`Реферальная программа: ${project?.name || 'Проект'}`}
+            description='Настройка и статистика привлечения новых пользователей'
+          />
         </div>
         <div className='flex items-center space-x-2'>
           <Badge variant={referralProgram?.isActive ? 'default' : 'secondary'}>
@@ -165,6 +168,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
               <ReferralSettingsForm
                 projectId={projectId}
                 referralProgram={referralProgram}
+                project={project}
                 onSuccess={handleSettingsUpdate}
               />
             </TabsContent>
@@ -281,7 +285,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
               <p className='text-muted-foreground text-sm'>
                 Ссылка формируется в формате:{' '}
                 <code className='text-xs'>
-                  maoka.ru/?utm_ref=&lt;userId&gt;
+                  {project?.domain || 'ваш-домен.ru'}/?utm_ref=&lt;userId&gt;
                 </code>
                 . Параметры utm_source/utm_medium/utm_campaign больше не
                 используются.

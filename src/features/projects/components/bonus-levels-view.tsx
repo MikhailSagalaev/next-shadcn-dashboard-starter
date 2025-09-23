@@ -279,23 +279,26 @@ export function BonusLevelsView({ projectId }: BonusLevelsViewProps) {
 
   return (
     <div className='flex flex-1 flex-col space-y-6'>
+      {/* Back Button */}
+      <div>
+        <Button
+          variant='ghost'
+          size='sm'
+          onClick={() => router.push('/dashboard/projects')}
+          className='mb-4'
+        >
+          <ArrowLeft className='mr-2 h-4 w-4' />
+          Назад к проектам
+        </Button>
+      </div>
+
       {/* Header */}
       <div className='flex items-center justify-between'>
-        <div className='flex items-center space-x-4'>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={() => router.push('/dashboard/projects')}
-          >
-            <ArrowLeft className='mr-2 h-4 w-4' />
-            Назад к проектам
-          </Button>
-          <div>
-            <Heading
-              title={`Уровни бонусов: ${project?.name || 'Проект'}`}
-              description='Настройка многоуровневой системы начисления бонусов'
-            />
-          </div>
+        <div>
+          <Heading
+            title={`Уровни бонусов: ${project?.name || 'Проект'}`}
+            description='Настройка многоуровневой системы начисления бонусов'
+          />
         </div>
         <div className='flex items-center space-x-2'>
           <Button variant='outline' size='sm' onClick={handleResetDefaults}>

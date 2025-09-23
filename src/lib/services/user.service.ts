@@ -27,12 +27,18 @@ export class UserService {
   static async createUser(data: CreateUserInput): Promise<User> {
     try {
       // Нормализуем телефон и email перед сохранением
-      let normalizedPhone = data.phone || '';
-      try {
-        const { normalizePhone } = await import('@/lib/phone');
-        normalizedPhone = normalizePhone(data.phone || '') || data.phone || '';
-      } catch {
-        // no-op
+      let normalizedPhone: string | null = data.phone || null;
+      if (normalizedPhone) {
+        try {
+          const { normalizePhone } = await import('@/lib/phone');
+          normalizedPhone = normalizePhone(normalizedPhone) || normalizedPhone;
+        } catch {
+          // no-op
+        }
+        // Если после нормализации получилась пустая строка, ставим null
+        if (!normalizedPhone || normalizedPhone.trim() === '') {
+          normalizedPhone = null;
+        }
       }
       const normalizedEmail = (data.email || '').trim();
 
@@ -94,14 +100,17 @@ export class UserService {
     email?: string,
     phone?: string
   ): Promise<User | null> {
-    if (!email && !phone) return null;
+    // Нормализуем входящие параметры
+    const normalizedEmail = email && email.trim() ? email.trim() : null;
+    const normalizedPhone = phone && phone.trim() ? phone.trim() : null;
+    if (!normalizedEmail && !normalizedPhone) return null;
 
     // Нормализуем и подбираем варианты телефона для максимального совпадения
     const phoneCandidates: string[] = [];
-    if (phone) {
+    if (normalizedPhone) {
       try {
         const { normalizePhone } = await import('@/lib/phone');
-        const trimmed = String(phone).trim();
+        const trimmed = normalizedPhone;
         const normalized = normalizePhone(trimmed);
         const digits = trimmed.replace(/\D/g, '');
 
@@ -127,12 +136,12 @@ export class UserService {
         phoneCandidates.push(trimmed);
       } catch {
         // В случае сбоя нормализации, используем исходное значение
-        phoneCandidates.push(String(phone));
+        phoneCandidates.push(normalizedPhone);
       }
     }
 
     const orConditions: Array<{ email?: string; phone?: string }> = [];
-    if (email) orConditions.push({ email });
+    if (normalizedEmail) orConditions.push({ email: normalizedEmail });
     for (const p of phoneCandidates) {
       orConditions.push({ phone: p });
     }
@@ -140,8 +149,8 @@ export class UserService {
     if (process.env.NODE_ENV !== 'production') {
       logger.info('Поиск пользователя по контакту (точный матч)', {
         projectId,
-        email,
-        phonePreview: phone ? String(phone).slice(-6) : undefined,
+        email: normalizedEmail,
+        phonePreview: normalizedPhone ? normalizedPhone.slice(-6) : undefined,
         phoneCandidates,
         component: 'user-service/findUserByContact'
       });
@@ -160,10 +169,10 @@ export class UserService {
     });
 
     // Фолбэк: если по точным строкам не нашли, ищем по совпадению последних цифр
-    if (!user && phone) {
+    if (!user && normalizedPhone) {
       try {
         const { normalizePhone } = await import('@/lib/phone');
-        const trimmed = String(phone).trim();
+        const trimmed = normalizedPhone;
         const normalized = normalizePhone(trimmed) || trimmed;
         const onlyDigits = (s: string) => s.replace(/\D/g, '');
         const candDigits = onlyDigits(normalized);

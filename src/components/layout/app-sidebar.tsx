@@ -44,10 +44,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { Icons } from '../icons';
+import { Logo } from '@/components/ui/logo';
 
 export const company = {
   name: 'Gupil.ru',
-  logo: IconPhotoUp,
+  logo: Logo,
   plan: 'Enterprise'
 };
 
@@ -68,7 +69,7 @@ export default function AppSidebar() {
             <SidebarMenuButton size='lg' asChild>
               <Link href='/dashboard'>
                 <div className='bg-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg'>
-                  <IconPhotoUp className='size-4' />
+                  <Logo className='size-4 text-white' width={16} height={16} />
                 </div>
                 <div className='flex flex-col gap-0.5 leading-none'>
                   <span className='font-semibold'>Gupil.ru</span>

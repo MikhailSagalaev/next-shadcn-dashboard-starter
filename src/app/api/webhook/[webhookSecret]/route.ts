@@ -145,10 +145,13 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       });
 
       // Проверяем условия для списания бонусов
-      const shouldSpendBonuses = 
-        (isGupilPromo && Number.isFinite(appliedRequested) && appliedRequested > 0) ||
-        (bonusBehavior === 'SPEND_ONLY' && Number.isFinite(appliedRequested) && appliedRequested > 0) ||
-        (bonusBehavior === 'SPEND_AND_EARN' && Number.isFinite(appliedRequested) && appliedRequested > 0);
+      const shouldSpendBonuses =
+        (isGupilPromo &&
+          Number.isFinite(appliedRequested) &&
+          appliedRequested > 0) ||
+        (bonusBehavior === 'SPEND_AND_EARN' &&
+          Number.isFinite(appliedRequested) &&
+          appliedRequested > 0);
 
       if (shouldSpendBonuses) {
         // Получаем текущий уровень пользователя для проверки лимитов оплаты
@@ -156,19 +159,20 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
           projectId,
           Number(user.totalPurchases)
         );
-        
+
         // Ограничиваем суммой доступных бонусов, чтобы не падать при нехватке
         const balance = await UserService.getUserBalance(user.id);
         let applied = Math.min(
           appliedRequested,
           Number(balance.currentBalance)
         );
-        
+
         // Применяем ограничение по проценту оплаты из уровня пользователя
         if (currentLevel && currentLevel.paymentPercent < 100) {
-          const maxPaymentByLevel = (totalAmount * currentLevel.paymentPercent) / 100;
+          const maxPaymentByLevel =
+            (totalAmount * currentLevel.paymentPercent) / 100;
           applied = Math.min(applied, maxPaymentByLevel);
-          
+
           logger.info('🔒 Применено ограничение по уровню пользователя', {
             projectId,
             orderId,
@@ -177,22 +181,28 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
             paymentPercent: currentLevel.paymentPercent,
             totalAmount,
             maxPaymentByLevel,
-            appliedBeforeLimit: Math.min(appliedRequested, Number(balance.currentBalance)),
+            appliedBeforeLimit: Math.min(
+              appliedRequested,
+              Number(balance.currentBalance)
+            ),
             appliedAfterLimit: applied,
             component: 'tilda-webhook'
           });
         }
-        
+
         if (applied <= 0) {
-          logger.warn('Запрошено списание, но баланс равен нулю или превышен лимит уровня', {
-            projectId,
-            orderId,
-            requested: appliedRequested,
-            currentBalance: balance.currentBalance,
-            userLevel: currentLevel?.name,
-            paymentPercent: currentLevel?.paymentPercent,
-            component: 'tilda-webhook'
-          });
+          logger.warn(
+            'Запрошено списание, но баланс равен нулю или превышен лимит уровня',
+            {
+              projectId,
+              orderId,
+              requested: appliedRequested,
+              currentBalance: balance.currentBalance,
+              userLevel: currentLevel?.name,
+              paymentPercent: currentLevel?.paymentPercent,
+              component: 'tilda-webhook'
+            }
+          );
         } else {
           logger.info('💰 Выполняем списание бонусов', {
             projectId,
@@ -211,9 +221,9 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
             user.id,
             applied,
             `Списание бонусов при заказе ${orderId}${isGupilPromo ? ' (промокод GUPIL)' : ''}`,
-            { 
-              orderId, 
-              source: 'tilda_order', 
+            {
+              orderId,
+              source: 'tilda_order',
               promocode: isGupilPromo ? 'GUPIL' : undefined,
               userLevel: currentLevel?.name,
               paymentPercent: currentLevel?.paymentPercent
@@ -233,8 +243,9 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       }
 
       // Проверяем, нужно ли начислять бонусы
-      const shouldEarnBonuses = bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'EARN_ONLY';
-      
+      const shouldEarnBonuses =
+        bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'EARN_ONLY';
+
       if (!shouldEarnBonuses) {
         logger.info('🚫 Начисление бонусов отключено для проекта', {
           projectId,
@@ -255,8 +266,12 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
             email: user.email,
             phone: user.phone,
             name: name,
-            currentBalance: Number((await UserService.getUserBalance(user.id)).currentBalance),
-            totalEarned: Number((await UserService.getUserBalance(user.id)).totalEarned)
+            currentBalance: Number(
+              (await UserService.getUserBalance(user.id)).currentBalance
+            ),
+            totalEarned: Number(
+              (await UserService.getUserBalance(user.id)).totalEarned
+            )
           },
           bonusBehavior,
           debug: {
@@ -275,6 +290,11 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         error: e instanceof Error ? e.message : String(e),
         component: 'tilda-webhook'
       });
+
+      // Если произошла ошибка при обработке бонусов, не продолжаем выполнение
+      throw new Error(
+        `Ошибка обработки бонусов: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
 
     // Начисляем бонусы за покупку с учётом уровня и реферальной системы
@@ -629,13 +649,31 @@ async function handlePOST(
           break;
 
         case 'purchase':
-          response = await handlePurchase(project.id, payload);
+          // Проверяем обязательные поля для покупки
+          if (!payload.purchaseAmount || !payload.orderId) {
+            throw new Error(
+              'purchaseAmount и orderId обязательны для действия purchase'
+            );
+          }
+          response = await handlePurchase(
+            project.id,
+            payload as WebhookPurchasePayload
+          );
           status = 200;
           success = true;
           break;
 
         case 'spend_bonuses':
-          response = await handleSpendBonuses(project.id, payload);
+          // Проверяем обязательные поля для списания бонусов
+          if (!payload.bonusAmount || !payload.orderId) {
+            throw new Error(
+              'bonusAmount и orderId обязательны для действия spend_bonuses'
+            );
+          }
+          response = await handleSpendBonuses(
+            project.id,
+            payload as WebhookSpendBonusesPayload
+          );
           status = 200;
           success = true;
           break;

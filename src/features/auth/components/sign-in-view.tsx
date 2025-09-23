@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { Logo } from '@/components/ui/logo';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Введите корректный email' }),
@@ -27,13 +28,18 @@ export default function SignInViewPage({ stars }: { stars: number }) {
   return (
     <div className='relative container grid h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-1 lg:px-0'>
       <div className='mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[400px]'>
-        <div className='flex flex-col space-y-2 text-center'>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            Добро пожаловать
-          </h1>
-          <p className='text-muted-foreground text-sm'>
-            Войдите в свой аккаунт
-          </p>
+        <div className='flex flex-col space-y-4 text-center'>
+          <div className='flex justify-center'>
+            <Logo className='text-primary' width={64} height={64} />
+          </div>
+          <div className='space-y-2'>
+            <h1 className='text-2xl font-semibold tracking-tight'>
+              Добро пожаловать
+            </h1>
+            <p className='text-muted-foreground text-sm'>
+              Войдите в свой аккаунт
+            </p>
+          </div>
         </div>
         <AuthForm />
         <p className='text-muted-foreground px-8 text-center text-sm'>
@@ -70,7 +76,10 @@ function AuthForm() {
         const apiError = (data?.error as string) || 'Ошибка входа';
         // Пробросить ошибки в форму, если есть детали
         if (data?.details?.fieldErrors) {
-          const fieldErrors = data.details.fieldErrors as Record<string, string[]>;
+          const fieldErrors = data.details.fieldErrors as Record<
+            string,
+            string[]
+          >;
           Object.entries(fieldErrors).forEach(([key, messages]) => {
             form.setError(key as keyof FormValues, {
               type: 'server',

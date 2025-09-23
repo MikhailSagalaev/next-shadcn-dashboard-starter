@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { Logo } from '@/components/ui/logo';
 
 const formSchema = z
   .object({
@@ -35,13 +36,18 @@ export default function SignUpViewPage() {
   return (
     <div className='relative container grid h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-1 lg:px-0'>
       <div className='mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[400px]'>
-        <div className='flex flex-col space-y-2 text-center'>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            Создать аккаунт
-          </h1>
-          <p className='text-muted-foreground text-sm'>
-            Зарегистрируйтесь как администратор системы
-          </p>
+        <div className='flex flex-col space-y-4 text-center'>
+          <div className='flex justify-center'>
+            <Logo className='text-primary' width={64} height={64} />
+          </div>
+          <div className='space-y-2'>
+            <h1 className='text-2xl font-semibold tracking-tight'>
+              Создать аккаунт
+            </h1>
+            <p className='text-muted-foreground text-sm'>
+              Зарегистрируйтесь как администратор системы
+            </p>
+          </div>
         </div>
         <AuthForm />
         <p className='text-muted-foreground px-8 text-center text-sm'>
@@ -80,7 +86,10 @@ function AuthForm() {
       if (!res.ok) {
         const apiError = (data?.error as string) || 'Ошибка регистрации';
         if (data?.details?.fieldErrors) {
-          const fieldErrors = data.details.fieldErrors as Record<string, string[]>;
+          const fieldErrors = data.details.fieldErrors as Record<
+            string,
+            string[]
+          >;
           Object.entries(fieldErrors).forEach(([key, messages]) => {
             // у нас нет confirmPassword с сервера, оставим только известные поля
             if (key === 'email' || key === 'password') {

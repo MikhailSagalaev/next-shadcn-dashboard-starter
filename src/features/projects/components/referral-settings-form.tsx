@@ -27,7 +27,7 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Save, AlertCircle, Users, Gift, DollarSign } from 'lucide-react';
-import type { ReferralProgram } from '@/types/bonus';
+import type { ReferralProgram, Project } from '@/types/bonus';
 
 const referralProgramSchema = z.object({
   isActive: z.boolean(),
@@ -58,12 +58,14 @@ type ReferralProgramFormData = z.infer<typeof referralProgramSchema>;
 interface ReferralSettingsFormProps {
   projectId: string;
   referralProgram?: ReferralProgram | null;
+  project?: Project | null;
   onSuccess: () => void;
 }
 
 export function ReferralSettingsForm({
   projectId,
   referralProgram,
+  project,
   onSuccess
 }: ReferralSettingsFormProps) {
   const { toast } = useToast();
@@ -324,7 +326,9 @@ export function ReferralSettingsForm({
             <ul className='ml-4 space-y-1 text-sm'>
               <li>
                 • Пользователь переходит по ссылке вида{' '}
-                <code>maoka.ru/?utm_ref=&lt;userId&gt;</code>
+                <code>
+                  {project?.domain || 'ваш-домен.ru'}/?utm_ref=&lt;userId&gt;
+                </code>
               </li>
               <li>
                 • При регистрации новый пользователь автоматически привязывается

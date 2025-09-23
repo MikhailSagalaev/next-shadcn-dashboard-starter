@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -101,6 +101,33 @@ export function BonusLevelDialog({
       isActive: level?.isActive ?? true
     }
   });
+
+  // Обновляем значения формы при изменении level
+  useEffect(() => {
+    if (level && open) {
+      console.log('Setting form values for level:', level);
+      reset({
+        name: level.name || '',
+        minAmount: level.minAmount || 0,
+        maxAmount: level.maxAmount,
+        bonusPercent: level.bonusPercent || 5,
+        paymentPercent: level.paymentPercent || 10,
+        isActive: level.isActive ?? true
+      });
+      setUnlimitedMax(level.maxAmount === null);
+    } else if (!level && open) {
+      // Сброс для создания нового уровня
+      reset({
+        name: '',
+        minAmount: 0,
+        maxAmount: null,
+        bonusPercent: 5,
+        paymentPercent: 10,
+        isActive: true
+      });
+      setUnlimitedMax(false);
+    }
+  }, [level, open, reset]);
 
   const handleUnlimitedMaxChange = (checked: boolean) => {
     setUnlimitedMax(checked);

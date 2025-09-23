@@ -34,12 +34,13 @@ import {
   IconBrandGithub,
   IconCoins
 } from '@tabler/icons-react';
+import { Logo } from '@/components/ui/logo';
 
 export type Icon = React.ComponentType<IconProps>;
 
 export const Icons = {
   dashboard: IconLayoutDashboard,
-  logo: IconCommand,
+  logo: Logo,
   login: IconLogin,
   close: IconX,
   product: IconShoppingBag,

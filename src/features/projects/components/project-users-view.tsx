@@ -354,23 +354,26 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     <div
       className={`flex flex-1 flex-col space-y-6 ${selectedUsers.length > 0 ? 'pb-24' : ''}`}
     >
+      {/* Back Button */}
+      <div>
+        <Button
+          variant='ghost'
+          size='sm'
+          onClick={() => router.push('/dashboard/projects')}
+          className='mb-4'
+        >
+          <ArrowLeft className='mr-2 h-4 w-4' />
+          Назад к проектам
+        </Button>
+      </div>
+
       {/* Header */}
       <div className='flex items-center justify-between'>
-        <div className='flex items-center space-x-4'>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={() => router.push('/dashboard/projects')}
-          >
-            <ArrowLeft className='mr-2 h-4 w-4' />
-            Назад к проектам
-          </Button>
-          <div>
-            <Heading
-              title={`Пользователи: ${project?.name || 'Проект'}`}
-              description={`Управление пользователями и их бонусами (${filteredUsers.length} пользователей)`}
-            />
-          </div>
+        <div>
+          <Heading
+            title={`Пользователи: ${project?.name || 'Проект'}`}
+            description={`Управление пользователями и их бонусами (${filteredUsers.length} пользователей)`}
+          />
         </div>
         <div className='flex items-center space-x-2'>
           <Button onClick={() => setShowCreateUserDialog(true)}>
