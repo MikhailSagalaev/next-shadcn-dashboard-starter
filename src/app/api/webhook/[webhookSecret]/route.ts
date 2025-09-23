@@ -82,6 +82,68 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     throw new Error('Должен быть указан email или телефон пользователя');
   }
 
+  // Получаем настройки проекта для определения поведения бонусов
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: { bonusBehavior: true }
+  });
+
+  if (!project) {
+    throw new Error('Проект не найден');
+  }
+
+  const bonusBehavior = project.bonusBehavior as
+    | 'SPEND_AND_EARN'
+    | 'SPEND_ONLY'
+    | 'EARN_ONLY';
+
+  // Получаем данные заказа
+  const totalAmount =
+    typeof payment.amount === 'string'
+      ? parseInt(payment.amount) || 0
+      : payment.amount || 0;
+
+  const appliedRequested =
+    typeof orderData.appliedBonuses === 'string'
+      ? parseFloat(orderData.appliedBonuses) || 0
+      : orderData.appliedBonuses || 0;
+
+  // Определяем является ли промокод GUPIL
+  const isGupilPromo =
+    typeof ((payment as any)?.promocode || (orderData as any)?.promocode) ===
+      'string' &&
+    ((payment as any)?.promocode || (orderData as any)?.promocode)
+      .trim()
+      .toUpperCase() === 'GUPIL';
+
+  // Проверяем условия для списания бонусов
+  // Бонусы списываются если:
+  // 1. Промокод GUPIL был применен (isGupilPromo = true)
+  // 2. Или настройка проекта позволяет списывать бонусы (SPEND_AND_EARN или SPEND_ONLY)
+  // 3. И есть примененные бонусы
+  const shouldSpendBonuses =
+    Number.isFinite(appliedRequested) &&
+    appliedRequested > 0 &&
+    (isGupilPromo ||
+      bonusBehavior === 'SPEND_AND_EARN' ||
+      bonusBehavior === 'SPEND_ONLY');
+
+  // Проверяем, нужно ли начислять бонусы
+  const shouldEarnBonuses =
+    bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'EARN_ONLY';
+
+  logger.info('🎯 Параметры заказа Tilda', {
+    projectId,
+    orderId: payment.orderid,
+    totalAmount,
+    appliedRequested,
+    isGupilPromo,
+    bonusBehavior,
+    shouldSpendBonuses,
+    shouldEarnBonuses,
+    component: 'tilda-webhook'
+  });
+
   try {
     // Сначала пытаемся найти пользователя
     let user = await UserService.findUserByContact(projectId, email, phone);
@@ -159,18 +221,6 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         bonusBehavior,
         component: 'tilda-webhook'
       });
-
-      // Проверяем условия для списания бонусов
-      // Бонусы списываются если:
-      // 1. Промокод GUPIL был применен (isGupilPromo = true)
-      // 2. Или настройка проекта позволяет списывать бонусы (SPEND_AND_EARN или SPEND_ONLY)
-      // 3. И есть примененные бонусы
-      const shouldSpendBonuses =
-        Number.isFinite(appliedRequested) &&
-        appliedRequested > 0 &&
-        (isGupilPromo ||
-          bonusBehavior === 'SPEND_AND_EARN' ||
-          bonusBehavior === 'SPEND_ONLY');
 
       if (shouldSpendBonuses) {
         logger.info('🎯 Условия для списания бонусов выполнены', {

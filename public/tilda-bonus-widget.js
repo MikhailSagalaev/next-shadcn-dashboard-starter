@@ -177,8 +177,8 @@
                  min="0"
                  style="display: none;">
           <button class="bonus-button" type="button"
-                  id="apply-bonus-button" 
-                  onclick="TildaBonusWidget.applyBonuses()"
+                  id="apply-bonus-button"
+                  onclick="TildaBonusWidget.applyOrReapplyBonuses()"
                   style="display: none;">
             Применить бонусы
           </button>
@@ -281,6 +281,46 @@
           subtree: true
         });
       }
+
+      // Слушаем события обновления корзины Tilda
+      document.addEventListener('tcart:updated', (event) => {
+        this.log('Получено событие обновления корзины Tilda');
+        // Обновляем отображение виджета при изменении корзины
+        setTimeout(() => {
+          this.updateWidgetUI();
+        }, 100);
+      });
+
+      // Слушаем события изменения количества товаров
+      document.addEventListener('click', (event) => {
+        if (
+          event.target.closest(
+            '.t706__product-plus, .t706__product-minus, .t706__product-del'
+          )
+        ) {
+          setTimeout(() => {
+            this.updateWidgetUI();
+            this.log('Обновляем виджет после изменения количества товаров');
+          }, 200);
+        }
+      });
+
+      // Слушаем события изменения количества через API Tilda
+      document.addEventListener('tcart:quantity:changed', (event) => {
+        this.log('Количество товаров изменено через API Tilda');
+        setTimeout(() => {
+          this.updateWidgetUI();
+          this.forceUpdateCartDisplay();
+        }, 150);
+      });
+
+      // Слушаем события пересчета корзины
+      document.addEventListener('tcart:recalculated', (event) => {
+        this.log('Корзина пересчитана');
+        setTimeout(() => {
+          this.updateWidgetUI();
+        }, 100);
+      });
     },
 
     onCartOpenDebounced: function () {
@@ -603,6 +643,41 @@
       }
     },
 
+    // Очистка и повторное применение бонусов
+    reapplyBonuses: function () {
+      try {
+        const currentAmount = this.state.appliedBonuses;
+        if (currentAmount > 0) {
+          this.log('Переприменяем бонусы:', currentAmount);
+
+          // Очищаем текущий промокод
+          if (typeof window.t_input_promocode__clearPromocode === 'function') {
+            try {
+              window.t_input_promocode__clearPromocode();
+            } catch (_) {}
+          }
+
+          // Повторно применяем бонусы
+          setTimeout(() => {
+            this.applyBonuses(currentAmount);
+          }, 100);
+        }
+      } catch (error) {
+        this.log('Ошибка при переприменении бонусов:', error);
+      }
+    },
+
+    // Универсальная функция применения/переприменения бонусов
+    applyOrReapplyBonuses: function () {
+      if (this.state.appliedBonuses > 0) {
+        this.log('Бонусы уже применены, переприменяем');
+        this.reapplyBonuses();
+      } else {
+        this.log('Бонусы не применены, применяем');
+        this.applyBonuses();
+      }
+    },
+
     // Применение бонусов
     applyBonuses: async function () {
       const amountInput = document.getElementById('bonus-amount-input');
@@ -655,23 +730,52 @@
 
         // Применяем скидку через нативный механизм Тильды как промокод с фиксированным дискаунтом
         try {
+          // Очищаем предыдущий промокод если был применен
+          if (typeof window.t_input_promocode__clearPromocode === 'function') {
+            try {
+              window.t_input_promocode__clearPromocode();
+            } catch (_) {}
+          }
+
+          // Применяем новый промокод с бонусами
           if (typeof window.t_input_promocode__addPromocode === 'function') {
             window.t_input_promocode__addPromocode({
               promocode: 'GUPIL',
               discountsum: amount
             });
+
+            // Вызываем пересчет промокода
             if (typeof window.tcart__calcPromocode === 'function') {
               try {
                 window.tcart__calcPromocode();
               } catch (_) {}
             }
+
+            // Полностью перерисовываем корзину
+            if (typeof window.tcart__reDrawTotal === 'function') {
+              try {
+                window.tcart__reDrawTotal();
+              } catch (_) {}
+            }
+
+            // Перерисовываем весь интерфейс корзины
             if (typeof window.tcart__reDraw === 'function') {
               try {
                 window.tcart__reDraw();
               } catch (_) {}
             }
+
+            // Сохраняем состояние корзины
+            if (typeof window.tcart__saveLocalObj === 'function') {
+              try {
+                window.tcart__saveLocalObj();
+              } catch (_) {}
+            }
           }
         } catch (_) {}
+
+        // Принудительно обновляем отображение суммы в корзине
+        this.forceUpdateCartDisplay();
 
         this.showSuccess(`Применено ${amount.toFixed(2)} бонусов.`);
       } catch (error) {
@@ -679,6 +783,80 @@
         this.log('Ошибка:', error);
       } finally {
         this.showLoading(false);
+      }
+    },
+
+    // Принудительное обновление отображения корзины
+    forceUpdateCartDisplay: function () {
+      try {
+        // Обновляем счетчик товаров в корзине
+        if (
+          typeof window.tcart !== 'undefined' &&
+          window.tcart.total !== undefined
+        ) {
+          const counter = document.querySelector('.t706__carticon-counter');
+          if (counter) {
+            counter.innerHTML = window.tcart.total;
+          }
+        }
+
+        // Обновляем общую сумму
+        const totalElements = document.querySelectorAll(
+          '.t706__cartwin-totalamount, .t706__cartwin-totalamount-value'
+        );
+        totalElements.forEach((el) => {
+          if (el && window.tcart && window.tcart.totalAmount !== undefined) {
+            el.innerHTML = window.tcart.totalAmount;
+          }
+        });
+
+        // Обновляем итоговую сумму
+        const totalContent = document.querySelector(
+          '.t706__cartwin-totalamount-content'
+        );
+        if (
+          totalContent &&
+          window.tcart &&
+          window.tcart.totalAmount !== undefined
+        ) {
+          const label = totalContent.querySelector(
+            '.t706__cartwin-totalamount-label'
+          );
+          const amount = totalContent.querySelector(
+            '.t706__cartwin-totalamount'
+          );
+          if (label) label.innerHTML = 'Итоговая сумма: ';
+          if (amount) {
+            const price = amount.querySelector(
+              '.t706__cartwin-prodamount-price'
+            );
+            const currency = amount.querySelector(
+              '.t706__cartwin-prodamount-currency'
+            );
+            if (price) price.innerHTML = window.tcart.totalAmount;
+            if (currency) currency.innerHTML = 'р.';
+          }
+        }
+
+        // Обновляем информацию о скидке
+        const discountElements = document.querySelectorAll(
+          '.t706__cartwin-totalamount-info_value'
+        );
+        discountElements.forEach((el) => {
+          if (el.innerHTML.includes('р.')) {
+            el.innerHTML = `<div class="t706__cartwin-prodamount-price">${this.state.appliedBonuses}</div><div class="t706__cartwin-prodamount-currency">р.</div>`;
+          }
+        });
+
+        // Принудительно триггерим событие обновления
+        const event = new CustomEvent('tcart:updated', {
+          detail: { bonuses: this.state.appliedBonuses }
+        });
+        document.dispatchEvent(event);
+
+        this.log('Корзина принудительно обновлена');
+      } catch (error) {
+        this.log('Ошибка принудительного обновления корзины:', error);
       }
     },
 
