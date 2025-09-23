@@ -42,7 +42,9 @@ import {
   Download,
   Eye,
   Copy,
-  ExternalLink
+  ExternalLink,
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
 import { PageContainer } from '@/components/page-container';
 import { WebhookLogEntry } from '@/types/api-responses';
@@ -63,6 +65,7 @@ export function ProjectLogsView({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [successFilter, setSuccessFilter] = useState<string>('all');
   const [selectedLog, setSelectedLog] = useState<WebhookLogEntry | null>(null);
+  const [replayingLog, setReplayingLog] = useState<string | null>(null);
   const resolvedParams = useParams();
   const projectId = resolvedParams?.id as string;
 
@@ -96,6 +99,67 @@ export function ProjectLogsView({
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
     toast.success('Скопировано в буфер обмена');
+  }
+
+  function generateCurlCommand(log: WebhookLogEntry) {
+    const baseUrl =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : 'http://localhost:3000';
+    const url = `${baseUrl}${log.endpoint}`;
+
+    const headers = Object.entries(log.headers)
+      .map(([key, value]) => `    -H "${key}: ${value}"`)
+      .join(' \\\n');
+
+    const body = log.body ? JSON.stringify(log.body, null, 2) : '';
+
+    return `curl -X ${log.method} "${url}" \\
+${headers}${body ? ` \\\n    -d '${body}'` : ''} \\
+    -H "Content-Type: application/json"`;
+  }
+
+  function copyCurlCommand(log: WebhookLogEntry) {
+    const curlCommand = generateCurlCommand(log);
+    copyToClipboard(curlCommand);
+  }
+
+  async function replayLog(log: WebhookLogEntry) {
+    try {
+      setReplayingLog(log.id);
+
+      const response = await fetch(
+        `/api/projects/${projectId}/integration/replay`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            logId: log.id,
+            endpoint: log.endpoint,
+            method: log.method,
+            headers: log.headers,
+            body: log.body
+          })
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success('Запрос успешно выполнен');
+        // Обновляем логи после повторного выполнения
+        loadLogs();
+      } else {
+        toast.error(`Ошибка: ${result.error?.message || 'Неизвестная ошибка'}`);
+      }
+    } catch (error) {
+      toast.error('Ошибка при выполнении запроса');
+      console.error('Replay error:', error);
+    } finally {
+      setReplayingLog(null);
+    }
   }
 
   function formatDate(date: Date | string) {
@@ -346,6 +410,19 @@ export function ProjectLogsView({
                       <Button
                         size='sm'
                         variant='ghost'
+                        onClick={() => replayLog(log)}
+                        disabled={replayingLog === log.id}
+                        title='Повторить запрос'
+                      >
+                        {replayingLog === log.id ? (
+                          <Loader2 className='h-4 w-4 animate-spin' />
+                        ) : (
+                          <RotateCcw className='h-4 w-4' />
+                        )}
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
                         onClick={() => setSelectedLog(log)}
                       >
                         <Eye className='h-4 w-4' />
@@ -379,9 +456,24 @@ export function ProjectLogsView({
                   {selectedLog.method} {selectedLog.endpoint}
                 </CardDescription>
               </div>
-              <Button variant='ghost' onClick={() => setSelectedLog(null)}>
-                ✕
-              </Button>
+              <div className='flex items-center gap-2'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => replayLog(selectedLog)}
+                  disabled={replayingLog === selectedLog.id}
+                >
+                  {replayingLog === selectedLog.id ? (
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                  ) : (
+                    <RotateCcw className='mr-2 h-4 w-4' />
+                  )}
+                  Повторить запрос
+                </Button>
+                <Button variant='ghost' onClick={() => setSelectedLog(null)}>
+                  ✕
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className='overflow-auto'>
               <Tabs defaultValue='request' className='space-y-4'>
@@ -394,18 +486,28 @@ export function ProjectLogsView({
                 <TabsContent value='request' className='space-y-2'>
                   <div className='flex items-center justify-between'>
                     <Label>Тело запроса</Label>
-                    <Button
-                      size='sm'
-                      variant='outline'
-                      onClick={() =>
-                        copyToClipboard(
-                          JSON.stringify(selectedLog.body, null, 2)
-                        )
-                      }
-                    >
-                      <Copy className='mr-1 h-4 w-4' />
-                      Копировать
-                    </Button>
+                    <div className='flex gap-2'>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        onClick={() =>
+                          copyToClipboard(
+                            JSON.stringify(selectedLog.body, null, 2)
+                          )
+                        }
+                      >
+                        <Copy className='mr-1 h-4 w-4' />
+                        Копировать JSON
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        onClick={() => copyCurlCommand(selectedLog)}
+                      >
+                        <ExternalLink className='mr-1 h-4 w-4' />
+                        Копировать cURL
+                      </Button>
+                    </div>
                   </div>
                   <pre className='bg-muted overflow-x-auto rounded-lg p-4 text-sm'>
                     <code>{JSON.stringify(selectedLog.body, null, 2)}</code>
