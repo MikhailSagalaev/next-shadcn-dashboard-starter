@@ -107,11 +107,23 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
   // Дополнительные настройки для расширенных сообщений
   const [advancedSettings, setAdvancedSettings] = useState({
     welcomeImageUrl: '',
-    welcomeButtons: [] as Array<{text: string, url?: string, callback_data?: string}>,
+    welcomeButtons: [] as Array<{
+      text: string;
+      url?: string;
+      callback_data?: string;
+    }>,
     helpImageUrl: '',
-    helpButtons: [] as Array<{text: string, url?: string, callback_data?: string}>,
+    helpButtons: [] as Array<{
+      text: string;
+      url?: string;
+      callback_data?: string;
+    }>,
     balanceImageUrl: '',
-    balanceButtons: [] as Array<{text: string, url?: string, callback_data?: string}>
+    balanceButtons: [] as Array<{
+      text: string;
+      url?: string;
+      callback_data?: string;
+    }>
   });
 
   // Form state для функционала (соответствует схеме БД)
@@ -149,6 +161,14 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
         // Загружаем настройки сообщений
         if (botData?.messageSettings) {
           setMessages({ ...messages, ...botData.messageSettings });
+
+          // Загружаем расширенные настройки (кнопки и изображения)
+          if (botData.messageSettings.advancedSettings) {
+            setAdvancedSettings({
+              ...advancedSettings,
+              ...botData.messageSettings.advancedSettings
+            });
+          }
         }
 
         // Загружаем настройки функционала
@@ -387,25 +407,33 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
   // Функции для работы с кнопками
   const addButton = (messageType: 'welcome' | 'help' | 'balance') => {
     const buttonKey = `${messageType}Buttons` as keyof typeof advancedSettings;
-    setAdvancedSettings(prev => ({
+    setAdvancedSettings((prev) => ({
       ...prev,
       [buttonKey]: [...(prev[buttonKey] as any[]), { text: '', url: '' }]
     }));
   };
 
-  const removeButton = (messageType: 'welcome' | 'help' | 'balance', index: number) => {
+  const removeButton = (
+    messageType: 'welcome' | 'help' | 'balance',
+    index: number
+  ) => {
     const buttonKey = `${messageType}Buttons` as keyof typeof advancedSettings;
-    setAdvancedSettings(prev => ({
+    setAdvancedSettings((prev) => ({
       ...prev,
       [buttonKey]: (prev[buttonKey] as any[]).filter((_, i) => i !== index)
     }));
   };
 
-  const updateButton = (messageType: 'welcome' | 'help' | 'balance', index: number, field: 'text' | 'url' | 'callback_data', value: string) => {
+  const updateButton = (
+    messageType: 'welcome' | 'help' | 'balance',
+    index: number,
+    field: 'text' | 'url' | 'callback_data',
+    value: string
+  ) => {
     const buttonKey = `${messageType}Buttons` as keyof typeof advancedSettings;
-    setAdvancedSettings(prev => ({
+    setAdvancedSettings((prev) => ({
       ...prev,
-      [buttonKey]: (prev[buttonKey] as any[]).map((btn, i) => 
+      [buttonKey]: (prev[buttonKey] as any[]).map((btn, i) =>
         i === index ? { ...btn, [field]: value } : btn
       )
     }));
@@ -533,8 +561,8 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
               : 'border-yellow-200 bg-yellow-50'
         }
       >
-        <div className='flex items-center justify-between w-full'>
-          <div className='flex items-center space-x-2 flex-1'>
+        <div className='flex w-full items-center justify-between'>
+          <div className='flex flex-1 items-center space-x-2'>
             {botStatus?.status === 'ACTIVE' ? (
               <Check className='h-4 w-4 text-green-600' />
             ) : botStatus?.status === 'ERROR' ? (
@@ -738,13 +766,15 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
               </div>
 
               <div className='space-y-2'>
-                <Label htmlFor='welcomeImageUrl'>URL изображения (опционально)</Label>
+                <Label htmlFor='welcomeImageUrl'>
+                  URL изображения (опционально)
+                </Label>
                 <div className='flex space-x-2'>
                   <Input
                     id='welcomeImageUrl'
                     value={advancedSettings.welcomeImageUrl}
                     onChange={(e) =>
-                      setAdvancedSettings(prev => ({
+                      setAdvancedSettings((prev) => ({
                         ...prev,
                         welcomeImageUrl: e.target.value
                       }))
@@ -754,10 +784,12 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   <Button
                     variant='outline'
                     size='sm'
-                    onClick={() => setAdvancedSettings(prev => ({
-                      ...prev,
-                      welcomeImageUrl: ''
-                    }))}
+                    onClick={() =>
+                      setAdvancedSettings((prev) => ({
+                        ...prev,
+                        welcomeImageUrl: ''
+                      }))
+                    }
                   >
                     <Trash2 className='h-4 w-4' />
                   </Button>
@@ -777,11 +809,16 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   </Button>
                 </div>
                 {advancedSettings.welcomeButtons.map((button, index) => (
-                  <div key={index} className='flex space-x-2 p-3 border rounded-lg'>
+                  <div
+                    key={index}
+                    className='flex space-x-2 rounded-lg border p-3'
+                  >
                     <Input
                       placeholder='Текст кнопки'
                       value={button.text}
-                      onChange={(e) => updateButton('welcome', index, 'text', e.target.value)}
+                      onChange={(e) =>
+                        updateButton('welcome', index, 'text', e.target.value)
+                      }
                     />
                     <Input
                       placeholder='URL или callback_data'
@@ -791,7 +828,12 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                         if (value.startsWith('http')) {
                           updateButton('welcome', index, 'url', value);
                         } else {
-                          updateButton('welcome', index, 'callback_data', value);
+                          updateButton(
+                            'welcome',
+                            index,
+                            'callback_data',
+                            value
+                          );
                         }
                       }}
                     />
@@ -834,13 +876,15 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
               </div>
 
               <div className='space-y-2'>
-                <Label htmlFor='helpImageUrl'>URL изображения (опционально)</Label>
+                <Label htmlFor='helpImageUrl'>
+                  URL изображения (опционально)
+                </Label>
                 <div className='flex space-x-2'>
                   <Input
                     id='helpImageUrl'
                     value={advancedSettings.helpImageUrl}
                     onChange={(e) =>
-                      setAdvancedSettings(prev => ({
+                      setAdvancedSettings((prev) => ({
                         ...prev,
                         helpImageUrl: e.target.value
                       }))
@@ -850,10 +894,12 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   <Button
                     variant='outline'
                     size='sm'
-                    onClick={() => setAdvancedSettings(prev => ({
-                      ...prev,
-                      helpImageUrl: ''
-                    }))}
+                    onClick={() =>
+                      setAdvancedSettings((prev) => ({
+                        ...prev,
+                        helpImageUrl: ''
+                      }))
+                    }
                   >
                     <Trash2 className='h-4 w-4' />
                   </Button>
@@ -873,11 +919,16 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   </Button>
                 </div>
                 {advancedSettings.helpButtons.map((button, index) => (
-                  <div key={index} className='flex space-x-2 p-3 border rounded-lg'>
+                  <div
+                    key={index}
+                    className='flex space-x-2 rounded-lg border p-3'
+                  >
                     <Input
                       placeholder='Текст кнопки'
                       value={button.text}
-                      onChange={(e) => updateButton('help', index, 'text', e.target.value)}
+                      onChange={(e) =>
+                        updateButton('help', index, 'text', e.target.value)
+                      }
                     />
                     <Input
                       placeholder='URL или callback_data'
@@ -927,19 +978,22 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   placeholder='Используйте {balance}, {totalEarned} для подстановки значений'
                   rows={3}
                 />
-                <p className='text-sm text-muted-foreground'>
-                  Доступные переменные: {'{balance}'}, {'{totalEarned}'}, {'{level}'}
+                <p className='text-muted-foreground text-sm'>
+                  Доступные переменные: {'{balance}'}, {'{totalEarned}'},{' '}
+                  {'{level}'}
                 </p>
               </div>
 
               <div className='space-y-2'>
-                <Label htmlFor='balanceImageUrl'>URL изображения (опционально)</Label>
+                <Label htmlFor='balanceImageUrl'>
+                  URL изображения (опционально)
+                </Label>
                 <div className='flex space-x-2'>
                   <Input
                     id='balanceImageUrl'
                     value={advancedSettings.balanceImageUrl}
                     onChange={(e) =>
-                      setAdvancedSettings(prev => ({
+                      setAdvancedSettings((prev) => ({
                         ...prev,
                         balanceImageUrl: e.target.value
                       }))
@@ -949,10 +1003,12 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   <Button
                     variant='outline'
                     size='sm'
-                    onClick={() => setAdvancedSettings(prev => ({
-                      ...prev,
-                      balanceImageUrl: ''
-                    }))}
+                    onClick={() =>
+                      setAdvancedSettings((prev) => ({
+                        ...prev,
+                        balanceImageUrl: ''
+                      }))
+                    }
                   >
                     <Trash2 className='h-4 w-4' />
                   </Button>
@@ -972,11 +1028,16 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   </Button>
                 </div>
                 {advancedSettings.balanceButtons.map((button, index) => (
-                  <div key={index} className='flex space-x-2 p-3 border rounded-lg'>
+                  <div
+                    key={index}
+                    className='flex space-x-2 rounded-lg border p-3'
+                  >
                     <Input
                       placeholder='Текст кнопки'
                       value={button.text}
-                      onChange={(e) => updateButton('balance', index, 'text', e.target.value)}
+                      onChange={(e) =>
+                        updateButton('balance', index, 'text', e.target.value)
+                      }
                     />
                     <Input
                       placeholder='URL или callback_data'
@@ -986,7 +1047,12 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                         if (value.startsWith('http')) {
                           updateButton('balance', index, 'url', value);
                         } else {
-                          updateButton('balance', index, 'callback_data', value);
+                          updateButton(
+                            'balance',
+                            index,
+                            'callback_data',
+                            value
+                          );
                         }
                       }}
                     />
@@ -1007,9 +1073,7 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
           <Card>
             <CardHeader>
               <CardTitle>Прочие сообщения</CardTitle>
-              <CardDescription>
-                Системные сообщения бота
-              </CardDescription>
+              <CardDescription>Системные сообщения бота</CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
               <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>

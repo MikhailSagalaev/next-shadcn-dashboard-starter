@@ -449,7 +449,7 @@ export class ReferralService {
       });
       const averageOrderValue =
         earmsForAvg.length > 0
-          ? earmsForAvg.reduce((s, t) => s + Number(t.amount), 0) /
+          ? earmsForAvg.reduce((s: number, t: any) => s + Number(t.amount), 0) /
             earmsForAvg.length
           : 0;
 
@@ -478,7 +478,7 @@ export class ReferralService {
         take: 10
       });
 
-      const topReferrers = topReferrersRaw.map((user) => ({
+      const topReferrers = topReferrersRaw.map((user: any) => ({
         id: user.id,
         firstName: user.firstName,
         lastName: user.lastName,

@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     // Уведомления о подписке
     if (admin.role === 'ADMIN' || admin.role === 'SUPERADMIN') {
       const hasSubscriptionNotification = existingNotifications.some(
-        (n) =>
+        (n: any) =>
           n.title.includes('Подписка') &&
           (n.metadata as any)?.status !== 'dismissed'
       );
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     // Уведомления о неактивных ботах
     if (activeBotsCount < botsCount) {
       const hasBotNotification = existingNotifications.some(
-        (n) =>
+        (n: any) =>
           (n.metadata as any)?.type === 'bot' &&
           (n.metadata as any)?.status !== 'dismissed'
       );
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
 
     // Уведомления о биллинге
     const hasBillingNotification = existingNotifications.some(
-      (n) =>
+      (n: any) =>
         (n.metadata as any)?.type === 'billing' &&
         (n.metadata as any)?.status !== 'dismissed'
     );
@@ -154,18 +154,20 @@ export async function GET(request: NextRequest) {
     });
 
     // Преобразуем в формат для фронтенда
-    const formattedNotifications = allNotifications.map((notification) => ({
-      id: notification.id,
-      type: (notification.metadata as any)?.type || 'info',
-      title: notification.title,
-      message: notification.message,
-      status: (notification.metadata as any)?.status || 'unread',
-      priority: (notification.metadata as any)?.priority || 'medium',
-      actionUrl: (notification.metadata as any)?.actionUrl,
-      actionText: (notification.metadata as any)?.actionText,
-      createdAt: notification.createdAt.toISOString(),
-      metadata: notification.metadata
-    }));
+    const formattedNotifications = allNotifications.map(
+      (notification: any) => ({
+        id: notification.id,
+        type: (notification.metadata as any)?.type || 'info',
+        title: notification.title,
+        message: notification.message,
+        status: (notification.metadata as any)?.status || 'unread',
+        priority: (notification.metadata as any)?.priority || 'medium',
+        actionUrl: (notification.metadata as any)?.actionUrl,
+        actionText: (notification.metadata as any)?.actionText,
+        createdAt: notification.createdAt.toISOString(),
+        metadata: notification.metadata
+      })
+    );
 
     logger.info('System notifications retrieved', {
       adminId: admin.id,
@@ -180,7 +182,7 @@ export async function GET(request: NextRequest) {
         stats: {
           totalNotifications: formattedNotifications.length,
           unreadCount: formattedNotifications.filter(
-            (n) => n.status === 'unread'
+            (n: any) => n.status === 'unread'
           ).length,
           projectsCount,
           usersCount,

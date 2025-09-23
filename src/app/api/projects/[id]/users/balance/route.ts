@@ -7,7 +7,7 @@
  * @author: AI Assistant + User
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { UserService } from '@/lib/services/user.service';
 import { ProjectService } from '@/lib/services/project.service';
 import { logger } from '@/lib/logger';
@@ -94,12 +94,22 @@ export async function GET(
     // Получаем баланс пользователя
     const userBalance = await UserService.getUserBalance(user.id);
 
+    // Получаем информацию об уровне пользователя для виджета
+    const { BonusLevelService } = await import(
+      '@/lib/services/bonus-level.service'
+    );
+    const currentLevel = await BonusLevelService.calculateUserLevel(
+      projectId,
+      Number(user.totalPurchases)
+    );
+
     logger.info('User balance retrieved', {
       projectId,
       userId: user.id,
       email: user.email,
       phone: user.phone,
-      balance: userBalance.currentBalance
+      balance: userBalance.currentBalance,
+      level: currentLevel?.name
     });
 
     return NextResponse.json(
@@ -119,7 +129,18 @@ export async function GET(
           totalEarned: Number(userBalance.totalEarned),
           totalSpent: Number(userBalance.totalSpent),
           expiringSoon: Number(userBalance.expiringSoon)
-        }
+        },
+        levelInfo: currentLevel
+          ? {
+              name: currentLevel.name,
+              bonusPercent: currentLevel.bonusPercent,
+              paymentPercent: currentLevel.paymentPercent,
+              minAmount: Number(currentLevel.minAmount),
+              maxAmount: currentLevel.maxAmount
+                ? Number(currentLevel.maxAmount)
+                : null
+            }
+          : null
       },
       { headers: corsHeaders }
     );

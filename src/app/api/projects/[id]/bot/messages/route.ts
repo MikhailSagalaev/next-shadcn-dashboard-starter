@@ -41,11 +41,16 @@ export async function PUT(
       );
     }
 
-    // Обновляем настройки сообщений
+    // Обновляем настройки сообщений и расширенные настройки
     const updatedSettings = await db.botSettings.update({
       where: { projectId: id },
       data: {
-        messageSettings: body.messageSettings
+        messageSettings: {
+          ...body.messageSettings,
+          ...(body.advancedSettings && {
+            advancedSettings: body.advancedSettings
+          })
+        }
       }
     });
 
@@ -78,7 +83,8 @@ export async function PUT(
       'Bot messages updated',
       {
         projectId: id,
-        messages: Object.keys(body.messageSettings || {})
+        messages: Object.keys(body.messageSettings || {}),
+        hasAdvancedSettings: !!body.advancedSettings
       },
       'bot-api'
     );

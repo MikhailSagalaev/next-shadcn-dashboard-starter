@@ -33,7 +33,8 @@
       cartOpenDebounceTimer: null,
       _bodyObserver: null,
       _cartObserver: null,
-      mode: 'bonus'
+      mode: 'bonus',
+      levelInfo: null // информация об уровне пользователя
     },
 
     // Инициализация виджета
@@ -438,8 +439,14 @@
           // Пользователь найден — монтируем виджет при необходимости и обновляем
           if (this.ensureWidgetMounted()) {
             this.state.bonusBalance = data.balance || 0;
+            this.state.levelInfo = data.levelInfo || null;
             this.updateBalanceDisplay();
-            this.log('Баланс загружен:', this.state.bonusBalance);
+            this.log(
+              'Баланс загружен:',
+              this.state.bonusBalance,
+              'Уровень:',
+              this.state.levelInfo
+            );
           }
         } else {
           // Пользователь не найден/не авторизован — виджет не показываем вовсе
@@ -469,11 +476,23 @@
         amountInput.style.display = 'block';
         applyButton.style.display = 'block';
 
-        // Устанавливаем максимум для input
+        // Устанавливаем максимум для input с учетом уровня пользователя
         const cartTotal = this.getCartTotal();
-        const maxBonuses = Math.min(this.state.bonusBalance, cartTotal);
+        let maxBonuses = Math.min(this.state.bonusBalance, cartTotal);
+
+        // Применяем ограничение по уровню пользователя
+        if (this.state.levelInfo && this.state.levelInfo.paymentPercent < 100) {
+          const maxByLevel =
+            (cartTotal * this.state.levelInfo.paymentPercent) / 100;
+          maxBonuses = Math.min(maxBonuses, maxByLevel);
+        }
+
         amountInput.max = maxBonuses.toFixed(2);
-        amountInput.placeholder = `Макс: ${maxBonuses.toFixed(2)} бонусов`;
+        const levelText =
+          this.state.levelInfo && this.state.levelInfo.paymentPercent < 100
+            ? ` (до ${this.state.levelInfo.paymentPercent}%)`
+            : '';
+        amountInput.placeholder = `Макс: ${maxBonuses.toFixed(2)} бонусов${levelText}`;
       } else {
         balanceElement.style.display = 'none';
         amountInput.style.display = 'none';
@@ -557,8 +576,26 @@
       }
 
       const cartTotal = this.getCartTotal();
-      if (amount > cartTotal) {
-        this.showError(`Максимум можно использовать ${cartTotal} бонусов`);
+      let maxAllowed = cartTotal;
+
+      // Применяем ограничение по уровню пользователя
+      if (this.state.levelInfo && this.state.levelInfo.paymentPercent < 100) {
+        const maxByLevel =
+          (cartTotal * this.state.levelInfo.paymentPercent) / 100;
+        maxAllowed = Math.min(maxAllowed, maxByLevel);
+
+        if (amount > maxByLevel) {
+          this.showError(
+            `Ваш уровень "${this.state.levelInfo.name}" позволяет оплачивать только до ${this.state.levelInfo.paymentPercent}% заказа бонусами (макс: ${maxByLevel.toFixed(2)} бонусов)`
+          );
+          return;
+        }
+      }
+
+      if (amount > maxAllowed) {
+        this.showError(
+          `Максимум можно использовать ${maxAllowed.toFixed(2)} бонусов`
+        );
         return;
       }
 

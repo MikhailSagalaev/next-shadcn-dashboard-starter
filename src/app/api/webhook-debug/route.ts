@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     logger.info('🔧 Найденные проекты', {
       count: projects.length,
-      projects: projects.map((p) => ({
+      projects: projects.map((p: any) => ({
         id: p.id,
         name: p.name,
         webhookSecret: p.webhookSecret,
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       message: 'Отладочный webhook обработан',
       timestamp: new Date().toISOString(),
       analysis,
-      projects: projects.map((p) => ({
+      projects: projects.map((p: any) => ({
         id: p.id,
         name: p.name,
         webhookSecret: p.webhookSecret,

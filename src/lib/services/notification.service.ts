@@ -254,7 +254,7 @@ export class NotificationService {
     // Для остальных типов уведомлений используем простую отправку
     const { botManager } = await import('@/lib/telegram/bot-manager');
     const botInstance = botManager.getBot(payload.projectId);
-    
+
     if (!botInstance || !botInstance.isActive) {
       throw new Error('Bot not active for this project');
     }
@@ -472,7 +472,7 @@ export class NotificationService {
       skip: offset
     });
 
-    return rows.map((n) => ({
+    return rows.map((n: any) => ({
       id: n.id,
       projectId: n.projectId,
       userId: n.userId || undefined,

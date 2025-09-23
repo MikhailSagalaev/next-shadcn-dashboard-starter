@@ -117,7 +117,7 @@ export class ProjectService {
         });
 
         logger.info('ProjectService: существующие проекты (первые 5)', {
-          projects: allProjects.map((p) => ({
+          projects: allProjects.map((p: any) => ({
             id: p.id,
             name: p.name,
             webhookSecret: p.webhookSecret

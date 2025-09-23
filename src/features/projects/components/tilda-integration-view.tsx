@@ -31,7 +31,6 @@ import {
   AlertCircle,
   Code,
   Webhook,
-  Settings,
   FileText,
   Clock
 } from 'lucide-react';
@@ -175,7 +174,7 @@ export function ProjectIntegrationView({
 
         {/* Табы с инструкциями */}
         <Tabs defaultValue='widget' className='space-y-4'>
-          <TabsList className='grid w-full grid-cols-4'>
+          <TabsList className='grid w-full grid-cols-3'>
             <TabsTrigger value='widget'>
               <Code className='mr-2 h-4 w-4' />
               Виджет
@@ -183,10 +182,6 @@ export function ProjectIntegrationView({
             <TabsTrigger value='webhook'>
               <Webhook className='mr-2 h-4 w-4' />
               Webhook
-            </TabsTrigger>
-            <TabsTrigger value='settings'>
-              <Settings className='mr-2 h-4 w-4' />
-              Настройки
             </TabsTrigger>
             <TabsTrigger value='logs'>
               <FileText className='mr-2 h-4 w-4' />
@@ -319,96 +314,6 @@ export function ProjectIntegrationView({
                     Используйте эти данные для тестирования webhook через
                     Postman или curl
                   </p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Настройки */}
-          <TabsContent
-            value='settings'
-            className='mt-0 min-h-[640px] space-y-4'
-          >
-            <Card className='overflow-hidden'>
-              <CardHeader>
-                <CardTitle>Настройки интеграции</CardTitle>
-                <CardDescription>
-                  Дополнительные параметры для тонкой настройки
-                </CardDescription>
-              </CardHeader>
-              <CardContent className='space-y-4'>
-                <Alert variant='destructive'>
-                  <AlertCircle className='h-4 w-4' />
-                  <AlertTitle>Внимание!</AlertTitle>
-                  <AlertDescription>
-                    Эти настройки интеграции не работают и не применяются в системе. 
-                    Все настройки бонусов управляются через раздел "Уровни бонусов" и 
-                    "Настройки проекта". Данная вкладка будет удалена в следующем обновлении.
-                  </AlertDescription>
-                </Alert>
-
-                <div className='space-y-4'>
-                  <div className='space-y-2'>
-                    <Label htmlFor='bonus-rate'>Курс бонусов</Label>
-                    <Input
-                      id='bonus-rate'
-                      type='number'
-                      defaultValue='1'
-                      min='0.1'
-                      step='0.1'
-                      disabled
-                    />
-                    <p className='text-muted-foreground text-sm'>
-                      Сколько рублей равен 1 бонус (НЕ РАБОТАЕТ)
-                    </p>
-                  </div>
-
-                  <div className='space-y-2'>
-                    <Label htmlFor='min-order'>Минимальная сумма заказа</Label>
-                    <Input
-                      id='min-order'
-                      type='number'
-                      defaultValue='100'
-                      min='0'
-                      disabled
-                    />
-                    <p className='text-muted-foreground text-sm'>
-                      Минимальная сумма для применения бонусов (НЕ РАБОТАЕТ)
-                    </p>
-                  </div>
-
-                  <div className='space-y-2'>
-                    <Label htmlFor='max-percent'>
-                      Максимальный процент оплаты бонусами
-                    </Label>
-                    <Input
-                      id='max-percent'
-                      type='number'
-                      defaultValue='50'
-                      min='1'
-                      max='100'
-                      disabled
-                    />
-                    <p className='text-muted-foreground text-sm'>
-                      Какую часть заказа можно оплатить бонусами (НЕ РАБОТАЕТ)
-                    </p>
-                  </div>
-                </div>
-
-                <Alert>
-                  <AlertCircle className='h-4 w-4' />
-                  <AlertTitle>Как настроить бонусы правильно:</AlertTitle>
-                  <AlertDescription>
-                    <ul className='mt-2 list-inside list-disc space-y-1'>
-                      <li>Перейдите в раздел "Уровни бонусов" для настройки процентов начисления и оплаты</li>
-                      <li>Используйте "Настройки проекта" для изменения поведения бонусов</li>
-                      <li>Процент оплаты бонусами настраивается в каждом уровне отдельно</li>
-                    </ul>
-                  </AlertDescription>
-                </Alert>
-
-                <div className='flex justify-end'>
-                  <Button disabled>Сохранить настройки (НЕ РАБОТАЕТ)</Button>
                 </div>
               </CardContent>
             </Card>

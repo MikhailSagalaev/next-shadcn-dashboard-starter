@@ -187,7 +187,7 @@ export class UserService {
             take: 50
           });
 
-          const matched = possible.find((u) => {
+          const matched = possible.find((u: any) => {
             const nd = onlyDigits(String(u.phone || ''));
             // Сравниваем по последним 10 цифрам
             return nd.slice(-10) === last10;
