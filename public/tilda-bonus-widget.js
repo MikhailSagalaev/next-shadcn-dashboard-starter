@@ -34,7 +34,8 @@
       _bodyObserver: null,
       _cartObserver: null,
       mode: 'bonus',
-      levelInfo: null // информация об уровне пользователя
+      levelInfo: null, // информация об уровне пользователя
+      originalCartTotal: 0 // изначальная сумма корзины без бонусов
     },
 
     // Инициализация виджета
@@ -298,6 +299,16 @@
     onCartOpen: function () {
       this.log('Корзина открыта');
 
+      // Обновляем изначальную сумму корзины при открытии
+      const currentTotal = this.getCartTotal();
+      if (currentTotal > 0 && this.state.originalCartTotal === 0) {
+        this.state.originalCartTotal = currentTotal;
+        this.log(
+          'Установлена изначальная сумма корзины:',
+          this.state.originalCartTotal
+        );
+      }
+
       // Получаем email/телефон пользователя
       const userContact = this.getUserContact();
       if (userContact) {
@@ -440,6 +451,17 @@
           if (this.ensureWidgetMounted()) {
             this.state.bonusBalance = data.balance || 0;
             this.state.levelInfo = data.levelInfo || null;
+
+            // Обновляем изначальную сумму корзины, если она ещё не установлена
+            const currentTotal = this.getCartTotal();
+            if (currentTotal > 0 && this.state.originalCartTotal === 0) {
+              this.state.originalCartTotal = currentTotal;
+              this.log(
+                'Установлена изначальная сумма корзины при загрузке баланса:',
+                this.state.originalCartTotal
+              );
+            }
+
             this.updateBalanceDisplay();
             this.log(
               'Баланс загружен:',
@@ -477,13 +499,14 @@
         applyButton.style.display = 'block';
 
         // Устанавливаем максимум для input с учетом уровня пользователя
-        const cartTotal = this.getCartTotal();
-        let maxBonuses = Math.min(this.state.bonusBalance, cartTotal);
+        // Используем изначальную сумму корзины для корректного расчета максимума
+        const originalCartTotal = this.getOriginalCartTotal();
+        let maxBonuses = Math.min(this.state.bonusBalance, originalCartTotal);
 
         // Применяем ограничение по уровню пользователя
         if (this.state.levelInfo && this.state.levelInfo.paymentPercent < 100) {
           const maxByLevel =
-            (cartTotal * this.state.levelInfo.paymentPercent) / 100;
+            (originalCartTotal * this.state.levelInfo.paymentPercent) / 100;
           maxBonuses = Math.min(maxBonuses, maxByLevel);
         }
 
@@ -500,7 +523,7 @@
       }
     },
 
-    // Получение суммы корзины
+    // Получение текущей суммы корзины
     getCartTotal: function () {
       // Ищем элемент с общей суммой
       const totalElement = document.querySelector(
@@ -514,6 +537,26 @@
         return isNaN(total) ? 0 : Number(total.toFixed(2));
       }
       return 0;
+    },
+
+    // Получение изначальной суммы корзины (без примененных скидок/бонусов)
+    getOriginalCartTotal: function () {
+      // Если у нас есть сохраненная изначальная сумма, используем её
+      if (this.state.originalCartTotal > 0) {
+        return this.state.originalCartTotal;
+      }
+
+      // Иначе пытаемся получить текущую сумму корзины
+      const currentTotal = this.getCartTotal();
+
+      // Если бонусы уже применены, пытаемся вычислить изначальную сумму
+      if (this.state.appliedBonuses > 0 && currentTotal > 0) {
+        // Сохраняем текущую сумму как изначальную для будущих применений
+        this.state.originalCartTotal = currentTotal + this.state.appliedBonuses;
+        return this.state.originalCartTotal;
+      }
+
+      return currentTotal;
     },
 
     // Применение скидки через Tilda отключено в режиме бонусов — используйте вкладку «Промокод» для стандартного поведения
@@ -575,13 +618,14 @@
         return;
       }
 
-      const cartTotal = this.getCartTotal();
-      let maxAllowed = cartTotal;
+      // Используем изначальную сумму корзины для корректного расчета максимума
+      const originalCartTotal = this.getOriginalCartTotal();
+      let maxAllowed = originalCartTotal;
 
       // Применяем ограничение по уровню пользователя
       if (this.state.levelInfo && this.state.levelInfo.paymentPercent < 100) {
         const maxByLevel =
-          (cartTotal * this.state.levelInfo.paymentPercent) / 100;
+          (originalCartTotal * this.state.levelInfo.paymentPercent) / 100;
         maxAllowed = Math.min(maxAllowed, maxByLevel);
 
         if (amount > maxByLevel) {

@@ -69,7 +69,10 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     domain: '',
     bonusPercentage: 1.0,
     bonusExpiryDays: 365,
-    bonusBehavior: 'SPEND_AND_EARN' as 'SPEND_AND_EARN' | 'EARN_ONLY',
+    bonusBehavior: 'SPEND_AND_EARN' as
+      | 'SPEND_AND_EARN'
+      | 'SPEND_ONLY'
+      | 'EARN_ONLY',
     isActive: true,
     welcomeBonusAmount: 0
   });
@@ -304,9 +307,9 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                     <Label htmlFor='bonusBehavior'>Поведение бонусов</Label>
                     <Select
                       value={formData.bonusBehavior}
-                      onValueChange={(value: 'SPEND_AND_EARN' | 'EARN_ONLY') =>
-                        setFormData({ ...formData, bonusBehavior: value })
-                      }
+                      onValueChange={(
+                        value: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY'
+                      ) => setFormData({ ...formData, bonusBehavior: value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder='Выберите поведение бонусов' />
@@ -315,14 +318,17 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                         <SelectItem value='SPEND_AND_EARN'>
                           Списывать и начислять бонусы
                         </SelectItem>
+                        <SelectItem value='SPEND_ONLY'>
+                          Только списывать бонусы
+                        </SelectItem>
                         <SelectItem value='EARN_ONLY'>
                           Только начислять бонусы
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <p className='text-muted-foreground text-xs'>
-                      Определяет, что происходит с бонусами при покупке с
-                      использованием бонусов
+                      Определяет поведение бонусов при покупке с использованием
+                      бонусов
                     </p>
                   </div>
                 </div>
