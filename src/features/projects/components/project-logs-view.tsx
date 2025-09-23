@@ -128,7 +128,8 @@ ${headers}${body ? ` \\\n    -d '${body}'` : ''} \\
     try {
       setReplayingLog(log.id);
 
-      const response = await fetch(
+      // Сначала получаем данные для повторного выполнения
+      const prepareResponse = await fetch(
         `/api/projects/${projectId}/integration/replay`,
         {
           method: 'POST',
@@ -145,14 +146,75 @@ ${headers}${body ? ` \\\n    -d '${body}'` : ''} \\
         }
       );
 
-      const result = await response.json();
+      const prepareResult = await prepareResponse.json();
+
+      if (!prepareResponse.ok) {
+        toast.error(
+          `Ошибка подготовки: ${prepareResult.error?.message || 'Неизвестная ошибка'}`
+        );
+        return;
+      }
+
+      // Получаем данные для повторного выполнения
+      const { replayData } = prepareResult;
+
+      if (!replayData) {
+        toast.error('Не получены данные для повторного выполнения');
+        return;
+      }
+
+      // Выполняем запрос на клиенте
+      const targetUrl = `${window.location.origin}${replayData.endpoint}`;
+
+      console.log('🔄 Выполняем повторный запрос:', {
+        url: targetUrl,
+        method: replayData.method,
+        headers: replayData.headers,
+        body: replayData.body
+      });
+
+      const response = await fetch(targetUrl, {
+        method: replayData.method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...replayData.headers
+        },
+        body: JSON.stringify(replayData.body)
+      });
+
+      // Читаем ответ
+      let responseBody;
+      try {
+        responseBody = await response.json();
+      } catch {
+        responseBody = { _error: 'failed_to_parse_response' };
+      }
+
+      // Сохраняем новый лог
+      await fetch(`/api/projects/${projectId}/integration/logs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          endpoint: replayData.endpoint,
+          method: replayData.method,
+          headers: replayData.headers,
+          body: replayData.body,
+          response: responseBody,
+          status: response.status,
+          success: response.ok
+        })
+      });
 
       if (response.ok) {
         toast.success('Запрос успешно выполнен');
         // Обновляем логи после повторного выполнения
         loadLogs();
       } else {
-        toast.error(`Ошибка: ${result.error?.message || 'Неизвестная ошибка'}`);
+        toast.error(
+          `Ошибка выполнения: ${response.status} ${response.statusText}`
+        );
       }
     } catch (error) {
       toast.error('Ошибка при выполнении запроса');

@@ -133,97 +133,50 @@ export async function POST(
       component: 'webhook-replay'
     });
 
-    // Определяем URL для повторного запроса
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const targetUrl = `${baseUrl}${endpoint}`;
-
-    // Выполняем запрос
-    const response = await fetch(targetUrl, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    // Читаем ответ
-    let responseBody;
-    try {
-      responseBody = await response.json();
-    } catch {
-      responseBody = { _error: 'failed_to_parse_response' };
-    }
-
-    // Логируем результат
-    console.log('🔄 Webhook запрос выполнен', {
+    // ВАЖНО: Поскольку мы находимся в server-side контексте,
+    // мы не можем делать fetch запросы на внешние URL
+    // Вместо этого возвращаем информацию для повторного выполнения на клиенте
+    console.log('🔄 Подготавливаем данные для повторного выполнения запроса', {
       projectId,
       logId,
       endpoint,
       method,
-      requestStatus: response.status,
-      responseSuccess: response.ok,
-      responseBody: safeJson(responseBody),
       component: 'webhook-replay'
     });
 
-    // Сохраняем новый лог
-    let newLog;
-    try {
-      newLog = await db.webhookLog.create({
-        data: {
-          projectId,
-          endpoint,
-          method,
-          headers: safeJson(headers),
-          body: safeJson(requestBody),
-          response: safeJson(responseBody),
-          status: response.status,
-          success: response.ok
-        }
-      });
-
-      console.log('📝 Новый лог создан', {
+    // Возвращаем данные для повторного выполнения на клиенте
+    return NextResponse.json({
+      success: true,
+      message: 'Данные подготовлены для повторного выполнения',
+      replayData: {
+        endpoint,
+        method,
+        headers,
+        body: requestBody,
         projectId,
-        logId: newLog.id,
-        originalLogId: logId,
-        component: 'webhook-replay'
-      });
-    } catch (dbCreateError) {
-      console.error('❌ Ошибка при создании нового лога в БД:', {
-        projectId,
-        logId,
-        error:
-          dbCreateError instanceof Error
-            ? dbCreateError.message
-            : String(dbCreateError),
-        component: 'webhook-replay'
-      });
+        logId
+      }
+    });
 
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            type: 'DATABASE_CREATE_ERROR',
-            message: 'Ошибка при создании лога в базе данных',
-            details:
-              dbCreateError instanceof Error
-                ? dbCreateError.message
-                : String(dbCreateError)
-          }
-        },
-        { status: 500 }
-      );
-    }
+    // Логируем подготовку данных
+    console.log('📝 Данные подготовлены для повторного выполнения', {
+      projectId,
+      logId,
+      endpoint,
+      method,
+      component: 'webhook-replay'
+    });
 
     return NextResponse.json({
       success: true,
-      message: 'Запрос успешно выполнен',
-      log: {
-        id: newLog.id,
-        status: response.status,
-        success: response.ok,
-        response: responseBody
+      message: 'Данные подготовлены для повторного выполнения',
+      replayData: {
+        endpoint,
+        method,
+        headers,
+        body: requestBody,
+        projectId,
+        logId
       }
     });
   } catch (error) {
