@@ -8,8 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest as NextRequestType } from 'next/server';
 import { db } from '@/lib/db';
-import { logger } from '@/lib/logger';
 
 interface ReplayRequestBody {
   logId: string;
@@ -40,19 +40,43 @@ export async function POST(
   const projectId = resolvedParams.id;
 
   try {
-    const body: ReplayRequestBody = await request.json();
-    const { logId, endpoint, method, headers, body: requestBody } = body;
-
+    // Добавляем базовую проверку на валидность запроса
     if (!projectId) {
       return NextResponse.json(
-        { error: { type: 'INVALID_REQUEST', message: 'ID проекта не указан' } },
+        {
+          success: false,
+          error: {
+            type: 'INVALID_REQUEST',
+            message: 'ID проекта не указан'
+          }
+        },
         { status: 400 }
       );
     }
 
+    let body: ReplayRequestBody;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error('❌ Ошибка парсинга JSON:', parseError);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            type: 'INVALID_JSON',
+            message: 'Неверный JSON в запросе'
+          }
+        },
+        { status: 400 }
+      );
+    }
+
+    const { logId, endpoint, method, headers, body: requestBody } = body;
+
     if (!logId || !endpoint || !method || !headers || !requestBody) {
       return NextResponse.json(
         {
+          success: false,
           error: {
             type: 'INVALID_REQUEST',
             message: 'Недостаточно данных для повторного выполнения'
@@ -63,20 +87,45 @@ export async function POST(
     }
 
     // Получаем проект
-    const project = await db.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, webhookSecret: true, name: true }
-    });
+    let project;
+    try {
+      project = await db.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, webhookSecret: true, name: true }
+      });
+    } catch (dbError) {
+      console.error('❌ Ошибка при получении проекта из БД:', {
+        projectId,
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        component: 'webhook-replay'
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            type: 'DATABASE_ERROR',
+            message: 'Ошибка при получении проекта из базы данных',
+            details:
+              dbError instanceof Error ? dbError.message : String(dbError)
+          }
+        },
+        { status: 500 }
+      );
+    }
 
     if (!project) {
       return NextResponse.json(
-        { error: { type: 'NOT_FOUND', message: 'Проект не найден' } },
+        {
+          success: false,
+          error: { type: 'NOT_FOUND', message: 'Проект не найден' }
+        },
         { status: 404 }
       );
     }
 
     // Логируем начало повторного выполнения
-    logger.info('🔄 Начинаем повторное выполнение webhook запроса', {
+    console.log('🔄 Начинаем повторное выполнение webhook запроса', {
       projectId,
       logId,
       endpoint,
@@ -107,7 +156,7 @@ export async function POST(
     }
 
     // Логируем результат
-    logger.info('🔄 Webhook запрос выполнен', {
+    console.log('🔄 Webhook запрос выполнен', {
       projectId,
       logId,
       endpoint,
@@ -119,25 +168,53 @@ export async function POST(
     });
 
     // Сохраняем новый лог
-    const newLog = await db.webhookLog.create({
-      data: {
-        projectId,
-        endpoint,
-        method,
-        headers: safeJson(headers),
-        body: safeJson(requestBody),
-        response: safeJson(responseBody),
-        status: response.status,
-        success: response.ok
-      }
-    });
+    let newLog;
+    try {
+      newLog = await db.webhookLog.create({
+        data: {
+          projectId,
+          endpoint,
+          method,
+          headers: safeJson(headers),
+          body: safeJson(requestBody),
+          response: safeJson(responseBody),
+          status: response.status,
+          success: response.ok
+        }
+      });
 
-    logger.info('📝 Новый лог создан', {
-      projectId,
-      logId: newLog.id,
-      originalLogId: logId,
-      component: 'webhook-replay'
-    });
+      console.log('📝 Новый лог создан', {
+        projectId,
+        logId: newLog.id,
+        originalLogId: logId,
+        component: 'webhook-replay'
+      });
+    } catch (dbCreateError) {
+      console.error('❌ Ошибка при создании нового лога в БД:', {
+        projectId,
+        logId,
+        error:
+          dbCreateError instanceof Error
+            ? dbCreateError.message
+            : String(dbCreateError),
+        component: 'webhook-replay'
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            type: 'DATABASE_CREATE_ERROR',
+            message: 'Ошибка при создании лога в базе данных',
+            details:
+              dbCreateError instanceof Error
+                ? dbCreateError.message
+                : String(dbCreateError)
+          }
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -150,9 +227,18 @@ export async function POST(
       }
     });
   } catch (error) {
-    logger.error('❌ Ошибка при повторном выполнении webhook запроса', {
-      projectId,
+    console.error('❌ Ошибка при повторном выполнении webhook запроса:', {
+      projectId: resolvedParams?.id || 'undefined',
       error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      component: 'webhook-replay'
+    });
+
+    // Логируем ошибку
+    console.error('❌ Ошибка при повторном выполнении webhook запроса:', {
+      projectId: resolvedParams?.id || 'undefined',
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
       component: 'webhook-replay'
     });
 
@@ -163,7 +249,7 @@ export async function POST(
           type: 'REPLAY_ERROR',
           message:
             error instanceof Error ? error.message : 'Неизвестная ошибка',
-          details: error
+          details: error instanceof Error ? error.stack : String(error)
         }
       },
       { status: 500 }
