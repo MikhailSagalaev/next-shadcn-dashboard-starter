@@ -343,10 +343,33 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
 
       for (const transaction of transactions) {
         const date = transaction.createdAt.toLocaleDateString('ru-RU');
-        const type = transaction.type === 'EARN' ? '➕' : '➖';
-        const amount = Number(transaction.amount);
+        let type = '';
+        let typeText = '';
 
-        message += `${type} ${amount}₽ - ${transaction.description || 'Без описания'}\n`;
+        switch (transaction.type) {
+          case 'EARN':
+            type = '➕';
+            typeText = 'Начисление';
+            break;
+          case 'SPEND':
+            type = '➖';
+            typeText = 'Списание';
+            break;
+          case 'EXPIRE':
+            type = '⏰';
+            typeText = 'Истекли';
+            break;
+          case 'REFUND':
+            type = '↩️';
+            typeText = 'Возврат';
+            break;
+          default:
+            type = '❓';
+            typeText = 'Неизвестно';
+        }
+
+        const amount = Number(transaction.amount);
+        message += `${type} ${amount}₽ - ${transaction.description || `${typeText} бонусов`}\n`;
         message += `📅 ${date}\n\n`;
       }
 
@@ -821,10 +844,33 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
 
       for (const transaction of transactions) {
         const date = transaction.createdAt.toLocaleDateString('ru-RU');
-        const type = transaction.type === 'EARN' ? '➕' : '➖';
-        const amount = Number(transaction.amount);
+        let type = '';
+        let typeText = '';
 
-        message += `${type} *${amount}₽* - ${transaction.description || 'Без описания'}\n`;
+        switch (transaction.type) {
+          case 'EARN':
+            type = '➕';
+            typeText = 'Начисление';
+            break;
+          case 'SPEND':
+            type = '➖';
+            typeText = 'Списание';
+            break;
+          case 'EXPIRE':
+            type = '⏰';
+            typeText = 'Истекли';
+            break;
+          case 'REFUND':
+            type = '↩️';
+            typeText = 'Возврат';
+            break;
+          default:
+            type = '❓';
+            typeText = 'Неизвестно';
+        }
+
+        const amount = Number(transaction.amount);
+        message += `${type} *${amount}₽* - ${transaction.description || `${typeText} бонусов`}\n`;
         message += `📅 ${date}\n\n`;
       }
 
