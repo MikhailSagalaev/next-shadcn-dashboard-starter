@@ -104,9 +104,9 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       : payment.amount || 0;
 
   const appliedRequested =
-    typeof orderData.appliedBonuses === 'string'
-      ? parseFloat(orderData.appliedBonuses) || 0
-      : orderData.appliedBonuses || 0;
+    typeof (orderData as any).appliedBonuses === 'string'
+      ? parseFloat((orderData as any).appliedBonuses) || 0
+      : (orderData as any).appliedBonuses || 0;
 
   // Определяем является ли промокод GUPIL
   const promoFromPayment = (payment as any)?.promocode;
@@ -219,6 +219,9 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       });
     }
 
+    // Получаем баланс пользователя до операций
+    const userBalanceBefore = await UserService.getUserBalance(user.id);
+
     // Начисляем бонусы за покупку
     const totalAmount =
       typeof payment.amount === 'string'
@@ -262,13 +265,16 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       });
 
       if (shouldSpendBonuses) {
+        const userBalanceBeforeSpend = await UserService.getUserBalance(
+          user.id
+        );
         logger.info('🎯 Условия для списания бонусов выполнены', {
           projectId,
           orderId,
           isGupilPromo,
           bonusBehavior,
           appliedRequested,
-          userBalance: user.currentBalance,
+          userBalance: userBalanceBeforeSpend.currentBalance,
           component: 'tilda-webhook'
         });
 
@@ -416,7 +422,9 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
           bonusBehavior,
           debug: {
             promo: finalPromo, // исправлено
-            appliedBonuses: appliedRaw,
+            appliedBonuses:
+              (orderData as any).appliedBonuses ??
+              (orderData as any).applied_bonuses,
             isGupilPromo,
             bonusBehavior,
             timestamp: new Date().toISOString()
@@ -512,7 +520,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         shouldEarnBonuses,
         bonusBehavior,
         userBalanceAfter: Number(userBalance.currentBalance),
-        userBalanceBefore: Number(user.currentBalance),
+        userBalanceBefore: Number(userBalanceBefore.currentBalance),
         bonusEarned: Number(result.bonus.amount),
         bonusSpent: bonusesSpent,
         bonusStatus,
@@ -530,7 +538,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       bonusEarned: Number(result.bonus.amount),
       bonusSpent: bonusesSpent,
       bonusStatus,
-      balanceBefore: Number(user.currentBalance),
+      balanceBefore: Number(userBalanceBefore.currentBalance),
       balanceAfter: Number(userBalance.currentBalance),
       component: 'tilda-webhook'
     });
