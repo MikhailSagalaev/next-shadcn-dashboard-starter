@@ -141,7 +141,14 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     bonusBehavior,
     shouldSpendBonuses,
     shouldEarnBonuses,
-    component: 'tilda-webhook'
+    component: 'tilda-webhook',
+    debug_checks: {
+      appliedRequested_isFinite: Number.isFinite(appliedRequested),
+      appliedRequested_gt_0: appliedRequested > 0,
+      isGupilPromo_check: isGupilPromo,
+      bonusBehavior_check:
+        bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY'
+    }
   });
 
   try {
@@ -183,13 +190,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
 
     // Обработка списания бонусов в зависимости от настроек проекта
     try {
-      const promo =
-        (payment as any)?.promocode || (orderData as any)?.promocode;
-      const isGupilPromo =
-        typeof promo === 'string' && promo.trim().toUpperCase() === 'GUPIL';
-
-      // Дополнительная проверка: если в данных есть appliedBonuses и это может быть GUPIL промокод
-      // (когда промокод применяется через Tilda API, он может не передаваться как строка)
+      // Используем уже определенный isGupilPromo вместо переопределения
       const hasAppliedBonuses = appliedRequested > 0;
       const shouldCheckGupilPromo = hasAppliedBonuses && !isGupilPromo;
 

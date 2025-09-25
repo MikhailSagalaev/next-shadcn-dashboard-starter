@@ -282,12 +282,15 @@
         });
       }
 
+      // Сохраняем ссылку на this для использования в event listener'ах
+      const self = this;
+
       // Слушаем события обновления корзины Tilda
       document.addEventListener('tcart:updated', (event) => {
-        this.log('Получено событие обновления корзины Tilda');
+        self.log('Получено событие обновления корзины Tilda');
         // Обновляем отображение виджета при изменении корзины
         setTimeout(() => {
-          this.updateWidgetUI();
+          self.updateWidgetUI();
         }, 100);
       });
 
@@ -299,26 +302,26 @@
           )
         ) {
           setTimeout(() => {
-            this.updateWidgetUI();
-            this.log('Обновляем виджет после изменения количества товаров');
+            self.updateWidgetUI();
+            self.log('Обновляем виджет после изменения количества товаров');
           }, 200);
         }
       });
 
       // Слушаем события изменения количества через API Tilda
       document.addEventListener('tcart:quantity:changed', (event) => {
-        this.log('Количество товаров изменено через API Tilda');
+        self.log('Количество товаров изменено через API Tilda');
         setTimeout(() => {
-          this.updateWidgetUI();
-          this.forceUpdateCartDisplay();
+          self.updateWidgetUI();
+          self.forceUpdateCartDisplay();
         }, 150);
       });
 
       // Слушаем события пересчета корзины
       document.addEventListener('tcart:recalculated', (event) => {
-        this.log('Корзина пересчитана');
+        self.log('Корзина пересчитана');
         setTimeout(() => {
-          this.updateWidgetUI();
+          self.updateWidgetUI();
         }, 100);
       });
     },
@@ -659,7 +662,7 @@
 
           // Повторно применяем бонусы
           setTimeout(() => {
-            this.applyBonuses(currentAmount);
+            this.applyBonuses();
           }, 100);
         }
       } catch (error) {
