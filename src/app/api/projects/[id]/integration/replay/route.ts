@@ -151,6 +151,13 @@ export async function POST(
     let response;
     let responseBody;
 
+    console.log('🚀 Начинаем fetch запрос:', {
+      targetUrl,
+      method,
+      hasBody: !!requestBody,
+      component: 'webhook-replay'
+    });
+
     try {
       response = await fetch(targetUrl, {
         method,
@@ -161,10 +168,27 @@ export async function POST(
         body: JSON.stringify(requestBody)
       });
 
+      console.log('✅ Fetch запрос завершен:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        component: 'webhook-replay'
+      });
+
       // Читаем ответ
       try {
         responseBody = await response.json();
-      } catch {
+        console.log('✅ Тело ответа прочитано:', {
+          hasBody: !!responseBody,
+          bodyType: typeof responseBody,
+          component: 'webhook-replay'
+        });
+      } catch (jsonError) {
+        console.error('⚠️ Ошибка чтения JSON ответа:', {
+          error:
+            jsonError instanceof Error ? jsonError.message : String(jsonError),
+          component: 'webhook-replay'
+        });
         responseBody = { _error: 'failed_to_parse_response' };
       }
     } catch (fetchError) {
@@ -193,6 +217,13 @@ export async function POST(
       );
     }
 
+    // Если fetch прошел успешно, продолжаем обработку
+    console.log('🔄 Продолжаем обработку после успешного fetch', {
+      responseStatus: response.status,
+      hasResponseBody: !!responseBody,
+      component: 'webhook-replay'
+    });
+
     // Логируем результат
     console.log('🔄 Webhook запрос выполнен', {
       projectId,
@@ -205,9 +236,44 @@ export async function POST(
       component: 'webhook-replay'
     });
 
+    // Проверяем, что у нас есть все необходимые данные
+    if (!response || responseBody === undefined) {
+      console.error(
+        '❌ Критическая ошибка: response или responseBody не определены',
+        {
+          hasResponse: !!response,
+          hasResponseBody: responseBody !== undefined,
+          component: 'webhook-replay'
+        }
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            type: 'INVALID_RESPONSE',
+            message: 'Ответ от сервера не получен или поврежден'
+          }
+        },
+        { status: 500 }
+      );
+    }
+
     // Сохраняем новый лог
     let newLog;
     try {
+      console.log('💾 Сохраняем новый лог в БД:', {
+        projectId,
+        endpoint,
+        method,
+        hasHeaders: !!headers,
+        hasBody: !!requestBody,
+        hasResponse: !!responseBody,
+        status: response.status,
+        ok: response.ok,
+        component: 'webhook-replay'
+      });
+
       newLog = await db.webhookLog.create({
         data: {
           projectId,
