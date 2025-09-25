@@ -128,7 +128,7 @@ ${headers}${body ? ` \\\n    -d '${body}'` : ''} \\
     try {
       setReplayingLog(log.id);
 
-      // Сервер сам выполняет запрос и сохраняет результат
+      // Сервер выполняет запрос и возвращает результат
       const response = await fetch(
         `/api/projects/${projectId}/integration/replay`,
         {
@@ -148,16 +148,19 @@ ${headers}${body ? ` \\\n    -d '${body}'` : ''} \\
 
       const result = await response.json();
 
-      if (response.ok) {
-        toast.success('Запрос успешно выполнен');
+      if (response.ok && result.success) {
+        toast.success('Запрос успешно повторен');
         // Обновляем логи после повторного выполнения
         loadLogs();
       } else {
-        toast.error(`Ошибка: ${result.error?.message || 'Неизвестная ошибка'}`);
+        const errorMsg =
+          result.error?.message || result.message || 'Неизвестная ошибка';
+        toast.error(`Ошибка повторения: ${errorMsg}`);
+        console.error('Replay failed:', result);
       }
     } catch (error) {
-      toast.error('Ошибка при выполнении запроса');
-      console.error('Replay error:', error);
+      toast.error('Ошибка сети при повторении запроса');
+      console.error('Replay network error:', error);
     } finally {
       setReplayingLog(null);
     }

@@ -109,12 +109,13 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       : orderData.appliedBonuses || 0;
 
   // Определяем является ли промокод GUPIL
+  const promoFromPayment = (payment as any)?.promocode;
+  const promoFromOrderData = (orderData as any)?.promocode;
+
+  const finalPromo = promoFromPayment || promoFromOrderData;
   const isGupilPromo =
-    typeof ((payment as any)?.promocode || (orderData as any)?.promocode) ===
-      'string' &&
-    ((payment as any)?.promocode || (orderData as any)?.promocode)
-      .trim()
-      .toUpperCase() === 'GUPIL';
+    typeof finalPromo === 'string' &&
+    finalPromo.trim().toUpperCase() === 'GUPIL';
 
   // Проверяем условия для списания бонусов
   // Бонусы списываются если:
@@ -142,6 +143,14 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     shouldSpendBonuses,
     shouldEarnBonuses,
     component: 'tilda-webhook',
+    promo_debug: {
+      promoFromPayment,
+      promoFromOrderData,
+      finalPromo,
+      finalPromoType: typeof finalPromo,
+      finalPromoUpper:
+        typeof finalPromo === 'string' ? finalPromo.toUpperCase() : null
+    },
     debug_checks: {
       appliedRequested_isFinite: Number.isFinite(appliedRequested),
       appliedRequested_gt_0: appliedRequested > 0,

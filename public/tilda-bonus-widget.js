@@ -290,7 +290,7 @@
         self.log('Получено событие обновления корзины Tilda');
         // Обновляем отображение виджета при изменении корзины
         setTimeout(() => {
-          self.updateWidgetUI();
+          self.updateBalanceDisplay();
         }, 100);
       });
 
@@ -302,7 +302,7 @@
           )
         ) {
           setTimeout(() => {
-            self.updateWidgetUI();
+            self.updateBalanceDisplay();
             self.log('Обновляем виджет после изменения количества товаров');
           }, 200);
         }
@@ -312,7 +312,7 @@
       document.addEventListener('tcart:quantity:changed', (event) => {
         self.log('Количество товаров изменено через API Tilda');
         setTimeout(() => {
-          self.updateWidgetUI();
+          self.updateBalanceDisplay();
           self.forceUpdateCartDisplay();
         }, 150);
       });
@@ -321,7 +321,7 @@
       document.addEventListener('tcart:recalculated', (event) => {
         self.log('Корзина пересчитана');
         setTimeout(() => {
-          self.updateWidgetUI();
+          self.updateBalanceDisplay();
         }, 100);
       });
     },
@@ -653,20 +653,57 @@
         if (currentAmount > 0) {
           this.log('Переприменяем бонусы:', currentAmount);
 
-          // Очищаем текущий промокод
-          if (typeof window.t_input_promocode__clearPromocode === 'function') {
-            try {
-              window.t_input_promocode__clearPromocode();
-            } catch (_) {}
-          }
+          // Полностью очищаем промокод и пересчитываем корзину
+          this.clearAllPromocodes();
 
-          // Повторно применяем бонусы
+          // Ждем полной очистки, затем применяем бонусы заново
           setTimeout(() => {
-            this.applyBonuses();
-          }, 100);
+            this.applyBonuses(currentAmount);
+          }, 500); // Увеличиваем задержку
         }
       } catch (error) {
         this.log('Ошибка при переприменении бонусов:', error);
+      }
+    },
+
+    // Полная очистка всех промокодов
+    clearAllPromocodes: function () {
+      try {
+        this.log('Полностью очищаем все промокоды');
+
+        // Очищаем промокод через Tilda API
+        if (typeof window.t_input_promocode__clearPromocode === 'function') {
+          try {
+            window.t_input_promocode__clearPromocode();
+          } catch (_) {}
+        }
+
+        // Сбрасываем состояние виджета
+        this.state.appliedBonuses = 0;
+
+        // Пересчитываем корзину без промокода
+        if (typeof window.tcart__calcPromocode === 'function') {
+          try {
+            window.tcart__calcPromocode();
+          } catch (_) {}
+        }
+
+        // Обновляем отображение
+        if (typeof window.tcart__reDrawTotal === 'function') {
+          try {
+            window.tcart__reDrawTotal();
+          } catch (_) {}
+        }
+
+        if (typeof window.tcart__reDraw === 'function') {
+          try {
+            window.tcart__reDraw();
+          } catch (_) {}
+        }
+
+        this.log('Промокоды очищены');
+      } catch (error) {
+        this.log('Ошибка при очистке промокодов:', error);
       }
     },
 
@@ -733,12 +770,11 @@
 
         // Применяем скидку через нативный механизм Тильды как промокод с фиксированным дискаунтом
         try {
-          // Очищаем предыдущий промокод если был применен
-          if (typeof window.t_input_promocode__clearPromocode === 'function') {
-            try {
-              window.t_input_promocode__clearPromocode();
-            } catch (_) {}
-          }
+          // Полностью очищаем все промокоды перед применением новых
+          this.clearAllPromocodes();
+
+          // Ждем очистки
+          await new Promise((resolve) => setTimeout(resolve, 300));
 
           // Применяем новый промокод с бонусами
           if (typeof window.t_input_promocode__addPromocode === 'function') {

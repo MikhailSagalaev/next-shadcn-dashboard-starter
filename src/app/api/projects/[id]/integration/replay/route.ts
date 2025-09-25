@@ -148,26 +148,49 @@ export async function POST(
     const targetUrl = `${baseUrl}${endpoint}`;
 
     // Выполняем запрос с правильной конфигурацией для Node.js
-    const response = await fetch(targetUrl, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      },
-      body: JSON.stringify(requestBody)
-      // В production может потребоваться дополнительная конфигурация
-      // для обхода проблем с SSL/TLS или DNS
-      // next: {
-      //   revalidate: 0, // Отключаем кеширование
-      // },
-    });
-
-    // Читаем ответ
+    let response;
     let responseBody;
+
     try {
-      responseBody = await response.json();
-    } catch {
-      responseBody = { _error: 'failed_to_parse_response' };
+      response = await fetch(targetUrl, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      // Читаем ответ
+      try {
+        responseBody = await response.json();
+      } catch {
+        responseBody = { _error: 'failed_to_parse_response' };
+      }
+    } catch (fetchError) {
+      console.error('❌ Ошибка выполнения fetch запроса:', {
+        projectId,
+        logId,
+        targetUrl,
+        error:
+          fetchError instanceof Error ? fetchError.message : String(fetchError),
+        component: 'webhook-replay'
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            type: 'FETCH_ERROR',
+            message: 'Ошибка выполнения запроса',
+            details:
+              fetchError instanceof Error
+                ? fetchError.message
+                : String(fetchError)
+          }
+        },
+        { status: 500 }
+      );
     }
 
     // Логируем результат
