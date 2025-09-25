@@ -141,6 +141,7 @@ async function getHandler(
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
+    const aggregate = searchParams.get('aggregate') !== 'false';
 
     // Проверяем существование пользователя в проекте
     const user = await db.user.findFirst({
@@ -189,12 +190,23 @@ async function getHandler(
           : undefined
       }));
 
+      const { aggregatedTransactions, aggregatedTotal } = aggregate
+        ? aggregateTransactionsForResponse(serializedTransactions)
+        : {
+            aggregatedTransactions: serializedTransactions,
+            aggregatedTotal: serializedTransactions.length
+          };
+
       return NextResponse.json({
-        transactions: serializedTransactions,
-        total,
+        transactions: aggregatedTransactions,
+        total: aggregatedTotal,
+        originalTotal: total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+        aggregated: aggregate,
+        pageAggregatedTotal: aggregatedTotal
       });
     }
 
@@ -222,3 +234,136 @@ async function getHandler(
 
 export const POST = withApiRateLimit(postHandler);
 export const GET = withApiRateLimit(getHandler);
+
+type SerializedTransaction = {
+  id: string;
+  userId: string;
+  bonusId?: string | null;
+  amount: string;
+  type: string;
+  description?: string | null;
+  metadata?: Record<string, any> | null;
+  createdAt: string;
+  user?: Record<string, unknown> | undefined;
+  bonus?: Record<string, unknown> | undefined;
+};
+
+type AggregatedSerializedTransaction = SerializedTransaction & {
+  aggregated?: boolean;
+  aggregatedTransactionIds?: string[];
+  aggregatedTransactions?: SerializedTransaction[];
+};
+
+function aggregateTransactionsForResponse(
+  transactions: SerializedTransaction[]
+) {
+  const spendGroups = new Map<
+    string,
+    {
+      items: SerializedTransaction[];
+    }
+  >();
+
+  transactions.forEach((transaction, index) => {
+    if (transaction.type !== 'SPEND') return;
+
+    const metadata = transaction.metadata;
+    if (!metadata || typeof metadata !== 'object') return;
+
+    const batchId =
+      metadata.spendBatchId ||
+      metadata.spend_batch_id ||
+      metadata.spendbatchid ||
+      metadata.spend_batchId;
+
+    if (!batchId || typeof batchId !== 'string') return;
+
+    if (!spendGroups.has(batchId)) {
+      spendGroups.set(batchId, { items: [] });
+    }
+
+    spendGroups.get(batchId)!.items.push(transaction);
+  });
+
+  if (spendGroups.size === 0) {
+    return {
+      aggregatedTransactions: transactions,
+      aggregatedTotal: transactions.length
+    };
+  }
+
+  const processedBatchIds = new Set<string>();
+  const aggregatedResult: AggregatedSerializedTransaction[] = [];
+
+  transactions.forEach((transaction) => {
+    if (transaction.type !== 'SPEND') {
+      aggregatedResult.push(transaction);
+      return;
+    }
+
+    const metadata = transaction.metadata;
+    const batchId =
+      metadata?.spendBatchId ||
+      metadata?.spend_batch_id ||
+      metadata?.spendbatchid ||
+      metadata?.spend_batchId;
+
+    if (!batchId || typeof batchId !== 'string') {
+      aggregatedResult.push(transaction);
+      return;
+    }
+
+    if (processedBatchIds.has(batchId)) {
+      return;
+    }
+
+    const group = spendGroups.get(batchId);
+    if (!group) {
+      aggregatedResult.push(transaction);
+      return;
+    }
+
+    processedBatchIds.add(batchId);
+
+    if (group.items.length === 1) {
+      aggregatedResult.push(group.items[0]);
+      return;
+    }
+
+    const baseTransaction = { ...group.items[0] };
+    const totalAmount = group.items.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0
+    );
+
+    const aggregatedMetadata = {
+      ...(typeof baseTransaction.metadata === 'object'
+        ? baseTransaction.metadata || {}
+        : {}),
+      spendBatchId: batchId,
+      spendBatchOriginalTransactionIds: group.items.map((item) => item.id),
+      spendBatchOriginalAmounts: group.items.map((item) => item.amount),
+      spendAggregatedCount: group.items.length,
+      spendAggregatedAmount: totalAmount
+    };
+
+    const aggregatedTransaction: AggregatedSerializedTransaction = {
+      ...baseTransaction,
+      id: `batch-${batchId}`,
+      amount: totalAmount.toFixed(2),
+      metadata: aggregatedMetadata,
+      description:
+        baseTransaction.description || 'Агрегированное списание бонусов',
+      aggregated: true,
+      aggregatedTransactionIds: group.items.map((item) => item.id),
+      aggregatedTransactions: group.items
+    };
+
+    aggregatedResult.push(aggregatedTransaction);
+  });
+
+  return {
+    aggregatedTransactions: aggregatedResult,
+    aggregatedTotal: aggregatedResult.length
+  };
+}

@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useMemo, useCallback, memo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle
@@ -176,12 +177,12 @@ export function BonusManagementPageRefactored({
       setHistoryUserId(userId);
       try {
         const res = await fetch(
-          `/api/projects/${currentProjectId}/users/${userId}/bonuses?page=${page}&limit=20`,
+          `/api/projects/${currentProjectId}/users/${userId}/bonuses?page=${page}&limit=20&aggregate=true`,
           { cache: 'no-store' }
         );
         const data = await res.json();
         setHistoryItems(data?.transactions || []);
-        setHistoryTotal(data?.pagination?.total || 0);
+        setHistoryTotal(data?.total || data?.originalTotal || 0);
         setHistoryPage(page);
       } finally {
         setHistoryLoading(false);
@@ -531,9 +532,14 @@ export function BonusManagementPageRefactored({
         open={!!historyUserId}
         onOpenChange={(o) => !o && setHistoryUserId(null)}
       >
-        <DialogContent className='max-w-4xl max-h-[80vh] flex flex-col'>
+        <DialogContent className='flex max-h-[80vh] max-w-4xl flex-col'>
           <DialogHeader>
-            <DialogTitle>История операций</DialogTitle>
+            <div className='flex items-start justify-between gap-3'>
+              <DialogTitle>История операций</DialogTitle>
+              <DialogClose className='hover:bg-muted rounded-md border px-3 py-1 text-xs font-medium transition-colors'>
+                Закрыть
+              </DialogClose>
+            </div>
           </DialogHeader>
           <div className='flex-1 overflow-hidden'>
             {historyLoading ? (
@@ -543,10 +549,10 @@ export function BonusManagementPageRefactored({
                 Нет операций
               </div>
             ) : (
-              <div className='space-y-3 h-full flex flex-col'>
-                <div className='flex-1 overflow-auto border rounded-lg'>
+              <div className='flex h-full flex-col space-y-3'>
+                <div className='flex-1 overflow-auto rounded-lg border'>
                   <Table>
-                    <TableHeader className='sticky top-0 bg-background z-10'>
+                    <TableHeader className='bg-background sticky top-0 z-10'>
                       <TableRow>
                         <TableHead className='w-[160px]'>Дата</TableHead>
                         <TableHead className='w-[120px] text-center'>
@@ -555,37 +561,75 @@ export function BonusManagementPageRefactored({
                         <TableHead className='w-[120px] text-right'>
                           Сумма
                         </TableHead>
-                        <TableHead className='min-w-[250px]'>Описание</TableHead>
+                        <TableHead className='min-w-[250px]'>
+                          Описание
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {historyItems.map((t) => (
-                        <TableRow key={t.id}>
-                          <TableCell className='text-sm'>
-                            {new Date(t.createdAt).toLocaleString('ru-RU')}
-                          </TableCell>
-                          <TableCell className='text-center'>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                t.type === 'EARN'
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-red-100 text-red-800'
-                              }`}
+                        <Fragment key={t.id}>
+                          <TableRow>
+                            <TableCell className='text-sm'>
+                              {new Date(t.createdAt).toLocaleString('ru-RU')}
+                            </TableCell>
+                            <TableCell className='text-center'>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                  t.type === 'EARN'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-red-100 text-red-800'
+                                }`}
+                              >
+                                {t.type === 'EARN' ? 'Начисление' : 'Списание'}
+                              </span>
+                            </TableCell>
+                            <TableCell className='text-right font-medium'>
+                              {t.type === 'EARN' ? '+' : '-'}
+                              {Number(t.amount).toFixed(2)}₽
+                            </TableCell>
+                            <TableCell
+                              className='text-sm break-words'
+                              title={t.description || ''}
                             >
-                              {t.type === 'EARN' ? 'Начисление' : 'Списание'}
-                            </span>
-                          </TableCell>
-                          <TableCell className='text-right font-medium'>
-                            {t.type === 'EARN' ? '+' : '-'}
-                            {Number(t.amount).toFixed(2)}₽
-                          </TableCell>
-                          <TableCell
-                            className='text-sm break-words'
-                            title={t.description || ''}
-                          >
-                            {t.description || '-'}
-                          </TableCell>
-                        </TableRow>
+                              {t.description || '-'}
+                              {t.metadata?.spendAggregatedCount ? (
+                                <span className='text-muted-foreground ml-2 text-xs'>
+                                  (совмещено {t.metadata.spendAggregatedCount}{' '}
+                                  операций)
+                                </span>
+                              ) : null}
+                              {Array.isArray(t.aggregatedTransactions) &&
+                              t.aggregatedTransactions.length > 0 ? (
+                                <div className='border-muted-foreground/30 bg-muted/50 text-muted-foreground mt-2 space-y-1 rounded-md border border-dashed p-2 text-xs'>
+                                  {t.aggregatedTransactions.map(
+                                    (child: any) => (
+                                      <div
+                                        key={child.id}
+                                        className='flex flex-wrap items-center justify-between gap-2'
+                                      >
+                                        <span>
+                                          {new Date(
+                                            child.createdAt
+                                          ).toLocaleString('ru-RU')}
+                                        </span>
+                                        <span className='text-destructive font-medium'>
+                                          -{Number(child.amount).toFixed(2)}₽
+                                        </span>
+                                        {child.metadata?.spentFromBonusId ? (
+                                          <span className='opacity-70'>
+                                            ID бонуса:{' '}
+                                            {child.metadata.spentFromBonusId}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        </Fragment>
                       ))}
                     </TableBody>
                   </Table>
@@ -604,7 +648,9 @@ export function BonusManagementPageRefactored({
                       variant='outline'
                       size='sm'
                       disabled={historyPage <= 1}
-                      onClick={() => openHistory(historyUserId!, historyPage - 1)}
+                      onClick={() =>
+                        openHistory(historyUserId!, historyPage - 1)
+                      }
                     >
                       Назад
                     </Button>
@@ -612,7 +658,9 @@ export function BonusManagementPageRefactored({
                       variant='outline'
                       size='sm'
                       disabled={historyPage * 20 >= historyTotal}
-                      onClick={() => openHistory(historyUserId!, historyPage + 1)}
+                      onClick={() =>
+                        openHistory(historyUserId!, historyPage + 1)
+                      }
                     >
                       Вперёд
                     </Button>

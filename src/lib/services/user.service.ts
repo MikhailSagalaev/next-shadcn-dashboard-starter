@@ -1,5 +1,7 @@
 // Типизация восстановлена для обеспечения безопасности типов
 
+import { randomUUID } from 'crypto';
+
 import { db } from '@/lib/db';
 import type {
   CreateUserInput,
@@ -587,6 +589,25 @@ export class BonusService {
       Number(user.totalPurchases)
     );
 
+    const baseMetadata = metadata ? { ...metadata } : {};
+    const spendBatchId =
+      typeof baseMetadata.spendBatchId === 'string'
+        ? baseMetadata.spendBatchId
+        : randomUUID();
+    baseMetadata.spendBatchId = spendBatchId;
+
+    const normalizedOrderId =
+      baseMetadata.spendOrderId ??
+      baseMetadata.orderId ??
+      baseMetadata.order_id ??
+      baseMetadata.orderID ??
+      baseMetadata.orderNumber ??
+      undefined;
+
+    if (normalizedOrderId && !baseMetadata.spendOrderId) {
+      baseMetadata.spendOrderId = normalizedOrderId;
+    }
+
     const transactions = await db.$transaction(async (tx) => {
       const availableBonuses = await tx.bonus.findMany({
         where: {
@@ -617,6 +638,16 @@ export class BonusService {
         const bonusAmount = Number(bonus.amount);
         const spendFromThisBonus = Math.min(bonusAmount, remainingAmount);
 
+        const transactionMetadata = {
+          ...baseMetadata,
+          spendBatchId,
+          spendBatchIndex: created.length,
+          spendOrderId: baseMetadata.spendOrderId,
+          spendSource: baseMetadata.source || baseMetadata.spendSource,
+          spentFromBonusId: bonus.id,
+          originalBonusAmount: bonusAmount
+        };
+
         const transaction = await tx.transaction.create({
           data: {
             userId,
@@ -624,7 +655,7 @@ export class BonusService {
             amount: spendFromThisBonus,
             type: 'SPEND',
             description: description || 'Списание бонусов',
-            metadata,
+            metadata: transactionMetadata,
             userLevel: currentLevel?.name,
             appliedPercent: currentLevel?.paymentPercent
           },
