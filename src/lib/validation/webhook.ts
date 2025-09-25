@@ -36,7 +36,9 @@ export const TildaOrderSchema = z.object({
   utm_medium: z.string().optional(),
   utm_campaign: z.string().optional(),
   utm_content: z.string().optional(),
-  utm_term: z.string().optional()
+  utm_term: z.string().optional(),
+  appliedBonuses: z.union([z.string(), z.number()]).optional(),
+  applied_bonuses: z.union([z.string(), z.number()]).optional()
 });
 
 // Схема для регистрации пользователя
