@@ -144,17 +144,20 @@ export async function POST(
     });
 
     // Определяем URL для повторного запроса
-    // В production может потребоваться другой подход
-    let baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    // Если endpoint уже абсолютный (начинается с http/https), используем его напрямую
+    let targetUrl = endpoint;
 
-    if (!baseUrl) {
-      // Пробуем определить URL из заголовков запроса
-      const host = request.headers.get('host');
-      const protocol = request.headers.get('x-forwarded-proto') || 'http';
-      baseUrl = `${protocol}://${host}`;
+    if (!/^https?:\/\//i.test(endpoint)) {
+      let baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+      if (!baseUrl) {
+        const host = request.headers.get('host');
+        const protocol = request.headers.get('x-forwarded-proto') || 'http';
+        baseUrl = `${protocol}://${host}`;
+      }
+
+      targetUrl = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     }
-
-    const targetUrl = `${baseUrl}${endpoint}`;
 
     console.log('🔍 Определение URL для replay:', {
       envAppUrl: process.env.NEXT_PUBLIC_APP_URL,
