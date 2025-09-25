@@ -117,6 +117,27 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     typeof finalPromo === 'string' &&
     finalPromo.trim().toUpperCase() === 'GUPIL';
 
+  // КРИТИЧНОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ ПРОМОКОДА
+  logger.info('🔍 ДЕТАЛЬНЫЙ АНАЛИЗ ПРОМОКОДА', {
+    projectId,
+    orderId: payment.orderid,
+    promoFromPayment,
+    promoFromOrderData,
+    finalPromo,
+    finalPromoType: typeof finalPromo,
+    isGupilPromo,
+    appliedBonuses: (orderData as any).appliedBonuses,
+    RAW_orderData: {
+      hasPromocode: 'promocode' in orderData,
+      keys: Object.keys(orderData)
+    },
+    RAW_payment: {
+      hasPromocode: 'promocode' in payment,
+      keys: Object.keys(payment)
+    },
+    component: 'tilda-webhook-promo-debug'
+  });
+
   // Проверяем условия для списания бонусов
   // НОВАЯ ЛОГИКА: Бонусы списываются если:
   // 1. Есть appliedBonuses > 0 (виджет применил бонусы)
@@ -236,6 +257,9 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     const description = `Заказ #${orderId}: ${productNames}`;
 
     // Обработка списания бонусов в зависимости от настроек проекта
+    let actuallySpentBonuses = false; // Реальный статус списания
+    let spentAmount = 0; // Реально списанная сумма
+
     try {
       logger.info('🔍 Анализ промокода', {
         projectId,
@@ -352,7 +376,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
             component: 'tilda-webhook'
           });
 
-          await BonusService.spendBonuses(
+          const spendTransactions = await BonusService.spendBonuses(
             user.id,
             applied,
             `Списание бонусов при заказе ${orderId}${isGupilPromo ? ' (промокод GUPIL)' : ''}`,
@@ -365,11 +389,20 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
             }
           );
 
+          // Обновляем реальный статус списания
+          actuallySpentBonuses = spendTransactions.length > 0;
+          spentAmount = spendTransactions.reduce(
+            (sum, t) => sum + Number(t.amount),
+            0
+          );
+
           logger.info('✅ Списание бонусов выполнено успешно', {
             projectId,
             orderId,
             userId: user.id,
             applied,
+            actuallySpent: spentAmount,
+            transactionsCount: spendTransactions.length,
             userLevel: currentLevel?.name,
             bonusBehavior,
             component: 'tilda-webhook'
@@ -462,13 +495,13 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     // Получаем баланс пользователя для ответа
     const userBalance = await UserService.getUserBalance(user.id);
 
-    // Определяем статус обработки бонусов
+    // Определяем статус обработки бонусов НА ОСНОВЕ РЕАЛЬНОГО ВЫПОЛНЕНИЯ
     let bonusStatus = 'earn_only';
-    if (shouldSpendBonuses) {
+    if (actuallySpentBonuses) {
       bonusStatus =
         bonusBehavior === 'SPEND_ONLY' ? 'spend_only' : 'spend_and_earn';
     }
-    const bonusesSpent = shouldSpendBonuses && appliedRequested > 0;
+    const bonusesSpent = actuallySpentBonuses;
 
     return {
       success: true,
@@ -501,7 +534,8 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       bonusStatus: {
         spent: bonusesSpent,
         earned: true,
-        appliedAmount: appliedRequested,
+        appliedAmount: actuallySpentBonuses ? spentAmount : 0,
+        requestedAmount: appliedRequested,
         bonusBehavior: bonusBehavior
       },
       debug: {
@@ -523,6 +557,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         userBalanceBefore: Number(userBalanceBefore.currentBalance),
         bonusEarned: Number(result.bonus.amount),
         bonusSpent: bonusesSpent,
+        bonusSpentAmount: spentAmount,
         bonusStatus,
         timestamp: new Date().toISOString()
       }
@@ -537,6 +572,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       shouldEarnBonuses,
       bonusEarned: Number(result.bonus.amount),
       bonusSpent: bonusesSpent,
+      bonusSpentAmount: spentAmount,
       bonusStatus,
       balanceBefore: Number(userBalanceBefore.currentBalance),
       balanceAfter: Number(userBalance.currentBalance),
