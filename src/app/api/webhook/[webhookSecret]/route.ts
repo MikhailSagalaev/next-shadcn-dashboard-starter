@@ -127,6 +127,20 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     appliedRequested > 0 &&
     (bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY');
 
+  // ЭКСТРЕННОЕ ЛОГИРОВАНИЕ СРАЗУ ПОСЛЕ РАСЧЕТА
+  logger.info('🚨 ЭКСТРЕННОЕ ЛОГИРОВАНИЕ ПОСЛЕ РАСЧЕТА shouldSpendBonuses', {
+    projectId,
+    orderId: payment.orderid,
+    appliedRequested_initial: appliedRequested,
+    bonusBehavior_initial: bonusBehavior,
+    shouldSpendBonuses_calculated: shouldSpendBonuses,
+    isFinite: Number.isFinite(appliedRequested),
+    gt_zero: appliedRequested > 0,
+    behavior_spend_and_earn: bonusBehavior === 'SPEND_AND_EARN',
+    behavior_spend_only: bonusBehavior === 'SPEND_ONLY',
+    component: 'tilda-webhook-emergency-log'
+  });
+
   // ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ для отладки проблемы
   logger.info('🎯 КРИТИЧНЫЙ АНАЛИЗ СПИСАНИЯ БОНУСОВ', {
     projectId,
@@ -255,6 +269,21 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         appliedRequested,
         bonusBehavior,
         component: 'tilda-webhook'
+      });
+
+      // КРИТИЧНОЕ ЛОГИРОВАНИЕ ПРЯМО ПЕРЕД ПРОВЕРКОЙ
+      logger.info('🚨 ПРЯМАЯ ПРОВЕРКА shouldSpendBonuses ПЕРЕД IF', {
+        projectId,
+        orderId,
+        shouldSpendBonuses,
+        appliedRequested_current: appliedRequested,
+        bonusBehavior_current: bonusBehavior,
+        isFinite_check: Number.isFinite(appliedRequested),
+        gt_zero_check: appliedRequested > 0,
+        behavior_check:
+          bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY',
+        calculation_debug: `${appliedRequested} > 0 && (${bonusBehavior} === 'SPEND_AND_EARN' || ${bonusBehavior} === 'SPEND_ONLY')`,
+        component: 'tilda-webhook-critical-if-check'
       });
 
       if (shouldSpendBonuses) {
