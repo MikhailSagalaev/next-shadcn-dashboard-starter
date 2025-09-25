@@ -10,10 +10,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ProjectService } from '@/lib/services/project.service';
 import { logger } from '@/lib/logger';
+import { validateRequest } from '@/lib/validation/api-schemas';
 import {
-  CreateProjectSchema,
-  validateRequest
-} from '@/lib/validation/api-schemas';
+  createProjectSchema,
+  type CreateProjectInput
+} from '@/lib/validation/schemas';
 import { z } from 'zod';
 // import { db } from '@/lib/db'; // удалено как неиспользуемое
 // import type { CreateProjectInput } from '@/types/bonus';
@@ -45,9 +46,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Валидация входных данных с Zod
-    const projectData = await validateRequest(request, CreateProjectSchema);
+    const validatedData = await validateRequest(request, createProjectSchema);
 
-    const project = await ProjectService.createProject(projectData);
+    // Zod гарантирует валидность данных, поэтому можем safely cast
+    const project = await ProjectService.createProject(validatedData as any);
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {

@@ -167,28 +167,36 @@ async function getHandler(
       );
 
       // Сериализуем BigInt поля в транзакциях
-      const serializedTransactions = transactions.map((t) => ({
-        ...t,
-        amount: t.amount.toString(),
-        // Дополнительная сериализация вложенных объектов, если они содержат BigInt
-        user: t.user
-          ? {
-              ...t.user,
-              totalPurchases: t.user.totalPurchases
-                ? t.user.totalPurchases.toString()
-                : '0',
-              telegramId: t.user.telegramId
-                ? t.user.telegramId.toString()
-                : null
-            }
-          : undefined,
-        bonus: t.bonus
-          ? {
-              ...t.bonus,
-              amount: t.bonus.amount.toString()
-            }
-          : undefined
-      }));
+      const serializedTransactions: SerializedTransaction[] = transactions.map(
+        (t) => ({
+          id: t.id,
+          userId: t.userId,
+          bonusId: t.bonusId,
+          amount: t.amount.toString(),
+          type: t.type,
+          description: t.description,
+          metadata: t.metadata,
+          createdAt: t.createdAt.toISOString(),
+          // Дополнительная сериализация вложенных объектов, если они содержат BigInt
+          user: t.user
+            ? {
+                ...t.user,
+                totalPurchases: t.user.totalPurchases
+                  ? t.user.totalPurchases.toString()
+                  : '0',
+                telegramId: t.user.telegramId
+                  ? t.user.telegramId.toString()
+                  : null
+              }
+            : undefined,
+          bonus: t.bonus
+            ? {
+                ...t.bonus,
+                amount: t.bonus.amount.toString()
+              }
+            : undefined
+        })
+      );
 
       const { aggregatedTransactions, aggregatedTotal } = aggregate
         ? aggregateTransactionsForResponse(serializedTransactions)

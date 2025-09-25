@@ -112,6 +112,9 @@ export function FileUploader(props: FileUploaderProps) {
     onChange: onValueChange
   });
 
+  // Ensure files is treated as File[] array
+  const currentFiles = Array.isArray(files) ? files : [];
+
   const onDrop = React.useCallback(
     (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       if (!multiple && maxFiles === 1 && acceptedFiles.length > 1) {
@@ -119,7 +122,7 @@ export function FileUploader(props: FileUploaderProps) {
         return;
       }
 
-      if ((files?.length ?? 0) + acceptedFiles.length > maxFiles) {
+      if (currentFiles.length + acceptedFiles.length > maxFiles) {
         toast.error(`Cannot upload more than ${maxFiles} files`);
         return;
       }
@@ -130,7 +133,7 @@ export function FileUploader(props: FileUploaderProps) {
         })
       );
 
-      const updatedFiles = files ? [...files, ...newFiles] : newFiles;
+      const updatedFiles = [...currentFiles, ...newFiles];
 
       setFiles(updatedFiles);
 
@@ -159,12 +162,11 @@ export function FileUploader(props: FileUploaderProps) {
       }
     },
 
-    [files, maxFiles, multiple, onUpload, setFiles]
+    [currentFiles, maxFiles, multiple, onUpload, setFiles]
   );
 
   function onRemove(index: number) {
-    if (!files) return;
-    const newFiles = files.filter((_, i) => i !== index);
+    const newFiles = currentFiles.filter((_, i) => i !== index);
     setFiles(newFiles);
     onValueChange?.(newFiles);
   }
@@ -172,8 +174,7 @@ export function FileUploader(props: FileUploaderProps) {
   // Revoke preview url when component unmounts
   React.useEffect(() => {
     return () => {
-      if (!files) return;
-      files.forEach((file) => {
+      currentFiles.forEach((file) => {
         if (isFileWithPreview(file)) {
           URL.revokeObjectURL(file.preview);
         }
@@ -182,7 +183,7 @@ export function FileUploader(props: FileUploaderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isDisabled = disabled || (files?.length ?? 0) >= maxFiles;
+  const isDisabled = disabled || currentFiles.length >= maxFiles;
 
   return (
     <div className='relative flex flex-col gap-6 overflow-hidden'>
@@ -244,10 +245,10 @@ export function FileUploader(props: FileUploaderProps) {
           </div>
         )}
       </Dropzone>
-      {files?.length ? (
+      {currentFiles.length ? (
         <ScrollArea className='h-fit w-full px-3'>
           <div className='max-h-48 space-y-4'>
-            {files?.map((file, index) => (
+            {currentFiles.map((file, index) => (
               <FileCard
                 key={index}
                 file={file}
