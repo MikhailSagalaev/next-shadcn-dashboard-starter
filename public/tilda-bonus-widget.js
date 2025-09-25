@@ -754,10 +754,26 @@
               } catch (_) {}
             }
 
+            // Пересчитываем суммы с учетом скидок (дополнительная функция Tilda)
+            if (typeof window.tcart__calcAmountWithDiscounts === 'function') {
+              try {
+                window.tcart__calcAmountWithDiscounts();
+              } catch (_) {}
+            }
+
             // Полностью перерисовываем корзину
             if (typeof window.tcart__reDrawTotal === 'function') {
               try {
                 window.tcart__reDrawTotal();
+              } catch (_) {}
+            }
+
+            // Обновляем объекты товаров в корзине
+            if (
+              typeof window.tcart__updateTotalProductsinCartObj === 'function'
+            ) {
+              try {
+                window.tcart__updateTotalProductsinCartObj();
               } catch (_) {}
             }
 
