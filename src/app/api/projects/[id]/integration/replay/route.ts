@@ -134,21 +134,13 @@ export async function POST(
     });
 
     // Выполняем повторный запрос на сервере с правильной конфигурацией
-    console.log('🔄 Начинаем повторное выполнение webhook запроса', {
-      projectId,
-      logId,
-      endpoint,
-      method,
-      targetUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${endpoint}`,
-      component: 'webhook-replay'
-    });
-
     // Определяем URL для повторного запроса
     // Если endpoint уже абсолютный (начинается с http/https), используем его напрямую
     let targetUrl = endpoint;
+    let baseUrl: string | undefined;
 
     if (!/^https?:\/\//i.test(endpoint)) {
-      let baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL;
 
       if (!baseUrl) {
         const host = request.headers.get('host');
