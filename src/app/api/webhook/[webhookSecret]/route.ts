@@ -285,17 +285,18 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
           component: 'tilda-webhook-balance-check'
         });
 
-        // Получаем текущий уровень пользователя для проверки лимитов оплаты
+        // Получаем текущий уровень пользователя (логирование)
         const currentLevel = await BonusLevelService.calculateUserLevel(
           projectId,
           Number(user.totalPurchases)
         );
 
-        // Ограничиваем суммой доступных бонусов, чтобы не падать при нехватке
+        // Ограничиваем суммой доступных бонусов и суммой заказа
         const balance = await UserService.getUserBalance(user.id);
         let applied = Math.min(
           appliedRequested,
-          Number(balance.currentBalance)
+          Number(balance.currentBalance),
+          totalAmount
         );
 
         logger.info('💰 Параметры списания бонусов', {
@@ -308,29 +309,6 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
           paymentPercent: currentLevel?.paymentPercent,
           component: 'tilda-webhook'
         });
-
-        // Применяем ограничение по проценту оплаты из уровня пользователя
-        if (currentLevel && currentLevel.paymentPercent < 100) {
-          const maxPaymentByLevel =
-            (totalAmount * currentLevel.paymentPercent) / 100;
-          applied = Math.min(applied, maxPaymentByLevel);
-
-          logger.info('🔒 Применено ограничение по уровню пользователя', {
-            projectId,
-            orderId,
-            userId: user.id,
-            userLevel: currentLevel.name,
-            paymentPercent: currentLevel.paymentPercent,
-            totalAmount,
-            maxPaymentByLevel,
-            appliedBeforeLimit: Math.min(
-              appliedRequested,
-              Number(balance.currentBalance)
-            ),
-            appliedAfterLimit: applied,
-            component: 'tilda-webhook'
-          });
-        }
 
         if (applied <= 0) {
           logger.warn(
