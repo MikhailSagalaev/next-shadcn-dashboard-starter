@@ -678,6 +678,14 @@
           } catch (_) {}
         }
 
+        // Удаляем промокод из объекта tcart (важно для корректной работы)
+        if (window.tcart && window.tcart.promocode) {
+          try {
+            delete window.tcart.promocode;
+            this.log('Удален промокод из window.tcart');
+          } catch (_) {}
+        }
+
         // Сбрасываем состояние виджета
         this.state.appliedBonuses = 0;
 

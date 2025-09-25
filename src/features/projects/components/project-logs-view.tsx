@@ -42,7 +42,6 @@ import {
   Download,
   Eye,
   Copy,
-  ExternalLink,
   RotateCcw,
   Loader2
 } from 'lucide-react';
@@ -99,29 +98,6 @@ export function ProjectLogsView({
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
     toast.success('Скопировано в буфер обмена');
-  }
-
-  function generateCurlCommand(log: WebhookLogEntry) {
-    const baseUrl =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : 'http://localhost:3000';
-    const url = `${baseUrl}${log.endpoint}`;
-
-    const headers = Object.entries(log.headers)
-      .map(([key, value]) => `    -H "${key}: ${value}"`)
-      .join(' \\\n');
-
-    const body = log.body ? JSON.stringify(log.body, null, 2) : '';
-
-    return `curl -X ${log.method} "${url}" \\
-${headers}${body ? ` \\\n    -d '${body}'` : ''} \\
-    -H "Content-Type: application/json"`;
-  }
-
-  function copyCurlCommand(log: WebhookLogEntry) {
-    const curlCommand = generateCurlCommand(log);
-    copyToClipboard(curlCommand);
   }
 
   async function replayLog(log: WebhookLogEntry) {
@@ -502,14 +478,6 @@ ${headers}${body ? ` \\\n    -d '${body}'` : ''} \\
                       >
                         <Copy className='mr-1 h-4 w-4' />
                         Копировать JSON
-                      </Button>
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        onClick={() => copyCurlCommand(selectedLog)}
-                      >
-                        <ExternalLink className='mr-1 h-4 w-4' />
-                        Копировать cURL
                       </Button>
                     </div>
                   </div>

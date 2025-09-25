@@ -144,8 +144,27 @@ export async function POST(
     });
 
     // Определяем URL для повторного запроса
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    // В production может потребоваться другой подход
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!baseUrl) {
+      // Пробуем определить URL из заголовков запроса
+      const host = request.headers.get('host');
+      const protocol = request.headers.get('x-forwarded-proto') || 'http';
+      baseUrl = `${protocol}://${host}`;
+    }
+
     const targetUrl = `${baseUrl}${endpoint}`;
+
+    console.log('🔍 Определение URL для replay:', {
+      envAppUrl: process.env.NEXT_PUBLIC_APP_URL,
+      requestHost: request.headers.get('host'),
+      requestProto: request.headers.get('x-forwarded-proto'),
+      finalBaseUrl: baseUrl,
+      endpoint,
+      targetUrl,
+      component: 'webhook-replay'
+    });
 
     // Выполняем запрос с правильной конфигурацией для Node.js
     let response;
@@ -155,6 +174,7 @@ export async function POST(
       targetUrl,
       method,
       hasBody: !!requestBody,
+      contentType: request.headers.get('content-type'),
       component: 'webhook-replay'
     });
 
@@ -196,21 +216,42 @@ export async function POST(
         projectId,
         logId,
         targetUrl,
+        method,
         error:
           fetchError instanceof Error ? fetchError.message : String(fetchError),
+        errorName: fetchError instanceof Error ? fetchError.name : 'Unknown',
         component: 'webhook-replay'
       });
+
+      // Определяем тип ошибки
+      let errorType = 'FETCH_ERROR';
+      let errorMessage = 'Ошибка выполнения запроса';
+
+      if (fetchError instanceof Error) {
+        if (fetchError.message.includes('ECONNREFUSED')) {
+          errorType = 'CONNECTION_REFUSED';
+          errorMessage = 'Сервер недоступен (ECONNREFUSED)';
+        } else if (fetchError.message.includes('ENOTFOUND')) {
+          errorType = 'DNS_ERROR';
+          errorMessage = 'DNS ошибка - хост не найден';
+        } else if (fetchError.message.includes('timeout')) {
+          errorType = 'TIMEOUT_ERROR';
+          errorMessage = 'Таймаут запроса';
+        }
+      }
 
       return NextResponse.json(
         {
           success: false,
           error: {
-            type: 'FETCH_ERROR',
-            message: 'Ошибка выполнения запроса',
+            type: errorType,
+            message: errorMessage,
             details:
               fetchError instanceof Error
                 ? fetchError.message
-                : String(fetchError)
+                : String(fetchError),
+            targetUrl,
+            method
           }
         },
         { status: 500 }
