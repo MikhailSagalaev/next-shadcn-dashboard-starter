@@ -232,58 +232,33 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       'Заказ Tilda';
     const description = `Заказ #${orderId}: ${productNames}`;
 
-    // Получаем настройки проекта для определения поведения бонусов
-    const project = await ProjectService.getProjectById(projectId);
-    const bonusBehavior = project?.bonusBehavior || 'SPEND_AND_EARN';
-
     // Обработка списания бонусов в зависимости от настроек проекта
     try {
-      // Используем уже определенный isGupilPromo вместо переопределения
-      const hasAppliedBonuses = appliedRequested > 0;
-      const shouldCheckGupilPromo = hasAppliedBonuses && !isGupilPromo;
-
       logger.info('🔍 Анализ промокода', {
         projectId,
         orderId,
         promo: finalPromo, // исправлено - была неопределенная переменная promo
         isGupilPromo,
-        hasAppliedBonuses,
         appliedRequested,
+        bonusBehavior,
         paymentData: payment,
         component: 'tilda-webhook'
       });
-      const appliedRaw =
-        (orderData as any).appliedBonuses ?? (orderData as any).applied_bonuses;
-      const appliedRequested = Number(
-        typeof appliedRaw === 'string'
-          ? appliedRaw.replace(/[^0-9.\-]/g, '')
-          : appliedRaw
-      );
 
-      logger.info('🔍 Проверка условий списания бонусов', {
-        projectId,
-        orderId,
-        promo: finalPromo, // исправлено
-        isGupilPromo,
-        appliedRaw,
-        appliedRequested,
-        bonusBehavior,
-        component: 'tilda-webhook'
-      });
-
-      // КРИТИЧНОЕ ЛОГИРОВАНИЕ ПРЯМО ПЕРЕД ПРОВЕРКОЙ
-      logger.info('🚨 ПРЯМАЯ ПРОВЕРКА shouldSpendBonuses ПЕРЕД IF', {
+      // КРИТИЧНОЕ ЛОГИРОВАНИЕ ПРЯМО ПЕРЕД РЕШЕНИЕМ О СПИСАНИИ
+      logger.info('🚨 ФИНАЛЬНАЯ ПРОВЕРКА СПИСАНИЯ БОНУСОВ', {
         projectId,
         orderId,
         shouldSpendBonuses,
-        appliedRequested_current: appliedRequested,
-        bonusBehavior_current: bonusBehavior,
-        isFinite_check: Number.isFinite(appliedRequested),
-        gt_zero_check: appliedRequested > 0,
-        behavior_check:
-          bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY',
-        calculation_debug: `${appliedRequested} > 0 && (${bonusBehavior} === 'SPEND_AND_EARN' || ${bonusBehavior} === 'SPEND_ONLY')`,
-        component: 'tilda-webhook-critical-if-check'
+        appliedRequested,
+        bonusBehavior,
+        isGupilPromo,
+        appliedBonuses_from_data: (orderData as any).appliedBonuses,
+        promocode_from_payment: (payment as any)?.promocode,
+        FINAL_DECISION: shouldSpendBonuses
+          ? '✅ БОНУСЫ БУДУТ СПИСАНЫ'
+          : '❌ БОНУСЫ НЕ БУДУТ СПИСАНЫ',
+        component: 'tilda-webhook-final-check'
       });
 
       if (shouldSpendBonuses) {
