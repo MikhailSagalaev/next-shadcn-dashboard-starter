@@ -118,16 +118,38 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     finalPromo.trim().toUpperCase() === 'GUPIL';
 
   // Проверяем условия для списания бонусов
-  // Бонусы списываются если:
-  // 1. Промокод GUPIL был применен (isGupilPromo = true)
-  // 2. Или настройка проекта позволяет списывать бонусы (SPEND_AND_EARN или SPEND_ONLY)
-  // 3. И есть примененные бонусы
+  // НОВАЯ ЛОГИКА: Бонусы списываются если:
+  // 1. Есть appliedBonuses > 0 (виджет применил бонусы)
+  // 2. И настройка проекта позволяет списывать бонусы (SPEND_AND_EARN или SPEND_ONLY)
+  // Промокод GUPIL больше не проверяется, так как он создается виджетом искусственно
   const shouldSpendBonuses =
     Number.isFinite(appliedRequested) &&
     appliedRequested > 0 &&
-    (isGupilPromo ||
-      bonusBehavior === 'SPEND_AND_EARN' ||
-      bonusBehavior === 'SPEND_ONLY');
+    (bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY');
+
+  // ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ для отладки проблемы
+  logger.info('🎯 КРИТИЧНЫЙ АНАЛИЗ СПИСАНИЯ БОНУСОВ', {
+    projectId,
+    orderId: payment.orderid,
+    RAW_DATA: {
+      appliedBonuses_from_orderData: (orderData as any).appliedBonuses,
+      promocode_from_payment: (payment as any)?.promocode,
+      bonusBehavior_from_project: bonusBehavior
+    },
+    PARSED_VALUES: {
+      appliedRequested,
+      isGupilPromo,
+      bonusBehavior
+    },
+    CALCULATIONS: {
+      isFinite_appliedRequested: Number.isFinite(appliedRequested),
+      appliedRequested_gt_0: appliedRequested > 0,
+      bonusBehavior_allows_spending:
+        bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY',
+      shouldSpendBonuses_RESULT: shouldSpendBonuses
+    },
+    component: 'tilda-webhook-critical-debug'
+  });
 
   // Проверяем, нужно ли начислять бонусы
   const shouldEarnBonuses =
@@ -151,12 +173,15 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       finalPromoUpper:
         typeof finalPromo === 'string' ? finalPromo.toUpperCase() : null
     },
-    debug_checks: {
+    NEW_LOGIC_CHECKS: {
       appliedRequested_isFinite: Number.isFinite(appliedRequested),
       appliedRequested_gt_0: appliedRequested > 0,
-      isGupilPromo_check: isGupilPromo,
-      bonusBehavior_check:
-        bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY'
+      bonusBehavior_allows_spending:
+        bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY',
+      shouldSpendBonuses_calculation:
+        Number.isFinite(appliedRequested) &&
+        appliedRequested > 0 &&
+        (bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY')
     }
   });
 
@@ -206,7 +231,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       logger.info('🔍 Анализ промокода', {
         projectId,
         orderId,
-        promo,
+        promo: finalPromo, // исправлено - была неопределенная переменная promo
         isGupilPromo,
         hasAppliedBonuses,
         appliedRequested,
@@ -224,7 +249,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       logger.info('🔍 Проверка условий списания бонусов', {
         projectId,
         orderId,
-        promo,
+        promo: finalPromo, // исправлено
         isGupilPromo,
         appliedRaw,
         appliedRequested,
@@ -344,6 +369,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         logger.info('🚫 Условия для списания бонусов НЕ выполнены', {
           projectId,
           orderId,
+          promo: finalPromo, // добавлено
           isGupilPromo,
           bonusBehavior,
           appliedRequested,
@@ -385,7 +411,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
           },
           bonusBehavior,
           debug: {
-            promo,
+            promo: finalPromo, // исправлено
             appliedBonuses: appliedRaw,
             isGupilPromo,
             bonusBehavior,
@@ -467,7 +493,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         bonusBehavior: bonusBehavior
       },
       debug: {
-        promo: (payment as any)?.promocode || (orderData as any)?.promocode,
+        promo: finalPromo, // исправлено
         appliedBonuses:
           (orderData as any).appliedBonuses ??
           (orderData as any).applied_bonuses,
