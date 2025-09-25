@@ -165,22 +165,55 @@ export async function POST(
     let response;
     let responseBody;
 
+    // Готовим заголовки: удаляем опасные поля и фиксируем content-length
+    const sanitizedHeaders: Record<string, string> = { ...headers };
+    for (const key of Object.keys(sanitizedHeaders)) {
+      const lower = key.toLowerCase();
+      if (
+        lower === 'content-length' ||
+        lower === 'host' ||
+        lower === 'connection' ||
+        lower === 'accept-encoding'
+      ) {
+        delete sanitizedHeaders[key];
+      }
+    }
+
+    const methodUpper = method.toUpperCase();
+    const hasBody =
+      requestBody !== undefined &&
+      requestBody !== null &&
+      methodUpper !== 'GET' &&
+      methodUpper !== 'HEAD';
+
+    const bodyString = hasBody
+      ? typeof requestBody === 'string'
+        ? requestBody
+        : JSON.stringify(requestBody)
+      : undefined;
+
+    if (hasBody) {
+      const hasContentType = Object.keys(sanitizedHeaders).some(
+        (key) => key.toLowerCase() === 'content-type'
+      );
+      if (!hasContentType) {
+        sanitizedHeaders['Content-Type'] = 'application/json';
+      }
+    }
+
     console.log('🚀 Начинаем fetch запрос:', {
       targetUrl,
-      method,
-      hasBody: !!requestBody,
-      contentType: request.headers.get('content-type'),
+      method: methodUpper,
+      hasBody,
+      headers: sanitizedHeaders,
       component: 'webhook-replay'
     });
 
     try {
       response = await fetch(targetUrl, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...headers
-        },
-        body: JSON.stringify(requestBody)
+        method: methodUpper,
+        headers: sanitizedHeaders,
+        body: hasBody ? bodyString : undefined
       });
 
       console.log('✅ Fetch запрос завершен:', {
