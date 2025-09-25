@@ -215,6 +215,11 @@ export async function POST(
         error:
           fetchError instanceof Error ? fetchError.message : String(fetchError),
         errorName: fetchError instanceof Error ? fetchError.name : 'Unknown',
+        cause:
+          fetchError && typeof fetchError === 'object' && 'cause' in fetchError
+            ? (fetchError as any).cause
+            : undefined,
+        stack: fetchError instanceof Error ? fetchError.stack : undefined,
         component: 'webhook-replay'
       });
 
