@@ -224,12 +224,12 @@ class MigrationRollbackService {
 
     // Восстановление пользователей
     for (const userData of backup.users) {
-      const { bonuses, transactions, notifications, ...user } = userData;
+      const { bonuses, transactions, notifications, ...userFields } = userData;
 
       // Создание пользователя
       const user = await prisma.user.create({
         data: {
-          ...user,
+          ...userFields,
           bonuses: {
             create: bonuses.map((b: any) => ({
               amount: b.amount,

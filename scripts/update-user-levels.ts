@@ -49,7 +49,7 @@ class LevelUpdateService {
 
     // Сортировка уровней по возрастанию суммы
     const sortedLevels = project.bonusLevels.sort(
-      (a, b) => a.minAmount - b.minAmount
+      (a, b) => Number(a.minAmount) - Number(b.minAmount)
     );
 
     console.log('\n🏆 Доступные уровни:');

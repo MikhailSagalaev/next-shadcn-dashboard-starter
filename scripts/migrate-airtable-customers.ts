@@ -102,9 +102,7 @@ class AirtableMigrationService {
       fs.createReadStream(csvPath)
         .pipe(
           csv({
-            separator: ';', // Попробовать разные разделители
-            skipEmptyLines: true,
-            trim: true
+            separator: ';' // Попробовать разные разделители
           })
         )
         .on('data', (data) => customers.push(data))
@@ -122,9 +120,7 @@ class AirtableMigrationService {
         fs.createReadStream(csvPath)
           .pipe(
             csv({
-              separator: ',',
-              skipEmptyLines: true,
-              trim: true
+              separator: ','
             })
           )
           .on('data', (data) => customers.push(data))
