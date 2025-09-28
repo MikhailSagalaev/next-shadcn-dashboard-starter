@@ -48,6 +48,15 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious
+} from '@/components/ui/pagination';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
@@ -82,6 +91,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const [users, setUsers] = useState<UserWithBonuses[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
   const [bulkOperation, setBulkOperation] = useState<
@@ -146,7 +158,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     setSelectedUsers([]);
   };
 
-  const loadData = async () => {
+  const loadData = async (page = 1, search = '') => {
     try {
       setLoading(true);
 
@@ -157,18 +169,28 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         setProject(projectData);
       }
 
-      // Загружаем пользователей
-      const usersResponse = await fetch(`/api/projects/${projectId}/users`);
+      // Создаем URL с параметрами пагинации и поиска
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '50', // Увеличиваем лимит до 50 пользователей на страницу
+        ...(search && { search })
+      });
+
+      // Загружаем пользователей с пагинацией
+      const usersResponse = await fetch(
+        `/api/projects/${projectId}/users?${params}`
+      );
       if (usersResponse.ok) {
         const usersData = await usersResponse.json();
         console.log('Загружены пользователи проекта:', usersData); // Для отладки
 
-        // Унифицируем формат ответа API: поддерживаем и массив, и объект { users: [...] }
-        const usersArray = Array.isArray(usersData)
-          ? usersData
-          : Array.isArray(usersData?.users)
-            ? usersData.users
-            : [];
+        // Унифицируем формат ответа API: поддерживаем и объект { users: [...], total: N, totalPages: N }
+        const usersArray = Array.isArray(usersData?.users)
+          ? usersData.users
+          : [];
+        const totalCount = usersData?.total || usersArray.length;
+        const totalPagesCount =
+          usersData?.totalPages || Math.ceil(totalCount / 50);
 
         // Форматируем данные для соответствия интерфейсу UserWithBonuses
         const formattedUsers = usersArray.map((user: any) => ({
@@ -210,6 +232,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
 
         console.log('Форматированные пользователи проекта:', formattedUsers); // Для отладки
         setUsers(formattedUsers);
+        setTotalUsers(totalCount);
+        setTotalPages(totalPagesCount);
       }
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
@@ -224,8 +248,20 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   };
 
   useEffect(() => {
-    loadData();
-  }, [projectId]); // Добавляем projectId в зависимости вместо loadData
+    loadData(currentPage, searchQuery);
+  }, [projectId, currentPage, searchQuery]);
+
+  // Обработчики пагинации и поиска
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    clearSelection();
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setCurrentPage(1); // Сбрасываем на первую страницу при новом поиске
+    clearSelection();
+  };
 
   const handleCreateUser = (newUser: UserWithBonuses) => {
     console.log('Создан новый пользователь в проекте:', newUser); // Для отладки
@@ -327,16 +363,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   };
 
   // Фильтрация пользователей
-  const filteredUsers = users.filter((user) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      user.firstName?.toLowerCase().includes(query) ||
-      user.lastName?.toLowerCase().includes(query) ||
-      user.email?.toLowerCase().includes(query) ||
-      user.phone?.toLowerCase().includes(query) ||
-      user.telegramUsername?.toLowerCase().includes(query)
-    );
-  });
+  // Фильтрация теперь происходит на стороне API
 
   if (loading) {
     return (
@@ -372,7 +399,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         <div>
           <Heading
             title={`Пользователи: ${project?.name || 'Проект'}`}
-            description={`Управление пользователями и их бонусами (${filteredUsers.length} пользователей)`}
+            description={`Управление пользователями и их бонусами (${totalUsers} пользователей)`}
           />
         </div>
         <div className='flex items-center space-x-2'>
@@ -468,7 +495,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           <Input
             placeholder='Поиск пользователей...'
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearch(e.target.value)}
             className='pl-8'
           />
         </div>
@@ -498,7 +525,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         </CardHeader>
         <CardContent>
           {/* Подсказка по рассылкам */}
-          {filteredUsers.length > 0 && selectedUsers.length === 0 && (
+          {users.length > 0 && selectedUsers.length === 0 && (
             <div className='mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4'>
               <div className='flex items-center gap-2 text-sm text-blue-700'>
                 <MessageSquare className='h-4 w-4' />
@@ -521,7 +548,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 <div key={i} className='bg-muted h-20 animate-pulse rounded' />
               ))}
             </div>
-          ) : filteredUsers.length === 0 ? (
+          ) : users.length === 0 ? (
             <div className='py-8 text-center'>
               <Users className='text-muted-foreground mx-auto mb-4 h-12 w-12' />
               <p className='text-muted-foreground'>Пользователи не найдены</p>
@@ -533,7 +560,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             </div>
           ) : (
             <div className='space-y-4 pr-2'>
-              {filteredUsers.map((user) => (
+              {users.map((user) => (
                 <div
                   key={user.id}
                   className='hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4 transition-colors'
@@ -842,6 +869,67 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         selectedUserIds={selectedUsers}
         projectId={projectId}
       />
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className='mt-6'>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() =>
+                    currentPage > 1 && handlePageChange(currentPage - 1)
+                  }
+                  className={
+                    currentPage <= 1
+                      ? 'pointer-events-none opacity-50'
+                      : 'cursor-pointer'
+                  }
+                />
+              </PaginationItem>
+
+              {/* Page numbers */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNumber =
+                  Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                if (pageNumber > totalPages) return null;
+
+                return (
+                  <PaginationItem key={pageNumber}>
+                    <PaginationLink
+                      onClick={() => handlePageChange(pageNumber)}
+                      isActive={currentPage === pageNumber}
+                      className='cursor-pointer'
+                    >
+                      {pageNumber}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+
+              {totalPages > 5 && currentPage < totalPages - 2 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() =>
+                    currentPage < totalPages &&
+                    handlePageChange(currentPage + 1)
+                  }
+                  className={
+                    currentPage >= totalPages
+                      ? 'pointer-events-none opacity-50'
+                      : 'cursor-pointer'
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 }
