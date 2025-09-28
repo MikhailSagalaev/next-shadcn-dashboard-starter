@@ -184,6 +184,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       );
       if (usersResponse.ok) {
         const usersData = await usersResponse.json();
+        console.log('API Response:', usersData); // Для отладки
 
         // Унифицируем формат ответа API: поддерживаем объект { users: [...], pagination: { total: N, pages: N } }
         const usersArray = Array.isArray(usersData?.users)
@@ -195,6 +196,12 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           usersData?.pagination?.pages ||
           usersData?.totalPages ||
           Math.ceil(totalCount / pageSize);
+
+        console.log('Parsed data:', {
+          usersArrayLength: usersArray.length,
+          totalCount,
+          totalPagesCount
+        }); // Для отладки
 
         // Форматируем данные для соответствия интерфейсу UserWithBonuses
         const formattedUsers = usersArray.map((user: any) => ({
