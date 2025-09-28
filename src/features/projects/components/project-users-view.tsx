@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useProjectUsers } from '@/features/bonuses/hooks/use-project-users';
 import {
   ArrowLeft,
   Plus,
@@ -89,18 +90,44 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
 
   // State
   const [project, setProject] = useState<Project | null>(null);
-  const [users, setUsers] = useState<UserWithBonuses[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalUsers, setTotalUsers] = useState(0);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
   const [bulkOperation, setBulkOperation] = useState<
     'bonus_award' | 'bonus_deduct' | 'notification'
   >('bonus_award');
+
+  // Users management hook
+  const {
+    users,
+    isLoading: usersLoading,
+    error: usersError,
+    totalUsers,
+    currentPage,
+    totalPages,
+    loadUsers
+  } = useProjectUsers({
+    projectId,
+    pageSize
+  });
+
+  // Обработчики пагинации
+  const handlePageChange = useCallback(
+    (page: number) => {
+      loadUsers(page);
+    },
+    [loadUsers]
+  );
+
+  const handlePageSizeChange = useCallback(
+    (newPageSize: number) => {
+      setPageSize(newPageSize);
+      // При изменении размера страницы возвращаемся на первую страницу
+      loadUsers(1);
+    },
+    [loadUsers]
+  );
 
   // Dialog states
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
@@ -160,127 +187,24 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     setSelectedUsers([]);
   };
 
-  const loadData = async (page = 1, search = '') => {
-    try {
-      setLoading(true);
-
-      // Загружаем проект
-      const projectResponse = await fetch(`/api/projects/${projectId}`);
-      if (projectResponse.ok) {
-        const projectData = await projectResponse.json();
-        setProject(projectData);
-      }
-
-      // Создаем URL с параметрами пагинации и поиска
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: pageSize.toString(),
-        ...(search && { search })
-      });
-
-      // Загружаем пользователей с пагинацией
-      const usersResponse = await fetch(
-        `/api/projects/${projectId}/users?${params}`
-      );
-      if (usersResponse.ok) {
-        const usersData = await usersResponse.json();
-
-        // Унифицируем формат ответа API: поддерживаем объект { users: [...], pagination: { total: N, pages: N } }
-        const usersArray = Array.isArray(usersData?.users)
-          ? usersData.users
-          : [];
-        const totalCount =
-          usersData?.pagination?.total || usersData?.total || usersArray.length;
-        const totalPagesCount =
-          usersData?.pagination?.pages ||
-          usersData?.totalPages ||
-          Math.ceil(totalCount / pageSize);
-
-        console.log('Parsed data:', {
-          usersArrayLength: usersArray.length,
-          totalCount,
-          totalPagesCount
-        }); // Для отладки
-
-        // Форматируем данные для соответствия интерфейсу UserWithBonuses
-        const formattedUsers = usersArray.map((user: any) => ({
-          id: user.id,
-          projectId: user.projectId || projectId,
-          firstName: user.firstName || user.first_name,
-          lastName: user.lastName || user.last_name,
-          email: user.email,
-          phone: user.phone,
-          birthDate: user.birthDate ? new Date(user.birthDate) : null,
-          telegramId: user.telegramId || user.telegram_id,
-          telegramUsername: user.telegramUsername || user.telegram_username,
-          isActive: user.isActive !== false, // По умолчанию true
-          registeredAt: new Date(
-            user.registeredAt ||
-              user.registered_at ||
-              user.createdAt ||
-              Date.now()
-          ),
-          updatedAt: new Date(user.updatedAt || user.updated_at || Date.now()),
-          totalPurchases: user.totalPurchases || user.total_purchases || 0,
-          currentLevel: user.currentLevel || user.current_level || null,
-          referredBy: user.referredBy || user.referred_by || null,
-          referralCode: user.referralCode || user.referral_code || null,
-          utmSource: user.utmSource || user.utm_source || null,
-          utmMedium: user.utmMedium || user.utm_medium || null,
-          utmCampaign: user.utmCampaign || user.utm_campaign || null,
-          utmContent: user.utmContent || user.utm_content || null,
-          utmTerm: user.utmTerm || user.utm_term || null,
-          // Дополнительные поля для UserWithBonuses
-          totalBonuses: user.totalBonuses || user.totalEarned || 0,
-          activeBonuses: user.activeBonuses || user.bonusBalance || 0,
-          lastActivity: user.lastActivity
-            ? new Date(user.lastActivity)
-            : new Date(user.updatedAt || Date.now()),
-          level: user.level || null,
-          progressToNext: user.progressToNext || null
-        }));
-
-        console.log('Форматированные пользователи проекта:', formattedUsers); // Для отладки
-        setUsers(formattedUsers);
-        setTotalUsers(totalCount);
-        setTotalPages(totalPagesCount);
-      }
-    } catch (error) {
-      console.error('Ошибка загрузки данных:', error);
-      toast({
-        title: 'Ошибка',
-        description: 'Не удалось загрузить данные',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Загружаем проект при монтировании
   useEffect(() => {
-    loadData(currentPage, searchQuery);
-  }, [projectId, currentPage, searchQuery]);
+    const loadProject = async () => {
+      try {
+        const projectResponse = await fetch(`/api/projects/${projectId}`);
+        if (projectResponse.ok) {
+          const projectData = await projectResponse.json();
+          setProject(projectData);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки проекта:', error);
+      }
+    };
 
-  // Обработчики пагинации и поиска
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    clearSelection();
-  };
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    setCurrentPage(1); // Сбрасываем на первую страницу при новом поиске
-    clearSelection();
-  };
-
-  const handlePageSizeChange = useCallback(
-    (newPageSize: number) => {
-      setPageSize(newPageSize);
-      setCurrentPage(1); // Возвращаемся на первую страницу
-      loadData(1, searchQuery);
-    },
-    [loadData, searchQuery]
-  );
+    if (projectId) {
+      loadProject();
+    }
+  }, [projectId]);
 
   // Функция для экспорта всех пользователей
   const handleExportAll = useCallback(async () => {
@@ -682,7 +606,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 if (user) handleOpenBonusDialog(user);
               }}
               onExport={handleExportAll}
-              loading={loading}
+              loading={usersLoading}
               totalCount={totalUsers}
               currentPage={currentPage}
               pageSize={pageSize}

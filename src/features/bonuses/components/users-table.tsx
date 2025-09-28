@@ -280,7 +280,6 @@ export function UsersTable({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
@@ -291,9 +290,12 @@ export function UsersTable({
       columnVisibility,
       rowSelection
     },
+    manualPagination: true, // Отключаем внутреннюю пагинацию
+    pageCount: Math.ceil(totalCount / pageSize), // Указываем общее количество страниц
     initialState: {
       pagination: {
-        pageSize
+        pageSize,
+        pageIndex: currentPage - 1 // Синхронизируем с внешней пагинацией
       }
     }
   });

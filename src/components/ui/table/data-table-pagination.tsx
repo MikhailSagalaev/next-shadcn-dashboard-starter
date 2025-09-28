@@ -60,6 +60,8 @@ export function DataTablePagination<TData>({
             onValueChange={(value) => {
               const newPageSize = Number(value);
               table.setPageSize(newPageSize);
+              // При изменении размера страницы возвращаемся на первую страницу
+              table.setPageIndex(0);
               onPageSizeChange?.(newPageSize);
             }}
           >
@@ -84,7 +86,13 @@ export function DataTablePagination<TData>({
             variant='outline'
             size='icon'
             className='hidden size-8 lg:flex'
-            onClick={() => onPageChange?.(1)}
+            onClick={() => {
+              if (onPageChange) {
+                onPageChange(1);
+              } else {
+                table.setPageIndex(0);
+              }
+            }}
             disabled={currentPage <= 1}
           >
             <ChevronsLeft />
@@ -94,7 +102,13 @@ export function DataTablePagination<TData>({
             variant='outline'
             size='icon'
             className='size-8'
-            onClick={() => onPageChange?.(currentPage - 1)}
+            onClick={() => {
+              if (onPageChange) {
+                onPageChange(currentPage - 1);
+              } else {
+                table.previousPage();
+              }
+            }}
             disabled={currentPage <= 1}
           >
             <ChevronLeftIcon />
@@ -104,7 +118,13 @@ export function DataTablePagination<TData>({
             variant='outline'
             size='icon'
             className='size-8'
-            onClick={() => onPageChange?.(currentPage + 1)}
+            onClick={() => {
+              if (onPageChange) {
+                onPageChange(currentPage + 1);
+              } else {
+                table.nextPage();
+              }
+            }}
             disabled={currentPage >= totalPages}
           >
             <ChevronRightIcon />
@@ -114,7 +134,13 @@ export function DataTablePagination<TData>({
             variant='outline'
             size='icon'
             className='hidden size-8 lg:flex'
-            onClick={() => onPageChange?.(totalPages)}
+            onClick={() => {
+              if (onPageChange) {
+                onPageChange(totalPages);
+              } else {
+                table.setPageIndex(totalPages - 1);
+              }
+            }}
             disabled={currentPage >= totalPages}
           >
             <ChevronsRight />

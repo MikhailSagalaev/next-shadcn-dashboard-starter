@@ -84,7 +84,6 @@ export function BonusManagementPageRefactored({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [showRichNotificationDialog, setShowRichNotificationDialog] =
     useState(false);
   const [pageSize, setPageSize] = useState(50);
@@ -553,25 +552,6 @@ export function BonusManagementPageRefactored({
             </div>
 
             <div className='flex items-center space-x-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => setShowFilters(!showFilters)}
-              >
-                <Filter className='mr-2 h-4 w-4' />
-                Фильтры
-              </Button>
-
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={handleExport}
-                disabled={users.length === 0 || isLoading}
-              >
-                <Download className='mr-2 h-4 w-4' />
-                Скачать
-              </Button>
-
               <Button
                 variant='outline'
                 size='sm'
