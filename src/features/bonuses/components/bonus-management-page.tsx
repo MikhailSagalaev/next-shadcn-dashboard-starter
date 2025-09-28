@@ -87,6 +87,7 @@ export function BonusManagementPageRefactored({
   const [showFilters, setShowFilters] = useState(false);
   const [showRichNotificationDialog, setShowRichNotificationDialog] =
     useState(false);
+  const [pageSize, setPageSize] = useState(50);
   const [historyUserId, setHistoryUserId] = useState<string | null>(null);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -123,13 +124,22 @@ export function BonusManagementPageRefactored({
     exportUsers
   } = useProjectUsers({
     projectId: currentProjectId || undefined,
-    pageSize: 50
+    pageSize
   });
 
   // Обработчики пагинации и поиска
   const handlePageChange = useCallback(
     (page: number) => {
       loadUsers(page);
+    },
+    [loadUsers]
+  );
+
+  const handlePageSizeChange = useCallback(
+    (newPageSize: number) => {
+      setPageSize(newPageSize);
+      // При изменении размера страницы возвращаемся на первую страницу
+      loadUsers(1);
     },
     [loadUsers]
   );
@@ -627,8 +637,9 @@ export function BonusManagementPageRefactored({
             loading={isLoading}
             totalCount={totalCount}
             currentPage={currentPage}
-            pageSize={50}
+            pageSize={pageSize}
             onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
           />
         </CardContent>
       </Card>

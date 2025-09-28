@@ -93,6 +93,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -173,7 +174,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       // Создаем URL с параметрами пагинации и поиска
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '50', // Увеличиваем лимит до 50 пользователей на страницу
+        limit: pageSize.toString(),
         ...(search && { search })
       });
 
@@ -183,15 +184,17 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       );
       if (usersResponse.ok) {
         const usersData = await usersResponse.json();
-        console.log('Загружены пользователи проекта:', usersData); // Для отладки
 
-        // Унифицируем формат ответа API: поддерживаем и объект { users: [...], total: N, totalPages: N }
+        // Унифицируем формат ответа API: поддерживаем объект { users: [...], pagination: { total: N, pages: N } }
         const usersArray = Array.isArray(usersData?.users)
           ? usersData.users
           : [];
-        const totalCount = usersData?.total || usersArray.length;
+        const totalCount =
+          usersData?.pagination?.total || usersData?.total || usersArray.length;
         const totalPagesCount =
-          usersData?.totalPages || Math.ceil(totalCount / 50);
+          usersData?.pagination?.pages ||
+          usersData?.totalPages ||
+          Math.ceil(totalCount / pageSize);
 
         // Форматируем данные для соответствия интерфейсу UserWithBonuses
         const formattedUsers = usersArray.map((user: any) => ({
@@ -263,6 +266,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     setCurrentPage(1); // Сбрасываем на первую страницу при новом поиске
     clearSelection();
   };
+
+  const handlePageSizeChange = useCallback(
+    (newPageSize: number) => {
+      setPageSize(newPageSize);
+      setCurrentPage(1); // Возвращаемся на первую страницу
+      loadData(1, searchQuery);
+    },
+    [loadData, searchQuery]
+  );
 
   // Функция для экспорта всех пользователей
   const handleExportAll = useCallback(async () => {
@@ -667,8 +679,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               loading={loading}
               totalCount={totalUsers}
               currentPage={currentPage}
-              pageSize={50}
+              pageSize={pageSize}
               onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
             />
           )}
         </CardContent>

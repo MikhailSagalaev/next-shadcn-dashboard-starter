@@ -102,9 +102,12 @@ export function useProjectUsers({
         const usersArray: any[] = Array.isArray(payload?.users)
           ? payload.users
           : [];
-        const totalCount = payload?.total || usersArray.length;
+        const totalCount =
+          payload?.pagination?.total || payload?.total || usersArray.length;
         const totalPagesCount =
-          payload?.totalPages || Math.ceil(totalCount / pageSize);
+          payload?.pagination?.pages ||
+          payload?.totalPages ||
+          Math.ceil(totalCount / pageSize);
 
         if (!Array.isArray(usersArray)) {
           throw new Error('Invalid response format: expected users array');

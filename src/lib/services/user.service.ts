@@ -331,12 +331,6 @@ export class UserService {
     page = 1,
     limit = 10
   ): Promise<{ users: UserWithBonuses[]; total: number }> {
-    console.log('UserService.getProjectUsers параметры:', {
-      projectId,
-      page,
-      limit
-    });
-
     const skip = (page - 1) * limit;
 
     // Загружаем пользователей страницы и общее количество

@@ -87,6 +87,7 @@ interface UsersTableProps {
   loading?: boolean;
   totalCount?: number;
   onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
   currentPage?: number;
   pageSize?: number;
 }
@@ -98,6 +99,7 @@ export function UsersTable({
   loading = false,
   totalCount = data.length,
   onPageChange,
+  onPageSizeChange,
   currentPage = 1,
   pageSize = 50
 }: UsersTableProps) {
@@ -391,6 +393,7 @@ export function UsersTable({
         table={table}
         totalCount={totalCount}
         onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
       />
     </div>
   );
