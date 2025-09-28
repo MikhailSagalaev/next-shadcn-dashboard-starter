@@ -329,14 +329,18 @@ export class UserService {
   static async getProjectUsers(
     projectId: string,
     page = 1,
-    limit = 10
+    limit = 10,
+    where?: any
   ): Promise<{ users: UserWithBonuses[]; total: number }> {
     const skip = (page - 1) * limit;
+
+    // Используем переданное where условие или создаем базовое
+    const queryWhere = where || { projectId };
 
     // Загружаем пользователей страницы и общее количество
     const [users, total] = await Promise.all([
       db.user.findMany({
-        where: { projectId },
+        where: queryWhere,
         skip,
         take: limit,
         include: {
@@ -347,7 +351,7 @@ export class UserService {
         },
         orderBy: { registeredAt: 'desc' }
       }),
-      db.user.count({ where: { projectId } })
+      db.user.count({ where: queryWhere })
     ]);
 
     if (users.length === 0) {

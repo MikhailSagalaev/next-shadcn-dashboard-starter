@@ -49,11 +49,11 @@ async function getHandler(
       ];
     }
 
-    const total = await db.user.count({ where });
-    const { users: enrichedUsers } = await UserService.getProjectUsers(
+    const { users: enrichedUsers, total } = await UserService.getProjectUsers(
       id,
       page,
-      limit
+      limit,
+      where
     );
 
     // Форматируем под ожидаемый UI
