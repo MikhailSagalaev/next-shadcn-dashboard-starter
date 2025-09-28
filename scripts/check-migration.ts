@@ -42,7 +42,7 @@ async function checkMigration() {
     // Проверяем последние 5 созданных пользователей
     const recentUsers = await prisma.user.findMany({
       where: { projectId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { registeredAt: 'desc' },
       take: 5,
       select: {
         id: true,
@@ -50,7 +50,7 @@ async function checkMigration() {
         lastName: true,
         email: true,
         phone: true,
-        createdAt: true
+        registeredAt: true
       }
     });
 
