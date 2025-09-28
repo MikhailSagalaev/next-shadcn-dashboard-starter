@@ -62,6 +62,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import type { Project, User, Bonus } from '@/types/bonus';
 import { UserCreateDialog } from './user-create-dialog';
+import { UsersTable } from '../../bonuses/components/users-table';
 import { BonusAwardDialog } from './bonus-award-dialog';
 import { EnhancedBulkActionsToolbar } from '@/features/bonuses/components/enhanced-bulk-actions-toolbar';
 import { RichNotificationDialog } from '@/features/bonuses/components/rich-notification-dialog';
@@ -262,6 +263,93 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     setCurrentPage(1); // Сбрасываем на первую страницу при новом поиске
     clearSelection();
   };
+
+  // Функция для экспорта всех пользователей
+  const handleExportAll = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      // Получаем все данные без пагинации
+      const response = await fetch(
+        `/api/projects/${projectId}/users?limit=10000`
+      );
+      if (!response.ok) {
+        throw new Error('Не удалось получить данные пользователей');
+      }
+
+      const allUsers = await response.json();
+      const usersArray = Array.isArray(allUsers?.users) ? allUsers.users : [];
+
+      // Создаем CSV
+      const headers = [
+        'ID',
+        'Имя',
+        'Email',
+        'Телефон',
+        'Активные бонусы',
+        'Всего бонусов',
+        'Дата регистрации',
+        'Статус',
+        'Уровень'
+      ];
+
+      const csvData = usersArray.map((user: any) => [
+        user.id || '',
+        user.firstName && user.lastName
+          ? `${user.firstName} ${user.lastName}`.trim()
+          : user.email || '',
+        user.email || '',
+        user.phone || '',
+        user.activeBonuses || 0,
+        user.totalBonuses || 0,
+        user.registeredAt
+          ? new Date(user.registeredAt).toLocaleDateString('ru-RU')
+          : '',
+        user.isActive ? 'Активен' : 'Неактивен',
+        user.currentLevel || 'Базовый'
+      ]);
+
+      // Добавляем заголовки
+      csvData.unshift(headers);
+
+      // Конвертируем в CSV строку
+      const csvContent = csvData
+        .map((row) =>
+          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        )
+        .join('\n');
+
+      // Создаем и скачиваем файл
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute(
+        'download',
+        `project-users-${projectId}-${new Date().toISOString().split('T')[0]}.csv`
+      );
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: 'Экспорт завершен',
+        description: `Экспортировано ${usersArray.length} пользователей`
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
+      toast({
+        title: 'Ошибка экспорта',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, toast]);
 
   const handleCreateUser = (newUser: UserWithBonuses) => {
     console.log('Создан новый пользователь в проекте:', newUser); // Для отладки
@@ -559,97 +647,29 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               </p>
             </div>
           ) : (
-            <div className='space-y-4 pr-2'>
-              {users.map((user) => (
-                <div
-                  key={user.id}
-                  className='hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4 transition-colors'
-                >
-                  <div className='flex items-center space-x-4'>
-                    {/* shadcn/ui Checkbox to avoid layout shift and ensure consistent styles */}
-                    <Checkbox
-                      checked={selectedUsers.includes(user.id)}
-                      onCheckedChange={() => toggleUserSelection(user.id)}
-                      className='size-4'
-                    />
-                    <div className='flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 font-medium text-white'>
-                      {user.firstName
-                        ? user.firstName[0]
-                        : user.email?.[0]?.toUpperCase() || 'U'}
-                    </div>
-                    <div>
-                      <p className='font-medium'>
-                        {user.firstName || user.lastName
-                          ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                          : 'Без имени'}
-                      </p>
-                      <div className='text-muted-foreground space-y-1 text-sm'>
-                        {user.email && (
-                          <div className='flex items-center'>
-                            <Mail className='mr-1 h-3 w-3' />
-                            {user.email}
-                          </div>
-                        )}
-                        {user.phone && (
-                          <div className='flex items-center'>
-                            <Phone className='mr-1 h-3 w-3' />
-                            {user.phone}
-                          </div>
-                        )}
-                        {user.telegramUsername && (
-                          <div className='flex items-center'>
-                            <BadgeIcon className='mr-1 h-3 w-3' />@
-                            {user.telegramUsername}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className='flex items-center space-x-6'>
-                    {/* Бонусы */}
-                    <div className='text-right'>
-                      <p className='text-lg font-semibold text-green-600'>
-                        {user.activeBonuses}₽
-                      </p>
-                      <p className='text-muted-foreground text-sm'>
-                        Всего: {user.totalBonuses}₽
-                      </p>
-                    </div>
-
-                    {/* Статус и дата */}
-                    <div className='space-y-1 text-right'>
-                      <Badge variant={user.isActive ? 'default' : 'secondary'}>
-                        {user.isActive ? 'Активен' : 'Неактивен'}
-                      </Badge>
-                      <p className='text-muted-foreground text-xs'>
-                        {new Date(user.registeredAt).toLocaleDateString(
-                          'ru-RU'
-                        )}
-                      </p>
-                    </div>
-
-                    {/* Действия */}
-                    <div className='flex space-x-2'>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={() => handleOpenBonusDialog(user)}
-                      >
-                        <Gift className='h-4 w-4' />
-                      </Button>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={() => handleOpenDeductionDialog(user)}
-                      >
-                        <Minus className='h-4 w-4' />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <UsersTable
+              data={users.map((user) => ({
+                ...user,
+                name:
+                  user.firstName && user.lastName
+                    ? `${user.firstName} ${user.lastName}`.trim()
+                    : user.email || 'Без имени',
+                bonusBalance: user.activeBonuses || 0,
+                totalEarned: user.totalBonuses || 0,
+                createdAt: new Date(user.registeredAt),
+                updatedAt: new Date(user.registeredAt)
+              }))}
+              onHistoryClick={(userId) => {
+                const user = users.find((u) => u.id === userId);
+                if (user) handleOpenBonusDialog(user);
+              }}
+              onExport={handleExportAll}
+              loading={loading}
+              totalCount={totalUsers}
+              currentPage={currentPage}
+              pageSize={50}
+              onPageChange={handlePageChange}
+            />
           )}
         </CardContent>
       </Card>

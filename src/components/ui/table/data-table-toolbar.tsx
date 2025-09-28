@@ -11,15 +11,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Cross2Icon } from '@radix-ui/react-icons';
+import { Download } from 'lucide-react';
 
 interface DataTableToolbarProps<TData> extends React.ComponentProps<'div'> {
   table: Table<TData>;
+  searchPlaceholder?: string;
+  searchColumn?: string;
+  onExport?: () => void;
 }
 
 export function DataTableToolbar<TData>({
   table,
   children,
   className,
+  searchPlaceholder = 'Поиск...',
+  searchColumn,
+  onExport,
   ...props
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
@@ -62,6 +69,17 @@ export function DataTableToolbar<TData>({
       </div>
       <div className='flex items-center gap-2'>
         {children}
+        {onExport && (
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={onExport}
+            className='gap-2'
+          >
+            <Download className='h-4 w-4' />
+            Экспорт
+          </Button>
+        )}
         <DataTableViewOptions table={table} />
       </div>
     </div>

@@ -1,6 +1,48 @@
+/**
+ * @file: users-table.tsx
+ * @description: Таблица пользователей с фильтрами и пагинацией
+ * @project: SaaS Bonus System
+ * @dependencies: TanStack Table, shadcn/ui, React
+ * @created: 2024-12-31
+ * @author: AI Assistant + User
+ */
+
 'use client';
 
 import { useState } from 'react';
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  type SortingState,
+  type VisibilityState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable
+} from '@tanstack/react-table';
+import {
+  ArrowUpDown,
+  ChevronDown,
+  MoreHorizontal,
+  History,
+  Eye,
+  Coins
+} from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -9,267 +51,347 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
-import {
-  MoreHorizontal,
-  Plus,
-  Minus,
-  Settings,
-  History,
-  User,
-  Mail
-} from 'lucide-react';
-import { useBonusStore } from '../stores/bonus-store';
-import { BonusDeductionDialog } from './bonus-deduction-dialog';
-import { BonusAdditionDialog } from './bonus-addition-dialog';
-import { UserTransactionsDialog } from './user-transactions-dialog';
-import type { User as UserType } from '../types';
-import { formatDistanceToNow } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { DataTablePagination } from '@/components/ui/table/data-table-pagination';
+import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar';
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  bonusBalance: number;
+  totalEarned: number;
+  createdAt: Date;
+  updatedAt: Date;
+  firstName?: string;
+  lastName?: string;
+  telegramId?: string;
+  telegramUsername?: string;
+  isActive?: boolean;
+  currentLevel?: string;
+  referralCode?: string;
+  referredBy?: string;
+  totalPurchases?: number;
+  // Совместимость с UserWithBonuses
+  projectId?: string;
+  birthDate?: Date | null;
+  registeredAt?: Date;
+};
 
 interface UsersTableProps {
-  users: UserType[];
-  isLoading?: boolean;
+  data: User[];
+  onHistoryClick: (userId: string) => void;
+  onExport: () => void;
+  loading?: boolean;
+  totalCount?: number;
+  onPageChange?: (page: number) => void;
+  currentPage?: number;
+  pageSize?: number;
 }
 
-export function UsersTable({ users, isLoading }: UsersTableProps) {
-  const { selectedUsers, toggleUserSelection, selectAllUsers, clearSelection } =
-    useBonusStore();
+export function UsersTable({
+  data,
+  onHistoryClick,
+  onExport,
+  loading = false,
+  totalCount = data.length,
+  onPageChange,
+  currentPage = 1,
+  pageSize = 50
+}: UsersTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: 'createdAt', desc: true }
+  ]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState({});
 
-  const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
-  const [showDeductionDialog, setShowDeductionDialog] = useState(false);
-  const [showAdditionDialog, setShowAdditionDialog] = useState(false);
-  const [showTransactionsDialog, setShowTransactionsDialog] = useState(false);
+  const columns: ColumnDef<User>[] = [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && 'indeterminate')
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label='Select all'
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label='Select row'
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false
+    },
+    {
+      accessorKey: 'name',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant='ghost'
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Пользователь
+            <ArrowUpDown className='ml-2 h-4 w-4' />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const user = row.original;
+        const initials =
+          `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() ||
+          'U';
 
-  const isAllSelected =
-    users.length > 0 && selectedUsers.length === users.length;
-  const isIndeterminate =
-    selectedUsers.length > 0 && selectedUsers.length < users.length;
+        return (
+          <div className='flex items-center space-x-3'>
+            <Avatar className='h-8 w-8'>
+              <AvatarImage
+                src={`https://api.slingacademy.com/public/sample-users/${(parseInt(user.id.slice(-2), 16) % 10) + 1}.png`}
+              />
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
+            <div>
+              <div className='font-medium'>{user.name}</div>
+              <div className='text-muted-foreground text-sm'>
+                ID: {user.id.slice(0, 8)}...
+              </div>
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      accessorKey: 'email',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant='ghost'
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Email
+            <ArrowUpDown className='ml-2 h-4 w-4' />
+          </Button>
+        );
+      },
+      cell: ({ row }) => (
+        <div className='font-mono text-sm'>{row.getValue('email') || '-'}</div>
+      )
+    },
+    {
+      accessorKey: 'phone',
+      header: 'Телефон',
+      cell: ({ row }) => (
+        <div className='font-mono text-sm'>{row.getValue('phone') || '-'}</div>
+      )
+    },
+    {
+      accessorKey: 'bonusBalance',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant='ghost'
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Активные бонусы
+            <ArrowUpDown className='ml-2 h-4 w-4' />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const balance = row.getValue('bonusBalance') as number;
+        return (
+          <Badge variant={balance > 0 ? 'default' : 'secondary'}>
+            {balance.toFixed(0)} ₽
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        const balance = row.getValue(id) as number;
+        return balance >= (value as number);
+      }
+    },
+    {
+      accessorKey: 'createdAt',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant='ghost'
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Регистрация
+            <ArrowUpDown className='ml-2 h-4 w-4' />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const date = row.getValue('createdAt') as Date;
+        return (
+          <div className='text-muted-foreground text-sm'>
+            {date.toLocaleDateString('ru-RU')}
+          </div>
+        );
+      }
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      cell: ({ row }) => {
+        const user = row.original;
 
-  const handleSelectAll = () => {
-    if (isAllSelected) {
-      clearSelection();
-    } else {
-      selectAllUsers();
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant='ghost' className='h-8 w-8 p-0'>
+                <span className='sr-only'>Open menu</span>
+                <MoreHorizontal className='h-4 w-4' />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end'>
+              <DropdownMenuLabel>Действия</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => onHistoryClick(user.id)}>
+                <Coins className='mr-2 h-4 w-4' />
+                История бонусов
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <Eye className='mr-2 h-4 w-4' />
+                Просмотреть профиль
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      }
     }
-  };
+  ];
 
-  const handleUserAction = (
-    user: UserType,
-    action: 'add' | 'deduct' | 'history'
-  ) => {
-    setSelectedUser(user);
-    switch (action) {
-      case 'add':
-        setShowAdditionDialog(true);
-        break;
-      case 'deduct':
-        setShowDeductionDialog(true);
-        break;
-      case 'history':
-        setShowTransactionsDialog(true);
-        break;
+  const table = useReactTable({
+    data,
+    columns,
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      rowSelection
+    },
+    initialState: {
+      pagination: {
+        pageSize
+      }
     }
-  };
-
-  const getBonusBalanceVariant = (balance: number) => {
-    if (balance === 0) return 'secondary';
-    if (balance < 100) return 'destructive';
-    if (balance < 1000) return 'default';
-    return 'default';
-  };
-
-  if (isLoading) {
-    return (
-      <div className='space-y-4'>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className='bg-muted h-16 animate-pulse rounded' />
-        ))}
-      </div>
-    );
-  }
+  });
 
   return (
-    <>
+    <div className='space-y-4'>
+      <DataTableToolbar
+        table={table}
+        searchPlaceholder='Поиск пользователей...'
+        searchColumn='name'
+        onExport={onExport}
+      />
+
       <div className='rounded-md border'>
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className='w-12'>
-                <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={handleSelectAll}
-                  // Note: indeterminate state handled by the component internally
-                  className={
-                    isIndeterminate
-                      ? 'data-[state=indeterminate]:bg-primary'
-                      : ''
-                  }
-                />
-              </TableHead>
-              <TableHead>Пользователь</TableHead>
-              <TableHead>Баланс бонусов</TableHead>
-              <TableHead>Всего заработано</TableHead>
-              <TableHead>Регистрация</TableHead>
-              <TableHead>Последнее обновление</TableHead>
-              <TableHead className='w-12'></TableHead>
-            </TableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
-            {users.length === 0 ? (
+            {loading ? (
+              // Loading state
+              Array.from({ length: pageSize }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-4 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex items-center space-x-3'>
+                      <div className='bg-muted h-8 w-8 animate-pulse rounded-full' />
+                      <div className='space-y-1'>
+                        <div className='bg-muted h-4 w-32 animate-pulse rounded' />
+                        <div className='bg-muted h-3 w-20 animate-pulse rounded' />
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-48 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-32 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-16 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-24 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-6 w-6 animate-pulse rounded' />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && 'selected'}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
               <TableRow>
                 <TableCell
-                  colSpan={7}
-                  className='text-muted-foreground py-8 text-center'
+                  colSpan={columns.length}
+                  className='h-24 text-center'
                 >
-                  Пользователи не найдены
+                  Пользователи не найдены.
                 </TableCell>
               </TableRow>
-            ) : (
-              users.map((user) => {
-                const isSelected = selectedUsers.includes(user.id);
-
-                return (
-                  <TableRow
-                    key={user.id}
-                    className={isSelected ? 'bg-muted/50' : ''}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleUserSelection(user.id)}
-                      />
-                    </TableCell>
-
-                    <TableCell>
-                      <div className='flex items-center gap-3'>
-                        <Avatar className='h-8 w-8'>
-                          <AvatarImage src={user.avatar} alt={user.name} />
-                          <AvatarFallback>
-                            <User className='h-4 w-4' />
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className='min-w-0 flex-1'>
-                          <p className='truncate font-medium'>{user.name}</p>
-                          <p className='text-muted-foreground truncate text-sm'>
-                            {user.email}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <Badge
-                        variant={getBonusBalanceVariant(user.bonusBalance)}
-                        className='font-mono'
-                      >
-                        {user.bonusBalance.toLocaleString()}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell>
-                      <span className='text-muted-foreground font-mono'>
-                        {user.totalEarned.toLocaleString()}
-                      </span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span className='text-muted-foreground text-sm'>
-                        {formatDistanceToNow(user.createdAt, {
-                          addSuffix: true,
-                          locale: ru
-                        })}
-                      </span>
-                    </TableCell>
-
-                    <TableCell>
-                      <span className='text-muted-foreground text-sm'>
-                        {formatDistanceToNow(user.updatedAt, {
-                          addSuffix: true,
-                          locale: ru
-                        })}
-                      </span>
-                    </TableCell>
-
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            className='h-8 w-8 p-0'
-                          >
-                            <MoreHorizontal className='h-4 w-4' />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align='end'>
-                          <DropdownMenuItem
-                            onClick={() => handleUserAction(user, 'add')}
-                          >
-                            <Plus className='mr-2 h-4 w-4 text-green-500' />
-                            Начислить бонусы
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleUserAction(user, 'deduct')}
-                            disabled={user.bonusBalance === 0}
-                          >
-                            <Minus className='mr-2 h-4 w-4 text-red-500' />
-                            Списать бонусы
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleUserAction(user, 'history')}
-                          >
-                            <History className='mr-2 h-4 w-4' />
-                            История транзакций
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Mail className='mr-2 h-4 w-4' />
-                            Отправить уведомление
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
             )}
           </TableBody>
         </Table>
       </div>
 
-      {/* Диалоги */}
-      {selectedUser && (
-        <>
-          <BonusDeductionDialog
-            open={showDeductionDialog}
-            onOpenChange={setShowDeductionDialog}
-            user={selectedUser}
-          />
-
-          <BonusAdditionDialog
-            open={showAdditionDialog}
-            onOpenChange={setShowAdditionDialog}
-            user={selectedUser}
-          />
-
-          <UserTransactionsDialog
-            open={showTransactionsDialog}
-            onOpenChange={setShowTransactionsDialog}
-            user={selectedUser}
-          />
-        </>
-      )}
-    </>
+      <DataTablePagination
+        table={table}
+        totalCount={totalCount}
+        onPageChange={onPageChange}
+      />
+    </div>
   );
 }

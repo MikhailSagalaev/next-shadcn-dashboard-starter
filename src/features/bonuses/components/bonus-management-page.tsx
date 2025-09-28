@@ -65,6 +65,7 @@ import { UserCreateDialog } from './user-create-dialog';
 import { BulkActionsToolbar } from './bulk-actions-toolbar';
 import { EnhancedBulkActionsToolbar } from './enhanced-bulk-actions-toolbar';
 import { RichNotificationDialog } from './rich-notification-dialog';
+import { UsersTable } from './users-table';
 
 // Types
 import type { User } from '../types';
@@ -310,6 +311,117 @@ export function BonusManagementPageRefactored({
     }
   }, [exportUsers, users.length, currentProjectId, toast]);
 
+  // Функция для экспорта всех пользователей
+  const handleExportAll = useCallback(async () => {
+    try {
+      if (!currentProjectId) {
+        toast({
+          title: 'Ошибка',
+          description: 'Не выбран проект',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setIsLoading(true);
+
+      // Получаем все данные без пагинации
+      const response = await fetch(
+        `/api/projects/${currentProjectId}/users?limit=10000`
+      );
+      if (!response.ok) {
+        throw new Error('Не удалось получить данные пользователей');
+      }
+
+      const allUsers = await response.json();
+      const usersArray = Array.isArray(allUsers?.users) ? allUsers.users : [];
+
+      // Создаем CSV
+      const headers = [
+        'ID',
+        'Имя',
+        'Email',
+        'Телефон',
+        'Баланс бонусов',
+        'Всего заработано',
+        'Дата регистрации',
+        'Уровень',
+        'Реферальный код'
+      ];
+
+      const csvData = usersArray.map((user: any) => [
+        user.id || '',
+        user.firstName && user.lastName
+          ? `${user.firstName} ${user.lastName}`.trim()
+          : user.email || '',
+        user.email || '',
+        user.phone || '',
+        user.bonusBalance || 0,
+        user.totalEarned || 0,
+        user.createdAt
+          ? new Date(user.createdAt).toLocaleDateString('ru-RU')
+          : '',
+        user.currentLevel || 'Базовый',
+        user.referralCode || ''
+      ]);
+
+      // Добавляем заголовки
+      csvData.unshift(headers);
+
+      // Конвертируем в CSV строку
+      const csvContent = csvData
+        .map((row) =>
+          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        )
+        .join('\n');
+
+      // Создаем и скачиваем файл
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute(
+        'download',
+        `users-${currentProjectId}-${new Date().toISOString().split('T')[0]}.csv`
+      );
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: 'Экспорт завершен',
+        description: `Экспортировано ${usersArray.length} пользователей`
+      });
+
+      logger.info(
+        'All users exported successfully',
+        { projectId: currentProjectId, count: usersArray.length },
+        'bonus-management'
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
+      toast({
+        title: 'Ошибка экспорта',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+
+      logger.error(
+        'Failed to export all users',
+        {
+          projectId: currentProjectId,
+          error: errorMessage
+        },
+        'bonus-management'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentProjectId, toast]);
+
   const handleRefresh = useCallback(async () => {
     try {
       logger.info(
@@ -508,13 +620,15 @@ export function BonusManagementPageRefactored({
           )}
 
           {/* Users List */}
-          <UsersDisplayArea
-            users={filteredUsers}
-            selectedUsers={selectedUsers}
-            isLoading={isLoading}
-            onUserSelection={handleUserSelection}
-            onSelectAll={handleSelectAll}
-            onOpenHistory={openHistory}
+          <UsersTable
+            data={filteredUsers}
+            onHistoryClick={openHistory}
+            onExport={handleExportAll}
+            loading={isLoading}
+            totalCount={totalCount}
+            currentPage={currentPage}
+            pageSize={50}
+            onPageChange={handlePageChange}
           />
         </CardContent>
       </Card>
