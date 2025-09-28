@@ -122,6 +122,7 @@ model Bonus {
   description  String?
   expiresAt    DateTime?     @map("expires_at")
   isUsed       Boolean       @default(false) @map("is_used")
+  metadata     Json?
   createdAt    DateTime      @default(now()) @map("created_at")
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
