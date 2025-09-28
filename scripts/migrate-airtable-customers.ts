@@ -201,7 +201,7 @@ class AirtableMigrationService {
 
     await new Promise<void>((resolve, reject) => {
       fs.createReadStream(csvPath)
-        .pipe(csv({ separator: ';', skipEmptyLines: true }))
+        .pipe(csv({ separator: ';' }))
         .on('data', (data) => {
           sampleCustomers.push(data);
           lineCount++;
@@ -527,7 +527,7 @@ class AirtableMigrationService {
     }
   }
 
-  private saveMigrationReport(): void {
+  public saveMigrationReport(): void {
     const report = {
       timestamp: new Date().toISOString(),
       projectId: this.projectId,
