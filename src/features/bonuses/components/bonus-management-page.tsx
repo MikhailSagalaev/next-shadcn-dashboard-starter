@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogClose,
@@ -131,11 +132,6 @@ export function BonusManagementPageRefactored({
     },
     [loadUsers]
   );
-
-  const handleSearch = useCallback((term: string) => {
-    setSearchTerm(term);
-    // Поиск обрабатывается локально через searchUsers
-  }, []);
 
   // Memoized values
   const filteredUsers = useMemo(() => {
@@ -750,19 +746,52 @@ const UsersDisplayArea = memo<UsersDisplayAreaProps>(
   }) => {
     if (isLoading) {
       return (
-        <div className='space-y-4'>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className='p-4'>
-              <div className='flex items-center space-x-4'>
-                <div className='bg-muted h-10 w-10 animate-pulse rounded-full' />
-                <div className='flex-1 space-y-2'>
-                  <div className='bg-muted h-4 w-48 animate-pulse rounded' />
-                  <div className='bg-muted h-3 w-32 animate-pulse rounded' />
-                </div>
-                <div className='bg-muted h-6 w-16 animate-pulse rounded' />
-              </div>
-            </Card>
-          ))}
+        <div className='rounded-md border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className='w-12'>
+                  <div className='bg-muted h-4 w-4 animate-pulse rounded' />
+                </TableHead>
+                <TableHead>Пользователь</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Телефон</TableHead>
+                <TableHead>Бонусы</TableHead>
+                <TableHead>Регистрация</TableHead>
+                <TableHead className='w-12'></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-4 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='flex items-center space-x-3'>
+                      <div className='bg-muted h-8 w-8 animate-pulse rounded-full' />
+                      <div className='bg-muted h-4 w-32 animate-pulse rounded' />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-48 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-32 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-16 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-4 w-24 animate-pulse rounded' />
+                  </TableCell>
+                  <TableCell>
+                    <div className='bg-muted h-6 w-6 animate-pulse rounded' />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       );
     }
@@ -782,110 +811,94 @@ const UsersDisplayArea = memo<UsersDisplayAreaProps>(
     }
 
     return (
-      <div className='space-y-4'>
-        {/* Select All Control */}
-        <div className='flex items-center space-x-2 border-b p-2'>
-          <input
-            type='checkbox'
-            checked={selectedUsers.size === users.length && users.length > 0}
-            onChange={(e) => onSelectAll(e.target.checked)}
-            className='rounded border-gray-300'
-          />
-          <span className='text-muted-foreground text-sm'>
-            Выбрать все ({users.length})
-          </span>
-        </div>
-
-        {/* Users List */}
-        <div className='grid gap-4'>
-          {users.map((user) => (
-            <UserCard
-              key={user.id}
-              user={user}
-              selected={selectedUsers.has(user.id)}
-              onSelectionChange={(selected) =>
-                onUserSelection(user.id, selected)
-              }
-              onOpenHistory={() => onOpenHistory(user.id)}
-            />
-          ))}
-        </div>
+      <div className='rounded-md border'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className='w-12'>
+                <Checkbox
+                  checked={
+                    selectedUsers.size === users.length && users.length > 0
+                  }
+                  onCheckedChange={(checked) => onSelectAll(checked as boolean)}
+                />
+              </TableHead>
+              <TableHead>Пользователь</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Телефон</TableHead>
+              <TableHead>Бонусы</TableHead>
+              <TableHead>Регистрация</TableHead>
+              <TableHead className='w-12'>Действия</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow
+                key={user.id}
+                className={selectedUsers.has(user.id) ? 'bg-muted/50' : ''}
+              >
+                <TableCell>
+                  <Checkbox
+                    checked={selectedUsers.has(user.id)}
+                    onCheckedChange={(checked) =>
+                      onUserSelection(user.id, checked as boolean)
+                    }
+                  />
+                </TableCell>
+                <TableCell>
+                  <div className='flex items-center space-x-3'>
+                    <div className='h-8 w-8 overflow-hidden rounded-full'>
+                      <Image
+                        src={user.avatar}
+                        alt={user.name}
+                        width={32}
+                        height={32}
+                        className='h-full w-full object-cover'
+                      />
+                    </div>
+                    <div>
+                      <div className='font-medium'>{user.name}</div>
+                      <div className='text-muted-foreground text-sm'>
+                        ID: {user.id.slice(0, 8)}...
+                      </div>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className='font-mono text-sm'>
+                  {user.email || '-'}
+                </TableCell>
+                <TableCell className='font-mono text-sm'>
+                  {user.phone || '-'}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={user.bonusBalance > 0 ? 'default' : 'secondary'}
+                  >
+                    {user.bonusBalance.toFixed(0)} ₽
+                  </Badge>
+                </TableCell>
+                <TableCell className='text-muted-foreground text-sm'>
+                  {user.createdAt.toLocaleDateString('ru-RU')}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    onClick={() => onOpenHistory(user.id)}
+                    className='h-8 w-8 p-0'
+                  >
+                    <MessageSquare className='h-4 w-4' />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     );
   }
 );
 
 UsersDisplayArea.displayName = 'UsersDisplayArea';
-
-/**
- * Компонент карточки пользователя
- */
-interface UserCardProps {
-  user: User;
-  selected: boolean;
-  onSelectionChange: (selected: boolean) => void;
-  onOpenHistory: () => void;
-}
-
-const UserCard = memo<UserCardProps>(
-  ({ user, selected, onSelectionChange, onOpenHistory }) => {
-    const isActive = user.bonusBalance > 0;
-
-    return (
-      <Card
-        className={`transition-all duration-200 ${selected ? 'ring-primary ring-2' : ''}`}
-      >
-        <CardContent className='p-4'>
-          <div className='flex items-center space-x-4'>
-            <input
-              type='checkbox'
-              checked={selected}
-              onChange={(e) => onSelectionChange(e.target.checked)}
-              className='rounded border-gray-300'
-            />
-
-            <Image
-              src={user.avatar || '/default-avatar.png'}
-              alt={user.name}
-              width={40}
-              height={40}
-              className='h-10 w-10 rounded-full object-cover'
-            />
-
-            <div className='flex-1'>
-              <div className='flex items-center space-x-2'>
-                <h4 className='font-medium'>{user.name}</h4>
-                {isActive && <Badge variant='default'>Активный</Badge>}
-              </div>
-              <div className='text-muted-foreground space-y-1 text-sm'>
-                <div>{user.email}</div>
-                {user.phone && <div>{user.phone}</div>}
-                <div>
-                  Регистрация: {user.createdAt.toLocaleDateString('ru-RU')}
-                </div>
-              </div>
-            </div>
-
-            <div className='text-right'>
-              <div className='text-lg font-semibold'>
-                {Number(user.bonusBalance).toFixed(2)}₽
-              </div>
-              <div className='text-muted-foreground text-sm'>
-                Заработано: {Number(user.totalEarned).toFixed(2)}₽
-              </div>
-              <div className='mt-2'>
-                <Button variant='outline' size='sm' onClick={onOpenHistory}>
-                  История
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-);
-
-UserCard.displayName = 'UserCard';
 
 export default BonusManagementPageRefactored;
