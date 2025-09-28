@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,15 +18,23 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  DialogFooter
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage
+} from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle, Save } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 import type { BonusLevel } from '@/types/bonus';
 
 const bonusLevelSchema = z
@@ -80,49 +88,25 @@ export function BonusLevelDialog({
   onSuccess
 }: BonusLevelDialogProps) {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [unlimitedMax, setUnlimitedMax] = useState(level?.maxAmount === null);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { errors }
-  } = useForm<BonusLevelFormData>({
+  const form = useForm<BonusLevelFormData>({
     resolver: zodResolver(bonusLevelSchema),
     defaultValues: {
-      name: level?.name || '',
-      minAmount: level?.minAmount || 0,
-      maxAmount: level?.maxAmount,
-      bonusPercent: level?.bonusPercent || 5,
-      paymentPercent: level?.paymentPercent || 10,
-      isActive: level?.isActive ?? true
+      name: '',
+      minAmount: 0,
+      maxAmount: null,
+      bonusPercent: 5,
+      paymentPercent: 10,
+      isActive: true
     }
   });
 
-  // Обновляем значения формы при изменении level
+  // Заполняем форму при открытии диалога с данными уровня
   useEffect(() => {
-    if (level && open) {
-      console.log('🔧 Setting form values for level:', level);
-      console.log('📊 Level properties:', {
-        id: level.id,
-        name: level.name,
-        minAmount: level.minAmount,
-        maxAmount: level.maxAmount,
-        bonusPercent: level.bonusPercent,
-        paymentPercent: level.paymentPercent,
-        isActive: level.isActive,
-        types: {
-          minAmount: typeof level.minAmount,
-          maxAmount: typeof level.maxAmount,
-          bonusPercent: typeof level.bonusPercent,
-          paymentPercent: typeof level.paymentPercent
-        }
-      });
+    if (open && level) {
+      console.log('🔧 Filling form with level data:', level);
 
-      const formData = {
+      form.reset({
         name: level.name || '',
         minAmount: Number(level.minAmount) || 0,
         maxAmount:
@@ -132,17 +116,10 @@ export function BonusLevelDialog({
         bonusPercent: Number(level.bonusPercent) || 5,
         paymentPercent: Number(level.paymentPercent) || 10,
         isActive: level.isActive ?? true
-      };
-
-      console.log('📝 Form data to set:', formData);
-      reset(formData);
-      setUnlimitedMax(
-        level.maxAmount === null || level.maxAmount === undefined
-      );
-    } else if (!level && open) {
-      // Сброс для создания нового уровня
-      console.log('🔄 Resetting form for new level creation');
-      reset({
+      });
+    } else if (open && !level) {
+      // Создание нового уровня
+      form.reset({
         name: '',
         minAmount: 0,
         maxAmount: null,
@@ -150,51 +127,37 @@ export function BonusLevelDialog({
         paymentPercent: 10,
         isActive: true
       });
-      setUnlimitedMax(false);
     }
-  }, [level, open, reset]);
-
-  const handleUnlimitedMaxChange = (checked: boolean) => {
-    setUnlimitedMax(checked);
-    setValue('maxAmount', checked ? null : 10000);
-  };
+  }, [open, level, form]);
 
   const onSubmit = async (data: BonusLevelFormData) => {
     try {
-      setLoading(true);
-
       const url = level
         ? `/api/projects/${projectId}/bonus-levels/${level.id}`
         : `/api/projects/${projectId}/bonus-levels`;
 
-      const method = level ? 'PUT' : 'POST';
-
-      const payload = {
-        ...data,
-        maxAmount: unlimitedMax ? null : data.maxAmount
-      };
-
       const response = await fetch(url, {
-        method,
+        method: level ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(data)
       });
 
-      if (response.ok) {
-        toast({
-          title: 'Успех',
-          description: level ? 'Уровень обновлен' : 'Уровень создан'
-        });
-        onSuccess();
-        reset();
-      } else {
+      if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Ошибка сохранения');
       }
+
+      toast({
+        title: 'Успех',
+        description: level ? 'Уровень обновлен' : 'Уровень создан'
+      });
+
+      onSuccess();
+      onOpenChange(false);
     } catch (error) {
-      console.error('Ошибка сохранения уровня:', error);
+      console.error('Error saving level:', error);
       toast({
         title: 'Ошибка',
         description:
@@ -203,20 +166,17 @@ export function BonusLevelDialog({
             : 'Не удалось сохранить уровень',
         variant: 'destructive'
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleClose = () => {
+  const handleCancel = () => {
+    form.reset();
     onOpenChange(false);
-    reset();
-    setUnlimitedMax(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className='max-w-md'>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className='sm:max-w-[500px]'>
         <DialogHeader>
           <DialogTitle>
             {level ? 'Редактировать уровень' : 'Создать уровень'}
@@ -228,145 +188,153 @@ export function BonusLevelDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className='space-y-4'>
-          {/* Name */}
-          <div className='space-y-2'>
-            <Label htmlFor='name'>Название уровня</Label>
-            <Input
-              id='name'
-              placeholder='Базовый, Серебряный, Золотой...'
-              {...register('name')}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
+            <FormField
+              control={form.control}
+              name='name'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Название уровня</FormLabel>
+                  <FormControl>
+                    <Input placeholder='Например: Базовый' {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {errors.name && (
-              <p className='text-sm text-red-600'>{errors.name.message}</p>
-            )}
-          </div>
 
-          {/* Min Amount */}
-          <div className='space-y-2'>
-            <Label htmlFor='minAmount'>Минимальная сумма покупок (₽)</Label>
-            <Input
-              id='minAmount'
-              type='number'
-              step='100'
-              placeholder='0'
-              {...register('minAmount', { valueAsNumber: true })}
-            />
-            {errors.minAmount && (
-              <p className='text-sm text-red-600'>{errors.minAmount.message}</p>
-            )}
-          </div>
-
-          {/* Max Amount */}
-          <div className='space-y-2'>
-            <Label>Максимальная сумма покупок</Label>
-            <div className='mb-2 flex items-center space-x-2'>
-              <Switch
-                checked={unlimitedMax}
-                onCheckedChange={handleUnlimitedMaxChange}
+            <div className='grid grid-cols-2 gap-4'>
+              <FormField
+                control={form.control}
+                name='minAmount'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Мин. сумма заказа (₽)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        placeholder='0'
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(Number(e.target.value) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              <Label className='text-sm'>Без ограничений</Label>
-            </div>
-            {!unlimitedMax && (
-              <Input
-                type='number'
-                step='100'
-                placeholder='10000'
-                {...register('maxAmount', { valueAsNumber: true })}
+
+              <FormField
+                control={form.control}
+                name='maxAmount'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Макс. сумма заказа (₽)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        placeholder='Без ограничений'
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(
+                            value === '' ? null : Number(value) || null
+                          );
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Оставьте пустым для без ограничений
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            )}
-            {errors.maxAmount && (
-              <p className='text-sm text-red-600'>{errors.maxAmount.message}</p>
-            )}
-          </div>
-
-          {/* Bonus Percent */}
-          <div className='space-y-2'>
-            <Label htmlFor='bonusPercent'>Процент начисления бонусов (%)</Label>
-            <Input
-              id='bonusPercent'
-              type='number'
-              step='0.1'
-              min='0.1'
-              max='50'
-              placeholder='5'
-              {...register('bonusPercent', { valueAsNumber: true })}
-            />
-            {errors.bonusPercent && (
-              <p className='text-sm text-red-600'>
-                {errors.bonusPercent.message}
-              </p>
-            )}
-            <p className='text-xs text-gray-600'>
-              Сколько процентов от покупки начисляется в виде бонусов
-            </p>
-          </div>
-
-          {/* Payment Percent */}
-          <div className='space-y-2'>
-            <Label htmlFor='paymentPercent'>
-              Максимальный процент оплаты бонусами (%)
-            </Label>
-            <Input
-              id='paymentPercent'
-              type='number'
-              step='1'
-              min='1'
-              max='100'
-              placeholder='10'
-              {...register('paymentPercent', { valueAsNumber: true })}
-            />
-            {errors.paymentPercent && (
-              <p className='text-sm text-red-600'>
-                {errors.paymentPercent.message}
-              </p>
-            )}
-            <p className='text-xs text-gray-600'>
-              Максимальный процент заказа, который можно оплатить бонусами
-            </p>
-          </div>
-
-          {/* Active Switch */}
-          <div className='flex items-center justify-between rounded-lg border p-4'>
-            <div>
-              <Label className='text-base'>Активный уровень</Label>
-              <p className='text-sm text-gray-600'>
-                Включить этот уровень в бонусную программу
-              </p>
             </div>
-            <Switch
-              {...register('isActive')}
-              checked={watch('isActive')}
-              onCheckedChange={(checked) => setValue('isActive', checked)}
+
+            <div className='grid grid-cols-2 gap-4'>
+              <FormField
+                control={form.control}
+                name='bonusPercent'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Процент бонусов (%)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        step='0.1'
+                        placeholder='5'
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(Number(e.target.value) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='paymentPercent'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Макс. оплата бонусами (%)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        placeholder='10'
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(Number(e.target.value) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name='isActive'
+              render={({ field }) => (
+                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                  <div className='space-y-0.5'>
+                    <FormLabel className='text-base'>
+                      Активный уровень
+                    </FormLabel>
+                    <FormDescription>
+                      Неактивные уровни не используются в расчетах
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Warning */}
-          <Alert>
-            <AlertCircle className='h-4 w-4' />
-            <AlertDescription>
-              Убедитесь, что диапазоны сумм не пересекаются с другими уровнями.
-              Пользователи получают уровень автоматически при достижении нужной
-              суммы покупок.
-            </AlertDescription>
-          </Alert>
-
-          {/* Actions */}
-          <div className='flex justify-end space-x-2 pt-4'>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={handleClose}
-              disabled={loading}
-            >
-              Отмена
-            </Button>
-            <Button type='submit' disabled={loading}>
-              <Save className='mr-2 h-4 w-4' />
-              {loading ? 'Сохранение...' : level ? 'Обновить' : 'Создать'}
-            </Button>
-          </div>
-        </form>
+            <DialogFooter>
+              <Button type='button' variant='outline' onClick={handleCancel}>
+                <X className='mr-2 h-4 w-4' />
+                Отмена
+              </Button>
+              <Button type='submit'>
+                <Save className='mr-2 h-4 w-4' />
+                {level ? 'Сохранить' : 'Создать'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
