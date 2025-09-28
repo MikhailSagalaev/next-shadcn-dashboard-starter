@@ -24,11 +24,16 @@ async function checkMigration() {
 
     console.log(`📊 Всего пользователей в проекте: ${totalUsers}`);
 
-    // Проверяем пользователей с бонусами
+    // Проверяем пользователей с бонусами (через связь с бонусами)
     const usersWithBonuses = await prisma.user.count({
       where: {
         projectId,
-        currentBonusBalance: { gt: 0 }
+        bonuses: {
+          some: {
+            isUsed: false,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+          }
+        }
       }
     });
 
@@ -45,15 +50,35 @@ async function checkMigration() {
         lastName: true,
         email: true,
         phone: true,
-        currentBonusBalance: true,
         createdAt: true
       }
     });
 
+    // Получаем баланс бонусов для каждого пользователя
+    const usersWithBalances = await Promise.all(
+      recentUsers.map(async (user) => {
+        const bonusBalance = await prisma.bonus.aggregate({
+          where: {
+            userId: user.id,
+            isUsed: false,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+          },
+          _sum: {
+            amount: true
+          }
+        });
+
+        return {
+          ...user,
+          currentBonusBalance: bonusBalance._sum.amount || 0
+        };
+      })
+    );
+
     console.log('\n🆕 Последние созданные пользователи:');
-    recentUsers.forEach((user, index) => {
+    usersWithBalances.forEach((user, index) => {
       console.log(
-        `${index + 1}. ${user.firstName} ${user.lastName || ''} (${user.email}) - ${user.currentBonusBalance}₽`
+        `${index + 1}. ${user.firstName} ${user.lastName || ''} (${user.email}) - ${Number(user.currentBonusBalance)}₽`
       );
     });
 
