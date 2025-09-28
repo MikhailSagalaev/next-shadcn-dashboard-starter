@@ -47,7 +47,9 @@ import {
   AlertCircle,
   Users,
   Filter,
-  MessageSquare
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
@@ -109,13 +111,31 @@ export function BonusManagementPageRefactored({
     totalUsers,
     activeUsers,
     totalBonuses,
+    currentPage,
+    totalPages,
+    totalCount,
+    loadUsers,
     createUser,
     refreshUsers,
     searchUsers,
     exportUsers
   } = useProjectUsers({
-    projectId: currentProjectId || undefined
+    projectId: currentProjectId || undefined,
+    pageSize: 50
   });
+
+  // Обработчики пагинации и поиска
+  const handlePageChange = useCallback(
+    (page: number) => {
+      loadUsers(page);
+    },
+    [loadUsers]
+  );
+
+  const handleSearch = useCallback((term: string) => {
+    setSearchTerm(term);
+    // Поиск обрабатывается локально через searchUsers
+  }, []);
 
   // Memoized values
   const filteredUsers = useMemo(() => {
@@ -510,6 +530,38 @@ export function BonusManagementPageRefactored({
         onClearSelection={() => setSelectedUsers(new Set())}
         onShowRichNotifications={() => setShowRichNotificationDialog(true)}
       />
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className='mt-6 flex items-center justify-between'>
+          <div className='text-muted-foreground text-sm'>
+            Показано {filteredUsers.length} из {totalCount} пользователей
+          </div>
+          <div className='flex items-center space-x-2'>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className='h-4 w-4' />
+              Назад
+            </Button>
+            <span className='text-muted-foreground text-sm'>
+              Страница {currentPage} из {totalPages}
+            </span>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+            >
+              Вперед
+              <ChevronRight className='h-4 w-4' />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Create User Dialog */}
       <UserCreateDialog

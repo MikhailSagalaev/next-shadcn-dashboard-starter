@@ -15,6 +15,7 @@ import type { User } from '../types';
 interface UseProjectUsersOptions {
   projectId?: string;
   initialUsers?: User[];
+  pageSize?: number;
 }
 
 interface UseProjectUsersReturn {
@@ -25,8 +26,13 @@ interface UseProjectUsersReturn {
   activeUsers: number;
   totalBonuses: number;
 
+  // Pagination
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+
   // Actions
-  loadUsers: () => Promise<void>;
+  loadUsers: (page?: number) => Promise<void>;
   createUser: (userData: any) => Promise<User | null>;
   refreshUsers: () => Promise<void>;
   searchUsers: (term: string) => User[];
@@ -35,11 +41,15 @@ interface UseProjectUsersReturn {
 
 export function useProjectUsers({
   projectId,
-  initialUsers = []
+  initialUsers = [],
+  pageSize = 50
 }: UseProjectUsersOptions = {}): UseProjectUsersReturn {
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Производные состояния
   const totalUsers = users.length;
@@ -51,105 +61,127 @@ export function useProjectUsers({
   /**
    * Загрузка пользователей проекта
    */
-  const loadUsers = useCallback(async () => {
-    if (!projectId) {
-      logger.warn(
-        'Cannot load users: projectId not provided',
-        {},
-        'use-project-users'
-      );
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      logger.info('Loading project users', { projectId }, 'use-project-users');
-
-      const response = await fetch(`/api/projects/${projectId}/users`);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP Error ${response.status}`);
-      }
-
-      const payload = await response.json();
-
-      const list: any[] = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.users)
-          ? payload.users
-          : [];
-
-      if (!Array.isArray(list)) {
-        throw new Error('Invalid response format: expected users array');
-      }
-
-      // Форматируем пользователей для корректного отображения
-      const formattedUsers: User[] = list.map((user: any, index: number) => ({
-        id: user.id || `user-${index}`,
-        name:
-          user.firstName && user.lastName
-            ? `${user.firstName} ${user.lastName}`.trim()
-            : user.email || `Пользователь ${index + 1}`,
-        email: user.email || '',
-        phone: user.phone || '',
-        avatar:
-          user.avatar ||
-          `https://api.slingacademy.com/public/sample-users/${(index % 10) + 1}.png`,
-        bonusBalance: Number(Number(user.bonusBalance).toFixed(2)) || 0,
-        totalEarned: Number(Number(user.totalEarned).toFixed(2)) || 0,
-        createdAt: new Date(user.registeredAt || user.createdAt || Date.now()),
-        updatedAt: new Date(user.updatedAt || Date.now()),
-        firstName: user.firstName,
-        lastName: user.lastName,
-        birthDate: user.birthDate,
-        registeredAt: user.registeredAt,
-        currentLevel: user.currentLevel
-      }));
-
-      setUsers(formattedUsers);
-
-      logger.info(
-        'Project users loaded successfully',
-        {
-          projectId,
-          count: formattedUsers.length,
-          totalBonuses: formattedUsers.reduce(
-            (sum, user) => sum + user.bonusBalance,
-            0
-          )
-        },
-        'use-project-users'
-      );
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      setError(errorMessage);
-
-      logger.error(
-        'Failed to load project users',
-        {
-          projectId,
-          error: errorMessage
-        },
-        'use-project-users'
-      );
-
-      // В случае ошибки используем демо данные в development
-      if (process.env.NODE_ENV === 'development') {
-        setUsers(getDemoUsers());
+  const loadUsers = useCallback(
+    async (page = 1) => {
+      if (!projectId) {
         logger.warn(
-          'Using demo data due to API error',
-          { projectId },
+          'Cannot load users: projectId not provided',
+          {},
           'use-project-users'
         );
+        return;
       }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [projectId]);
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        logger.info(
+          'Loading project users',
+          { projectId, page, pageSize },
+          'use-project-users'
+        );
+
+        // Создаем URL с параметрами пагинации
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: pageSize.toString()
+        });
+
+        const response = await fetch(
+          `/api/projects/${projectId}/users?${params}`
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `HTTP Error ${response.status}`);
+        }
+
+        const payload = await response.json();
+
+        const usersArray: any[] = Array.isArray(payload?.users)
+          ? payload.users
+          : [];
+        const totalCount = payload?.total || usersArray.length;
+        const totalPagesCount =
+          payload?.totalPages || Math.ceil(totalCount / pageSize);
+
+        if (!Array.isArray(usersArray)) {
+          throw new Error('Invalid response format: expected users array');
+        }
+
+        // Форматируем пользователей для корректного отображения
+        const formattedUsers: User[] = usersArray.map(
+          (user: any, index: number) => ({
+            id: user.id || `user-${index}`,
+            name:
+              user.firstName && user.lastName
+                ? `${user.firstName} ${user.lastName}`.trim()
+                : user.email || `Пользователь ${index + 1}`,
+            email: user.email || '',
+            phone: user.phone || '',
+            avatar:
+              user.avatar ||
+              `https://api.slingacademy.com/public/sample-users/${(index % 10) + 1}.png`,
+            bonusBalance: Number(Number(user.bonusBalance).toFixed(2)) || 0,
+            totalEarned: Number(Number(user.totalEarned).toFixed(2)) || 0,
+            createdAt: new Date(
+              user.registeredAt || user.createdAt || Date.now()
+            ),
+            updatedAt: new Date(user.updatedAt || Date.now()),
+            firstName: user.firstName,
+            lastName: user.lastName,
+            birthDate: user.birthDate,
+            registeredAt: user.registeredAt,
+            currentLevel: user.currentLevel
+          })
+        );
+
+        setUsers(formattedUsers);
+        setCurrentPage(page);
+        setTotalCount(totalCount);
+        setTotalPages(totalPagesCount);
+
+        logger.info(
+          'Project users loaded successfully',
+          {
+            projectId,
+            count: formattedUsers.length,
+            totalUsers: totalCount,
+            page,
+            totalPages: totalPagesCount
+          },
+          'use-project-users'
+        );
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        setError(errorMessage);
+
+        logger.error(
+          'Failed to load project users',
+          {
+            projectId,
+            error: errorMessage
+          },
+          'use-project-users'
+        );
+
+        // В случае ошибки используем демо данные в development
+        if (process.env.NODE_ENV === 'development') {
+          setUsers(getDemoUsers());
+          logger.warn(
+            'Using demo data due to API error',
+            { projectId },
+            'use-project-users'
+          );
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [projectId]
+  );
 
   /**
    * Создание нового пользователя
@@ -346,9 +378,12 @@ export function useProjectUsers({
     users,
     isLoading,
     error,
-    totalUsers,
+    totalUsers: totalCount,
     activeUsers,
     totalBonuses,
+    currentPage,
+    totalPages,
+    totalCount,
     loadUsers,
     createUser,
     refreshUsers,
