@@ -126,17 +126,53 @@ class AirtableMigrationService {
 
     const customers: AirtableCustomer[] = [];
 
-    // Чтение и парсинг CSV
+    // Чтение и парсинг CSV с обработкой проблемных полей
     await new Promise<void>((resolve, reject) => {
       fs.createReadStream(csvPath)
         .pipe(
           csv({
-            separator: ';' // Попробовать разные разделители
+            separator: ',', // Используем запятую как основной разделитель
+            escape: '"', // Экранирование кавычек
+            quote: '"', // Кавычки для полей
+            skipEmptyLines: false
           })
         )
-        .on('data', (data) => customers.push(data))
+        .on('data', (data) => {
+          // Очистка данных от лишних полей со скриптами
+          const cleanedData: any = {};
+
+          for (const [key, value] of Object.entries(data)) {
+            // Пропускаем поля со скриптами и ненужные поля
+            if (
+              key.includes('script') ||
+              key.includes('lk_script') ||
+              key.includes('tilda_cashcalc') ||
+              key.includes('Calculation')
+            ) {
+              continue;
+            }
+
+            // Очищаем значение от лишних символов
+            let cleanValue = String(value || '').trim();
+
+            // Удаляем многострочные скрипты если они есть
+            if (
+              cleanValue.includes('<script>') ||
+              cleanValue.includes('function')
+            ) {
+              continue;
+            }
+
+            cleanedData[key] = cleanValue;
+          }
+
+          customers.push(cleanedData);
+        })
         .on('end', () => {
-          console.log(`📊 Прочитано ${customers.length} строк из CSV`);
+          console.log(
+            `📊 Прочитано и очищено ${customers.length} строк из CSV`
+          );
+          console.log('🔍 Пример очищенных данных:', customers[0]);
           resolve();
         })
         .on('error', reject);
@@ -229,25 +265,36 @@ class AirtableMigrationService {
       throw new Error('Не удалось прочитать данные из CSV файла');
     }
 
-    // Проверяем структуру данных
+    // Проверяем структуру данных (после очистки)
     const firstRow = sampleCustomers[0];
-    const requiredFields = ['Имя', 'Email', 'Телефон'];
-    const hasAnyRequiredField = requiredFields.some(
+    const availableFields = Object.keys(firstRow);
+    console.log('📋 Доступные поля после очистки:', availableFields);
+
+    // Ищем необходимые поля
+    const hasEmail = availableFields.some(
       (field) =>
-        firstRow.hasOwnProperty(field) ||
-        firstRow.hasOwnProperty(`${field} клиента`) ||
-        firstRow.hasOwnProperty(field.toLowerCase())
+        field.toLowerCase().includes('email') && firstRow[field]?.includes('@')
+    );
+    const hasName = availableFields.some(
+      (field) =>
+        field.toLowerCase().includes('имя') ||
+        field.toLowerCase().includes('name')
+    );
+    const hasBonuses = availableFields.some(
+      (field) =>
+        field.includes('Количество бонусов') || field.includes('AlltimeCost')
     );
 
-    if (!hasAnyRequiredField) {
-      console.warn(
-        '⚠️  В CSV файле не найдены ожидаемые поля (Имя, Email, Телефон)'
-      );
-      console.log('📋 Найденные поля:', Object.keys(firstRow));
+    if (!hasEmail || !hasName) {
+      console.warn('⚠️  В CSV файле не найдены необходимые поля (Email, Имя)');
+      console.log('📋 Найденные поля:', availableFields);
       console.log('🔄 Попробуем продолжить миграцию...');
     }
 
     console.log('✅ CSV файл прошел валидацию');
+    console.log(
+      `📊 Найдено: Email=${hasEmail}, Имя=${hasName}, Бонусы=${hasBonuses}`
+    );
   }
 
   private async migrateCustomer(customer: AirtableCustomer): Promise<void> {
@@ -394,30 +441,42 @@ class AirtableMigrationService {
   }
 
   private transformCustomerData(customer: AirtableCustomer): any {
-    // Маппинг полей с поддержкой альтернативных названий
-    const firstName = customer['Имя'] || customer['Имя клиента'] || '';
-    const lastName = customer['Фамилия'] || customer['Фамилия клиента'] || '';
-    const email = customer['Email'] || customer['Email клиента'];
-    const phone = customer['Телефон'] || customer['Телефон клиента'];
+    // Поиск полей в очищенных данных (без учета регистра)
+    const findField = (possibleNames: string[]): string | undefined => {
+      for (const name of possibleNames) {
+        // Ищем точное совпадение
+        if (customer[name] !== undefined) return customer[name];
+
+        // Ищем без учета регистра
+        const key = Object.keys(customer).find(
+          (k) => k.toLowerCase() === name.toLowerCase()
+        );
+        if (key) return customer[key];
+      }
+      return undefined;
+    };
+
+    const firstName = findField(['Имя', 'Имя клиента', 'name', 'Name']) || '';
+    const lastName =
+      findField(['Фамилия', 'Фамилия клиента', 'lastname', 'LastName']) || '';
+    const email = findField(['Email', 'Email клиента', 'email']);
+    const phone = findField(['Телефон', 'Телефон клиента', 'phone', 'Phone']);
 
     // Преобразование суммы покупок (расширенная логика для Airtable полей)
     const totalPurchasesStr =
-      customer['Сумма покупок'] ||
-      customer['Общая сумма'] ||
-      customer['Общая сумма покупок'] ||
-      customer['AlltimeCost'] || // Новое поле из Airtable
-      customer['Cost (from Orders)'] ||
-      '0';
+      findField([
+        'Сумма покупок',
+        'Общая сумма',
+        'Общая сумма покупок',
+        'AlltimeCost',
+        'Cost (from Orders)'
+      ]) || '0';
 
     // Более надёжный парсинг чисел с поддержкой разных форматов
     const totalPurchases = this.parseCurrency(totalPurchasesStr);
 
     // Определение статуса (расширенная логика)
-    const status =
-      customer['Статус'] ||
-      customer['Статус клиента'] ||
-      customer['Status'] ||
-      '';
+    const status = findField(['Статус', 'Статус клиента', 'Status']) || '';
     const isActive =
       !status.toLowerCase().includes('архив') &&
       !status.toLowerCase().includes('неактив') &&
@@ -426,7 +485,7 @@ class AirtableMigrationService {
 
     // Дата регистрации
     let registeredAt = new Date();
-    const purchaseDate = customer['Дата первой покупки'];
+    const purchaseDate = findField(['Дата первой покупки', 'Дата регистрации']);
     if (purchaseDate) {
       const parsedDate = new Date(purchaseDate);
       if (!isNaN(parsedDate.getTime())) {
@@ -436,17 +495,28 @@ class AirtableMigrationService {
 
     // Преобразование текущего баланса бонусов
     const currentBonusBalance = this.parseCurrency(
-      customer['Количество бонусов'] || '0'
+      findField(['Количество бонусов']) || '0'
     );
 
     // Определение уровня на основе CashbackLevel или tilda_level
     let currentLevel = 'Базовый'; // По умолчанию
-    const cashbackLevel = customer['CashbackLevel'] || customer['tilda_level'];
+    const cashbackLevel = findField([
+      'CashbackLevel',
+      'tilda_level',
+      'Уровень'
+    ]);
     if (cashbackLevel) {
-      const levelNum = parseInt(cashbackLevel.toString());
-      if (levelNum === 2) currentLevel = 'Серебряный';
-      else if (levelNum === 3) currentLevel = 'Золотой';
-      else if (levelNum >= 4) currentLevel = 'Платиновый';
+      const levelStr = cashbackLevel.toString().toLowerCase();
+      if (levelStr.includes('2') || levelStr.includes('серебрян'))
+        currentLevel = 'Серебряный';
+      else if (levelStr.includes('3') || levelStr.includes('золот'))
+        currentLevel = 'Золотой';
+      else if (
+        levelStr.includes('4') ||
+        levelStr.includes('плати') ||
+        levelStr.includes('прем')
+      )
+        currentLevel = 'Платиновый';
     }
 
     return {
