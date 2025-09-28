@@ -38,6 +38,7 @@
     "pm2:stop": "pm2 delete bonus-app || true",
     "prod:up": "yarn build && yarn pm2:start",
     "migrate-customers": "tsx scripts/migrate-airtable-customers.ts",
+    "check-migration": "tsx scripts/check-migration.ts",
     "update-levels": "tsx scripts/update-user-levels.ts",
     "validate-migration": "tsx scripts/validate-migration.ts",
     "rollback-migration": "tsx scripts/rollback-migration.ts"
