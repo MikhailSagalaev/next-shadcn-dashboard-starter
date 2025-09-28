@@ -18,9 +18,12 @@ export async function GET(
   try {
     const { id } = await context.params;
 
-    // Получаем проект без связанных данных
+    // Получаем проект со связанными данными
     const project = await db.project.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        referralProgram: true
+      }
     });
 
     if (!project) {

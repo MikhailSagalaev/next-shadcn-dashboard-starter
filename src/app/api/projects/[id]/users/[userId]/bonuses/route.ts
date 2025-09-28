@@ -243,7 +243,7 @@ type SerializedTransaction = {
   type: string;
   description?: string | null;
   metadata?: Record<string, any> | null;
-  createdAt: string;
+  createdAt: string | Date;
   user?: Record<string, unknown> | undefined;
   bonus?: Record<string, unknown> | undefined;
 };

@@ -37,6 +37,7 @@ export class ProjectService {
       where: { id },
       include: {
         botSettings: true,
+        referralProgram: true,
         _count: {
           select: {
             users: true
@@ -65,6 +66,7 @@ export class ProjectService {
         where: { webhookSecret },
         include: {
           botSettings: true,
+          referralProgram: true,
           _count: {
             select: {
               users: true
@@ -84,6 +86,7 @@ export class ProjectService {
           where: { webhookSecret },
           include: {
             botSettings: true,
+            referralProgram: true,
             _count: {
               select: {
                 users: true
@@ -143,6 +146,7 @@ export class ProjectService {
       where: { domain },
       include: {
         botSettings: true,
+        referralProgram: true,
         _count: {
           select: {
             users: true
@@ -167,6 +171,7 @@ export class ProjectService {
         take: limit,
         include: {
           botSettings: true,
+          referralProgram: true,
           _count: {
             select: {
               users: true
@@ -193,6 +198,7 @@ export class ProjectService {
       data,
       include: {
         botSettings: true,
+        referralProgram: true,
         _count: {
           select: {
             users: true
@@ -211,6 +217,7 @@ export class ProjectService {
       data: { isActive: false },
       include: {
         botSettings: true,
+        referralProgram: true,
         _count: {
           select: {
             users: true
