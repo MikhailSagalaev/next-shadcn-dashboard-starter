@@ -28,9 +28,15 @@ async function getHandler(
 ) {
   try {
     const { id } = await context.params;
-    const page = context.validatedQuery?.page ?? 1;
-    const limit = context.validatedQuery?.limit ?? 20;
-    const search = context.validatedQuery?.search as string | undefined;
+
+    // Парсим параметры напрямую из URL
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1', 10);
+    const limit = Math.min(
+      parseInt(url.searchParams.get('limit') || '50', 10),
+      200
+    );
+    const search = url.searchParams.get('search') || undefined;
 
     // Базовый фильтр с поиском
     const where: any = { projectId: id };
@@ -490,8 +496,6 @@ async function putHandler(
   }
 }
 
-export const GET = withApiRateLimit(
-  withValidation(getHandler, { query: getQuerySchema })
-);
+export const GET = withApiRateLimit(getHandler);
 export const POST = withApiRateLimit(postHandler);
 export const PUT = withApiRateLimit(putHandler);
