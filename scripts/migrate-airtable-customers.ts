@@ -10,7 +10,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
-const csv = require('csv-parser');
+import csv from 'csv-parser';
 
 const prisma = new PrismaClient();
 
@@ -60,6 +60,12 @@ interface MigrationStats {
   duplicates: number;
 }
 
+interface MigrationOptions {
+  dryRun?: boolean;
+  batchSize?: number;
+  skipValidation?: boolean;
+}
+
 class AirtableMigrationService {
   private stats: MigrationStats = {
     total: 0,
@@ -72,10 +78,19 @@ class AirtableMigrationService {
   private errors: string[] = [];
   private warnings: string[] = [];
 
-  constructor(private projectId: string) {}
+  constructor(
+    private projectId: string,
+    private options: MigrationOptions = {}
+  ) {}
 
   async migrateFromCSV(csvPath: string): Promise<void> {
-    console.log('🚀 Начинаем миграцию данных из Airtable...');
+    const isDryRun = this.options.dryRun;
+    console.log(
+      `🚀 ${isDryRun ? 'ПРОБНЫЙ ЗАПУСК' : 'Начинаем'} миграцию данных из Airtable...`
+    );
+    if (isDryRun) {
+      console.log('⚠️  Режим DRY-RUN: данные не будут сохранены в базу');
+    }
     console.log(`📁 Файл: ${csvPath}`);
     console.log(`🏢 Проект: ${this.projectId}`);
 
@@ -94,6 +109,9 @@ class AirtableMigrationService {
     }
 
     console.log(`✅ Проект найден: ${project.name}`);
+
+    // Валидация CSV файла
+    await this.validateCsvFile(csvPath);
 
     const customers: AirtableCustomer[] = [];
 
@@ -163,6 +181,64 @@ class AirtableMigrationService {
     this.saveMigrationReport();
   }
 
+  private async validateCsvFile(csvPath: string): Promise<void> {
+    console.log('🔍 Валидация CSV файла...');
+
+    // Проверяем размер файла
+    const stats = fs.statSync(csvPath);
+    if (stats.size === 0) {
+      throw new Error('CSV файл пустой');
+    }
+
+    if (stats.size > 100 * 1024 * 1024) {
+      // 100MB
+      throw new Error('CSV файл слишком большой (>100MB)');
+    }
+
+    // Читаем первые несколько строк для валидации
+    const sampleCustomers: AirtableCustomer[] = [];
+    let lineCount = 0;
+
+    await new Promise<void>((resolve, reject) => {
+      fs.createReadStream(csvPath)
+        .pipe(csv({ separator: ';', skipEmptyLines: true }))
+        .on('data', (data) => {
+          sampleCustomers.push(data);
+          lineCount++;
+          if (lineCount >= 5) {
+            // Проверяем только первые 5 строк
+            // Не завершаем поток, просто прекращаем обработку
+          }
+        })
+        .on('end', () => resolve())
+        .on('error', reject);
+    });
+
+    if (sampleCustomers.length === 0) {
+      throw new Error('Не удалось прочитать данные из CSV файла');
+    }
+
+    // Проверяем структуру данных
+    const firstRow = sampleCustomers[0];
+    const requiredFields = ['Имя', 'Email', 'Телефон'];
+    const hasAnyRequiredField = requiredFields.some(
+      (field) =>
+        firstRow.hasOwnProperty(field) ||
+        firstRow.hasOwnProperty(`${field} клиента`) ||
+        firstRow.hasOwnProperty(field.toLowerCase())
+    );
+
+    if (!hasAnyRequiredField) {
+      console.warn(
+        '⚠️  В CSV файле не найдены ожидаемые поля (Имя, Email, Телефон)'
+      );
+      console.log('📋 Найденные поля:', Object.keys(firstRow));
+      console.log('🔄 Попробуем продолжить миграцию...');
+    }
+
+    console.log('✅ CSV файл прошел валидацию');
+  }
+
   private async migrateCustomer(customer: AirtableCustomer): Promise<void> {
     try {
       // Преобразование данных
@@ -191,26 +267,57 @@ class AirtableMigrationService {
         return;
       }
 
-      // Создание пользователя
-      const user = await prisma.user.create({
-        data: userData
-      });
+      // Создание пользователя и связанных данных в транзакции
+      let user: any;
 
-      // Генерация реферального кода
-      const referralCode = this.generateReferralCode(user);
-      if (referralCode) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { referralCode }
-        });
-      }
-
-      // Создание начальной транзакции на основе суммы покупок
-      if (userData.totalPurchases > 0) {
-        await this.createInitialPurchaseTransaction(
-          user.id,
-          userData.totalPurchases
+      if (this.options.dryRun) {
+        // В режиме dry-run только симулируем создание
+        user = {
+          id: `dry-run-${Date.now()}-${Math.random()}`,
+          ...userData,
+          referralCode: this.generateReferralCode({
+            email: userData.email,
+            phone: userData.phone
+          }),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        console.log(
+          `🔍 DRY-RUN: Симуляция создания пользователя ${user.firstName} ${user.lastName || ''}`
         );
+      } else {
+        const createdUser = await prisma.$transaction(async (tx) => {
+          // Создание пользователя
+          const newUser = await tx.user.create({
+            data: userData
+          });
+
+          // Генерация реферального кода
+          const referralCode = this.generateReferralCode(newUser);
+          if (referralCode) {
+            await tx.user.update({
+              where: { id: newUser.id },
+              data: { referralCode }
+            });
+          }
+
+          // Создание начальной транзакции на основе суммы покупок
+          if (userData.totalPurchases > 0) {
+            await tx.transaction.create({
+              data: {
+                userId: newUser.id,
+                amount: userData.totalPurchases.toString(),
+                type: 'EARN',
+                description:
+                  'Начисление бонусов за исторические покупки (миграция из Airtable)',
+                createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000) // 1 день назад
+              }
+            });
+          }
+
+          return newUser;
+        });
+        user = createdUser;
       }
 
       this.stats.successful++;
@@ -238,9 +345,9 @@ class AirtableMigrationService {
       customer['Общая сумма'] ||
       customer['Общая сумма покупок'] ||
       '0';
-    const totalPurchases =
-      parseFloat(totalPurchasesStr.replace(/[^\d.,]/g, '').replace(',', '.')) ||
-      0;
+
+    // Более надёжный парсинг чисел с поддержкой разных форматов
+    const totalPurchases = this.parseCurrency(totalPurchasesStr);
 
     // Определение статуса
     const status = customer['Статус'] || customer['Статус клиента'] || '';
@@ -310,25 +417,72 @@ class AirtableMigrationService {
     return isNaN(date.getTime()) ? null : date;
   }
 
-  private async findExistingUser(email?: string | null, phone?: string | null) {
-    if (email) {
-      const user = await prisma.user.findFirst({
-        where: {
-          projectId: this.projectId,
-          email: email.toLowerCase()
-        }
-      });
-      if (user) return user;
+  private parseCurrency(currencyStr: string): number {
+    if (!currencyStr || typeof currencyStr !== 'string') return 0;
+
+    // Удаляем пробелы и неразрывные пробелы
+    let cleanStr = currencyStr.replace(/[\s\u00A0]/g, '');
+
+    // Обрабатываем разные валютные символы
+    cleanStr = cleanStr.replace(/[₽$€£¥₴₸₼₺₻₲₱₭₯₰₳₶₷₹₻₽₾₿]/g, '');
+
+    // Заменяем запятую на точку, если она используется как разделитель дробной части
+    // (европейский формат: 1.234,56 -> 1234.56)
+    if (cleanStr.includes(',') && cleanStr.includes('.')) {
+      // Если есть и точка и запятая, точка - разделитель тысяч, запятая - дробной части
+      cleanStr = cleanStr.replace(/\./g, '').replace(',', '.');
+    } else if (cleanStr.includes(',')) {
+      // Если только запятая, считаем её разделителем дробной части
+      cleanStr = cleanStr.replace(',', '.');
     }
 
-    if (phone) {
-      const user = await prisma.user.findFirst({
+    // Удаляем все символы кроме цифр и точки
+    cleanStr = cleanStr.replace(/[^\d.-]/g, '');
+
+    const parsed = parseFloat(cleanStr);
+    return isNaN(parsed) ? 0 : Math.max(0, parsed); // Не допускаем отрицательные суммы
+  }
+
+  private async findExistingUser(email?: string | null, phone?: string | null) {
+    // Проверяем email
+    if (email) {
+      const normalizedEmail = email.toLowerCase().trim();
+      const userByEmail = await prisma.user.findFirst({
         where: {
           projectId: this.projectId,
-          phone: this.normalizePhone(phone)
+          email: normalizedEmail
         }
       });
-      if (user) return user;
+      if (userByEmail) return userByEmail;
+    }
+
+    // Проверяем телефон с различными вариантами нормализации
+    if (phone) {
+      const normalizedPhone = this.normalizePhone(phone);
+      if (normalizedPhone) {
+        // Проверяем точное совпадение
+        const userByPhone = await prisma.user.findFirst({
+          where: {
+            projectId: this.projectId,
+            phone: normalizedPhone
+          }
+        });
+        if (userByPhone) return userByPhone;
+
+        // Проверяем без форматирования (только цифры)
+        const digitsOnly = phone.replace(/\D/g, '');
+        if (digitsOnly.length >= 10) {
+          const userByDigits = await prisma.user.findFirst({
+            where: {
+              projectId: this.projectId,
+              phone: {
+                contains: digitsOnly.slice(-10) // последние 10 цифр
+              }
+            }
+          });
+          if (userByDigits) return userByDigits;
+        }
+      }
     }
 
     return null;
@@ -343,22 +497,6 @@ class AirtableMigrationService {
 
     const random = Math.random().toString(36).substring(2, 6);
     return `${base}_${random}`.toUpperCase();
-  }
-
-  private async createInitialPurchaseTransaction(
-    userId: string,
-    amount: number
-  ): Promise<void> {
-    await prisma.transaction.create({
-      data: {
-        userId,
-        amount: amount.toString(),
-        type: 'EARN',
-        description:
-          'Начисление бонусов за исторические покупки (миграция из Airtable)',
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000) // 1 день назад
-      }
-    });
   }
 
   private printFinalStats(): void {
@@ -395,13 +533,38 @@ class AirtableMigrationService {
       projectId: this.projectId,
       stats: this.stats,
       errors: this.errors,
-      warnings: this.warnings
+      warnings: this.warnings,
+      summary: {
+        successRate:
+          this.stats.total > 0
+            ? (this.stats.successful / this.stats.total) * 100
+            : 0,
+        hasErrors: this.errors.length > 0,
+        hasWarnings: this.warnings.length > 0
+      }
     };
 
-    const reportPath = path.join(process.cwd(), 'migration-report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    const reportPath = path.join(
+      process.cwd(),
+      `migration-report-${Date.now()}.json`
+    );
 
-    console.log(`\n📄 Отчет сохранен: ${reportPath}`);
+    try {
+      // Проверяем, что директория существует
+      const dir = path.dirname(reportPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      console.log(`\n📄 Отчет сохранен: ${reportPath}`);
+    } catch (error) {
+      console.error(
+        `❌ Ошибка сохранения отчета: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      console.log('📊 Статистика миграции:');
+      console.log(JSON.stringify(this.stats, null, 2));
+    }
   }
 }
 
@@ -409,30 +572,66 @@ class AirtableMigrationService {
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length !== 2) {
+  if (args.length < 2 || args.length > 3) {
     console.error(
-      'Использование: npm run migrate-customers <csv-path> <project-id>'
+      'Использование: npm run migrate-customers <csv-path> <project-id> [--dry-run]'
     );
     console.error(
       'Пример: npm run migrate-customers customers.csv proj_123456'
+    );
+    console.error(
+      'Пример с dry-run: npm run migrate-customers customers.csv proj_123456 --dry-run'
+    );
+    console.error(
+      'Примечание: CSV файл должен содержать колонки: Имя, Фамилия, Email, Телефон, Сумма покупок'
     );
     process.exit(1);
   }
 
   const [csvPath, projectId] = args;
+  const isDryRun = args.includes('--dry-run');
+
+  // Обработка прерываний для корректного завершения
+  let migrationService: AirtableMigrationService | null = null;
+
+  const cleanup = async () => {
+    console.log('\n⚠️  Получен сигнал прерывания, завершаем миграцию...');
+    if (migrationService) {
+      migrationService.saveMigrationReport();
+    }
+    await prisma.$disconnect();
+    process.exit(130);
+  };
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 
   try {
-    const migration = new AirtableMigrationService(projectId);
-    await migration.migrateFromCSV(csvPath);
+    migrationService = new AirtableMigrationService(projectId, {
+      dryRun: isDryRun,
+      batchSize: 50,
+      skipValidation: false
+    });
+    await migrationService.migrateFromCSV(csvPath);
+    console.log(
+      `\n🎉 ${isDryRun ? 'Пробная миграция' : 'Миграция'} успешно завершена!`
+    );
+    if (isDryRun) {
+      console.log('💡 Для выполнения реальной миграции уберите флаг --dry-run');
+    }
   } catch (error) {
     console.error('❌ Критическая ошибка миграции:', error);
+    if (migrationService) {
+      migrationService.saveMigrationReport();
+    }
     process.exit(1);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-if (require.main === module) {
+// Запуск скрипта если он вызван напрямую
+if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
