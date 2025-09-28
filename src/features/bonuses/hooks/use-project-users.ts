@@ -52,11 +52,11 @@ export function useProjectUsers({
   const [totalCount, setTotalCount] = useState(0);
 
   // Производные состояния
-  const totalUsers = users.length;
-  const activeUsers = users.filter((user) => user.bonusBalance > 0).length;
+  const totalUsers = totalCount; // Используем общее количество пользователей
+  const activeUsers = users.filter((user) => user.bonusBalance > 0).length; // Пока оставляем на основе видимых
   const totalBonuses = Number(
     users.reduce((sum, user) => sum + user.bonusBalance, 0).toFixed(2)
-  );
+  ); // Пока оставляем на основе видимых
 
   /**
    * Загрузка пользователей проекта

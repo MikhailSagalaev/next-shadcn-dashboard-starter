@@ -395,7 +395,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   // Фильтрация пользователей
   // Фильтрация теперь происходит на стороне API
 
-  if (loading) {
+  if (usersLoading) {
     return (
       <div className='flex flex-1 flex-col space-y-4'>
         <div className='animate-pulse space-y-4'>
@@ -572,7 +572,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             </div>
           )}
 
-          {loading ? (
+          {usersLoading ? (
             <div className='space-y-4 pr-2'>
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className='bg-muted h-20 animate-pulse rounded' />
