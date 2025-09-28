@@ -50,6 +50,17 @@ interface AirtableCustomer {
   Кампания?: string;
   'Ключевые слова'?: string;
   Содержание?: string;
+
+  // Поля из реального Airtable CSV
+  ID?: string;
+  Status?: string; // Английское название статуса
+  Orders?: string;
+  'Cost (from Orders)'?: string;
+  AlltimeCost?: string; // Общая сумма покупок
+  CashbackLevel?: string; // Уровень кэшбэка
+  'Количество бонусов'?: string; // Текущий баланс бонусов
+  tilda_level?: string; // Уровень в Tilda
+  ref_link?: string; // Реферальная ссылка
 }
 
 interface MigrationStats {
@@ -283,13 +294,21 @@ class AirtableMigrationService {
           updatedAt: new Date()
         };
         console.log(
-          `🔍 DRY-RUN: Симуляция создания пользователя ${user.firstName} ${user.lastName || ''}`
+          `🔍 DRY-RUN: Симуляция создания пользователя ${user.firstName} ${user.lastName || ''} (баланс: ${userData.currentBonusBalance}₽)`
         );
       } else {
         const createdUser = await prisma.$transaction(async (tx) => {
+          // Подготовка данных пользователя (убираем дополнительные поля)
+          const {
+            currentBonusBalance,
+            airtableId,
+            referralLink,
+            ...userFields
+          } = userData;
+
           // Создание пользователя
           const newUser = await tx.user.create({
-            data: userData
+            data: userFields
           });
 
           // Генерация реферального кода
@@ -310,7 +329,49 @@ class AirtableMigrationService {
                 type: 'EARN',
                 description:
                   'Начисление бонусов за исторические покупки (миграция из Airtable)',
-                createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000) // 1 день назад
+                createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 день назад
+                userLevel: userData.currentLevel,
+                metadata: {
+                  migration: true,
+                  airtableId,
+                  source: 'historical_purchases'
+                }
+              }
+            });
+          }
+
+          // Создание транзакции для текущего баланса бонусов (если есть)
+          if (currentBonusBalance > 0) {
+            await tx.transaction.create({
+              data: {
+                userId: newUser.id,
+                amount: currentBonusBalance.toString(),
+                type: 'EARN',
+                description:
+                  'Перенос текущего баланса бонусов (миграция из Airtable)',
+                createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000), // 12 часов назад
+                userLevel: userData.currentLevel,
+                metadata: {
+                  migration: true,
+                  airtableId,
+                  source: 'current_balance',
+                  originalBalance: customer['Количество бонусов']
+                }
+              }
+            });
+
+            // Создание бонуса для текущего баланса
+            await tx.bonus.create({
+              data: {
+                userId: newUser.id,
+                amount: currentBonusBalance.toString(),
+                description: 'Перенос текущего баланса из Airtable',
+                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 год
+                metadata: {
+                  migration: true,
+                  airtableId,
+                  source: 'current_balance'
+                }
               }
             });
           }
@@ -339,21 +400,29 @@ class AirtableMigrationService {
     const email = customer['Email'] || customer['Email клиента'];
     const phone = customer['Телефон'] || customer['Телефон клиента'];
 
-    // Преобразование суммы покупок
+    // Преобразование суммы покупок (расширенная логика для Airtable полей)
     const totalPurchasesStr =
       customer['Сумма покупок'] ||
       customer['Общая сумма'] ||
       customer['Общая сумма покупок'] ||
+      customer['AlltimeCost'] || // Новое поле из Airtable
+      customer['Cost (from Orders)'] ||
       '0';
 
     // Более надёжный парсинг чисел с поддержкой разных форматов
     const totalPurchases = this.parseCurrency(totalPurchasesStr);
 
-    // Определение статуса
-    const status = customer['Статус'] || customer['Статус клиента'] || '';
+    // Определение статуса (расширенная логика)
+    const status =
+      customer['Статус'] ||
+      customer['Статус клиента'] ||
+      customer['Status'] ||
+      '';
     const isActive =
       !status.toLowerCase().includes('архив') &&
-      !status.toLowerCase().includes('неактив');
+      !status.toLowerCase().includes('неактив') &&
+      status.toLowerCase() !== 'inactive' &&
+      status.toLowerCase() !== 'archived';
 
     // Дата регистрации
     let registeredAt = new Date();
@@ -365,6 +434,21 @@ class AirtableMigrationService {
       }
     }
 
+    // Преобразование текущего баланса бонусов
+    const currentBonusBalance = this.parseCurrency(
+      customer['Количество бонусов'] || '0'
+    );
+
+    // Определение уровня на основе CashbackLevel или tilda_level
+    let currentLevel = 'Базовый'; // По умолчанию
+    const cashbackLevel = customer['CashbackLevel'] || customer['tilda_level'];
+    if (cashbackLevel) {
+      const levelNum = parseInt(cashbackLevel.toString());
+      if (levelNum === 2) currentLevel = 'Серебряный';
+      else if (levelNum === 3) currentLevel = 'Золотой';
+      else if (levelNum >= 4) currentLevel = 'Платиновый';
+    }
+
     return {
       projectId: this.projectId,
       firstName: firstName.trim() || null,
@@ -373,13 +457,18 @@ class AirtableMigrationService {
       phone: phone ? this.normalizePhone(phone) : null,
       birthDate: this.parseDate(customer['Дата рождения']),
       totalPurchases,
+      currentLevel,
       isActive,
       registeredAt,
       utmSource: customer['UTM Source'] || customer['Источник'],
       utmMedium: customer['UTM Medium'] || customer['Канал'],
       utmCampaign: customer['UTM Campaign'] || customer['Кампания'],
       utmTerm: customer['UTM Term'] || customer['Ключевые слова'],
-      utmContent: customer['UTM Content'] || customer['Содержание']
+      utmContent: customer['UTM Content'] || customer['Содержание'],
+      // Дополнительные поля для миграции
+      currentBonusBalance,
+      airtableId: customer['ID'],
+      referralLink: customer['ref_link']
     };
   }
 
