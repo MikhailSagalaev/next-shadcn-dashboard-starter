@@ -105,28 +105,43 @@ export function BonusLevelDialog({
   // Обновляем значения формы при изменении level
   useEffect(() => {
     if (level && open) {
-      console.log('Setting form values for level:', level);
-      console.log('Level properties:', {
+      console.log('🔧 Setting form values for level:', level);
+      console.log('📊 Level properties:', {
         id: level.id,
         name: level.name,
         minAmount: level.minAmount,
         maxAmount: level.maxAmount,
         bonusPercent: level.bonusPercent,
         paymentPercent: level.paymentPercent,
-        isActive: level.isActive
+        isActive: level.isActive,
+        types: {
+          minAmount: typeof level.minAmount,
+          maxAmount: typeof level.maxAmount,
+          bonusPercent: typeof level.bonusPercent,
+          paymentPercent: typeof level.paymentPercent
+        }
       });
-      reset({
+
+      const formData = {
         name: level.name || '',
-        minAmount: level.minAmount || 0,
-        maxAmount: level.maxAmount,
-        bonusPercent: level.bonusPercent || 5,
-        paymentPercent: level.paymentPercent || 10,
+        minAmount: Number(level.minAmount) || 0,
+        maxAmount:
+          level.maxAmount === null || level.maxAmount === undefined
+            ? null
+            : Number(level.maxAmount),
+        bonusPercent: Number(level.bonusPercent) || 5,
+        paymentPercent: Number(level.paymentPercent) || 10,
         isActive: level.isActive ?? true
-      });
-      setUnlimitedMax(level.maxAmount === null);
+      };
+
+      console.log('📝 Form data to set:', formData);
+      reset(formData);
+      setUnlimitedMax(
+        level.maxAmount === null || level.maxAmount === undefined
+      );
     } else if (!level && open) {
       // Сброс для создания нового уровня
-      console.log('Resetting form for new level creation');
+      console.log('🔄 Resetting form for new level creation');
       reset({
         name: '',
         minAmount: 0,

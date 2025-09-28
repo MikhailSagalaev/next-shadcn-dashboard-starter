@@ -134,10 +134,16 @@ export async function PUT(
       );
     }
 
+    // Проверяем корректность диапазона только если оба значения переданы
+    const minAmount =
+      body.minAmount !== undefined ? body.minAmount : existingLevel.minAmount;
+    const maxAmount =
+      body.maxAmount !== undefined ? body.maxAmount : existingLevel.maxAmount;
+
     if (
-      body.maxAmount !== undefined &&
-      body.minAmount !== undefined &&
-      body.maxAmount <= body.minAmount
+      maxAmount !== undefined &&
+      maxAmount !== null &&
+      Number(maxAmount) <= Number(minAmount)
     ) {
       return NextResponse.json(
         { error: 'Максимальная сумма должна быть больше минимальной' },

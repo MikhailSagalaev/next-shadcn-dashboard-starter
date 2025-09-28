@@ -184,6 +184,16 @@ export function BonusLevelsView({ projectId }: BonusLevelsViewProps) {
   };
 
   const handleEditLevel = (level: BonusLevel) => {
+    console.log('✏️ Opening edit dialog for level:', level);
+    console.log('🎯 Level data structure:', {
+      id: level.id,
+      name: level.name,
+      minAmount: level.minAmount,
+      maxAmount: level.maxAmount,
+      bonusPercent: level.bonusPercent,
+      paymentPercent: level.paymentPercent,
+      isActive: level.isActive
+    });
     setEditingLevel(level);
     setDialogOpen(true);
   };
