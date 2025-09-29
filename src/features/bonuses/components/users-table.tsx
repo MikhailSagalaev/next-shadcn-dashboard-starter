@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -82,8 +82,10 @@ export type User = {
 
 interface UsersTableProps {
   data: User[];
-  onHistoryClick: (userId: string) => void;
   onExport: () => void;
+  onSelectionChange?: (selectedIds: string[]) => void;
+  onProfileClick?: (user: User) => void;
+  onHistoryClick?: (userId: string) => void;
   loading?: boolean;
   totalCount?: number;
   onPageChange?: (page: number) => void;
@@ -94,8 +96,10 @@ interface UsersTableProps {
 
 export function UsersTable({
   data,
-  onHistoryClick,
   onExport,
+  onSelectionChange,
+  onProfileClick,
+  onHistoryClick,
   loading = false,
   totalCount = data.length,
   onPageChange,
@@ -109,20 +113,46 @@ export function UsersTable({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
+  const [pagination, setPagination] = useState({
+    pageIndex: currentPage - 1,
+    pageSize
+  });
+
+  // Синхронизируем внутреннюю пагинацию с внешней
+  useEffect(() => {
+    setPagination({
+      pageIndex: currentPage - 1,
+      pageSize
+    });
+  }, [currentPage, pageSize]);
+
+  // Обработчик изменений пагинации
+  useEffect(() => {
+    const newPage = pagination.pageIndex + 1;
+    const newPageSize = pagination.pageSize;
+
+    // Вызываем внешние обработчики только если значения изменились
+    if (newPage !== currentPage && onPageChange) {
+      onPageChange(newPage);
+    }
+    if (newPageSize !== pageSize && onPageSizeChange) {
+      onPageSizeChange(newPageSize);
+    }
+  }, [pagination, currentPage, pageSize, onPageChange, onPageSizeChange]);
+
+  // Обработчик изменений выбора
+  useEffect(() => {
+    if (onSelectionChange) {
+      const selectedRows = table.getSelectedRowModel().rows;
+      const selectedIds = selectedRows.map((row) => row.original.id);
+      onSelectionChange(selectedIds);
+    }
+  }, [rowSelection, table, onSelectionChange]);
 
   const columns: ColumnDef<User>[] = [
     {
       id: 'select',
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && 'indeterminate')
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label='Select all'
-        />
-      ),
+      header: '',
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
@@ -131,7 +161,8 @@ export function UsersTable({
         />
       ),
       enableSorting: false,
-      enableHiding: false
+      enableHiding: false,
+      size: 40
     },
     {
       accessorKey: 'name',
@@ -263,7 +294,7 @@ export function UsersTable({
                 История бонусов
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onProfileClick?.(user)}>
                 <Eye className='mr-2 h-4 w-4' />
                 Просмотреть профиль
               </DropdownMenuItem>
@@ -279,6 +310,7 @@ export function UsersTable({
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -288,16 +320,11 @@ export function UsersTable({
       sorting,
       columnFilters,
       columnVisibility,
-      rowSelection
+      rowSelection,
+      pagination
     },
     manualPagination: true, // Отключаем внутреннюю пагинацию
-    pageCount: Math.ceil(totalCount / pageSize), // Указываем общее количество страниц
-    initialState: {
-      pagination: {
-        pageSize,
-        pageIndex: currentPage - 1 // Синхронизируем с внешней пагинацией
-      }
-    }
+    pageCount: Math.ceil(totalCount / pageSize) // Указываем общее количество страниц
   });
 
   return (

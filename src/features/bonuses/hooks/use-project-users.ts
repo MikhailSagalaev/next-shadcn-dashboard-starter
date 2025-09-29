@@ -16,6 +16,7 @@ interface UseProjectUsersOptions {
   projectId?: string;
   initialUsers?: User[];
   pageSize?: number;
+  searchTerm?: string;
 }
 
 interface UseProjectUsersReturn {
@@ -36,13 +37,15 @@ interface UseProjectUsersReturn {
   createUser: (userData: any) => Promise<User | null>;
   refreshUsers: () => Promise<void>;
   searchUsers: (term: string) => User[];
+  setSearchTerm: (term: string) => void;
   exportUsers: () => void;
 }
 
 export function useProjectUsers({
   projectId,
   initialUsers = [],
-  pageSize = 50
+  pageSize = 50,
+  searchTerm = ''
 }: UseProjectUsersOptions = {}): UseProjectUsersReturn {
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,13 +53,17 @@ export function useProjectUsers({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [currentSearchTerm, setCurrentSearchTerm] = useState(searchTerm);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalBonuses: 0
+  });
 
-  // Производные состояния
-  const totalUsers = totalCount; // Используем общее количество пользователей
-  const activeUsers = users.filter((user) => user.bonusBalance > 0).length; // Пока оставляем на основе видимых
-  const totalBonuses = Number(
-    users.reduce((sum, user) => sum + user.bonusBalance, 0).toFixed(2)
-  ); // Пока оставляем на основе видимых
+  // Используем статистику из API
+  const totalUsers = stats.totalUsers;
+  const activeUsers = stats.activeUsers;
+  const totalBonuses = stats.totalBonuses;
 
   /**
    * Загрузка пользователей проекта
@@ -82,11 +89,15 @@ export function useProjectUsers({
           'use-project-users'
         );
 
-        // Создаем URL с параметрами пагинации
+        // Создаем URL с параметрами пагинации и поиска
         const params = new URLSearchParams({
           page: page.toString(),
           limit: pageSize.toString()
         });
+
+        if (currentSearchTerm.trim()) {
+          params.set('search', currentSearchTerm.trim());
+        }
 
         const response = await fetch(
           `/api/projects/${projectId}/users?${params}`
@@ -144,6 +155,15 @@ export function useProjectUsers({
         setCurrentPage(page);
         setTotalCount(totalCount);
         setTotalPages(totalPagesCount);
+
+        // Сохраняем статистику из API
+        if (payload?.stats) {
+          setStats({
+            totalUsers: payload.stats.totalUsers || totalCount,
+            activeUsers: payload.stats.activeUsers || 0,
+            totalBonuses: payload.stats.totalBonuses || 0
+          });
+        }
 
         logger.info(
           'Project users loaded successfully',
@@ -294,17 +314,15 @@ export function useProjectUsers({
    */
   const searchUsers = useCallback(
     (term: string): User[] => {
-      if (!term.trim()) return users;
-
-      const searchTerm = term.toLowerCase();
-      return users.filter(
-        (user) =>
-          user.name.toLowerCase().includes(searchTerm) ||
-          user.email.toLowerCase().includes(searchTerm)
-      );
+      // Теперь поиск работает через API, эта функция просто возвращает текущих пользователей
+      return users;
     },
     [users]
   );
+
+  const setSearchTerm = useCallback((term: string) => {
+    setCurrentSearchTerm(term);
+  }, []);
 
   /**
    * Экспорт пользователей в CSV
@@ -391,6 +409,7 @@ export function useProjectUsers({
     createUser,
     refreshUsers,
     searchUsers,
+    setSearchTerm,
     exportUsers
   };
 }

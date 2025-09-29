@@ -38,6 +38,13 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Search,
@@ -81,11 +88,12 @@ export function BonusManagementPageRefactored({
   const { toast } = useToast();
 
   // Local state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTermState] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
   const [showRichNotificationDialog, setShowRichNotificationDialog] =
     useState(false);
+  const [profileUser, setProfileUser] = useState<User | null>(null);
   const [pageSize, setPageSize] = useState(50);
   const [historyUserId, setHistoryUserId] = useState<string | null>(null);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
@@ -120,10 +128,12 @@ export function BonusManagementPageRefactored({
     createUser,
     refreshUsers,
     searchUsers,
+    setSearchTerm,
     exportUsers
   } = useProjectUsers({
     projectId: currentProjectId || undefined,
-    pageSize
+    pageSize,
+    searchTerm
   });
 
   // Обработчики пагинации и поиска
@@ -165,20 +175,23 @@ export function BonusManagementPageRefactored({
   // Event handlers
   const handleSearch = useCallback(
     (term: string) => {
-      setSearchTerm(term);
+      setSearchTermState(term);
+      setSearchTerm(term); // Устанавливаем search term в хуке
       setSelectedUsers(new Set()); // Сбрасываем выбор при поиске
+
+      // При поиске возвращаемся на первую страницу
+      loadUsers(1);
 
       logger.debug(
         'Users search performed',
         {
           searchTerm: term,
-          resultsCount: searchUsers(term).length,
           projectId: currentProjectId
         },
         'bonus-management'
       );
     },
-    [searchUsers, currentProjectId]
+    [loadUsers, currentProjectId, setSearchTerm]
   );
 
   const handleUserSelection = useCallback(
@@ -195,6 +208,10 @@ export function BonusManagementPageRefactored({
     },
     []
   );
+
+  const handleProfileClick = useCallback((user: User) => {
+    setProfileUser(user);
+  }, []);
 
   const openHistory = useCallback(
     async (userId: string, page = 1) => {
@@ -497,18 +514,22 @@ export function BonusManagementPageRefactored({
 
         <div className='flex items-center space-x-2'>
           {projects.length > 1 && (
-            <select
+            <Select
               value={currentProjectId || ''}
-              onChange={(e) => selectProject(e.target.value)}
-              className='rounded-md border px-3 py-2 text-sm'
+              onValueChange={selectProject}
               disabled={isLoading}
             >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className='w-[200px]'>
+                <SelectValue placeholder='Выберите проект' />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
 
           <Button
@@ -586,15 +607,15 @@ export function BonusManagementPageRefactored({
               />
             </div>
 
-            {selectedUsers.size > 0 && (
-              <Badge variant='default'>Выбрано: {selectedUsers.size}</Badge>
+            {selectedUsers.length > 0 && (
+              <Badge variant='default'>Выбрано: {selectedUsers.length}</Badge>
             )}
           </div>
         </CardHeader>
 
         <CardContent>
           {/* Подсказка по рассылкам */}
-          {filteredUsers.length > 0 && selectedUsers.size === 0 && (
+          {filteredUsers.length > 0 && selectedUsers.length === 0 && (
             <div className='mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4'>
               <div className='flex items-center gap-2 text-sm text-blue-700'>
                 <MessageSquare className='h-4 w-4' />
@@ -612,8 +633,10 @@ export function BonusManagementPageRefactored({
           {/* Users List */}
           <UsersTable
             data={filteredUsers}
-            onHistoryClick={openHistory}
             onExport={handleExportAll}
+            onSelectionChange={setSelectedUsers}
+            onProfileClick={handleProfileClick}
+            onHistoryClick={openHistory}
             loading={isLoading}
             totalCount={totalCount}
             currentPage={currentPage}
@@ -626,9 +649,9 @@ export function BonusManagementPageRefactored({
 
       {/* Enhanced Bulk Actions Toolbar */}
       <EnhancedBulkActionsToolbar
-        selectedUserIds={Array.from(selectedUsers)}
-        selectedCount={selectedUsers.size}
-        onClearSelection={() => setSelectedUsers(new Set())}
+        selectedUserIds={selectedUsers}
+        selectedCount={selectedUsers.length}
+        onClearSelection={() => setSelectedUsers([])}
         onShowRichNotifications={() => setShowRichNotificationDialog(true)}
       />
 
@@ -647,6 +670,86 @@ export function BonusManagementPageRefactored({
         selectedUserIds={Array.from(selectedUsers)}
         projectId={currentProjectId || ''}
       />
+
+      {/* User Profile Dialog */}
+      <Dialog
+        open={!!profileUser}
+        onOpenChange={(o) => !o && setProfileUser(null)}
+      >
+        <DialogContent className='max-w-2xl'>
+          <DialogHeader>
+            <DialogTitle>Профиль пользователя</DialogTitle>
+          </DialogHeader>
+          {profileUser && (
+            <div className='space-y-6'>
+              <div className='flex items-center space-x-4'>
+                <Avatar className='h-16 w-16'>
+                  <AvatarImage
+                    src={`https://api.slingacademy.com/public/sample-users/${(parseInt(profileUser.id.slice(-2), 16) % 10) + 1}.png`}
+                  />
+                  <AvatarFallback className='text-lg'>
+                    {profileUser.firstName?.[0] || ''}
+                    {profileUser.lastName?.[0] || ''}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className='text-xl font-semibold'>{profileUser.name}</h3>
+                  <p className='text-muted-foreground'>
+                    ID: {profileUser.id.slice(0, 8)}...
+                  </p>
+                </div>
+              </div>
+
+              <div className='grid grid-cols-2 gap-4'>
+                <div>
+                  <Label className='text-sm font-medium'>Email</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.email || 'Не указан'}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>Телефон</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.phone || 'Не указан'}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>Активные бонусы</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.bonusBalance} ₽
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    Всего заработано
+                  </Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.totalEarned} ₽
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    Дата регистрации
+                  </Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {new Date(profileUser.createdAt).toLocaleDateString(
+                      'ru-RU'
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>Telegram</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.telegramUsername
+                      ? `@${profileUser.telegramUsername}`
+                      : 'Не подключен'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* История операций пользователя */}
       <Dialog

@@ -93,6 +93,43 @@ async function getHandler(
       };
     });
 
+    // Получаем статистику проекта
+    const stats = await db.$transaction(async (tx) => {
+      // Общее количество пользователей
+      const totalUsersCount = await tx.user.count({
+        where: { projectId: id }
+      });
+
+      // Активные пользователи (с бонусами > 0)
+      const activeUsersCount = await tx.user.count({
+        where: {
+          projectId: id,
+          bonuses: {
+            some: {
+              isUsed: false,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+            }
+          }
+        }
+      });
+
+      // Общий баланс бонусов
+      const totalBonusesResult = await tx.bonus.aggregate({
+        where: {
+          user: { projectId: id },
+          isUsed: false,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+        },
+        _sum: { amount: true }
+      });
+
+      return {
+        totalUsers: totalUsersCount,
+        activeUsers: activeUsersCount,
+        totalBonuses: Number(totalBonusesResult._sum.amount || 0)
+      };
+    });
+
     return NextResponse.json({
       success: true,
       users: formattedUsers,
@@ -101,7 +138,8 @@ async function getHandler(
         limit,
         total,
         pages: Math.max(1, Math.ceil(total / limit))
-      }
+      },
+      stats
     });
   } catch (error) {
     const { id } = await context.params;
