@@ -13,16 +13,14 @@ import { ProjectService } from '@/lib/services/project.service';
 import { botManager } from '@/lib/telegram/bot-manager';
 import { logger } from '@/lib/logger';
 
-// Функция для создания CORS заголовков с учетом origin
+// Функция для создания CORS заголовков - разрешаем все origins для виджета
 function createCorsHeaders(request: NextRequest) {
-  const origin = request.headers.get('origin') || '*';
-
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, X-Requested-With',
-    'Access-Control-Allow-Credentials': 'true',
+      'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma',
+    'Access-Control-Allow-Credentials': 'false',
     'Access-Control-Max-Age': '86400' // 24 hours
   };
 }

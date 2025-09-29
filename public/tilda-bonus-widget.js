@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.2.0
+ * @version: 2.3.0
  * @author: AI Assistant + User
  */
 
@@ -415,11 +415,8 @@
     },
 
     // Показать плашку с приглашением зарегистрироваться
-    showRegistrationPrompt: async function () {
+    showRegistrationPrompt: function () {
       try {
-        // Загружаем настройки проекта
-        const settings = await this.loadProjectSettings();
-
         // Удаляем существующую плашку если есть
         const existingPrompt = document.querySelector(
           '.registration-prompt-inline'
@@ -437,12 +434,111 @@
           return;
         }
 
+        // Пытаемся загрузить настройки из API, но используем fallback если не получится
+        this.loadProjectSettingsForPrompt()
+          .then((settings) => {
+            this.renderRegistrationPrompt(settings);
+          })
+          .catch((error) => {
+            this.log(
+              'Не удалось загрузить настройки проекта, используем значения по умолчанию:',
+              error
+            );
+            // Используем значения по умолчанию
+            this.renderRegistrationPrompt({
+              welcomeBonusAmount: 0,
+              botUsername: null
+            });
+          });
+      } catch (error) {
+        this.log('Ошибка при показе плашки регистрации:', error);
+      }
+    },
+
+    // Загружаем настройки для плашки с fallback
+    loadProjectSettingsForPrompt: async function () {
+      try {
+        // Проверяем локальное хранилище сначала
+        const cachedSettings = this.getCachedProjectSettings();
+        if (cachedSettings) {
+          return cachedSettings;
+        }
+
+        // Если нет в кэше, пытаемся загрузить из API
+        const settings = await this.loadProjectSettings();
+
+        // Сохраняем в кэш на 1 час
+        this.cacheProjectSettings(settings, 60 * 60 * 1000);
+
+        return settings;
+      } catch (error) {
+        this.log('Ошибка загрузки настроек проекта:', error);
+        // Возвращаем значения по умолчанию
+        return {
+          welcomeBonusAmount: 0,
+          botUsername: null
+        };
+      }
+    },
+
+    // Кэширование настроек проекта
+    cacheProjectSettings: function (settings, ttlMs) {
+      try {
+        const cacheData = {
+          settings: settings,
+          timestamp: Date.now(),
+          ttl: ttlMs
+        };
+        localStorage.setItem(
+          `tilda_bonus_${this.config.projectId}_settings`,
+          JSON.stringify(cacheData)
+        );
+      } catch (error) {
+        this.log('Ошибка сохранения настроек в кэш:', error);
+      }
+    },
+
+    // Получение настроек из кэша
+    getCachedProjectSettings: function () {
+      try {
+        const cacheKey = `tilda_bonus_${this.config.projectId}_settings`;
+        const cached = localStorage.getItem(cacheKey);
+        if (!cached) return null;
+
+        const cacheData = JSON.parse(cached);
+        const now = Date.now();
+
+        // Проверяем срок действия кэша
+        if (now - cacheData.timestamp > cacheData.ttl) {
+          localStorage.removeItem(cacheKey);
+          return null;
+        }
+
+        return cacheData.settings;
+      } catch (error) {
+        this.log('Ошибка чтения настроек из кэша:', error);
+        return null;
+      }
+    },
+
+    // Отрисовка плашки регистрации
+    renderRegistrationPrompt: function (settings) {
+      try {
         // Экранируем данные для безопасности
         const welcomeBonusAmount = Number(settings.welcomeBonusAmount || 0);
         const botUsername = String(settings.botUsername || '').replace(
           /[<>'"&]/g,
           ''
         );
+
+        // Ищем контейнер поля промокода
+        const promocodeWrapper = document.querySelector(
+          '.t-inputpromocode__wrapper'
+        );
+        if (!promocodeWrapper) {
+          this.log('Контейнер поля промокода не найден при отрисовке');
+          return;
+        }
 
         // Создаем плашку регистрации внутри поля промокода
         const promptDiv = document.createElement('div');
@@ -1311,36 +1407,73 @@
         // Сбрасываем состояние виджета
         this.state.appliedBonuses = 0;
 
+        // Сбрасываем скрытое поле applied_bonuses_field
+        const appliedBonusesField = document.getElementById(
+          'applied_bonuses_field'
+        );
+        if (appliedBonusesField) {
+          appliedBonusesField.value = '0';
+          this.log('Сброшено скрытое поле applied_bonuses_field');
+        }
+
+        // Сбрасываем отображение статуса бонусов
+        const bonusStatus = document.getElementById('bonus-status');
+        if (bonusStatus) {
+          bonusStatus.innerHTML = '';
+        }
+
         // Используем функции Tilda для пересчета и обновления
         if (typeof window.tcart__calcAmountWithDiscounts === 'function') {
           try {
             window.tcart__calcAmountWithDiscounts();
             this.log('Пересчитаны скидки в корзине');
-          } catch (_) {}
+          } catch (e) {
+            this.log('Ошибка при пересчете скидок:', e);
+          }
         }
 
         if (typeof window.tcart__reDrawTotal === 'function') {
           try {
             window.tcart__reDrawTotal();
             this.log('Перерисован итог корзины');
-          } catch (_) {}
+          } catch (e) {
+            this.log('Ошибка при перерисовке итога:', e);
+          }
         }
 
         if (typeof window.tcart__updateTotalProductsinCartObj === 'function') {
           try {
             window.tcart__updateTotalProductsinCartObj();
             this.log('Обновлено количество товаров в объекте корзины');
-          } catch (_) {}
+          } catch (e) {
+            this.log('Ошибка при обновлении количества товаров:', e);
+          }
         }
 
         // Дополнительно очищаем промокод через Tilda API (если доступно)
         if (typeof window.t_input_promocode__clearPromocode === 'function') {
           try {
             window.t_input_promocode__clearPromocode();
-          } catch (_) {}
+          } catch (e) {
+            this.log('Ошибка при очистке промокода через Tilda API:', e);
+          }
         }
 
-        this.log('Промокоды очищены');
+        // Дополнительный пересчет через tcart__calcPromocode если доступен
+        if (typeof window.tcart__calcPromocode === 'function') {
+          try {
+            window.tcart__calcPromocode();
+            this.log('Выполнен дополнительный пересчет промокода');
+          } catch (e) {
+            this.log('Ошибка при дополнительном пересчете промокода:', e);
+          }
+        }
+
+        // Обновляем отображение баланса и доступных бонусов
+        this.updateBalanceDisplay();
+        this.updateBonusInputMax();
+
+        this.log('Промокоды полностью очищены');
       } catch (error) {
         this.log('Ошибка при очистке промокодов:', error);
       }
