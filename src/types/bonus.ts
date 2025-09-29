@@ -72,9 +72,6 @@ export interface BotSettings {
   project?: Project;
 }
 
-// Логируем загрузку глобального User интерфейса для отладки
-console.log('[DEBUG] Loading GLOBAL User interface from types/bonus.ts');
-
 export interface User {
   id: string;
   projectId: string;

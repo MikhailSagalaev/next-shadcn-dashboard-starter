@@ -9,9 +9,6 @@
 
 'use client';
 
-// Логируем загрузку компонента для отладки
-console.log('[DEBUG] Loading BonusManagementPage component');
-
 import { useState, useMemo, useCallback, memo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -87,9 +84,6 @@ interface BonusManagementPageProps {
 export function BonusManagementPageRefactored({
   className
 }: BonusManagementPageProps = {}) {
-  console.log('[DEBUG] BonusManagementPageRefactored component rendered', {
-    className
-  });
   const router = useRouter();
   const { toast } = useToast();
 
@@ -137,7 +131,7 @@ export function BonusManagementPageRefactored({
     setSearchTerm,
     exportUsers
   } = useProjectUsers({
-    projectId: currentProjectId || undefined,
+    projectId: currentProjectId,
     pageSize,
     searchTerm
   });
@@ -637,19 +631,28 @@ export function BonusManagementPageRefactored({
           )}
 
           {/* Users List */}
-          <UsersTable
-            data={filteredUsers}
-            onExport={handleExportAll}
-            onSelectionChange={setSelectedUsers}
-            onProfileClick={handleProfileClick}
-            onHistoryClick={openHistory}
-            loading={isLoading}
-            totalCount={totalCount}
-            currentPage={currentPage}
-            pageSize={pageSize}
-            onPageChange={handlePageChange}
-            onPageSizeChange={handlePageSizeChange}
-          />
+          {currentProjectId ? (
+            <UsersTable
+              data={filteredUsers}
+              onExport={handleExportAll}
+              onSelectionChange={setSelectedUsers}
+              onProfileClick={handleProfileClick}
+              onHistoryClick={openHistory}
+              loading={isLoading}
+              totalCount={totalCount}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          ) : (
+            <div className='flex items-center justify-center p-8'>
+              <div className='text-center'>
+                <div className='border-primary mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2'></div>
+                <p className='text-muted-foreground'>Загрузка проекта...</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
