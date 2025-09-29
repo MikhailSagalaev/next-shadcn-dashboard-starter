@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.5.0
+ * @version: 1.6.0
  * @author: AI Assistant + User
  */
 
@@ -590,6 +590,43 @@
           this.onUserInputChange(e.target);
         }
       });
+
+      // Отслеживаем клики по кнопке выхода
+      document.addEventListener('click', (e) => {
+        if (
+          e.target.classList.contains('t706__auth__log-in-btn') ||
+          e.target.classList.contains('js-cart-log-out') ||
+          e.target.closest('.t706__auth__log-in-btn') ||
+          e.target.closest('.js-cart-log-out')
+        ) {
+          this.log('🚪 Обнаружен клик по кнопке выхода');
+          this.onUserLogout();
+        }
+      });
+    },
+
+    // Обработка выхода пользователя
+    onUserLogout: function () {
+      this.log('👋 Пользователь выходит из аккаунта');
+
+      // Очищаем данные пользователя
+      this.state.userEmail = '';
+      this.state.userPhone = '';
+      this.state.bonusBalance = 0;
+      this.state.appliedBonuses = 0;
+
+      // Очищаем localStorage
+      localStorage.removeItem('tilda_user_email');
+      localStorage.removeItem('tilda_user_phone');
+      localStorage.removeItem('tilda_applied_bonuses');
+
+      // Сбрасываем промокоды
+      this.clearAllPromocodes();
+
+      // Показываем плашку регистрации
+      this.showRegistrationPrompt();
+
+      this.log('✅ Данные пользователя очищены, показана плашка регистрации');
     },
 
     // Обработка изменения данных пользователя
