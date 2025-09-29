@@ -9,6 +9,9 @@
 
 'use client';
 
+// Логируем загрузку компонента для отладки
+console.log('[DEBUG] Loading UsersTable component');
+
 import { useState, useEffect } from 'react';
 import {
   type ColumnDef,
@@ -84,6 +87,11 @@ export function UsersTable({
   currentPage = 1,
   pageSize = 50
 }: UsersTableProps) {
+  console.log('[DEBUG] UsersTable component rendered', {
+    dataLength: data.length,
+    loading,
+    totalCount
+  });
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'createdAt', desc: true }
   ]);

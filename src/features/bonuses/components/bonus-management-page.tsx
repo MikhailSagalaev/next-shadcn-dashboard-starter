@@ -9,6 +9,9 @@
 
 'use client';
 
+// Логируем загрузку компонента для отладки
+console.log('[DEBUG] Loading BonusManagementPage component');
+
 import { useState, useMemo, useCallback, memo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -84,6 +87,9 @@ interface BonusManagementPageProps {
 export function BonusManagementPageRefactored({
   className
 }: BonusManagementPageProps = {}) {
+  console.log('[DEBUG] BonusManagementPageRefactored component rendered', {
+    className
+  });
   const router = useRouter();
   const { toast } = useToast();
 

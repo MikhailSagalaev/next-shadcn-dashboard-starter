@@ -1,3 +1,6 @@
+// Логируем загрузку типов для отладки
+console.log('[DEBUG] Loading DisplayUser interface from bonus types');
+
 export interface DisplayUser {
   id: string;
   name: string;

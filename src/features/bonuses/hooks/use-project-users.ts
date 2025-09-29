@@ -7,6 +7,9 @@
  * @author: AI Assistant + User
  */
 
+// Логируем загрузку хука для отладки
+console.log('[DEBUG] Loading useProjectUsers hook');
+
 import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/lib/logger';
 import { validateWithSchema, createUserSchema } from '@/lib/validation/schemas';
@@ -47,6 +50,12 @@ export function useProjectUsers({
   pageSize = 50,
   searchTerm = ''
 }: UseProjectUsersOptions = {}): UseProjectUsersReturn {
+  console.log('[DEBUG] useProjectUsers hook called', {
+    projectId,
+    initialUsersLength: initialUsers.length,
+    pageSize,
+    searchTerm
+  });
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
