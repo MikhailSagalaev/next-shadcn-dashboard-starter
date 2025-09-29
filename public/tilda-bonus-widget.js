@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.4.0
+ * @version: 2.5.0
  * @author: AI Assistant + User
  */
 
@@ -436,28 +436,24 @@
           return;
         }
 
-        // Сначала показываем плашку с базовыми данными, потом обновляем
-        const defaultSettings = {
-          welcomeBonusAmount: 500, // Базовое значение
-          botUsername: null
-        };
-
-        // Сразу отрисовываем с базовыми данными
-        this.renderRegistrationPrompt(defaultSettings);
-
-        // Асинхронно пытаемся загрузить реальные настройки и обновить плашку
+        // Асинхронно загружаем реальные настройки и показываем плашку
         this.loadProjectSettingsForPrompt()
           .then((settings) => {
             this.log(
-              '✅ Настройки проекта загружены, обновляем плашку:',
+              '✅ Настройки проекта загружены, показываем плашку:',
               settings
             );
-            // Перерисовываем с реальными данными
+            // Отрисовываем с реальными данными
             this.renderRegistrationPrompt(settings);
           })
           .catch((error) => {
             this.log('❌ Не удалось загрузить настройки проекта:', error);
-            // Плашка уже показана с базовыми данными, ничего не делаем
+            // Показываем плашку с базовыми данными
+            const defaultSettings = {
+              welcomeBonusAmount: 500, // Базовое значение
+              botUsername: null
+            };
+            this.renderRegistrationPrompt(defaultSettings);
           });
       } catch (error) {
         this.log('Ошибка при показе плашки регистрации:', error);
@@ -524,10 +520,14 @@
           const data = await response.json();
           this.log('📦 Данные от API:', data);
 
-          return {
+          const processedData = {
             welcomeBonusAmount: Number(data?.welcomeBonusAmount || 500),
             botUsername: data?.botUsername || null
           };
+
+          this.log('🔧 Обработанные настройки для плашки:', processedData);
+
+          return processedData;
         } else {
           throw new Error(
             `API error: ${response.status} ${response.statusText}`
@@ -983,14 +983,16 @@
       // Сбрасываем промокоды
       this.clearAllPromocodes();
 
-      // Полная очистка ресурсов
-      this.cleanup();
+      // Удаляем виджет перед показом плашки
+      this.removeWidget();
 
       // Показываем плашку регистрации
-      this.showRegistrationPrompt();
+      setTimeout(() => {
+        this.showRegistrationPrompt();
+      }, 100); // Небольшая задержка для корректного переключения
 
       this.log(
-        '✅ Данные пользователя очищены, ресурсы очищены, показана плашка регистрации'
+        '✅ Данные пользователя очищены, виджет удален, показана плашка регистрации'
       );
     },
 
@@ -999,23 +1001,46 @@
       const value = input.value.trim();
       if (!value) return;
 
+      let hasNewData = false;
+
       if (input.type === 'email' || input.name === 'email') {
-        this.state.userEmail = value;
-        localStorage.setItem('tilda_user_email', value);
+        if (this.state.userEmail !== value) {
+          this.state.userEmail = value;
+          localStorage.setItem('tilda_user_email', value);
+          hasNewData = true;
+        }
       } else if (input.type === 'tel' || input.name === 'phone') {
-        this.state.userPhone = value;
-        localStorage.setItem('tilda_user_phone', value);
+        if (this.state.userPhone !== value) {
+          this.state.userPhone = value;
+          localStorage.setItem('tilda_user_phone', value);
+          hasNewData = true;
+        }
       }
 
-      // Обновляем состояние виджета при изменении контактных данных
-      this.updateWidgetState();
+      // Обновляем состояние виджета только при изменении данных
+      if (hasNewData) {
+        this.log('📝 Новые контактные данные, обновляем состояние виджета');
 
-      // Загружаем баланс с дебаунсом (только если есть контактные данные)
-      if (this.state.userEmail || this.state.userPhone) {
-        this.loadUserBalanceDebounced({
-          email: this.state.userEmail,
-          phone: this.state.userPhone
-        });
+        // Проверяем, показана ли сейчас плашка регистрации
+        const registrationPrompt = document.querySelector(
+          '.registration-prompt-inline'
+        );
+        if (registrationPrompt) {
+          this.log('🔄 Переключаемся с плашки регистрации на виджет');
+          this.hideRegistrationPrompt();
+          this.ensureWidgetMounted();
+        }
+
+        // Обновляем состояние виджета
+        this.updateWidgetState();
+
+        // Загружаем баланс с дебаунсом (только если есть контактные данные)
+        if (this.state.userEmail || this.state.userPhone) {
+          this.loadUserBalanceDebounced({
+            email: this.state.userEmail,
+            phone: this.state.userPhone
+          });
+        }
       }
     },
 
