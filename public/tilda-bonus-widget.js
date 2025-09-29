@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.8.0
+ * @version: 1.9.0
  * @author: AI Assistant + User
  */
 
@@ -201,17 +201,18 @@
           background: #333333;
         }
 
-        /* Стили для overlay плашки регистрации */
-        .registration-prompt-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          z-index: 1000;
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(4px);
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        /* Стили для inline плашки регистрации в поле промокода */
+        .registration-prompt-inline {
+          width: 100%;
+          padding: 8px 0;
+        }
+
+        .registration-prompt-inline .registration-prompt {
+          text-align: center;
+          padding: 12px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          background: #f9fafb;
         }
       `;
       document.head.appendChild(style);
@@ -314,10 +315,23 @@
 
     // Скрыть плашку регистрации
     hideRegistrationPrompt: function () {
-      const overlay = document.querySelector('.registration-prompt-overlay');
-      if (overlay) {
-        overlay.remove();
-        this.log('Скрыта плашка регистрации');
+      const prompt = document.querySelector('.registration-prompt-inline');
+      if (prompt) {
+        // Восстанавливаем поле ввода промокода и кнопку активации
+        const promocodeWrapper = prompt.parentNode;
+        if (promocodeWrapper) {
+          const promocodeInput =
+            promocodeWrapper.querySelector('.t-inputpromocode');
+          const promocodeBtn = promocodeWrapper.querySelector(
+            '.t-inputpromocode__btn'
+          );
+
+          if (promocodeInput) promocodeInput.style.display = '';
+          if (promocodeBtn) promocodeBtn.style.display = '';
+        }
+
+        prompt.remove();
+        this.log('Скрыта плашка регистрации, восстановлено поле промокода');
       }
     },
 
@@ -329,16 +343,25 @@
 
         // Удаляем существующую плашку если есть
         const existingPrompt = document.querySelector(
-          '.registration-prompt-overlay'
+          '.registration-prompt-inline'
         );
         if (existingPrompt) {
           existingPrompt.remove();
         }
 
-        // Создаем плашку регистрации как overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'registration-prompt-overlay';
-        overlay.innerHTML = `
+        // Ищем контейнер поля промокода
+        const promocodeWrapper = document.querySelector(
+          '.t-inputpromocode__wrapper'
+        );
+        if (!promocodeWrapper) {
+          this.log('Контейнер поля промокода не найден');
+          return;
+        }
+
+        // Создаем плашку регистрации внутри поля промокода
+        const promptDiv = document.createElement('div');
+        promptDiv.className = 'registration-prompt-inline';
+        promptDiv.innerHTML = `
           <div class="registration-prompt">
             <div class="registration-icon">🎁</div>
             <div class="registration-title">Зарегистрируйся и получи ${settings.welcomeBonusAmount || 0} бонусов!</div>
@@ -357,13 +380,20 @@
           </div>
         `;
 
-        // Добавляем overlay в корзину
-        const cart = document.querySelector('.t706__cartwin');
-        if (cart) {
-          cart.appendChild(overlay);
-        }
+        // Скрываем поле ввода промокода и кнопку активации
+        const promocodeInput =
+          promocodeWrapper.querySelector('.t-inputpromocode');
+        const promocodeBtn = promocodeWrapper.querySelector(
+          '.t-inputpromocode__btn'
+        );
 
-        this.log('Показана плашка регистрации', settings);
+        if (promocodeInput) promocodeInput.style.display = 'none';
+        if (promocodeBtn) promocodeBtn.style.display = 'none';
+
+        // Добавляем плашку в контейнер поля промокода
+        promocodeWrapper.appendChild(promptDiv);
+
+        this.log('Показана плашка регистрации в поле промокода', settings);
       } catch (error) {
         this.log('Ошибка показа плашки регистрации:', error);
       }

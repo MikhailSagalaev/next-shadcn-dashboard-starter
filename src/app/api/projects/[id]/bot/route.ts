@@ -37,7 +37,10 @@ export async function GET(
     // Проверяем существование проекта
     const project = await ProjectService.getProjectById(id);
     if (!project) {
-      return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Проект не найден' },
+        { status: 404, headers: corsHeaders }
+      );
     }
 
     // Получаем настройки бота
@@ -46,7 +49,7 @@ export async function GET(
     });
 
     // Получаем welcomeBonusAmount из meta проекта
-    const welcomeBonusAmount = Number(project.meta?.welcomeBonus || 0);
+    const welcomeBonusAmount = Number((project as any).meta?.welcomeBonus || 0);
 
     // Добавляем welcomeBonusAmount к ответу
     const response = {
@@ -63,7 +66,7 @@ export async function GET(
     );
     return NextResponse.json(
       { error: 'Ошибка получения настроек бота' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
@@ -80,14 +83,17 @@ export async function POST(
     // Проверяем существование проекта
     const project = await ProjectService.getProjectById(id);
     if (!project) {
-      return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Проект не найден' },
+        { status: 404, headers: corsHeaders }
+      );
     }
 
     // Валидация данных
     if (!body.botToken) {
       return NextResponse.json(
         { error: 'Токен бота обязателен' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -95,7 +101,7 @@ export async function POST(
     if (!body.botToken.match(/^\d+:[A-Za-z0-9_-]{35}$/)) {
       return NextResponse.json(
         { error: 'Неверный формат токена бота' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -179,7 +185,10 @@ export async function POST(
       })();
     }, 0);
 
-    return NextResponse.json(botSettings, { status: 201 });
+    return NextResponse.json(botSettings, {
+      status: 201,
+      headers: corsHeaders
+    });
   } catch (error) {
     logger.error(
       'Ошибка настройки бота',
@@ -190,13 +199,13 @@ export async function POST(
     if (error instanceof Error && error.message.includes('Unique constraint')) {
       return NextResponse.json(
         { error: 'Токен бота уже используется в другом проекте' },
-        { status: 409 }
+        { status: 409, headers: corsHeaders }
       );
     }
 
     return NextResponse.json(
       { error: 'Ошибка настройки бота' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
@@ -218,7 +227,7 @@ export async function PUT(
     if (!existingBot) {
       return NextResponse.json(
         { error: 'Настройки бота не найдены' },
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       );
     }
 
@@ -226,7 +235,7 @@ export async function PUT(
     if (body.botToken && !body.botToken.match(/^\d+:[A-Za-z0-9_-]{35}$/)) {
       return NextResponse.json(
         { error: 'Неверный формат токена бота' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -269,7 +278,7 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json(updatedBot);
+    return NextResponse.json(updatedBot, { headers: corsHeaders });
   } catch (error) {
     logger.error(
       'Ошибка обновления настроек бота',
@@ -278,7 +287,7 @@ export async function PUT(
     );
     return NextResponse.json(
       { error: 'Ошибка обновления настроек бота' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
@@ -298,7 +307,7 @@ export async function DELETE(
     if (!botSettings) {
       return NextResponse.json(
         { error: 'Настройки бота не найдены' },
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       );
     }
 
@@ -320,10 +329,13 @@ export async function DELETE(
       );
     }
 
-    return NextResponse.json({
-      message: 'Бот успешно деактивирован',
-      bot: deactivatedBot
-    });
+    return NextResponse.json(
+      {
+        message: 'Бот успешно деактивирован',
+        bot: deactivatedBot
+      },
+      { headers: corsHeaders }
+    );
   } catch (error) {
     logger.error(
       'Ошибка деактивации бота',
@@ -332,7 +344,7 @@ export async function DELETE(
     );
     return NextResponse.json(
       { error: 'Ошибка деактивации бота' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
