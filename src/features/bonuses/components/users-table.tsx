@@ -91,43 +91,16 @@ export function UsersTable({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
   const [pagination, setPagination] = useState({
-    pageIndex: currentPage - 1,
-    pageSize
+    pageIndex: 0,
+    pageSize: 50
   });
 
-  // Синхронизируем внутреннюю пагинацию с внешней
+  // Обработчик изменений пагинации - вызываем только при изменении размера страницы
   useEffect(() => {
-    setPagination({
-      pageIndex: currentPage - 1,
-      pageSize
-    });
-  }, [currentPage, pageSize]);
-
-  // Обработчик изменений пагинации
-  useEffect(() => {
-    const newPage = pagination.pageIndex + 1;
-    const newPageSize = pagination.pageSize;
-
-    // Вызываем внешние обработчики только если значения изменились
-    // и только если это изменение от пользовательского взаимодействия, а не от синхронизации
-    if (
-      newPage !== currentPage &&
-      onPageChange &&
-      Math.abs(newPage - currentPage) === 1
-    ) {
-      onPageChange(newPage);
+    if (pagination.pageSize !== pageSize && onPageSizeChange) {
+      onPageSizeChange(pagination.pageSize);
     }
-    if (newPageSize !== pageSize && onPageSizeChange) {
-      onPageSizeChange(newPageSize);
-    }
-  }, [
-    pagination.pageIndex,
-    pagination.pageSize,
-    currentPage,
-    pageSize,
-    onPageChange,
-    onPageSizeChange
-  ]);
+  }, [pagination.pageSize, pageSize, onPageSizeChange]);
 
   const columns: ColumnDef<User>[] = [
     {
@@ -302,7 +275,6 @@ export function UsersTable({
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -312,11 +284,26 @@ export function UsersTable({
       sorting,
       columnFilters,
       columnVisibility,
-      rowSelection,
-      pagination
+      rowSelection
     },
-    manualPagination: true, // Отключаем внутреннюю пагинацию
-    pageCount: Math.ceil(totalCount / pageSize) // Указываем общее количество страниц
+    manualPagination: false, // Включаем внутреннюю пагинацию
+    pageCount: Math.ceil(totalCount / pageSize),
+    onPaginationChange: (updater) => {
+      const newPagination =
+        typeof updater === 'function' ? updater(pagination) : updater;
+      setPagination(newPagination);
+
+      // Уведомляем родителя об изменении страницы
+      const newPage = newPagination.pageIndex + 1;
+      const newPageSize = newPagination.pageSize;
+
+      if (newPage !== currentPage && onPageChange) {
+        onPageChange(newPage);
+      }
+      if (newPageSize !== pageSize && onPageSizeChange) {
+        onPageSizeChange(newPageSize);
+      }
+    }
   });
 
   // Обработчик изменений выбора
