@@ -109,18 +109,39 @@ export function UsersTable({
     const newPageSize = pagination.pageSize;
 
     // Вызываем внешние обработчики только если значения изменились
-    if (newPage !== currentPage && onPageChange) {
+    // и только если это изменение от пользовательского взаимодействия, а не от синхронизации
+    if (
+      newPage !== currentPage &&
+      onPageChange &&
+      Math.abs(newPage - currentPage) === 1
+    ) {
       onPageChange(newPage);
     }
     if (newPageSize !== pageSize && onPageSizeChange) {
       onPageSizeChange(newPageSize);
     }
-  }, [pagination, currentPage, pageSize, onPageChange, onPageSizeChange]);
+  }, [
+    pagination.pageIndex,
+    pagination.pageSize,
+    currentPage,
+    pageSize,
+    onPageChange,
+    onPageSizeChange
+  ]);
 
   const columns: ColumnDef<User>[] = [
     {
       id: 'select',
-      header: '',
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && 'indeterminate')
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label='Select all'
+        />
+      ),
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}

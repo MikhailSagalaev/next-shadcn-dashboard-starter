@@ -357,80 +357,113 @@ export function BonusManagementPageRefactored({
 
       setExportLoading(true);
 
-      // Получаем все данные без пагинации
-      const response = await fetch(
-        `/api/projects/${currentProjectId}/users?limit=10000`
+      // Получаем общее количество пользователей для расчета страниц
+      const totalResponse = await fetch(
+        `/api/projects/${currentProjectId}/users?page=1&limit=1`
       );
-      if (!response.ok) {
-        throw new Error('Не удалось получить данные пользователей');
+      if (!totalResponse.ok) {
+        throw new Error('Не удалось получить информацию о пользователях');
+      }
+      const totalData = await totalResponse.json();
+      const totalUsers = totalData.pagination?.total || 0;
+      const totalPages = totalData.pagination?.pages || 0;
+
+      if (totalUsers === 0) {
+        toast({
+          title: 'Нет данных',
+          description: 'В проекте нет пользователей для экспорта',
+          variant: 'destructive'
+        });
+        return;
       }
 
-      const allUsers = await response.json();
-      const usersArray = Array.isArray(allUsers?.users) ? allUsers.users : [];
+      // Загружаем все страницы параллельно (по 10 страниц одновременно)
+      const pageSize = 100;
+      const pages = Math.ceil(totalUsers / pageSize);
+      const batchSize = 10;
 
-      // Создаем CSV
-      const headers = [
-        'ID',
-        'Имя',
-        'Email',
-        'Телефон',
-        'Баланс бонусов',
-        'Всего заработано',
-        'Дата регистрации',
-        'Уровень',
-        'Реферальный код'
-      ];
+      const allUsers: any[] = [];
 
-      const csvData = usersArray.map((user: any) => [
-        user.id || '',
-        user.firstName && user.lastName
-          ? `${user.firstName} ${user.lastName}`.trim()
-          : user.email || '',
-        user.email || '',
-        user.phone || '',
-        user.bonusBalance || 0,
-        user.totalEarned || 0,
-        user.createdAt
+      for (let i = 0; i < pages; i += batchSize) {
+        const batchPromises = [];
+        for (let j = 0; j < batchSize && i + j < pages; j++) {
+          const page = i + j + 1;
+          batchPromises.push(
+            fetch(
+              `/api/projects/${currentProjectId}/users?page=${page}&limit=${pageSize}`
+            )
+              .then((res) => (res.ok ? res.json() : []))
+              .then((data) => data.users || [])
+          );
+        }
+
+        const batchResults = await Promise.all(batchPromises);
+        batchResults.forEach((users) => allUsers.push(...users));
+
+        // Обновляем прогресс
+        const progress = Math.min(((i + batchSize) / pages) * 100, 100);
+        toast({
+          title: 'Экспорт в процессе...',
+          description: `Загружено ${allUsers.length} из ${totalUsers} пользователей (${Math.round(progress)}%)`
+        });
+      }
+
+      // Подготавливаем данные для CSV
+      const csvData = allUsers.map((user: any) => ({
+        ID: user.id || '',
+        Имя:
+          user.firstName && user.lastName
+            ? `${user.firstName} ${user.lastName}`.trim()
+            : user.email || '',
+        Email: user.email || '',
+        Телефон: user.phone || '',
+        'Баланс бонусов': user.bonusBalance || 0,
+        'Всего заработано': user.totalEarned || 0,
+        'Дата регистрации': user.createdAt
           ? new Date(user.createdAt).toLocaleDateString('ru-RU')
           : '',
-        user.currentLevel || 'Базовый',
-        user.referralCode || ''
-      ]);
+        Уровень: user.currentLevel || 'Базовый',
+        'Реферальный код': user.referralCode || '',
+        Telegram: user.telegramUsername ? `@${user.telegramUsername}` : '',
+        Активный: user.isActive ? 'Да' : 'Нет'
+      }));
 
-      // Добавляем заголовки
-      csvData.unshift(headers);
+      // Используем papaparse для создания CSV
+      import('papaparse').then(({ unparse }) => {
+        const csvContent = unparse(csvData, {
+          delimiter: ';',
+          header: true,
+          encoding: 'utf-8'
+        });
 
-      // Конвертируем в CSV строку
-      const csvContent = csvData
-        .map((row) =>
-          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-        )
-        .join('\n');
+        // Создаем и скачиваем файл
+        const blob = new Blob(['\ufeff' + csvContent], {
+          type: 'text/csv;charset=utf-8;'
+        });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute(
+          'download',
+          `users-${currentProjectId}-${new Date().toISOString().split('T')[0]}.csv`
+        );
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
-      // Создаем и скачиваем файл
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute(
-        'download',
-        `users-${currentProjectId}-${new Date().toISOString().split('T')[0]}.csv`
-      );
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+        toast({
+          title: 'Экспорт завершен',
+          description: `Экспортировано ${allUsers.length} пользователей`
+        });
 
-      toast({
-        title: 'Экспорт завершен',
-        description: `Экспортировано ${usersArray.length} пользователей`
+        logger.info(
+          'All users exported successfully',
+          { projectId: currentProjectId, count: allUsers.length },
+          'bonus-management'
+        );
       });
-
-      logger.info(
-        'All users exported successfully',
-        { projectId: currentProjectId, count: usersArray.length },
-        'bonus-management'
-      );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
