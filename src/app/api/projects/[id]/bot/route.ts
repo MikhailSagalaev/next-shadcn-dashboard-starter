@@ -262,10 +262,39 @@ export async function PUT(
       );
     }
 
-    // Валидация данных
+    // Получаем существующие настройки бота
+    const existingBotSettings = await db.botSettings.findUnique({
+      where: { projectId: id }
+    });
+
+    // Если обновляем только функциональные настройки (например, widgetSettings)
+    // и не передан botToken, используем существующие данные
+    if (!body.botToken && existingBotSettings) {
+      logger.info('Обновляем только функциональные настройки бота', {
+        projectId: id
+      });
+
+      // Обновляем только functionalSettings
+      const updatedSettings = await db.botSettings.update({
+        where: { projectId: id },
+        data: {
+          functionalSettings: body.functionalSettings || {}
+        }
+      });
+
+      return NextResponse.json(
+        {
+          ...updatedSettings,
+          message: 'Функциональные настройки бота успешно обновлены'
+        },
+        { headers: createCorsHeaders(request) }
+      );
+    }
+
+    // Валидация данных для полного обновления
     if (!body.botToken) {
       return NextResponse.json(
-        { error: 'Токен бота обязателен' },
+        { error: 'Токен бота обязателен для создания/полного обновления' },
         { status: 400, headers: createCorsHeaders(request) }
       );
     }

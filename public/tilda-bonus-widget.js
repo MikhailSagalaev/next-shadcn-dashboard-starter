@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.7.0
+ * @version: 2.8.0
  * @author: AI Assistant + User
  */
 
@@ -623,21 +623,39 @@
         // Создаем плашку регистрации внутри поля промокода
         const promptDiv = document.createElement('div');
         promptDiv.className = 'registration-prompt-inline';
+        // Используем стилевые настройки или значения по умолчанию
+        const styles = {
+          backgroundColor: widgetSettings.backgroundColor || '#667eea',
+          backgroundGradient: widgetSettings.backgroundGradient || '#764ba2',
+          textColor: widgetSettings.textColor || '#ffffff',
+          buttonBackgroundColor:
+            widgetSettings.buttonBackgroundColor || 'rgba(255,255,255,0.2)',
+          buttonBorderColor:
+            widgetSettings.buttonBorderColor || 'rgba(255,255,255,0.3)',
+          buttonHoverColor:
+            widgetSettings.buttonHoverColor || 'rgba(255,255,255,0.3)',
+          borderRadius: widgetSettings.borderRadius || '8px',
+          padding: widgetSettings.padding || '16px',
+          fontSize: widgetSettings.fontSize || '14px',
+          titleFontSize: widgetSettings.titleFontSize || '18px',
+          iconEmoji: widgetSettings.iconEmoji || '🎁'
+        };
+
         promptDiv.innerHTML = `
           <div class="registration-prompt" style="
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 16px;
-            border-radius: 8px;
+            background: linear-gradient(135deg, ${styles.backgroundColor} 0%, ${styles.backgroundGradient} 100%);
+            color: ${styles.textColor};
+            padding: ${styles.padding};
+            border-radius: ${styles.borderRadius};
             margin-bottom: 12px;
             text-align: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           ">
-            <div class="registration-icon" style="font-size: 24px; margin-bottom: 8px;">🎁</div>
-            <div class="registration-title" style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">
+            <div class="registration-icon" style="font-size: 24px; margin-bottom: 8px;">${styles.iconEmoji}</div>
+            <div class="registration-title" style="font-size: ${styles.titleFontSize}; font-weight: bold; margin-bottom: 8px;">
               ${templates.registrationTitle.replace('{bonusAmount}', welcomeBonusAmount)}
             </div>
-            <div class="registration-description" style="font-size: 14px; margin-bottom: 12px; opacity: 0.9;">
+            <div class="registration-description" style="font-size: ${styles.fontSize}; margin-bottom: 12px; opacity: 0.9;">
               ${templates.registrationDescription}
             </div>
             <div class="registration-action">
@@ -645,18 +663,19 @@
                 botUsername
                   ? `<a href="https://t.me/${botUsername}" target="_blank" class="registration-button" style="
                       display: inline-block;
-                      background: rgba(255,255,255,0.2);
-                      color: white;
+                      background: ${styles.buttonBackgroundColor};
+                      color: ${styles.textColor};
                       padding: 8px 16px;
                       border-radius: 6px;
                       text-decoration: none;
                       font-weight: 500;
                       transition: all 0.3s ease;
-                      border: 1px solid rgba(255,255,255,0.3);
-                    " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                      border: 1px solid ${styles.buttonBorderColor};
+                      font-size: ${styles.fontSize};
+                    " onmouseover="this.style.background='${styles.buttonHoverColor}'" onmouseout="this.style.background='${styles.buttonBackgroundColor}'">
                       ${templates.registrationButtonText}
                     </a>`
-                  : `<div style="font-size: 14px; opacity: 0.8;">${templates.registrationFallbackText}</div>`
+                  : `<div style="font-size: ${styles.fontSize}; opacity: 0.8;">${templates.registrationFallbackText}</div>`
               }
             </div>
           </div>
@@ -1053,30 +1072,52 @@
 
     // Получение контактов пользователя
     getUserContact: function () {
-      // Из localStorage
-      const savedEmail = localStorage.getItem('tilda_user_email');
-      const savedPhone = localStorage.getItem('tilda_user_phone');
+      try {
+        this.log('🔍 Ищем контактные данные пользователя...');
 
-      if (savedEmail || savedPhone) {
-        return { email: savedEmail, phone: savedPhone };
+        // Из localStorage
+        const savedEmail = localStorage.getItem('tilda_user_email');
+        const savedPhone = localStorage.getItem('tilda_user_phone');
+
+        if (savedEmail || savedPhone) {
+          this.log('📦 Найдены сохраненные контакты в localStorage:', {
+            hasEmail: !!savedEmail,
+            hasPhone: !!savedPhone
+          });
+          return { email: savedEmail, phone: savedPhone };
+        }
+
+        // Из полей формы
+        const emailField = document.querySelector(
+          'input[name="email"], input[type="email"], input[name="Email"]'
+        );
+        const phoneField = document.querySelector(
+          'input[name="phone"], input[type="tel"], input[name="Phone"], input[name="tildaspec-phone-part"]'
+        );
+
+        const email = emailField ? emailField.value.trim() : null;
+        const phone = phoneField ? phoneField.value.trim() : null;
+
+        this.log('🔍 Поиск в полях формы:', {
+          emailField: !!emailField,
+          phoneField: !!phoneField,
+          hasEmail: !!(email && email.length > 0),
+          hasPhone: !!(phone && phone.length > 0),
+          emailValue: email ? email.substring(0, 3) + '***' : 'пусто',
+          phoneValue: phone ? phone.substring(0, 3) + '***' : 'пусто'
+        });
+
+        if ((email && email.length > 0) || (phone && phone.length > 0)) {
+          this.log('✅ Найдены контакты в полях формы');
+          return { email, phone };
+        }
+
+        this.log('❌ Контактные данные не найдены');
+        return null;
+      } catch (error) {
+        this.log('❌ Ошибка получения контактов:', error);
+        return null;
       }
-
-      // Из полей формы
-      const emailField = document.querySelector(
-        'input[name="email"], input[type="email"]'
-      );
-      const phoneField = document.querySelector(
-        'input[name="phone"], input[type="tel"]'
-      );
-
-      const email = emailField ? emailField.value : null;
-      const phone = phoneField ? phoneField.value : null;
-
-      if (email || phone) {
-        return { email, phone };
-      }
-
-      return null;
     },
 
     // Дебаунс-обёртка для загрузки баланса
@@ -1187,8 +1228,8 @@
           '🚨 Обнаружено изменение корзины с примененными бонусами - удаляем промокод'
         );
 
-        // Полностью очищаем промокод при любом изменении корзины
-        this.clearAllPromocodes();
+        // Принудительное удаление промокода из Tilda
+        this.forceDeletePromocode();
 
         // Сбрасываем состояние бонусов
         this.state.appliedBonuses = 0;
@@ -1205,7 +1246,7 @@
         // Обновляем сохраненную сумму корзины
         this.state.originalCartTotal = currentTotal;
 
-        this.log('✅ Промокод полностью удален из-за изменения корзины');
+        this.log('✅ Промокод принудительно удален из-за изменения корзины');
       } catch (error) {
         this.log('❌ Ошибка при корректировке бонусов:', error);
       }
@@ -1586,6 +1627,114 @@
         this.log('Промокоды полностью очищены');
       } catch (error) {
         this.log('Ошибка при очистке промокодов:', error);
+      }
+    },
+
+    // Принудительное удаление промокода (более агрессивный метод)
+    forceDeletePromocode: function () {
+      try {
+        this.log('🔥 ПРИНУДИТЕЛЬНОЕ удаление промокода');
+
+        // 1. Удаляем из window.tcart всеми способами
+        if (window.tcart) {
+          if (window.tcart.promocode) {
+            delete window.tcart.promocode;
+            this.log('✅ Удален window.tcart.promocode');
+          }
+
+          // Также удаляем другие возможные поля промокода
+          if (window.tcart.promo) {
+            delete window.tcart.promo;
+          }
+          if (window.tcart.discount) {
+            delete window.tcart.discount;
+          }
+        }
+
+        // 2. Очищаем ВСЕ поля ввода промокода
+        const promocodeSelectors = [
+          '.t-inputpromocode',
+          'input[name="promocode"]',
+          'input[name="promo"]',
+          '#promocode',
+          '#promo'
+        ];
+
+        promocodeSelectors.forEach((selector) => {
+          const input = document.querySelector(selector);
+          if (input) {
+            input.value = '';
+            this.log(`✅ Очищено поле ${selector}`);
+          }
+        });
+
+        // 3. Принудительно вызываем ВСЕ функции пересчета Tilda
+        const tildaFunctions = [
+          'tcart__calcAmountWithDiscounts',
+          'tcart__reDrawTotal',
+          'tcart__updateTotalProductsinCartObj',
+          'tcart__calcPromocode',
+          't_input_promocode__clearPromocode'
+        ];
+
+        tildaFunctions.forEach((funcName) => {
+          if (typeof window[funcName] === 'function') {
+            try {
+              window[funcName]();
+              this.log(`✅ Принудительно вызвана ${funcName}`);
+            } catch (e) {
+              this.log(`❌ Ошибка принудительного вызова ${funcName}:`, e);
+            }
+          }
+        });
+
+        // 4. Полный сброс состояния виджета
+        this.state.appliedBonuses = 0;
+        this.state.originalCartTotal = this.getCartTotal();
+        localStorage.setItem('tilda_applied_bonuses', '0');
+
+        // 5. Очищаем ВСЕ скрытые поля
+        const hiddenFields = [
+          'applied_bonuses_field',
+          'applied_bonuses',
+          'bonus_amount',
+          'promocode_field',
+          'promo_field'
+        ];
+
+        hiddenFields.forEach((fieldId) => {
+          const field = document.getElementById(fieldId);
+          if (field) {
+            field.value = '0';
+            this.log(`✅ Принудительно очищено поле ${fieldId}`);
+          }
+        });
+
+        // 6. Удаляем все элементы статуса промокода
+        const statusSelectors = [
+          '#bonus-status',
+          '.bonus-status',
+          '.promocode-status',
+          '.t-promocode-status'
+        ];
+
+        statusSelectors.forEach((selector) => {
+          const element = document.querySelector(selector);
+          if (element) {
+            element.innerHTML = '';
+            element.style.display = 'none';
+          }
+        });
+
+        // 7. Принудительно обновляем отображение
+        this.updateBalanceDisplay();
+
+        this.log('🔥 ПРИНУДИТЕЛЬНОЕ удаление промокода ЗАВЕРШЕНО');
+      } catch (error) {
+        this.log(
+          '❌ КРИТИЧЕСКАЯ ошибка принудительного удаления промокода:',
+          error
+        );
       }
     },
 

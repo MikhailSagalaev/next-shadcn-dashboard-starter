@@ -58,7 +58,19 @@ export function ProjectIntegrationView({
     registrationTitle: 'Зарегистрируйся и получи {bonusAmount} бонусов!',
     registrationDescription: 'Зарегистрируйся в нашей бонусной программе',
     registrationButtonText: 'Для участия в акции перейдите в бота',
-    registrationFallbackText: 'Свяжитесь с администратором для регистрации'
+    registrationFallbackText: 'Свяжитесь с администратором для регистрации',
+    // Стилевые настройки
+    backgroundColor: '#667eea',
+    backgroundGradient: '#764ba2',
+    textColor: '#ffffff',
+    buttonBackgroundColor: 'rgba(255,255,255,0.2)',
+    buttonBorderColor: 'rgba(255,255,255,0.3)',
+    buttonHoverColor: 'rgba(255,255,255,0.3)',
+    borderRadius: '8px',
+    padding: '16px',
+    fontSize: '14px',
+    titleFontSize: '18px',
+    iconEmoji: '🎁'
   });
   const [saving, setSaving] = useState(false);
   const resolvedParams = useParams();
@@ -105,7 +117,31 @@ export function ProjectIntegrationView({
                 'Для участия в акции перейдите в бота',
               registrationFallbackText:
                 functionalSettings.widgetSettings.registrationFallbackText ||
-                'Свяжитесь с администратором для регистрации'
+                'Свяжитесь с администратором для регистрации',
+              // Стилевые настройки с fallback
+              backgroundColor:
+                functionalSettings.widgetSettings.backgroundColor || '#667eea',
+              backgroundGradient:
+                functionalSettings.widgetSettings.backgroundGradient ||
+                '#764ba2',
+              textColor:
+                functionalSettings.widgetSettings.textColor || '#ffffff',
+              buttonBackgroundColor:
+                functionalSettings.widgetSettings.buttonBackgroundColor ||
+                'rgba(255,255,255,0.2)',
+              buttonBorderColor:
+                functionalSettings.widgetSettings.buttonBorderColor ||
+                'rgba(255,255,255,0.3)',
+              buttonHoverColor:
+                functionalSettings.widgetSettings.buttonHoverColor ||
+                'rgba(255,255,255,0.3)',
+              borderRadius:
+                functionalSettings.widgetSettings.borderRadius || '8px',
+              padding: functionalSettings.widgetSettings.padding || '16px',
+              fontSize: functionalSettings.widgetSettings.fontSize || '14px',
+              titleFontSize:
+                functionalSettings.widgetSettings.titleFontSize || '18px',
+              iconEmoji: functionalSettings.widgetSettings.iconEmoji || '🎁'
             });
           }
         }
@@ -252,14 +288,10 @@ export function ProjectIntegrationView({
 
         {/* Табы с инструкциями */}
         <Tabs defaultValue='widget' className='space-y-4'>
-          <TabsList className='grid w-full grid-cols-4'>
+          <TabsList className='grid w-full grid-cols-3'>
             <TabsTrigger value='widget'>
               <Code className='mr-2 h-4 w-4' />
               Виджет
-            </TabsTrigger>
-            <TabsTrigger value='settings'>
-              <Settings className='mr-2 h-4 w-4' />
-              Настройки
             </TabsTrigger>
             <TabsTrigger value='webhook'>
               <Webhook className='mr-2 h-4 w-4' />
@@ -326,147 +358,278 @@ export function ProjectIntegrationView({
                 </Alert>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* Настройки виджета */}
-          <TabsContent
-            value='settings'
-            className='mt-0 min-h-[640px] space-y-4'
-          >
+            {/* Настройки плашки регистрации */}
             <Card>
               <CardHeader>
-                <CardTitle>Настройки плашки регистрации</CardTitle>
+                <CardTitle className='flex items-center gap-2'>
+                  <Settings className='h-5 w-5' />
+                  Настройки плашки регистрации
+                </CardTitle>
                 <CardDescription>
-                  Настройте текст плашки, которая отображается
-                  незарегистрированным пользователям
+                  Настройте внешний вид и текст плашки для незарегистрированных
+                  пользователей
                 </CardDescription>
               </CardHeader>
-              <CardContent className='space-y-4'>
-                <div className='grid gap-4'>
-                  <div className='space-y-2'>
-                    <Label htmlFor='registrationTitle'>
-                      Заголовок плашки
-                      <span className='text-muted-foreground ml-2 text-sm'>
-                        (используйте {'{bonusAmount}'} для подстановки суммы
-                        бонуса)
-                      </span>
-                    </Label>
-                    <Input
-                      id='registrationTitle'
-                      value={widgetSettings.registrationTitle}
-                      onChange={(e) =>
-                        setWidgetSettings({
-                          ...widgetSettings,
-                          registrationTitle: e.target.value
-                        })
-                      }
-                      placeholder='Зарегистрируйся и получи {bonusAmount} бонусов!'
-                    />
-                  </div>
-
-                  <div className='space-y-2'>
-                    <Label htmlFor='registrationDescription'>Описание</Label>
-                    <Input
-                      id='registrationDescription'
-                      value={widgetSettings.registrationDescription}
-                      onChange={(e) =>
-                        setWidgetSettings({
-                          ...widgetSettings,
-                          registrationDescription: e.target.value
-                        })
-                      }
-                      placeholder='Зарегистрируйся в нашей бонусной программе'
-                    />
-                  </div>
-
-                  <div className='space-y-2'>
-                    <Label htmlFor='registrationButtonText'>
-                      Текст кнопки (когда есть бот)
-                    </Label>
-                    <Input
-                      id='registrationButtonText'
-                      value={widgetSettings.registrationButtonText}
-                      onChange={(e) =>
-                        setWidgetSettings({
-                          ...widgetSettings,
-                          registrationButtonText: e.target.value
-                        })
-                      }
-                      placeholder='Для участия в акции перейдите в бота'
-                    />
-                  </div>
-
-                  <div className='space-y-2'>
-                    <Label htmlFor='registrationFallbackText'>
-                      Текст без бота
-                    </Label>
-                    <Input
-                      id='registrationFallbackText'
-                      value={widgetSettings.registrationFallbackText}
-                      onChange={(e) =>
-                        setWidgetSettings({
-                          ...widgetSettings,
-                          registrationFallbackText: e.target.value
-                        })
-                      }
-                      placeholder='Свяжитесь с администратором для регистрации'
-                    />
+              <CardContent className='space-y-6'>
+                {/* Текстовые настройки */}
+                <div className='space-y-4'>
+                  <h4 className='text-sm font-medium'>Содержание</h4>
+                  <div className='grid gap-4 md:grid-cols-2'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='registrationTitle'>
+                        Заголовок
+                        <span className='text-muted-foreground ml-2 text-xs'>
+                          (используйте {'{bonusAmount}'})
+                        </span>
+                      </Label>
+                      <Input
+                        id='registrationTitle'
+                        value={widgetSettings.registrationTitle}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            registrationTitle: e.target.value
+                          })
+                        }
+                        placeholder='Зарегистрируйся и получи {bonusAmount} бонусов!'
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='registrationDescription'>Описание</Label>
+                      <Input
+                        id='registrationDescription'
+                        value={widgetSettings.registrationDescription}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            registrationDescription: e.target.value
+                          })
+                        }
+                        placeholder='Зарегистрируйся в нашей бонусной программе'
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='registrationButtonText'>
+                        Текст кнопки (с ботом)
+                      </Label>
+                      <Input
+                        id='registrationButtonText'
+                        value={widgetSettings.registrationButtonText}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            registrationButtonText: e.target.value
+                          })
+                        }
+                        placeholder='Для участия в акции перейдите в бота'
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='registrationFallbackText'>
+                        Текст без бота
+                      </Label>
+                      <Input
+                        id='registrationFallbackText'
+                        value={widgetSettings.registrationFallbackText}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            registrationFallbackText: e.target.value
+                          })
+                        }
+                        placeholder='Свяжитесь с администратором для регистрации'
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <Separator />
 
-                <div className='flex items-center justify-between'>
-                  <div className='space-y-1'>
+                {/* Стилевые настройки */}
+                <div className='space-y-4'>
+                  <h4 className='text-sm font-medium'>Внешний вид</h4>
+                  <div className='grid gap-4 md:grid-cols-3'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='backgroundColor'>Основной цвет</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='backgroundColor'
+                          type='color'
+                          value={widgetSettings.backgroundColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              backgroundColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.backgroundColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              backgroundColor: e.target.value
+                            })
+                          }
+                          placeholder='#667eea'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='backgroundGradient'>Градиент</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='backgroundGradient'
+                          type='color'
+                          value={widgetSettings.backgroundGradient}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              backgroundGradient: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.backgroundGradient}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              backgroundGradient: e.target.value
+                            })
+                          }
+                          placeholder='#764ba2'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='textColor'>Цвет текста</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='textColor'
+                          type='color'
+                          value={widgetSettings.textColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              textColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.textColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              textColor: e.target.value
+                            })
+                          }
+                          placeholder='#ffffff'
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-4 md:grid-cols-2'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='iconEmoji'>Иконка</Label>
+                      <Input
+                        id='iconEmoji'
+                        value={widgetSettings.iconEmoji}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            iconEmoji: e.target.value
+                          })
+                        }
+                        placeholder='🎁'
+                        maxLength={4}
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='borderRadius'>Скругление углов</Label>
+                      <Input
+                        id='borderRadius'
+                        value={widgetSettings.borderRadius}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            borderRadius: e.target.value
+                          })
+                        }
+                        placeholder='8px'
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Предварительный просмотр и сохранение */}
+                <div className='space-y-4'>
+                  <div className='flex items-center justify-between'>
                     <h4 className='text-sm font-medium'>
                       Предварительный просмотр
                     </h4>
-                    <p className='text-muted-foreground text-sm'>
-                      Так будет выглядеть плашка на сайте
-                    </p>
+                    <Button onClick={saveWidgetSettings} disabled={saving}>
+                      <Save className='mr-2 h-4 w-4' />
+                      {saving ? 'Сохранение...' : 'Сохранить настройки'}
+                    </Button>
                   </div>
-                  <Button onClick={saveWidgetSettings} disabled={saving}>
-                    <Save className='mr-2 h-4 w-4' />
-                    {saving ? 'Сохранение...' : 'Сохранить'}
-                  </Button>
-                </div>
 
-                {/* Предварительный просмотр */}
-                <div className='bg-muted/20 rounded-lg border p-4'>
-                  <div
-                    className='rounded-lg p-4 text-center text-white'
-                    style={{
-                      background:
-                        'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                    }}
-                  >
-                    <div className='mb-2 text-2xl'>🎁</div>
-                    <div className='mb-2 text-lg font-bold'>
-                      {widgetSettings.registrationTitle.replace(
-                        '{bonusAmount}',
-                        '1000'
-                      )}
-                    </div>
-                    <div className='mb-3 text-sm opacity-90'>
-                      {widgetSettings.registrationDescription}
-                    </div>
-                    <div>
-                      {project?.botUsername ? (
-                        <div
-                          className='inline-block cursor-pointer rounded-md px-4 py-2 transition-all'
-                          style={{
-                            background: 'rgba(255,255,255,0.2)',
-                            border: '1px solid rgba(255,255,255,0.3)'
-                          }}
-                        >
-                          {widgetSettings.registrationButtonText}
-                        </div>
-                      ) : (
-                        <div className='text-sm opacity-80'>
-                          {widgetSettings.registrationFallbackText}
-                        </div>
-                      )}
+                  <div className='bg-muted/20 rounded-lg border p-4'>
+                    <div
+                      className='rounded-lg p-4 text-center'
+                      style={{
+                        background: `linear-gradient(135deg, ${widgetSettings.backgroundColor} 0%, ${widgetSettings.backgroundGradient} 100%)`,
+                        color: widgetSettings.textColor,
+                        borderRadius: widgetSettings.borderRadius,
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      <div className='mb-2' style={{ fontSize: '24px' }}>
+                        {widgetSettings.iconEmoji}
+                      </div>
+                      <div
+                        className='mb-2 font-bold'
+                        style={{ fontSize: widgetSettings.titleFontSize }}
+                      >
+                        {widgetSettings.registrationTitle.replace(
+                          '{bonusAmount}',
+                          '1000'
+                        )}
+                      </div>
+                      <div
+                        className='mb-3 opacity-90'
+                        style={{ fontSize: widgetSettings.fontSize }}
+                      >
+                        {widgetSettings.registrationDescription}
+                      </div>
+                      <div>
+                        {project?.botUsername ? (
+                          <div
+                            className='inline-block cursor-pointer rounded-md px-4 py-2 transition-all'
+                            style={{
+                              background: widgetSettings.buttonBackgroundColor,
+                              border: `1px solid ${widgetSettings.buttonBorderColor}`,
+                              color: widgetSettings.textColor,
+                              fontSize: widgetSettings.fontSize
+                            }}
+                          >
+                            {widgetSettings.registrationButtonText}
+                          </div>
+                        ) : (
+                          <div
+                            className='opacity-80'
+                            style={{ fontSize: widgetSettings.fontSize }}
+                          >
+                            {widgetSettings.registrationFallbackText}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
