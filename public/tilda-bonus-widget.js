@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.9.0
+ * @version: 2.0.0
  * @author: AI Assistant + User
  */
 
@@ -226,6 +226,16 @@
         this.log('Виджет уже добавлен, пропускаем');
         return;
       }
+
+      // Находим контейнер поля промокода
+      const promocodeWrapper = document.querySelector(
+        '.t-inputpromocode__wrapper'
+      );
+      if (!promocodeWrapper) {
+        this.log('Контейнер поля промокода не найден');
+        return;
+      }
+
       const container = document.createElement('div');
       container.className = 'bonus-widget-container';
       container.innerHTML = `
@@ -238,10 +248,10 @@
           Ваш баланс: <span class="bonus-balance-amount">0</span> бонусов
         </div>
         <div id="bonus-section" class="bonus-input-group">
-          <input type="number" 
-                 class="bonus-input" 
-                 id="bonus-amount-input" 
-                 placeholder="Количество бонусов" 
+          <input type="number"
+                 class="bonus-input"
+                 id="bonus-amount-input"
+                 placeholder="Количество бонусов"
                  min="0"
                  style="display: none;">
           <button class="bonus-button" type="button"
@@ -255,28 +265,14 @@
         <div id="bonus-status"></div>
       `;
 
-      // Вставляем рядом со стандартным инпутом промокода, если он есть
-      const insertPoint = (function () {
-        var w = document.querySelector('.t-inputpromocode__wrapper');
-        if (w) return w;
-        return TildaBonusWidget.findInsertPoint();
-      })();
-      if (insertPoint) {
-        insertPoint.parentNode.insertBefore(container, insertPoint);
-        this.log('Виджет добавлен на страницу');
-      } else {
-        this.log('Не удалось найти место для виджета');
-      }
+      // Вставляем виджет вместо поля промокода
+      promocodeWrapper.parentNode.replaceChild(container, promocodeWrapper);
+      this.state.promoWrapper = promocodeWrapper; // Сохраняем ссылку на оригинальный wrapper
 
-      try {
-        this.state.promoWrapper = document.querySelector(
-          '.t-inputpromocode__wrapper'
-        );
-        // При старте виджета режим bonus → скрываем нативный промокод
-        if (this.state.mode !== 'promo' && this.state.promoWrapper) {
-          this.state.promoWrapper.style.display = 'none';
-        }
-      } catch (_) {}
+      this.log('Виджет добавлен вместо поля промокода');
+
+      // Показываем баланс и элементы управления
+      this.showWidgetControls();
     },
 
     // Гарантированно вставить виджет, если его ещё нет
@@ -287,15 +283,28 @@
       return !!document.querySelector('.bonus-widget-container');
     },
 
+    // Показывает элементы управления виджета
+    showWidgetControls: function () {
+      const balanceEl = document.querySelector('.bonus-balance');
+      const inputEl = document.getElementById('bonus-amount-input');
+      const buttonEl = document.getElementById('apply-bonus-button');
+
+      if (balanceEl) balanceEl.style.display = 'block';
+      if (inputEl) inputEl.style.display = 'block';
+      if (buttonEl) buttonEl.style.display = 'block';
+    },
+
     // Получить настройки проекта для плашки регистрации
     loadProjectSettings: async function () {
       try {
+        const cacheBuster = Date.now(); // Предотвращаем кэширование
         const response = await fetch(
-          `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot`,
+          `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`,
           {
             method: 'GET',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache'
             }
           }
         );
@@ -402,9 +411,14 @@
     // Полностью скрыть/удалить виджет, если пользователь не найден/не авторизован
     removeWidget: function () {
       const container = document.querySelector('.bonus-widget-container');
-      if (container && container.parentNode) {
+      if (container && container.parentNode && this.state.promoWrapper) {
+        // Восстанавливаем оригинальное поле промокода вместо виджета
+        container.parentNode.replaceChild(this.state.promoWrapper, container);
+        this.log('Виджет удалён, восстановлено поле промокода');
+      } else if (container && container.parentNode) {
+        // Если нет сохраненного promoWrapper, просто удаляем
         container.parentNode.removeChild(container);
-        this.log('Виджет удалён (пользователь не найден)');
+        this.log('Виджет удалён (без восстановления поля промокода)');
       }
     },
 
@@ -600,14 +614,24 @@
         );
       }
 
-      // Получаем email/телефон пользователя
+      // Определяем текущее состояние авторизации и показываем соответствующий UI
+      this.updateWidgetState();
+    },
+
+    // Определяет и обновляет состояние виджета на основе данных пользователя
+    updateWidgetState: function () {
       const userContact = this.getUserContact();
+
       if (userContact && (userContact.email || userContact.phone)) {
-        // У пользователя есть контактные данные - проверяем баланс
+        // У пользователя есть контактные данные - показываем виджет с балансом
+        this.log('Пользователь авторизован - показываем виджет с балансом');
+        this.hideRegistrationPrompt();
+        this.ensureWidgetMounted();
         this.loadUserBalance(userContact);
       } else {
         // У пользователя нет контактных данных - показываем плашку регистрации
         this.log('Пользователь не авторизован - показываем плашку регистрации');
+        this.removeWidget();
         this.showRegistrationPrompt();
       }
     },
@@ -619,21 +643,43 @@
       var promoTab = document.getElementById('promo-tab');
       var bonusSection = document.getElementById('bonus-section');
       if (!bonusTab || !promoTab || !bonusSection) return;
+
       if (this.state.mode === 'promo') {
+        // Переключаемся на режим промокода
         bonusTab.classList.remove('active');
         promoTab.classList.add('active');
         bonusSection.style.display = 'none';
-        var w =
-          this.state.promoWrapper ||
-          document.querySelector('.t-inputpromocode__wrapper');
-        if (w) w.style.display = 'table';
+
+        // Восстанавливаем оригинальное поле промокода вместо виджета
+        const widgetContainer = document.querySelector(
+          '.bonus-widget-container'
+        );
+        if (widgetContainer && this.state.promoWrapper) {
+          widgetContainer.parentNode.replaceChild(
+            this.state.promoWrapper,
+            widgetContainer
+          );
+          this.log(
+            'Переключено на режим промокода - восстановлено поле промокода'
+          );
+        }
       } else {
+        // Переключаемся на режим бонусов
         promoTab.classList.remove('active');
         bonusTab.classList.add('active');
-        var w2 =
-          this.state.promoWrapper ||
-          document.querySelector('.t-inputpromocode__wrapper');
-        if (w2) w2.style.display = 'none';
+
+        // Восстанавливаем виджет вместо поля промокода
+        const promoWrapper = document.querySelector(
+          '.t-inputpromocode__wrapper'
+        );
+        if (
+          promoWrapper &&
+          !document.querySelector('.bonus-widget-container')
+        ) {
+          this.state.promoWrapper = promoWrapper;
+          this.createWidget();
+          this.log('Переключено на режим бонусов - восстановлен виджет');
+        }
         bonusSection.style.display = 'flex';
       }
       // Переключение режима всегда сбрасывает ранее применённые бонусы/визуальные изменения
@@ -706,24 +752,16 @@
         localStorage.setItem('tilda_user_phone', value);
       }
 
-      // Если есть контактные данные, переключаемся с плашки на обычный виджет
+      // Обновляем состояние виджета при изменении контактных данных
+      this.updateWidgetState();
+
+      // Загружаем баланс с дебаунсом (только если есть контактные данные)
       if (this.state.userEmail || this.state.userPhone) {
-        // Скрываем плашку регистрации если она показана
-        this.hideRegistrationPrompt();
-
-        // Создаем обычный виджет
-        this.createWidget();
-
-        this.log(
-          'Пользователь ввел контактные данные - переключаемся на обычный виджет'
-        );
+        this.loadUserBalanceDebounced({
+          email: this.state.userEmail,
+          phone: this.state.userPhone
+        });
       }
-
-      // Загружаем баланс с дебаунсом
-      this.loadUserBalanceDebounced({
-        email: this.state.userEmail,
-        phone: this.state.userPhone
-      });
     },
 
     // Получение контактов пользователя
