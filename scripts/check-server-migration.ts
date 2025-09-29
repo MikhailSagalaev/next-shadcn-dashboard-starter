@@ -35,7 +35,8 @@ async function checkServerMigration() {
     console.log(`\n📊 Найдено проектов: ${projects.length}\n`);
 
     // Выводим детальную информацию по каждому проекту
-    for (const [index, project] of projects.entries()) {
+    for (let index = 0; index < projects.length; index++) {
+      const project = projects[index];
       console.log(`${index + 1}. ${project.name}`);
       console.log(`   ID: ${project.id}`);
       console.log(`   Пользователей: ${project._count.users}`);

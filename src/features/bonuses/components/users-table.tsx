@@ -117,15 +117,6 @@ export function UsersTable({
     }
   }, [pagination, currentPage, pageSize, onPageChange, onPageSizeChange]);
 
-  // Обработчик изменений выбора
-  useEffect(() => {
-    if (onSelectionChange) {
-      const selectedRows = table.getSelectedRowModel().rows;
-      const selectedIds = selectedRows.map((row) => row.original.id);
-      onSelectionChange(selectedIds);
-    }
-  }, [rowSelection, table, onSelectionChange]);
-
   const columns: ColumnDef<User>[] = [
     {
       id: 'select',
@@ -303,6 +294,15 @@ export function UsersTable({
     manualPagination: true, // Отключаем внутреннюю пагинацию
     pageCount: Math.ceil(totalCount / pageSize) // Указываем общее количество страниц
   });
+
+  // Обработчик изменений выбора
+  useEffect(() => {
+    if (onSelectionChange) {
+      const selectedRows = table.getSelectedRowModel().rows;
+      const selectedIds = selectedRows.map((row) => row.original.id);
+      onSelectionChange(selectedIds);
+    }
+  }, [rowSelection, table, onSelectionChange]);
 
   return (
     <div className='space-y-4'>

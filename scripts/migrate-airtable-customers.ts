@@ -133,8 +133,7 @@ class AirtableMigrationService {
           csv({
             separator: ',', // Используем запятую как основной разделитель
             escape: '"', // Экранирование кавычек
-            quote: '"', // Кавычки для полей
-            skipEmptyLines: false
+            quote: '"' // Кавычки для полей
           })
         )
         .on('data', (data) => {
