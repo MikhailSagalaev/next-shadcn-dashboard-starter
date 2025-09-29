@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.6.0
+ * @version: 2.7.0
  * @author: AI Assistant + User
  */
 
@@ -510,7 +510,8 @@
 
           const processedData = {
             welcomeBonusAmount: Number(data?.welcomeBonusAmount || 500),
-            botUsername: data?.botUsername || null
+            botUsername: data?.botUsername || null,
+            widgetSettings: data?.widgetSettings || null
           };
 
           this.log('🔧 Обработанные настройки для плашки:', processedData);
@@ -579,6 +580,23 @@
           ''
         );
 
+        // Используем настройки шаблона или значения по умолчанию
+        const widgetSettings = settings.widgetSettings || {};
+        const templates = {
+          registrationTitle:
+            widgetSettings.registrationTitle ||
+            'Зарегистрируйся и получи {bonusAmount} бонусов!',
+          registrationDescription:
+            widgetSettings.registrationDescription ||
+            'Зарегистрируйся в нашей бонусной программе',
+          registrationButtonText:
+            widgetSettings.registrationButtonText ||
+            'Для участия в акции перейдите в бота',
+          registrationFallbackText:
+            widgetSettings.registrationFallbackText ||
+            'Свяжитесь с администратором для регистрации'
+        };
+
         this.log('🔧 Обработанные данные:', {
           welcomeBonusAmount,
           botUsername
@@ -617,10 +635,10 @@
           ">
             <div class="registration-icon" style="font-size: 24px; margin-bottom: 8px;">🎁</div>
             <div class="registration-title" style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">
-              Зарегистрируйся и получи ${welcomeBonusAmount} бонусов!
+              ${templates.registrationTitle.replace('{bonusAmount}', welcomeBonusAmount)}
             </div>
             <div class="registration-description" style="font-size: 14px; margin-bottom: 12px; opacity: 0.9;">
-              Зарегистрируйся в нашей бонусной программе
+              ${templates.registrationDescription}
             </div>
             <div class="registration-action">
               ${
@@ -636,9 +654,9 @@
                       transition: all 0.3s ease;
                       border: 1px solid rgba(255,255,255,0.3);
                     " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                      Для участия в акции перейдите в бота
+                      ${templates.registrationButtonText}
                     </a>`
-                  : '<div style="font-size: 14px; opacity: 0.8;">Свяжитесь с администратором для регистрации</div>'
+                  : `<div style="font-size: 14px; opacity: 0.8;">${templates.registrationFallbackText}</div>`
               }
             </div>
           </div>
@@ -900,19 +918,9 @@
         promoTab.classList.add('active');
         bonusSection.style.display = 'none';
 
-        // Восстанавливаем оригинальное поле промокода вместо виджета
-        const widgetContainer = document.querySelector(
-          '.bonus-widget-container'
-        );
-        if (widgetContainer && this.state.promoWrapper) {
-          widgetContainer.parentNode.replaceChild(
-            this.state.promoWrapper,
-            widgetContainer
-          );
-          this.log(
-            'Переключено на режим промокода - восстановлено поле промокода'
-          );
-        }
+        // НЕ восстанавливаем поле промокода - просто скрываем секцию бонусов
+        // Виджет остается на месте, но показывает только табы
+        this.log('Переключено на режим промокода - скрыта секция бонусов');
       } else {
         // Переключаемся на режим бонусов
         promoTab.classList.remove('active');

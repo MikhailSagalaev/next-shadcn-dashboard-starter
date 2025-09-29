@@ -199,6 +199,13 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     setSelectedUsers([]);
   };
 
+  // Search handler
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    // TODO: Implement server-side search
+    // For now, just update the state
+  }, []);
+
   // Загружаем проект при монтировании
   useEffect(() => {
     const loadProject = async () => {
@@ -843,6 +850,10 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         selectedCount={selectedUsers.length}
         onClearSelection={() => setSelectedUsers([])}
         onShowRichNotifications={() => setShowRichNotificationDialog(true)}
+        onBulkBonusAction={(action) => {
+          setBulkOperation(action === 'ADD' ? 'bonus_award' : 'bonus_deduct');
+          setShowBulkDialog(true);
+        }}
         onDeleteSelected={handleDeleteSelected}
       />
 

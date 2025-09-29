@@ -68,6 +68,9 @@ export async function GET(
         if (functionalSettings && functionalSettings.welcomeBonusAmount) {
           welcomeBonusAmount = Number(functionalSettings.welcomeBonusAmount);
         }
+
+        // Извлекаем настройки виджета для шаблона регистрации
+        const widgetSettings = functionalSettings?.widgetSettings;
       } catch (e) {
         logger.warn('Ошибка парсинга functionalSettings', { error: e });
       }
@@ -103,11 +106,23 @@ export async function GET(
       hasBotSettings: !!botSettings
     });
 
+    // Извлекаем настройки виджета из functionalSettings
+    let widgetSettings = null;
+    if (botSettings?.functionalSettings) {
+      try {
+        const functionalSettings = botSettings.functionalSettings as any;
+        widgetSettings = functionalSettings.widgetSettings || null;
+      } catch (e) {
+        logger.warn('Ошибка извлечения widgetSettings', { error: e });
+      }
+    }
+
     // Формируем ответ
     const response = {
       ...botSettings,
       welcomeBonusAmount,
-      botUsername
+      botUsername,
+      widgetSettings
     };
 
     return NextResponse.json(response, { headers: createCorsHeaders(request) });
