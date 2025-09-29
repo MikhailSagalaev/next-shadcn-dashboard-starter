@@ -55,30 +55,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DataTablePagination } from '@/components/ui/table/data-table-pagination';
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar';
-
-export type User = {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  bonusBalance: number;
-  totalEarned: number;
-  createdAt: Date;
-  updatedAt: Date;
-  firstName?: string;
-  lastName?: string;
-  telegramId?: string;
-  telegramUsername?: string;
-  isActive?: boolean;
-  currentLevel?: string;
-  referralCode?: string;
-  referredBy?: string;
-  totalPurchases?: number;
-  // Совместимость с UserWithBonuses
-  projectId?: string;
-  birthDate?: Date | null;
-  registeredAt?: Date;
-};
+import type { User } from '../types';
 
 interface UsersTableProps {
   data: User[];

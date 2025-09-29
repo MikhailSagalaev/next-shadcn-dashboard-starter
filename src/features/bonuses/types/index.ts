@@ -8,6 +8,18 @@ export interface User {
   totalEarned: number;
   createdAt: Date;
   updatedAt: Date;
+  firstName?: string;
+  lastName?: string;
+  telegramId?: string;
+  telegramUsername?: string;
+  isActive?: boolean;
+  currentLevel?: string;
+  referralCode?: string;
+  referredBy?: string;
+  totalPurchases?: number;
+  projectId?: string;
+  birthDate?: Date | null;
+  registeredAt?: Date;
 }
 
 export interface BonusTransaction {
