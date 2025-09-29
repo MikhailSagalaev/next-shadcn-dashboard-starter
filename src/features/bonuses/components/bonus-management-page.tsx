@@ -432,8 +432,7 @@ export function BonusManagementPageRefactored({
       import('papaparse').then(({ unparse }) => {
         const csvContent = unparse(csvData, {
           delimiter: ';',
-          header: true,
-          encoding: 'utf-8'
+          header: true
         });
 
         // Создаем и скачиваем файл
