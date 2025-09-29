@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.4
+ * @version: 2.9.5
  * @author: AI Assistant + User
  */
 
@@ -79,8 +79,50 @@
       // Отслеживаем ввод email/телефона
       this.observeUserInput();
 
+      // Загружаем сохраненные данные пользователя из localStorage
+      this.loadUserDataFromStorage();
+
       this.state.initialized = true;
       this.log('Виджет инициализирован', this.config);
+    },
+
+    // Загрузка данных пользователя из localStorage при инициализации
+    loadUserDataFromStorage: function () {
+      try {
+        const savedEmail = localStorage.getItem('tilda_user_email');
+        const savedPhone = localStorage.getItem('tilda_user_phone');
+        const savedAppliedBonuses = localStorage.getItem(
+          'tilda_applied_bonuses'
+        );
+
+        if (savedEmail) {
+          this.state.userEmail = savedEmail;
+          this.log(
+            '📧 Загружен email из localStorage:',
+            savedEmail.substring(0, 3) + '***'
+          );
+        }
+
+        if (savedPhone) {
+          this.state.userPhone = savedPhone;
+          this.log(
+            '📱 Загружен телефон из localStorage:',
+            savedPhone.substring(0, 3) + '***'
+          );
+        }
+
+        if (savedAppliedBonuses) {
+          this.state.appliedBonuses = parseFloat(savedAppliedBonuses) || 0;
+          this.log(
+            '💰 Загружены примененные бонусы из localStorage:',
+            this.state.appliedBonuses
+          );
+        }
+
+        this.log('✅ Данные пользователя загружены из localStorage');
+      } catch (error) {
+        this.log('❌ Ошибка загрузки данных из localStorage:', error);
+      }
     },
 
     // Логирование (только в debug режиме)
@@ -1101,17 +1143,39 @@
 
     // Определяет и обновляет состояние виджета на основе данных пользователя
     updateWidgetState: function () {
+      // Проверяем данные в состоянии виджета (загруженные из localStorage)
+      const hasStoredData = this.state.userEmail || this.state.userPhone;
+
+      // Также проверяем данные через getUserContact() для дополнительной валидации
       const userContact = this.getUserContact();
 
-      if (userContact && (userContact.email || userContact.phone)) {
+      if (
+        hasStoredData ||
+        (userContact && (userContact.email || userContact.phone))
+      ) {
         // У пользователя есть контактные данные - показываем виджет с балансом
-        this.log('Пользователь авторизован - показываем виджет с балансом');
+        this.log('✅ Пользователь авторизован - показываем виджет с балансом', {
+          hasStoredData,
+          userContact: userContact
+            ? {
+                hasEmail: !!userContact.email,
+                hasPhone: !!userContact.phone
+              }
+            : null
+        });
         this.hideRegistrationPrompt();
         this.ensureWidgetMounted();
-        this.loadUserBalance(userContact);
+        this.loadUserBalance(
+          userContact || {
+            email: this.state.userEmail,
+            phone: this.state.userPhone
+          }
+        );
       } else {
         // У пользователя нет контактных данных - показываем плашку регистрации
-        this.log('Пользователь не авторизован - показываем плашку регистрации');
+        this.log(
+          '❌ Пользователь не авторизован - показываем плашку регистрации'
+        );
         this.removeWidget();
         this.showRegistrationPrompt();
       }
