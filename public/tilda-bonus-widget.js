@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.3.0
+ * @version: 2.4.0
  * @author: AI Assistant + User
  */
 
@@ -248,14 +248,14 @@
           Ваш баланс: <span class="bonus-balance-amount">0</span> бонусов
         </div>
         <div id="bonus-section" class="bonus-input-group">
-          <input type="number"
-                 class="bonus-input"
-                 id="bonus-amount-input"
-                 placeholder="Количество бонусов"
+          <input type="number" 
+                 class="bonus-input" 
+                 id="bonus-amount-input" 
+                 placeholder="Количество бонусов" 
                  min="0"
                  style="display: none;">
           <button class="bonus-button" type="button"
-                  id="apply-bonus-button"
+                  id="apply-bonus-button" 
                   onclick="TildaBonusWidget.applyOrReapplyBonuses()"
                   style="display: none;">
             Применить бонусы
@@ -417,6 +417,8 @@
     // Показать плашку с приглашением зарегистрироваться
     showRegistrationPrompt: function () {
       try {
+        this.log('🎯 Показываем плашку регистрации');
+
         // Удаляем существующую плашку если есть
         const existingPrompt = document.querySelector(
           '.registration-prompt-inline'
@@ -434,21 +436,28 @@
           return;
         }
 
-        // Пытаемся загрузить настройки из API, но используем fallback если не получится
+        // Сначала показываем плашку с базовыми данными, потом обновляем
+        const defaultSettings = {
+          welcomeBonusAmount: 500, // Базовое значение
+          botUsername: null
+        };
+
+        // Сразу отрисовываем с базовыми данными
+        this.renderRegistrationPrompt(defaultSettings);
+
+        // Асинхронно пытаемся загрузить реальные настройки и обновить плашку
         this.loadProjectSettingsForPrompt()
           .then((settings) => {
+            this.log(
+              '✅ Настройки проекта загружены, обновляем плашку:',
+              settings
+            );
+            // Перерисовываем с реальными данными
             this.renderRegistrationPrompt(settings);
           })
           .catch((error) => {
-            this.log(
-              'Не удалось загрузить настройки проекта, используем значения по умолчанию:',
-              error
-            );
-            // Используем значения по умолчанию
-            this.renderRegistrationPrompt({
-              welcomeBonusAmount: 0,
-              botUsername: null
-            });
+            this.log('❌ Не удалось загрузить настройки проекта:', error);
+            // Плашка уже показана с базовыми данными, ничего не делаем
           });
       } catch (error) {
         this.log('Ошибка при показе плашки регистрации:', error);
@@ -458,26 +467,75 @@
     // Загружаем настройки для плашки с fallback
     loadProjectSettingsForPrompt: async function () {
       try {
+        this.log('📡 Загружаем настройки проекта для плашки...');
+
         // Проверяем локальное хранилище сначала
         const cachedSettings = this.getCachedProjectSettings();
         if (cachedSettings) {
+          this.log('📋 Используем кэшированные настройки:', cachedSettings);
           return cachedSettings;
         }
 
-        // Если нет в кэше, пытаемся загрузить из API
-        const settings = await this.loadProjectSettings();
+        this.log('🌐 Кэш пуст, загружаем из API...');
+
+        // Если нет в кэше, пытаемся загрузить из API с упрощенным методом
+        const settings = await this.loadProjectSettingsSimple();
 
         // Сохраняем в кэш на 1 час
         this.cacheProjectSettings(settings, 60 * 60 * 1000);
 
+        this.log('✅ Настройки загружены и сохранены в кэш:', settings);
         return settings;
       } catch (error) {
-        this.log('Ошибка загрузки настроек проекта:', error);
+        this.log('❌ Ошибка загрузки настроек проекта:', error);
         // Возвращаем значения по умолчанию
-        return {
-          welcomeBonusAmount: 0,
+        const defaultSettings = {
+          welcomeBonusAmount: 500, // Базовое значение
           botUsername: null
         };
+        this.log('🔄 Используем значения по умолчанию:', defaultSettings);
+        return defaultSettings;
+      }
+    },
+
+    // Упрощенная загрузка настроек без лишних заголовков
+    loadProjectSettingsSimple: async function () {
+      try {
+        const cacheBuster = Date.now();
+        const url = `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`;
+
+        this.log('🔗 Запрос к API:', url);
+
+        // Простой fetch без сложных заголовков
+        const response = await fetch(url, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-cache'
+        });
+
+        this.log('📊 Ответ API:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          this.log('📦 Данные от API:', data);
+
+          return {
+            welcomeBonusAmount: Number(data?.welcomeBonusAmount || 500),
+            botUsername: data?.botUsername || null
+          };
+        } else {
+          throw new Error(
+            `API error: ${response.status} ${response.statusText}`
+          );
+        }
+      } catch (error) {
+        this.log('🚨 Ошибка при запросе к API:', error);
+        throw error;
       }
     },
 
@@ -524,20 +582,36 @@
     // Отрисовка плашки регистрации
     renderRegistrationPrompt: function (settings) {
       try {
+        this.log('🎨 Отрисовываем плашку регистрации с настройками:', settings);
+
         // Экранируем данные для безопасности
-        const welcomeBonusAmount = Number(settings.welcomeBonusAmount || 0);
+        const welcomeBonusAmount = Number(settings.welcomeBonusAmount || 500);
         const botUsername = String(settings.botUsername || '').replace(
           /[<>'"&]/g,
           ''
         );
+
+        this.log('🔧 Обработанные данные:', {
+          welcomeBonusAmount,
+          botUsername
+        });
 
         // Ищем контейнер поля промокода
         const promocodeWrapper = document.querySelector(
           '.t-inputpromocode__wrapper'
         );
         if (!promocodeWrapper) {
-          this.log('Контейнер поля промокода не найден при отрисовке');
+          this.log('❌ Контейнер поля промокода не найден при отрисовке');
           return;
+        }
+
+        // Удаляем существующую плашку перед добавлением новой
+        const existingPrompt = promocodeWrapper.querySelector(
+          '.registration-prompt-inline'
+        );
+        if (existingPrompt) {
+          existingPrompt.remove();
+          this.log('🗑️ Удалена существующая плашка');
         }
 
         // Создаем плашку регистрации внутри поля промокода
@@ -575,7 +649,11 @@
         // Добавляем плашку в контейнер поля промокода
         promocodeWrapper.appendChild(promptDiv);
 
-        this.log('Показана плашка регистрации в поле промокода', settings);
+        this.log('✅ Плашка регистрации успешно отображена:', {
+          welcomeBonusAmount,
+          botUsername,
+          hasButton: !!botUsername
+        });
       } catch (error) {
         this.log('Ошибка показа плашки регистрации:', error);
       }
