@@ -14,6 +14,18 @@ import { botManager } from '@/lib/telegram/bot-manager';
 import type { BotSettings } from '@/types/bonus';
 import { logger } from '@/lib/logger';
 
+// CORS заголовки для виджета
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
+
+// OPTIONS handler для CORS preflight
+export async function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
+}
+
 // GET /api/projects/[id]/bot - Получение настроек бота
 export async function GET(
   request: NextRequest,
@@ -33,7 +45,16 @@ export async function GET(
       where: { projectId: id }
     });
 
-    return NextResponse.json(botSettings);
+    // Получаем welcomeBonusAmount из meta проекта
+    const welcomeBonusAmount = Number(project.meta?.welcomeBonus || 0);
+
+    // Добавляем welcomeBonusAmount к ответу
+    const response = {
+      ...botSettings,
+      welcomeBonusAmount
+    };
+
+    return NextResponse.json(response, { headers: corsHeaders });
   } catch (error) {
     logger.error(
       'Ошибка получения настроек бота',

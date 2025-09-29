@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.7.0
+ * @version: 1.8.0
  * @author: AI Assistant + User
  */
 
@@ -200,6 +200,19 @@
         .registration-button:hover {
           background: #333333;
         }
+
+        /* Стили для overlay плашки регистрации */
+        .registration-prompt-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 1000;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(4px);
+          border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
       `;
       document.head.appendChild(style);
       // Контейнер создаём лениво — только когда пользователь найден
@@ -288,11 +301,8 @@
 
         if (response.ok) {
           const settings = await response.json();
-          const functionalSettings = settings?.functionalSettings || {};
           return {
-            welcomeBonusAmount: Number(
-              functionalSettings.welcomeBonusAmount || 0
-            ),
+            welcomeBonusAmount: Number(settings?.welcomeBonusAmount || 0),
             botUsername: settings?.botUsername || null
           };
         }
@@ -302,22 +312,33 @@
       return { welcomeBonusAmount: 0, botUsername: null };
     },
 
+    // Скрыть плашку регистрации
+    hideRegistrationPrompt: function () {
+      const overlay = document.querySelector('.registration-prompt-overlay');
+      if (overlay) {
+        overlay.remove();
+        this.log('Скрыта плашка регистрации');
+      }
+    },
+
     // Показать плашку с приглашением зарегистрироваться
     showRegistrationPrompt: async function () {
       try {
         // Загружаем настройки проекта
         const settings = await this.loadProjectSettings();
 
-        // Создаем виджет если его нет
-        if (!document.querySelector('.bonus-widget-container')) {
-          this.createWidget();
+        // Удаляем существующую плашку если есть
+        const existingPrompt = document.querySelector(
+          '.registration-prompt-overlay'
+        );
+        if (existingPrompt) {
+          existingPrompt.remove();
         }
 
-        const container = document.querySelector('.bonus-widget-container');
-        if (!container) return;
-
-        // Очищаем содержимое и добавляем плашку регистрации
-        container.innerHTML = `
+        // Создаем плашку регистрации как overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'registration-prompt-overlay';
+        overlay.innerHTML = `
           <div class="registration-prompt">
             <div class="registration-icon">🎁</div>
             <div class="registration-title">Зарегистрируйся и получи ${settings.welcomeBonusAmount || 0} бонусов!</div>
@@ -328,13 +349,19 @@
               ${
                 settings.botUsername
                   ? `<a href="https://t.me/${settings.botUsername}" target="_blank" class="registration-button">
-                  Для участия в акции перейдите в бота
-                </a>`
+                      Для участия в акции перейдите в бота
+                    </a>`
                   : 'Свяжитесь с администратором для регистрации'
               }
             </div>
           </div>
         `;
+
+        // Добавляем overlay в корзину
+        const cart = document.querySelector('.t706__cartwin');
+        if (cart) {
+          cart.appendChild(overlay);
+        }
 
         this.log('Показана плашка регистрации', settings);
       } catch (error) {
@@ -629,7 +656,8 @@
       // Сбрасываем промокоды
       this.clearAllPromocodes();
 
-      // Показываем плашку регистрации
+      // Скрываем обычный виджет и показываем плашку регистрации
+      this.removeWidget();
       this.showRegistrationPrompt();
 
       this.log('✅ Данные пользователя очищены, показана плашка регистрации');
@@ -650,14 +678,15 @@
 
       // Если есть контактные данные, переключаемся с плашки на обычный виджет
       if (this.state.userEmail || this.state.userPhone) {
-        // Если сейчас показывается плашка регистрации, переключаемся на обычный виджет
-        const container = document.querySelector('.bonus-widget-container');
-        if (container && container.querySelector('.registration-prompt')) {
-          this.log(
-            'Пользователь ввел контактные данные - переключаемся на обычный виджет'
-          );
-          this.createWidget(); // Пересоздаем виджет с обычным интерфейсом
-        }
+        // Скрываем плашку регистрации если она показана
+        this.hideRegistrationPrompt();
+
+        // Создаем обычный виджет
+        this.createWidget();
+
+        this.log(
+          'Пользователь ввел контактные данные - переключаемся на обычный виджет'
+        );
       }
 
       // Загружаем баланс с дебаунсом
