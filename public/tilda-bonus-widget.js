@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.1.0
+ * @version: 1.3.0
  * @author: AI Assistant + User
  */
 
@@ -146,6 +146,60 @@
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+
+        /* Стили для плашки регистрации */
+        .registration-prompt {
+          text-align: center;
+          padding: 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          background: #ffffff;
+          margin-bottom: 12px;
+        }
+
+        .registration-icon {
+          font-size: 32px;
+          margin-bottom: 12px;
+        }
+
+        .registration-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: #111827;
+          margin-bottom: 8px;
+        }
+
+        .registration-description {
+          font-size: 14px;
+          color: #6b7280;
+          line-height: 1.4;
+          margin-bottom: 16px;
+        }
+
+        .registration-description strong {
+          color: #059669;
+          font-weight: 600;
+        }
+
+        .registration-action {
+          margin-top: 12px;
+        }
+
+        .registration-button {
+          display: inline-block;
+          padding: 10px 16px;
+          background: #000000;
+          color: #ffffff;
+          text-decoration: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 500;
+          transition: background-color 0.2s;
+        }
+
+        .registration-button:hover {
+          background: #333333;
+        }
       `;
       document.head.appendChild(style);
       // Контейнер создаём лениво — только когда пользователь найден
@@ -217,6 +271,79 @@
         this.createWidget();
       }
       return !!document.querySelector('.bonus-widget-container');
+    },
+
+    // Получить настройки проекта для плашки регистрации
+    loadProjectSettings: async function () {
+      try {
+        const response = await fetch(
+          `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (response.ok) {
+          const settings = await response.json();
+          const functionalSettings = settings?.functionalSettings || {};
+          return {
+            welcomeBonusAmount: Number(
+              functionalSettings.welcomeBonusAmount || 0
+            ),
+            botUsername: settings?.botUsername || null
+          };
+        }
+      } catch (error) {
+        this.log('Ошибка загрузки настроек проекта:', error);
+      }
+      return { welcomeBonusAmount: 0, botUsername: null };
+    },
+
+    // Показать плашку с приглашением зарегистрироваться
+    showRegistrationPrompt: async function () {
+      try {
+        // Загружаем настройки проекта
+        const settings = await this.loadProjectSettings();
+
+        // Создаем виджет если его нет
+        if (!document.querySelector('.bonus-widget-container')) {
+          this.createWidget();
+        }
+
+        const container = document.querySelector('.bonus-widget-container');
+        if (!container) return;
+
+        // Очищаем содержимое и добавляем плашку регистрации
+        container.innerHTML = `
+          <div class="registration-prompt">
+            <div class="registration-icon">🎁</div>
+            <div class="registration-title">Зарегистрируйся и получи бонусы!</div>
+            <div class="registration-description">
+              ${
+                settings.welcomeBonusAmount > 0
+                  ? `Зарегистрируйся и получи <strong>${settings.welcomeBonusAmount} приветственных бонусов</strong>`
+                  : 'Зарегистрируйся в нашей бонусной программе'
+              }
+            </div>
+            ${
+              settings.botUsername
+                ? `<div class="registration-action">
+                <a href="https://t.me/${settings.botUsername}" target="_blank" class="registration-button">
+                  Перейти в Telegram бот
+                </a>
+              </div>`
+                : '<div class="registration-action">Свяжитесь с администратором для регистрации</div>'
+            }
+          </div>
+        `;
+
+        this.log('Показана плашка регистрации', settings);
+      } catch (error) {
+        this.log('Ошибка показа плашки регистрации:', error);
+      }
     },
 
     // Полностью скрыть/удалить виджет, если пользователь не найден/не авторизован
@@ -518,8 +645,8 @@
             );
           }
         } else {
-          // Пользователь не найден/не авторизован — виджет не показываем вовсе
-          this.removeWidget();
+          // Пользователь не найден/не авторизован — показываем плашку с приглашением зарегистрироваться
+          this.showRegistrationPrompt();
         }
       } catch (error) {
         if (error && error.name === 'AbortError') {
@@ -541,44 +668,26 @@
           return;
         }
 
-        // Рассчитываем новый максимум для текущей корзины
-        const originalCartTotal = this.getOriginalCartTotal();
-        let newMaxBonuses = Math.min(
-          this.state.bonusBalance,
-          originalCartTotal
+        this.log(
+          'Обнаружено изменение корзины с примененными бонусами - удаляем промокод'
         );
 
-        // Применяем ограничение по уровню пользователя
-        if (this.state.levelInfo && this.state.levelInfo.paymentPercent < 100) {
-          const maxByLevel =
-            (originalCartTotal * this.state.levelInfo.paymentPercent) / 100;
-          newMaxBonuses = Math.min(newMaxBonuses, maxByLevel);
-        }
+        // Полностью очищаем промокод при любом изменении корзины
+        this.clearAllPromocodes();
 
-        // Если текущие примененные бонусы превышают новый максимум
-        if (this.state.appliedBonuses > newMaxBonuses) {
-          const oldAmount = this.state.appliedBonuses;
-          const newAmount = Math.min(oldAmount, newMaxBonuses);
+        // Сбрасываем состояние бонусов
+        this.state.appliedBonuses = 0;
+        localStorage.setItem('tilda_applied_bonuses', '0');
 
-          this.log(
-            `Корректируем бонусы: ${oldAmount} → ${newAmount} (новый максимум: ${newMaxBonuses})`
-          );
+        // Обновляем отображение
+        this.updateBalanceDisplay();
 
-          // Сохраняем новое значение
-          this.state.appliedBonuses = newAmount;
-          localStorage.setItem('tilda_applied_bonuses', newAmount);
+        // Показываем уведомление пользователю
+        this.showInfo(
+          'Бонусы отменены из-за изменения корзины. Примените заново при необходимости.'
+        );
 
-          // Обновляем скрытое поле
-          this.updateHiddenBonusField(newAmount);
-
-          // Переприменяем бонусы с новым количеством
-          this.reapplyBonusesWithAmount(newAmount);
-
-          // Показываем уведомление пользователю
-          this.showInfo(
-            `Количество бонусов скорректировано до ${newAmount}₽ из-за изменения корзины`
-          );
-        }
+        this.log('Промокод полностью удален из-за изменения корзины');
       } catch (error) {
         this.log('Ошибка при корректировке бонусов:', error);
       }

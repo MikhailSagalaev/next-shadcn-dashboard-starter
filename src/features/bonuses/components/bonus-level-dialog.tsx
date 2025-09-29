@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -37,7 +37,10 @@ import { toast } from 'sonner';
 import { BonusLevel } from '@/types/bonus';
 
 const formSchema = z.object({
-  name: z.string().min(1, 'Название обязательно').max(50, 'Максимум 50 символов'),
+  name: z
+    .string()
+    .min(1, 'Название обязательно')
+    .max(50, 'Максимум 50 символов'),
   minAmount: z.number().min(0, 'Минимальная сумма не может быть отрицательной'),
   maxAmount: z.number().optional().nullable(),
   bonusPercent: z.number().min(0).max(100, 'Процент должен быть от 0 до 100'),
@@ -75,6 +78,18 @@ export function BonusLevelDialog({
     }
   });
 
+  // Обновляем форму при изменении level пропса
+  useEffect(() => {
+    form.reset({
+      name: level?.name || '',
+      minAmount: level?.minAmount || 0,
+      maxAmount: level?.maxAmount || null,
+      bonusPercent: level?.bonusPercent || 5,
+      paymentPercent: level?.paymentPercent || 10,
+      isActive: level?.isActive ?? true
+    });
+  }, [level, form]);
+
   async function onSubmit(values: FormValues) {
     setLoading(true);
 
@@ -108,7 +123,7 @@ export function BonusLevelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[525px]">
+      <DialogContent className='sm:max-w-[525px]'>
         <DialogHeader>
           <DialogTitle>
             {isEditing ? 'Редактировать уровень' : 'Создать уровень'}
@@ -119,15 +134,15 @@ export function BonusLevelDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
             <FormField
               control={form.control}
-              name="name"
+              name='name'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Название уровня</FormLabel>
                   <FormControl>
-                    <Input placeholder="Например: Золотой" {...field} />
+                    <Input placeholder='Например: Золотой' {...field} />
                   </FormControl>
                   <FormDescription>
                     Название, которое увидят пользователи
@@ -137,24 +152,22 @@ export function BonusLevelDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className='grid grid-cols-2 gap-4'>
               <FormField
                 control={form.control}
-                name="minAmount"
+                name='minAmount'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Минимальная сумма</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        placeholder="0"
+                        type='number'
+                        placeholder='0'
                         {...field}
                         onChange={(e) => field.onChange(Number(e.target.value))}
                       />
                     </FormControl>
-                    <FormDescription>
-                      От какой суммы покупок
-                    </FormDescription>
+                    <FormDescription>От какой суммы покупок</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -162,14 +175,14 @@ export function BonusLevelDialog({
 
               <FormField
                 control={form.control}
-                name="maxAmount"
+                name='maxAmount'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Максимальная сумма</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        placeholder="Не ограничено"
+                        type='number'
+                        placeholder='Не ограничено'
                         {...field}
                         value={field.value || ''}
                         onChange={(e) => {
@@ -187,28 +200,28 @@ export function BonusLevelDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className='grid grid-cols-2 gap-4'>
               <FormField
                 control={form.control}
-                name="bonusPercent"
+                name='bonusPercent'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Процент начисления</FormLabel>
                     <FormControl>
-                      <div className="flex items-center gap-2">
+                      <div className='flex items-center gap-2'>
                         <Input
-                          type="number"
-                          min="0"
-                          max="100"
+                          type='number'
+                          min='0'
+                          max='100'
                           {...field}
-                          onChange={(e) => field.onChange(Number(e.target.value))}
+                          onChange={(e) =>
+                            field.onChange(Number(e.target.value))
+                          }
                         />
-                        <span className="text-muted-foreground">%</span>
+                        <span className='text-muted-foreground'>%</span>
                       </div>
                     </FormControl>
-                    <FormDescription>
-                      Сколько бонусов начислять
-                    </FormDescription>
+                    <FormDescription>Сколько бонусов начислять</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -216,20 +229,22 @@ export function BonusLevelDialog({
 
               <FormField
                 control={form.control}
-                name="paymentPercent"
+                name='paymentPercent'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Процент оплаты</FormLabel>
                     <FormControl>
-                      <div className="flex items-center gap-2">
+                      <div className='flex items-center gap-2'>
                         <Input
-                          type="number"
-                          min="0"
-                          max="100"
+                          type='number'
+                          min='0'
+                          max='100'
                           {...field}
-                          onChange={(e) => field.onChange(Number(e.target.value))}
+                          onChange={(e) =>
+                            field.onChange(Number(e.target.value))
+                          }
                         />
-                        <span className="text-muted-foreground">%</span>
+                        <span className='text-muted-foreground'>%</span>
                       </div>
                     </FormControl>
                     <FormDescription>
@@ -243,11 +258,11 @@ export function BonusLevelDialog({
 
             <FormField
               control={form.control}
-              name="isActive"
+              name='isActive'
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">
+                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                  <div className='space-y-0.5'>
+                    <FormLabel className='text-base'>
                       Активный уровень
                     </FormLabel>
                     <FormDescription>
@@ -266,14 +281,14 @@ export function BonusLevelDialog({
 
             <DialogFooter>
               <Button
-                type="button"
-                variant="outline"
+                type='button'
+                variant='outline'
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
               >
                 Отмена
               </Button>
-              <Button type="submit" disabled={loading}>
+              <Button type='submit' disabled={loading}>
                 {loading ? 'Сохранение...' : 'Сохранить'}
               </Button>
             </DialogFooter>
