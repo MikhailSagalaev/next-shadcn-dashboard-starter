@@ -2,7 +2,7 @@
  * Production-ready утилиты для бонусной системы
  */
 
-import type { User, BonusTransaction } from '../types';
+import type { DisplayUser as User, BonusTransaction } from '../types';
 
 /**
  * Валидация данных пользователя перед сохранением

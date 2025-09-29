@@ -10,7 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -19,7 +19,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -28,11 +28,11 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AlertTriangle, Coins, User } from 'lucide-react';
 import { useBonusStore } from '../stores/bonus-store';
-import type { User as UserType } from '../types';
+import type { DisplayUser as UserType } from '../types';
 
 const deductionSchema = z.object({
   amount: z.number().min(1, 'Сумма должна быть больше 0'),
-  description: z.string().min(3, 'Описание должно содержать минимум 3 символа'),
+  description: z.string().min(3, 'Описание должно содержать минимум 3 символа')
 });
 
 type DeductionFormValues = z.infer<typeof deductionSchema>;
@@ -46,7 +46,7 @@ interface BonusDeductionDialogProps {
 export function BonusDeductionDialog({
   open,
   onOpenChange,
-  user,
+  user
 }: BonusDeductionDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { deductBonusFromUser } = useBonusStore();
@@ -55,8 +55,8 @@ export function BonusDeductionDialog({
     resolver: zodResolver(deductionSchema),
     defaultValues: {
       amount: 0,
-      description: '',
-    },
+      description: ''
+    }
   });
 
   const watchedAmount = form.watch('amount');
@@ -90,10 +90,10 @@ export function BonusDeductionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className='sm:max-w-[500px]'>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Coins className="h-5 w-5 text-red-500" />
+          <DialogTitle className='flex items-center gap-2'>
+            <Coins className='h-5 w-5 text-red-500' />
             Списание бонусов
           </DialogTitle>
           <DialogDescription>
@@ -102,47 +102,48 @@ export function BonusDeductionDialog({
         </DialogHeader>
 
         {/* Информация о пользователе */}
-        <div className="rounded-lg border p-4 bg-muted/50">
-          <div className="flex items-center gap-3 mb-3">
-            <Avatar className="h-10 w-10">
+        <div className='bg-muted/50 rounded-lg border p-4'>
+          <div className='mb-3 flex items-center gap-3'>
+            <Avatar className='h-10 w-10'>
               <AvatarImage src={user.avatar} alt={user.name} />
               <AvatarFallback>
-                <User className="h-4 w-4" />
+                <User className='h-4 w-4' />
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
-              <h4 className="font-medium">{user.name}</h4>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
+            <div className='flex-1'>
+              <h4 className='font-medium'>{user.name}</h4>
+              <p className='text-muted-foreground text-sm'>{user.email}</p>
             </div>
           </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Текущий баланс:</span>
-            <Badge variant="secondary" className="text-lg font-bold">
+
+          <div className='flex items-center justify-between'>
+            <span className='text-sm font-medium'>Текущий баланс:</span>
+            <Badge variant='secondary' className='text-lg font-bold'>
               {user.bonusBalance.toLocaleString()} бонусов
             </Badge>
           </div>
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
             <FormField
               control={form.control}
-              name="amount"
+              name='amount'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Сумма списания</FormLabel>
                   <FormControl>
                     <Input
-                      type="number"
-                      placeholder="Введите количество бонусов"
+                      type='number'
+                      placeholder='Введите количество бонусов'
                       {...field}
                       onChange={(e) => field.onChange(Number(e.target.value))}
                       className={isInsufficientFunds ? 'border-red-500' : ''}
                     />
                   </FormControl>
                   <FormDescription>
-                    Максимальная сумма: {user.bonusBalance.toLocaleString()} бонусов
+                    Максимальная сумма: {user.bonusBalance.toLocaleString()}{' '}
+                    бонусов
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -151,9 +152,9 @@ export function BonusDeductionDialog({
 
             {/* Предупреждение о недостатке средств */}
             {isInsufficientFunds && watchedAmount > 0 && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700">
-                <AlertTriangle className="h-4 w-4" />
-                <span className="text-sm font-medium">
+              <div className='flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700'>
+                <AlertTriangle className='h-4 w-4' />
+                <span className='text-sm font-medium'>
                   Недостаточно бонусов на балансе
                 </span>
               </div>
@@ -161,10 +162,10 @@ export function BonusDeductionDialog({
 
             {/* Предварительный расчет */}
             {watchedAmount > 0 && !isInsufficientFunds && (
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                <div className="flex justify-between items-center text-sm">
+              <div className='rounded-lg border border-blue-200 bg-blue-50 p-3'>
+                <div className='flex items-center justify-between text-sm'>
                   <span>Баланс после списания:</span>
-                  <span className="font-bold text-blue-700">
+                  <span className='font-bold text-blue-700'>
                     {remainingBalance.toLocaleString()} бонусов
                   </span>
                 </div>
@@ -173,13 +174,13 @@ export function BonusDeductionDialog({
 
             <FormField
               control={form.control}
-              name="description"
+              name='description'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Причина списания</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Укажите причину списания бонусов..."
+                      placeholder='Укажите причину списания бонусов...'
                       {...field}
                     />
                   </FormControl>
@@ -191,20 +192,22 @@ export function BonusDeductionDialog({
               )}
             />
 
-            <DialogFooter className="gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+            <DialogFooter className='gap-2'>
+              <Button
+                type='button'
+                variant='outline'
                 onClick={handleCancel}
                 disabled={isSubmitting}
               >
                 Отмена
               </Button>
-              <Button 
-                type="submit" 
-                variant="destructive"
-                disabled={isSubmitting || isInsufficientFunds || watchedAmount <= 0}
-                className="min-w-[100px]"
+              <Button
+                type='submit'
+                variant='destructive'
+                disabled={
+                  isSubmitting || isInsufficientFunds || watchedAmount <= 0
+                }
+                className='min-w-[100px]'
               >
                 {isSubmitting ? 'Списание...' : 'Списать'}
               </Button>

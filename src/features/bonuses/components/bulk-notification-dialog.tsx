@@ -10,7 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -19,7 +19,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -28,11 +28,11 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Mail, User, Send } from 'lucide-react';
-import type { User as UserType } from '../types';
+import type { DisplayUser as UserType } from '../types';
 
 const notificationSchema = z.object({
   title: z.string().min(3, 'Заголовок должен содержать минимум 3 символа'),
-  message: z.string().min(10, 'Сообщение должно содержать минимум 10 символов'),
+  message: z.string().min(10, 'Сообщение должно содержать минимум 10 символов')
 });
 
 type NotificationFormValues = z.infer<typeof notificationSchema>;
@@ -46,7 +46,7 @@ interface BulkNotificationDialogProps {
 export function BulkNotificationDialog({
   open,
   onOpenChange,
-  selectedUsers,
+  selectedUsers
 }: BulkNotificationDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,8 +54,8 @@ export function BulkNotificationDialog({
     resolver: zodResolver(notificationSchema),
     defaultValues: {
       title: '',
-      message: '',
-    },
+      message: ''
+    }
   });
 
   const onSubmit = async (data: NotificationFormValues) => {
@@ -64,11 +64,11 @@ export function BulkNotificationDialog({
       // Здесь была бы логика отправки уведомлений
       console.log('Отправка уведомлений:', {
         ...data,
-        recipients: selectedUsers.map(u => ({ id: u.id, email: u.email })),
+        recipients: selectedUsers.map((u) => ({ id: u.id, email: u.email }))
       });
 
       // Симуляция отправки
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       form.reset();
       onOpenChange(false);
@@ -86,10 +86,10 @@ export function BulkNotificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh]">
+      <DialogContent className='max-h-[90vh] sm:max-w-[600px]'>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-blue-500" />
+          <DialogTitle className='flex items-center gap-2'>
+            <Mail className='h-5 w-5 text-blue-500' />
             Массовая отправка уведомлений
           </DialogTitle>
           <DialogDescription>
@@ -97,39 +97,41 @@ export function BulkNotificationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className='space-y-4'>
           {/* Список получателей */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium text-sm">
+          <div className='space-y-2'>
+            <div className='flex items-center justify-between'>
+              <h4 className='text-sm font-medium'>
                 Получатели ({selectedUsers.length})
               </h4>
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant='secondary' className='text-xs'>
                 {selectedUsers.length} пользователей
               </Badge>
             </div>
 
-            <ScrollArea className="h-32 w-full border rounded-md p-2">
-              <div className="space-y-2">
+            <ScrollArea className='h-32 w-full rounded-md border p-2'>
+              <div className='space-y-2'>
                 {selectedUsers.map((user) => (
-                  <div 
-                    key={user.id} 
-                    className="flex items-center gap-2 p-2 rounded text-sm bg-muted/30"
+                  <div
+                    key={user.id}
+                    className='bg-muted/30 flex items-center gap-2 rounded p-2 text-sm'
                   >
-                    <Avatar className="h-6 w-6">
+                    <Avatar className='h-6 w-6'>
                       <AvatarImage src={user.avatar} alt={user.name} />
-                      <AvatarFallback className="text-xs">
-                        <User className="h-3 w-3" />
+                      <AvatarFallback className='text-xs'>
+                        <User className='h-3 w-3' />
                       </AvatarFallback>
                     </Avatar>
-                    
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{user.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+
+                    <div className='min-w-0 flex-1'>
+                      <p className='truncate font-medium'>{user.name}</p>
+                      <p className='text-muted-foreground truncate text-xs'>
+                        {user.email}
+                      </p>
                     </div>
-                    
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">
+
+                    <div className='text-right'>
+                      <p className='text-muted-foreground text-xs'>
                         {user.bonusBalance.toLocaleString()} бонусов
                       </p>
                     </div>
@@ -140,18 +142,15 @@ export function BulkNotificationDialog({
           </div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
               <FormField
                 control={form.control}
-                name="title"
+                name='title'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Заголовок уведомления</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Введите заголовок..."
-                        {...field}
-                      />
+                      <Input placeholder='Введите заголовок...' {...field} />
                     </FormControl>
                     <FormDescription>
                       Краткий заголовок, который увидят пользователи
@@ -163,13 +162,13 @@ export function BulkNotificationDialog({
 
               <FormField
                 control={form.control}
-                name="message"
+                name='message'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Текст сообщения</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Введите текст уведомления..."
+                        placeholder='Введите текст уведомления...'
                         rows={4}
                         {...field}
                       />
@@ -183,38 +182,47 @@ export function BulkNotificationDialog({
               />
 
               {/* Шаблоны сообщений */}
-              <div className="space-y-2">
+              <div className='space-y-2'>
                 <FormLabel>Быстрые шаблоны</FormLabel>
-                <div className="grid grid-cols-1 gap-2">
+                <div className='grid grid-cols-1 gap-2'>
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
+                    type='button'
+                    variant='outline'
+                    size='sm'
                     onClick={() => {
                       form.setValue('title', 'Не забудьте потратить бонусы!');
-                      form.setValue('message', 'У вас есть бонусы, которые скоро истекут. Используйте их для получения скидок на следующие покупки!');
+                      form.setValue(
+                        'message',
+                        'У вас есть бонусы, которые скоро истекут. Используйте их для получения скидок на следующие покупки!'
+                      );
                     }}
                   >
                     Напоминание об истекающих бонусах
                   </Button>
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
+                    type='button'
+                    variant='outline'
+                    size='sm'
                     onClick={() => {
                       form.setValue('title', 'Новые бонусы начислены!');
-                      form.setValue('message', 'Поздравляем! Вам начислены новые бонусы. Проверьте свой баланс и используйте их при следующей покупке.');
+                      form.setValue(
+                        'message',
+                        'Поздравляем! Вам начислены новые бонусы. Проверьте свой баланс и используйте их при следующей покупке.'
+                      );
                     }}
                   >
                     Уведомление о начислении
                   </Button>
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
+                    type='button'
+                    variant='outline'
+                    size='sm'
                     onClick={() => {
                       form.setValue('title', 'Специальное предложение');
-                      form.setValue('message', 'Только для вас! Специальная акция с повышенным начислением бонусов. Не упустите возможность!');
+                      form.setValue(
+                        'message',
+                        'Только для вас! Специальная акция с повышенным начислением бонусов. Не упустите возможность!'
+                      );
                     }}
                   >
                     Специальное предложение
@@ -224,37 +232,43 @@ export function BulkNotificationDialog({
 
               {/* Предварительный просмотр */}
               {form.watch('title') && form.watch('message') && (
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
-                  <div className="flex items-center gap-2 text-blue-700">
-                    <Mail className="h-4 w-4" />
-                    <span className="font-medium">Предварительный просмотр</span>
+                <div className='space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-3'>
+                  <div className='flex items-center gap-2 text-blue-700'>
+                    <Mail className='h-4 w-4' />
+                    <span className='font-medium'>
+                      Предварительный просмотр
+                    </span>
                   </div>
-                  <div className="text-sm">
-                    <div className="font-medium mb-1">{form.watch('title')}</div>
-                    <div className="text-muted-foreground">{form.watch('message')}</div>
+                  <div className='text-sm'>
+                    <div className='mb-1 font-medium'>
+                      {form.watch('title')}
+                    </div>
+                    <div className='text-muted-foreground'>
+                      {form.watch('message')}
+                    </div>
                   </div>
                 </div>
               )}
 
-              <DialogFooter className="gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+              <DialogFooter className='gap-2'>
+                <Button
+                  type='button'
+                  variant='outline'
                   onClick={handleCancel}
                   disabled={isSubmitting}
                 >
                   Отмена
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type='submit'
                   disabled={isSubmitting || selectedUsers.length === 0}
-                  className="min-w-[120px]"
+                  className='min-w-[120px]'
                 >
                   {isSubmitting ? (
                     'Отправка...'
                   ) : (
                     <>
-                      <Send className="h-4 w-4 mr-2" />
+                      <Send className='mr-2 h-4 w-4' />
                       Отправить
                     </>
                   )}

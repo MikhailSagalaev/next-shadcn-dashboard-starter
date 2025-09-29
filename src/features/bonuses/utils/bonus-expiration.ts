@@ -1,4 +1,8 @@
-import type { BonusTransaction, BonusNotification, User } from '../types';
+import type {
+  BonusTransaction,
+  BonusNotification,
+  DisplayUser as User
+} from '../types';
 
 export interface ExpiringBonusInfo {
   userId: string;
@@ -19,29 +23,39 @@ export function findExpiringBonuses(
 ): ExpiringBonusInfo[] {
   const now = new Date();
   const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-  
+
   const expiringBonuses: ExpiringBonusInfo[] = [];
-  
+
   // Группируем транзакции по пользователям
   const userTransactions = transactions
-    .filter(t => t.type === 'EARN' && t.expiresAt && t.expiresAt > now && t.expiresAt <= futureDate)
-    .reduce((acc, transaction) => {
-      if (!acc[transaction.userId]) {
-        acc[transaction.userId] = [];
-      }
-      acc[transaction.userId].push(transaction);
-      return acc;
-    }, {} as Record<string, BonusTransaction[]>);
+    .filter(
+      (t) =>
+        t.type === 'EARN' &&
+        t.expiresAt &&
+        t.expiresAt > now &&
+        t.expiresAt <= futureDate
+    )
+    .reduce(
+      (acc, transaction) => {
+        if (!acc[transaction.userId]) {
+          acc[transaction.userId] = [];
+        }
+        acc[transaction.userId].push(transaction);
+        return acc;
+      },
+      {} as Record<string, BonusTransaction[]>
+    );
 
   // Создаем информацию об истекающих бонусах для каждого пользователя
   Object.entries(userTransactions).forEach(([userId, userTxs]) => {
-    const user = users.find(u => u.id === userId);
+    const user = users.find((u) => u.id === userId);
     if (!user) return;
 
-    userTxs.forEach(transaction => {
+    userTxs.forEach((transaction) => {
       if (transaction.expiresAt) {
         const daysUntilExpiration = Math.ceil(
-          (transaction.expiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
+          (transaction.expiresAt.getTime() - now.getTime()) /
+            (24 * 60 * 60 * 1000)
         );
 
         expiringBonuses.push({
@@ -50,13 +64,15 @@ export function findExpiringBonuses(
           userEmail: user.email,
           expiringAmount: transaction.amount,
           expirationDate: transaction.expiresAt,
-          daysUntilExpiration,
+          daysUntilExpiration
         });
       }
     });
   });
 
-  return expiringBonuses.sort((a, b) => a.daysUntilExpiration - b.daysUntilExpiration);
+  return expiringBonuses.sort(
+    (a, b) => a.daysUntilExpiration - b.daysUntilExpiration
+  );
 }
 
 /**
@@ -65,7 +81,7 @@ export function findExpiringBonuses(
 export function createExpirationNotifications(
   expiringBonuses: ExpiringBonusInfo[]
 ): BonusNotification[] {
-  return expiringBonuses.map(bonus => ({
+  return expiringBonuses.map((bonus) => ({
     id: crypto.randomUUID(),
     userId: bonus.userId,
     type: 'EXPIRING_SOON' as const,
@@ -74,7 +90,7 @@ export function createExpirationNotifications(
     bonusAmount: bonus.expiringAmount,
     expiresAt: bonus.expirationDate,
     isRead: false,
-    createdAt: new Date(),
+    createdAt: new Date()
   }));
 }
 
@@ -85,9 +101,9 @@ export function findExpiredBonuses(
   transactions: BonusTransaction[]
 ): BonusTransaction[] {
   const now = new Date();
-  
+
   return transactions.filter(
-    t => t.type === 'EARN' && t.expiresAt && t.expiresAt <= now
+    (t) => t.type === 'EARN' && t.expiresAt && t.expiresAt <= now
   );
 }
 
@@ -97,7 +113,7 @@ export function findExpiredBonuses(
 export function createExpirationTransactions(
   expiredBonuses: BonusTransaction[]
 ): BonusTransaction[] {
-  return expiredBonuses.map(expiredBonus => ({
+  return expiredBonuses.map((expiredBonus) => ({
     id: crypto.randomUUID(),
     userId: expiredBonus.userId,
     type: 'EXPIRE' as const,
@@ -107,8 +123,8 @@ export function createExpirationTransactions(
     metadata: {
       originalTransactionId: expiredBonus.id,
       originalCreatedAt: expiredBonus.createdAt,
-      expiredAt: expiredBonus.expiresAt,
-    },
+      expiredAt: expiredBonus.expiresAt
+    }
   }));
 }
 
@@ -120,17 +136,23 @@ export function createExpiredNotifications(
   users: User[]
 ): BonusNotification[] {
   // Группируем истекшие бонусы по пользователям
-  const userExpiredBonuses = expiredBonuses.reduce((acc, transaction) => {
-    if (!acc[transaction.userId]) {
-      acc[transaction.userId] = [];
-    }
-    acc[transaction.userId].push(transaction);
-    return acc;
-  }, {} as Record<string, BonusTransaction[]>);
+  const userExpiredBonuses = expiredBonuses.reduce(
+    (acc, transaction) => {
+      if (!acc[transaction.userId]) {
+        acc[transaction.userId] = [];
+      }
+      acc[transaction.userId].push(transaction);
+      return acc;
+    },
+    {} as Record<string, BonusTransaction[]>
+  );
 
   return Object.entries(userExpiredBonuses).map(([userId, userBonuses]) => {
-    const user = users.find(u => u.id === userId);
-    const totalExpired = userBonuses.reduce((sum, bonus) => sum + bonus.amount, 0);
+    const user = users.find((u) => u.id === userId);
+    const totalExpired = userBonuses.reduce(
+      (sum, bonus) => sum + bonus.amount,
+      0
+    );
 
     return {
       id: crypto.randomUUID(),
@@ -140,7 +162,7 @@ export function createExpiredNotifications(
       message: `У вас истекло ${totalExpired.toLocaleString()} бонусов. В следующий раз используйте их вовремя!`,
       bonusAmount: totalExpired,
       isRead: false,
-      createdAt: new Date(),
+      createdAt: new Date()
     };
   });
 }
@@ -163,17 +185,20 @@ export async function processBonusExpiration(
 }> {
   // Находим истекшие бонусы
   const expiredBonuses = findExpiredBonuses(transactions);
-  
+
   // Создаем транзакции списания
   const expirationTransactions = createExpirationTransactions(expiredBonuses);
-  
+
   // Создаем уведомления
   const notifications = createExpiredNotifications(expiredBonuses, users);
-  
+
   // Подсчитываем статистику
-  const affectedUserIds = new Set(expiredBonuses.map(b => b.userId));
-  const totalExpiredAmount = expiredBonuses.reduce((sum, bonus) => sum + bonus.amount, 0);
-  
+  const affectedUserIds = new Set(expiredBonuses.map((b) => b.userId));
+  const totalExpiredAmount = expiredBonuses.reduce(
+    (sum, bonus) => sum + bonus.amount,
+    0
+  );
+
   return {
     expiredTransactions: expiredBonuses,
     expirationTransactions,
@@ -181,8 +206,8 @@ export async function processBonusExpiration(
     summary: {
       totalExpiredBonuses: expiredBonuses.length,
       affectedUsers: affectedUserIds.size,
-      totalExpiredAmount,
-    },
+      totalExpiredAmount
+    }
   };
 }
 
@@ -195,13 +220,13 @@ export async function scheduleExpirationWarnings(
   warningDays: number[] = [7, 3, 1]
 ): Promise<BonusNotification[]> {
   const allNotifications: BonusNotification[] = [];
-  
+
   for (const days of warningDays) {
     const expiringBonuses = findExpiringBonuses(transactions, users, days);
     const notifications = createExpirationNotifications(expiringBonuses);
     allNotifications.push(...notifications);
   }
-  
+
   return allNotifications;
 }
 
@@ -221,6 +246,6 @@ export function formatExpirationDate(date: Date): string {
     month: 'long',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit',
+    minute: '2-digit'
   }).format(date);
 }

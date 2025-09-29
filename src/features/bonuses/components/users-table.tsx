@@ -55,7 +55,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DataTablePagination } from '@/components/ui/table/data-table-pagination';
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar';
-import type { User } from '../types';
+import type { DisplayUser as User } from '../types';
 
 interface UsersTableProps {
   data: User[];

@@ -75,7 +75,7 @@ import { RichNotificationDialog } from './rich-notification-dialog';
 import { UsersTable } from './users-table';
 
 // Types
-import type { User } from '../types';
+import type { DisplayUser as User } from '../types';
 
 interface BonusManagementPageProps {
   className?: string;

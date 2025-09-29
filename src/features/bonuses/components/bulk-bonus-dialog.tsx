@@ -10,7 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -19,7 +19,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -28,32 +28,42 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Plus, 
-  Minus, 
-  Settings, 
-  User, 
+import {
+  Plus,
+  Minus,
+  Settings,
+  User,
   Calendar,
   AlertTriangle,
   CheckCircle
 } from 'lucide-react';
 import { useBonusStore } from '../stores/bonus-store';
-import type { User as UserType } from '../types';
+import type { DisplayUser as UserType } from '../types';
 
-const bulkBonusSchema = z.object({
-  amount: z.number().min(1, 'Сумма должна быть больше 0'),
-  description: z.string().min(3, 'Описание должно содержать минимум 3 символа'),
-  hasExpiration: z.boolean(),
-  expirationDays: z.number().optional(),
-}).refine((data) => {
-  if (data.hasExpiration && (!data.expirationDays || data.expirationDays < 1)) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'Укажите количество дней до истечения',
-  path: ['expirationDays'],
-});
+const bulkBonusSchema = z
+  .object({
+    amount: z.number().min(1, 'Сумма должна быть больше 0'),
+    description: z
+      .string()
+      .min(3, 'Описание должно содержать минимум 3 символа'),
+    hasExpiration: z.boolean(),
+    expirationDays: z.number().optional()
+  })
+  .refine(
+    (data) => {
+      if (
+        data.hasExpiration &&
+        (!data.expirationDays || data.expirationDays < 1)
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Укажите количество дней до истечения',
+      path: ['expirationDays']
+    }
+  );
 
 type BulkBonusFormValues = z.infer<typeof bulkBonusSchema>;
 
@@ -71,7 +81,7 @@ const actionConfig = {
     icon: Plus,
     color: 'text-green-500',
     buttonText: 'Начислить',
-    buttonVariant: 'default' as const,
+    buttonVariant: 'default' as const
   },
   DEDUCT: {
     title: 'Массовое списание бонусов',
@@ -79,7 +89,7 @@ const actionConfig = {
     icon: Minus,
     color: 'text-red-500',
     buttonText: 'Списать',
-    buttonVariant: 'destructive' as const,
+    buttonVariant: 'destructive' as const
   },
   SET: {
     title: 'Установка баланса',
@@ -87,15 +97,15 @@ const actionConfig = {
     icon: Settings,
     color: 'text-blue-500',
     buttonText: 'Установить',
-    buttonVariant: 'default' as const,
-  },
+    buttonVariant: 'default' as const
+  }
 };
 
 export function BulkBonusDialog({
   open,
   onOpenChange,
   action,
-  selectedUsers,
+  selectedUsers
 }: BulkBonusDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { bulkAddBonus, bulkDeductBonus, bulkSetBalance } = useBonusStore();
@@ -109,27 +119,31 @@ export function BulkBonusDialog({
       amount: 0,
       description: '',
       hasExpiration: false,
-      expirationDays: 30,
-    },
+      expirationDays: 30
+    }
   });
 
   const watchedAmount = form.watch('amount');
   const watchedHasExpiration = form.watch('hasExpiration');
 
   // Подсчет пользователей, у которых недостаточно средств для списания
-  const insufficientFundsUsers = action === 'DEDUCT' 
-    ? selectedUsers.filter(user => user.bonusBalance < watchedAmount)
-    : [];
+  const insufficientFundsUsers =
+    action === 'DEDUCT'
+      ? selectedUsers.filter((user) => user.bonusBalance < watchedAmount)
+      : [];
 
-  const validUsers = action === 'DEDUCT'
-    ? selectedUsers.filter(user => user.bonusBalance >= watchedAmount)
-    : selectedUsers;
+  const validUsers =
+    action === 'DEDUCT'
+      ? selectedUsers.filter((user) => user.bonusBalance >= watchedAmount)
+      : selectedUsers;
 
   const onSubmit = async (data: BulkBonusFormValues) => {
     setIsSubmitting(true);
     try {
-      const userIds = validUsers.map(user => user.id);
-      const expirationDays = data.hasExpiration ? data.expirationDays : undefined;
+      const userIds = validUsers.map((user) => user.id);
+      const expirationDays = data.hasExpiration
+        ? data.expirationDays
+        : undefined;
 
       switch (action) {
         case 'ADD':
@@ -159,63 +173,66 @@ export function BulkBonusDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh]">
+      <DialogContent className='max-h-[90vh] sm:max-w-[600px]'>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className='flex items-center gap-2'>
             <IconComponent className={`h-5 w-5 ${config.color}`} />
             {config.title}
           </DialogTitle>
-          <DialogDescription>
-            {config.description}
-          </DialogDescription>
+          <DialogDescription>{config.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className='space-y-4'>
           {/* Список выбранных пользователей */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium text-sm">
+          <div className='space-y-2'>
+            <div className='flex items-center justify-between'>
+              <h4 className='text-sm font-medium'>
                 Выбранные пользователи ({selectedUsers.length})
               </h4>
               {insufficientFundsUsers.length > 0 && (
-                <Badge variant="destructive" className="text-xs">
+                <Badge variant='destructive' className='text-xs'>
                   {insufficientFundsUsers.length} с недостатком средств
                 </Badge>
               )}
             </div>
 
-            <ScrollArea className="h-32 w-full border rounded-md p-2">
-              <div className="space-y-2">
+            <ScrollArea className='h-32 w-full rounded-md border p-2'>
+              <div className='space-y-2'>
                 {selectedUsers.map((user) => {
-                  const hasInsufficientFunds = insufficientFundsUsers.includes(user);
-                  
+                  const hasInsufficientFunds =
+                    insufficientFundsUsers.includes(user);
+
                   return (
-                    <div 
-                      key={user.id} 
-                      className={`flex items-center gap-2 p-2 rounded text-sm ${
-                        hasInsufficientFunds ? 'bg-red-50 border border-red-200' : 'bg-muted/30'
+                    <div
+                      key={user.id}
+                      className={`flex items-center gap-2 rounded p-2 text-sm ${
+                        hasInsufficientFunds
+                          ? 'border border-red-200 bg-red-50'
+                          : 'bg-muted/30'
                       }`}
                     >
-                      <Avatar className="h-6 w-6">
+                      <Avatar className='h-6 w-6'>
                         <AvatarImage src={user.avatar} alt={user.name} />
-                        <AvatarFallback className="text-xs">
-                          <User className="h-3 w-3" />
+                        <AvatarFallback className='text-xs'>
+                          <User className='h-3 w-3' />
                         </AvatarFallback>
                       </Avatar>
-                      
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{user.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+
+                      <div className='min-w-0 flex-1'>
+                        <p className='truncate font-medium'>{user.name}</p>
+                        <p className='text-muted-foreground truncate text-xs'>
+                          {user.email}
+                        </p>
                       </div>
-                      
-                      <div className="text-right">
-                        <p className="font-medium">
+
+                      <div className='text-right'>
+                        <p className='font-medium'>
                           {user.bonusBalance.toLocaleString()}
                         </p>
                         {hasInsufficientFunds && (
-                          <div className="flex items-center gap-1 text-red-500">
-                            <AlertTriangle className="h-3 w-3" />
-                            <span className="text-xs">Недостаточно</span>
+                          <div className='flex items-center gap-1 text-red-500'>
+                            <AlertTriangle className='h-3 w-3' />
+                            <span className='text-xs'>Недостаточно</span>
                           </div>
                         )}
                       </div>
@@ -227,10 +244,10 @@ export function BulkBonusDialog({
           </div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
               <FormField
                 control={form.control}
-                name="amount"
+                name='amount'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
@@ -238,18 +255,20 @@ export function BulkBonusDialog({
                     </FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
+                        type='number'
                         placeholder={`Введите ${action === 'SET' ? 'баланс' : 'сумму'}`}
                         {...field}
                         onChange={(e) => field.onChange(Number(e.target.value))}
                       />
                     </FormControl>
                     <FormDescription>
-                      {action === 'DEDUCT' && insufficientFundsUsers.length > 0 && (
-                        <span className="text-red-500">
-                          {insufficientFundsUsers.length} пользователей будут пропущены
-                        </span>
-                      )}
+                      {action === 'DEDUCT' &&
+                        insufficientFundsUsers.length > 0 && (
+                          <span className='text-red-500'>
+                            {insufficientFundsUsers.length} пользователей будут
+                            пропущены
+                          </span>
+                        )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -257,14 +276,14 @@ export function BulkBonusDialog({
               />
 
               {action === 'ADD' && (
-                <div className="space-y-3">
+                <div className='space-y-3'>
                   <FormField
                     control={form.control}
-                    name="hasExpiration"
+                    name='hasExpiration'
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">
+                      <FormItem className='flex flex-row items-center justify-between rounded-lg border p-3'>
+                        <div className='space-y-0.5'>
+                          <FormLabel className='text-base'>
                             Срок действия
                           </FormLabel>
                           <FormDescription>
@@ -284,19 +303,21 @@ export function BulkBonusDialog({
                   {watchedHasExpiration && (
                     <FormField
                       control={form.control}
-                      name="expirationDays"
+                      name='expirationDays'
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
+                          <FormLabel className='flex items-center gap-2'>
+                            <Calendar className='h-4 w-4' />
                             Дней до истечения
                           </FormLabel>
                           <FormControl>
                             <Input
-                              type="number"
-                              placeholder="Количество дней"
+                              type='number'
+                              placeholder='Количество дней'
                               {...field}
-                              onChange={(e) => field.onChange(Number(e.target.value))}
+                              onChange={(e) =>
+                                field.onChange(Number(e.target.value))
+                              }
                             />
                           </FormControl>
                           <FormMessage />
@@ -309,13 +330,13 @@ export function BulkBonusDialog({
 
               <FormField
                 control={form.control}
-                name="description"
+                name='description'
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Описание операции</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Укажите причину или описание операции..."
+                        placeholder='Укажите причину или описание операции...'
                         {...field}
                       />
                     </FormControl>
@@ -329,48 +350,55 @@ export function BulkBonusDialog({
 
               {/* Сводка операции */}
               {watchedAmount > 0 && validUsers.length > 0 && (
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
-                  <div className="flex items-center gap-2 text-blue-700">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="font-medium">Сводка операции</span>
+                <div className='space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-3'>
+                  <div className='flex items-center gap-2 text-blue-700'>
+                    <CheckCircle className='h-4 w-4' />
+                    <span className='font-medium'>Сводка операции</span>
                   </div>
-                  <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
+                  <div className='space-y-1 text-sm'>
+                    <div className='flex justify-between'>
                       <span>Будет обработано пользователей:</span>
-                      <span className="font-medium">{validUsers.length}</span>
+                      <span className='font-medium'>{validUsers.length}</span>
                     </div>
                     {action !== 'SET' && (
-                      <div className="flex justify-between">
+                      <div className='flex justify-between'>
                         <span>Общая сумма операции:</span>
-                        <span className="font-medium">
-                          {(watchedAmount * validUsers.length).toLocaleString()} бонусов
+                        <span className='font-medium'>
+                          {(watchedAmount * validUsers.length).toLocaleString()}{' '}
+                          бонусов
                         </span>
                       </div>
                     )}
                     {insufficientFundsUsers.length > 0 && (
-                      <div className="flex justify-between text-red-600">
+                      <div className='flex justify-between text-red-600'>
                         <span>Пропущено пользователей:</span>
-                        <span className="font-medium">{insufficientFundsUsers.length}</span>
+                        <span className='font-medium'>
+                          {insufficientFundsUsers.length}
+                        </span>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              <DialogFooter className="gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+              <DialogFooter className='gap-2'>
+                <Button
+                  type='button'
+                  variant='outline'
                   onClick={handleCancel}
                   disabled={isSubmitting}
                 >
                   Отмена
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type='submit'
                   variant={config.buttonVariant}
-                  disabled={isSubmitting || watchedAmount <= 0 || validUsers.length === 0}
-                  className="min-w-[120px]"
+                  disabled={
+                    isSubmitting ||
+                    watchedAmount <= 0 ||
+                    validUsers.length === 0
+                  }
+                  className='min-w-[120px]'
                 >
                   {isSubmitting ? 'Обработка...' : config.buttonText}
                 </Button>

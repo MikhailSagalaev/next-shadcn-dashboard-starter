@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/lib/logger';
 import { validateWithSchema, createUserSchema } from '@/lib/validation/schemas';
-import type { User } from '../types';
+import type { DisplayUser as User } from '../types';
 
 interface UseProjectUsersOptions {
   projectId?: string;

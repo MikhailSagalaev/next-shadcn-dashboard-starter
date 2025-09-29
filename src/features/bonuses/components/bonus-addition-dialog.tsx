@@ -29,7 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Plus, User, Calendar } from 'lucide-react';
 import { useBonusStore } from '../stores/bonus-store';
-import type { User as UserType } from '../types';
+import type { DisplayUser as UserType } from '../types';
 
 const additionSchema = z
   .object({
