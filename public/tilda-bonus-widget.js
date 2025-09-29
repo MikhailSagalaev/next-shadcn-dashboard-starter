@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.5.0
+ * @version: 2.6.0
  * @author: AI Assistant + User
  */
 
@@ -396,22 +396,10 @@
     hideRegistrationPrompt: function () {
       const prompt = document.querySelector('.registration-prompt-inline');
       if (prompt) {
-        // Восстанавливаем поле ввода промокода и кнопку активации
-        const promocodeWrapper = prompt.parentNode;
-        if (promocodeWrapper) {
-          const promocodeInput =
-            promocodeWrapper.querySelector('.t-inputpromocode');
-          const promocodeBtn = promocodeWrapper.querySelector(
-            '.t-inputpromocode__btn'
-          );
-
-          if (promocodeInput) promocodeInput.style.display = '';
-          if (promocodeBtn) promocodeBtn.style.display = '';
-        }
-
         prompt.remove();
-        this.log('Скрыта плашка регистрации, восстановлено поле промокода');
+        this.log('Скрыта плашка регистрации');
       }
+      // Поле промокода не нужно восстанавливать, т.к. мы его не скрывали
     },
 
     // Показать плашку с приглашением зарегистрироваться
@@ -618,36 +606,47 @@
         const promptDiv = document.createElement('div');
         promptDiv.className = 'registration-prompt-inline';
         promptDiv.innerHTML = `
-          <div class="registration-prompt">
-            <div class="registration-icon">🎁</div>
-            <div class="registration-title">Зарегистрируйся и получи ${welcomeBonusAmount} бонусов!</div>
-            <div class="registration-description">
+          <div class="registration-prompt" style="
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          ">
+            <div class="registration-icon" style="font-size: 24px; margin-bottom: 8px;">🎁</div>
+            <div class="registration-title" style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">
+              Зарегистрируйся и получи ${welcomeBonusAmount} бонусов!
+            </div>
+            <div class="registration-description" style="font-size: 14px; margin-bottom: 12px; opacity: 0.9;">
               Зарегистрируйся в нашей бонусной программе
             </div>
             <div class="registration-action">
               ${
                 botUsername
-                  ? `<a href="https://t.me/${botUsername}" target="_blank" class="registration-button">
+                  ? `<a href="https://t.me/${botUsername}" target="_blank" class="registration-button" style="
+                      display: inline-block;
+                      background: rgba(255,255,255,0.2);
+                      color: white;
+                      padding: 8px 16px;
+                      border-radius: 6px;
+                      text-decoration: none;
+                      font-weight: 500;
+                      transition: all 0.3s ease;
+                      border: 1px solid rgba(255,255,255,0.3);
+                    " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
                       Для участия в акции перейдите в бота
                     </a>`
-                  : 'Свяжитесь с администратором для регистрации'
+                  : '<div style="font-size: 14px; opacity: 0.8;">Свяжитесь с администратором для регистрации</div>'
               }
             </div>
           </div>
         `;
 
-        // Скрываем поле ввода промокода и кнопку активации
-        const promocodeInput =
-          promocodeWrapper.querySelector('.t-inputpromocode');
-        const promocodeBtn = promocodeWrapper.querySelector(
-          '.t-inputpromocode__btn'
-        );
-
-        if (promocodeInput) promocodeInput.style.display = 'none';
-        if (promocodeBtn) promocodeBtn.style.display = 'none';
-
-        // Добавляем плашку в контейнер поля промокода
-        promocodeWrapper.appendChild(promptDiv);
+        // НЕ скрываем поле промокода - плашка должна быть дополнительным элементом
+        // Добавляем плашку ПЕРЕД полем промокода, а не заменяем его
+        promocodeWrapper.insertBefore(promptDiv, promocodeWrapper.firstChild);
 
         this.log('✅ Плашка регистрации успешно отображена:', {
           welcomeBonusAmount,

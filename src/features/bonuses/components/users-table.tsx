@@ -167,6 +167,28 @@ export function UsersTable({
       }
     },
     {
+      accessorKey: 'isActive',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant='ghost'
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Статус
+            <ArrowUpDown className='ml-2 h-4 w-4' />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const isActive = row.getValue('isActive') as boolean;
+        return (
+          <Badge variant={isActive ? 'default' : 'secondary'}>
+            {isActive ? 'Активный' : 'Неактивный'}
+          </Badge>
+        );
+      }
+    },
+    {
       accessorKey: 'email',
       header: ({ column }) => {
         return (

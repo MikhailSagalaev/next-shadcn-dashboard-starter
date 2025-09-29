@@ -55,13 +55,59 @@ export async function GET(
       where: { projectId: id }
     });
 
-    // Получаем welcomeBonusAmount из meta проекта
-    const welcomeBonusAmount = Number((project as any).meta?.welcomeBonus || 0);
+    // Получаем welcomeBonusAmount из botSettings.functionalSettings или ReferralProgram
+    let welcomeBonusAmount = 0;
+    let botUsername = null;
 
-    // Добавляем welcomeBonusAmount к ответу
+    if (botSettings) {
+      botUsername = botSettings.botUsername;
+
+      // Пытаемся получить из functionalSettings
+      try {
+        const functionalSettings = botSettings.functionalSettings as any;
+        if (functionalSettings && functionalSettings.welcomeBonusAmount) {
+          welcomeBonusAmount = Number(functionalSettings.welcomeBonusAmount);
+        }
+      } catch (e) {
+        logger.warn('Ошибка парсинга functionalSettings', { error: e });
+      }
+    }
+
+    // Если не нашли в botSettings, пытаемся получить из ReferralProgram
+    if (welcomeBonusAmount === 0) {
+      try {
+        const referralProgram = await db.referralProgram.findUnique({
+          where: { projectId: id }
+        });
+
+        if (referralProgram && referralProgram.description) {
+          const meta = JSON.parse(referralProgram.description);
+          welcomeBonusAmount = Number(meta.welcomeBonus || 0);
+        }
+      } catch (e) {
+        logger.warn('Ошибка получения welcomeBonus из ReferralProgram', {
+          error: e
+        });
+      }
+    }
+
+    // Если все еще 0, пытаемся получить из project.meta
+    if (welcomeBonusAmount === 0) {
+      welcomeBonusAmount = Number((project as any).meta?.welcomeBonus || 0);
+    }
+
+    logger.info('Bot settings loaded', {
+      projectId: id,
+      welcomeBonusAmount,
+      botUsername,
+      hasBotSettings: !!botSettings
+    });
+
+    // Формируем ответ
     const response = {
       ...botSettings,
-      welcomeBonusAmount
+      welcomeBonusAmount,
+      botUsername
     };
 
     return NextResponse.json(response, { headers: createCorsHeaders(request) });
