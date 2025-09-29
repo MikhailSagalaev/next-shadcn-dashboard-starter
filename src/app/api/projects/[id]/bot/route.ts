@@ -11,19 +11,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ProjectService } from '@/lib/services/project.service';
 import { botManager } from '@/lib/telegram/bot-manager';
-import type { BotSettings } from '@/types/bonus';
 import { logger } from '@/lib/logger';
 
-// CORS заголовки для виджета
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-};
+// Функция для создания CORS заголовков с учетом origin
+function createCorsHeaders(request: NextRequest) {
+  const origin = request.headers.get('origin') || '*';
+
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers':
+      'Content-Type, Authorization, X-Requested-With',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400' // 24 hours
+  };
+}
 
 // OPTIONS handler для CORS preflight
-export async function OPTIONS() {
-  return new Response(null, { status: 200, headers: corsHeaders });
+export async function OPTIONS(request: NextRequest) {
+  return new Response(null, {
+    status: 200,
+    headers: createCorsHeaders(request)
+  });
 }
 
 // GET /api/projects/[id]/bot - Получение настроек бота
@@ -39,7 +48,7 @@ export async function GET(
     if (!project) {
       return NextResponse.json(
         { error: 'Проект не найден' },
-        { status: 404, headers: corsHeaders }
+        { status: 404, headers: createCorsHeaders(request) }
       );
     }
 
@@ -57,7 +66,7 @@ export async function GET(
       welcomeBonusAmount
     };
 
-    return NextResponse.json(response, { headers: corsHeaders });
+    return NextResponse.json(response, { headers: createCorsHeaders(request) });
   } catch (error) {
     logger.error(
       'Ошибка получения настроек бота',
@@ -66,7 +75,7 @@ export async function GET(
     );
     return NextResponse.json(
       { error: 'Ошибка получения настроек бота' },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: createCorsHeaders(request) }
     );
   }
 }
@@ -85,7 +94,7 @@ export async function POST(
     if (!project) {
       return NextResponse.json(
         { error: 'Проект не найден' },
-        { status: 404, headers: corsHeaders }
+        { status: 404, headers: createCorsHeaders(request) }
       );
     }
 
@@ -93,119 +102,85 @@ export async function POST(
     if (!body.botToken) {
       return NextResponse.json(
         { error: 'Токен бота обязателен' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: createCorsHeaders(request) }
       );
     }
 
     // Проверяем валидность токена бота (базовая проверка формата)
-    if (!body.botToken.match(/^\d+:[A-Za-z0-9_-]{35}$/)) {
+    if (!body.botToken.startsWith('bot') || body.botToken.length < 45) {
       return NextResponse.json(
         { error: 'Неверный формат токена бота' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: createCorsHeaders(request) }
       );
     }
 
-    // Подготавливаем настройки сообщений по умолчанию
-    const defaultMessageSettings = {
-      welcomeMessage:
-        'Добро пожаловать! 🎉\n\nОтправьте свой номер телефона для привязки аккаунта.',
-      balanceMessage: 'Ваш баланс бонусов: {balance}',
-      helpMessage:
-        'Доступные команды:\n/start - начать работу\n/balance - проверить баланс\n/help - показать помощь'
-    };
+    // Проверяем, не существует ли уже настройки для этого проекта
+    const existingSettings = await db.botSettings.findUnique({
+      where: { projectId: id }
+    });
 
-    // Подготавливаем функциональные настройки по умолчанию
-    const defaultFunctionalSettings = {
-      showBalance: true,
-      showLevel: true,
-      showReferral: true,
-      showHistory: true,
-      showHelp: true
-    };
+    if (existingSettings) {
+      return NextResponse.json(
+        {
+          error:
+            'Настройки бота для этого проекта уже существуют. Используйте PUT для обновления.'
+        },
+        { status: 409, headers: createCorsHeaders(request) }
+      );
+    }
 
-    // Создаем или обновляем настройки бота в базе данных
-    const botSettings = await db.botSettings.upsert({
-      where: { projectId: id },
-      update: {
-        botToken: body.botToken,
-        botUsername: body.botUsername || null,
-        welcomeMessage:
-          body.welcomeMessage || defaultMessageSettings.welcomeMessage,
-        messageSettings: body.messageSettings || defaultMessageSettings,
-        functionalSettings:
-          body.functionalSettings || defaultFunctionalSettings,
-        isActive: body.isActive !== undefined ? body.isActive : true
-      },
-      create: {
+    // Создаем настройки бота
+    const botSettings = await db.botSettings.create({
+      data: {
         projectId: id,
         botToken: body.botToken,
-        botUsername: body.botUsername || null,
-        welcomeMessage:
-          body.welcomeMessage || defaultMessageSettings.welcomeMessage,
-        messageSettings: body.messageSettings || defaultMessageSettings,
-        functionalSettings:
-          body.functionalSettings || defaultFunctionalSettings,
-        isActive: body.isActive !== undefined ? body.isActive : true
+        botUsername: body.botUsername,
+        functionalSettings: body.functionalSettings || {}
       }
     });
 
-    // Создаем/обновляем бота в BotManager НЕ блокируя ответ API
-    // Выполняем операцию в фоне, чтобы UI не зависал при сетевых задержках Telegram
-    setTimeout(() => {
-      (async () => {
-        try {
-          if (botSettings.isActive) {
-            const botSettingsForManager = {
-              ...botSettings,
-              welcomeMessage:
-                typeof botSettings.welcomeMessage === 'string'
-                  ? botSettings.welcomeMessage
-                  : 'Добро пожаловать! 🎉\n\nЭто бот бонусной программы.'
-            };
-            await botManager.createBot(
-              id,
-              botSettingsForManager as BotSettings
-            );
-            logger.info(
-              '✅ Бот создан и активирован',
-              { projectId: id },
-              'bot-api'
-            );
-          } else {
-            await botManager.stopBot(id);
-            logger.info('🔄 Бот деактивирован', { projectId: id }, 'bot-api');
-          }
-        } catch (error) {
-          logger.error(
-            'Ошибка управления ботом через BotManager (background)',
-            { error: error instanceof Error ? error.message : 'Unknown error' },
-            'bot-api'
-          );
-        }
-      })();
-    }, 0);
-
-    return NextResponse.json(botSettings, {
-      status: 201,
-      headers: corsHeaders
-    });
-  } catch (error) {
-    logger.error(
-      'Ошибка настройки бота',
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      'bot-api'
-    );
-
-    if (error instanceof Error && error.message.includes('Unique constraint')) {
-      return NextResponse.json(
-        { error: 'Токен бота уже используется в другом проекте' },
-        { status: 409, headers: corsHeaders }
+    // Инициализируем бота
+    try {
+      await botManager.createBot(id, {
+        id: body.id,
+        projectId: id,
+        botToken: body.botToken,
+        botUsername: body.botUsername,
+        functionalSettings: body.functionalSettings || {},
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      logger.info('Бот успешно инициализирован', { projectId: id }, 'bot-api');
+    } catch (botError) {
+      logger.warn(
+        'Не удалось инициализировать бота, но настройки сохранены',
+        {
+          projectId: id,
+          error: botError instanceof Error ? botError.message : 'Unknown error'
+        },
+        'bot-api'
       );
     }
 
+    logger.info('Настройки бота созданы', { projectId: id }, 'bot-api');
+
     return NextResponse.json(
-      { error: 'Ошибка настройки бота' },
-      { status: 500, headers: corsHeaders }
+      {
+        ...botSettings,
+        message: 'Настройки бота успешно созданы'
+      },
+      { headers: createCorsHeaders(request) }
+    );
+  } catch (error) {
+    logger.error(
+      'Ошибка создания настроек бота',
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      'bot-api'
+    );
+    return NextResponse.json(
+      { error: 'Ошибка создания настроек бота' },
+      { status: 500, headers: createCorsHeaders(request) }
     );
   }
 }
@@ -219,66 +194,78 @@ export async function PUT(
     const { id } = await context.params;
     const body = await request.json();
 
-    // Проверяем существование настроек бота
-    const existingBot = await db.botSettings.findUnique({
-      where: { projectId: id }
-    });
-
-    if (!existingBot) {
+    // Проверяем существование проекта
+    const project = await ProjectService.getProjectById(id);
+    if (!project) {
       return NextResponse.json(
-        { error: 'Настройки бота не найдены' },
-        { status: 404, headers: corsHeaders }
+        { error: 'Проект не найден' },
+        { status: 404, headers: createCorsHeaders(request) }
       );
     }
 
-    // Валидация токена если он передан
-    if (body.botToken && !body.botToken.match(/^\d+:[A-Za-z0-9_-]{35}$/)) {
+    // Валидация данных
+    if (!body.botToken) {
+      return NextResponse.json(
+        { error: 'Токен бота обязателен' },
+        { status: 400, headers: createCorsHeaders(request) }
+      );
+    }
+
+    // Проверяем валидность токена бота (базовая проверка формата)
+    if (!body.botToken.startsWith('bot') || body.botToken.length < 45) {
       return NextResponse.json(
         { error: 'Неверный формат токена бота' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: createCorsHeaders(request) }
       );
     }
 
-    // Обновляем настройки
-    const updateData: any = {};
-    if (body.botToken !== undefined) updateData.botToken = body.botToken;
-    if (body.botUsername !== undefined)
-      updateData.botUsername = body.botUsername;
-    if (body.welcomeMessage !== undefined)
-      updateData.welcomeMessage = body.welcomeMessage;
-    if (body.isActive !== undefined) updateData.isActive = body.isActive;
-
-    const updatedBot = await db.botSettings.update({
+    // Обновляем настройки бота
+    const botSettings = await db.botSettings.update({
       where: { projectId: id },
-      data: updateData
+      data: {
+        botToken: body.botToken,
+        botUsername: body.botUsername,
+        functionalSettings: body.functionalSettings || {}
+      }
     });
 
-    // Обновляем бота в BotManager
+    // Переинициализируем бота
     try {
-      if (updatedBot.isActive) {
-        // Преобразуем настройки для BotManager
-        const botSettingsForManager = {
-          ...updatedBot,
-          welcomeMessage:
-            typeof updatedBot.welcomeMessage === 'string'
-              ? updatedBot.welcomeMessage
-              : 'Добро пожаловать! 🎉\n\nЭто бот бонусной программы.'
-        };
-        await botManager.updateBot(id, botSettingsForManager as BotSettings);
-        logger.info('🔄 Бот обновлен', { projectId: id }, 'bot-api');
-      } else {
-        await botManager.stopBot(id);
-        logger.info('🔄 Бот деактивирован', { projectId: id }, 'bot-api');
-      }
-    } catch (error) {
-      logger.error(
-        'Ошибка обновления бота через BotManager',
-        { error: error instanceof Error ? error.message : 'Unknown error' },
+      await botManager.updateBot(id, {
+        id: body.id,
+        projectId: id,
+        botToken: body.botToken,
+        botUsername: body.botUsername,
+        functionalSettings: body.functionalSettings || {},
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      logger.info(
+        'Бот успешно переинициализирован',
+        { projectId: id },
+        'bot-api'
+      );
+    } catch (botError) {
+      logger.warn(
+        'Не удалось переинициализировать бота, но настройки обновлены',
+        {
+          projectId: id,
+          error: botError instanceof Error ? botError.message : 'Unknown error'
+        },
         'bot-api'
       );
     }
 
-    return NextResponse.json(updatedBot, { headers: corsHeaders });
+    logger.info('Настройки бота обновлены', { projectId: id }, 'bot-api');
+
+    return NextResponse.json(
+      {
+        ...botSettings,
+        message: 'Настройки бота успешно обновлены'
+      },
+      { headers: createCorsHeaders(request) }
+    );
   } catch (error) {
     logger.error(
       'Ошибка обновления настроек бота',
@@ -287,12 +274,12 @@ export async function PUT(
     );
     return NextResponse.json(
       { error: 'Ошибка обновления настроек бота' },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: createCorsHeaders(request) }
     );
   }
 }
 
-// DELETE /api/projects/[id]/bot - Деактивация бота
+// DELETE /api/projects/[id]/bot - Удаление настроек бота
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -300,51 +287,62 @@ export async function DELETE(
   try {
     const { id } = await context.params;
 
-    const botSettings = await db.botSettings.findUnique({
-      where: { projectId: id }
-    });
-
-    if (!botSettings) {
+    // Проверяем существование проекта
+    const project = await ProjectService.getProjectById(id);
+    if (!project) {
       return NextResponse.json(
-        { error: 'Настройки бота не найдены' },
-        { status: 404, headers: corsHeaders }
+        { error: 'Проект не найден' },
+        { status: 404, headers: createCorsHeaders(request) }
       );
     }
 
-    // Деактивируем бота в базе данных
-    const deactivatedBot = await db.botSettings.update({
-      where: { projectId: id },
-      data: { isActive: false }
+    // Проверяем существование настроек
+    const existingSettings = await db.botSettings.findUnique({
+      where: { projectId: id }
     });
 
-    // Останавливаем бота в BotManager
+    if (!existingSettings) {
+      return NextResponse.json(
+        { error: 'Настройки бота не найдены' },
+        { status: 404, headers: createCorsHeaders(request) }
+      );
+    }
+
+    // Удаляем настройки бота
+    await db.botSettings.delete({
+      where: { projectId: id }
+    });
+
+    // Останавливаем бота
     try {
       await botManager.stopBot(id);
-      logger.info('🛑 Бот остановлен через API', { projectId: id }, 'bot-api');
-    } catch (error) {
-      logger.error(
-        'Ошибка остановки бота через BotManager',
-        { error: error instanceof Error ? error.message : 'Unknown error' },
+      logger.info('Бот успешно остановлен', { projectId: id }, 'bot-api');
+    } catch (botError) {
+      logger.warn(
+        'Не удалось остановить бота',
+        {
+          projectId: id,
+          error: botError instanceof Error ? botError.message : 'Unknown error'
+        },
         'bot-api'
       );
     }
 
+    logger.info('Настройки бота удалены', { projectId: id }, 'bot-api');
+
     return NextResponse.json(
-      {
-        message: 'Бот успешно деактивирован',
-        bot: deactivatedBot
-      },
-      { headers: corsHeaders }
+      { message: 'Настройки бота успешно удалены' },
+      { headers: createCorsHeaders(request) }
     );
   } catch (error) {
     logger.error(
-      'Ошибка деактивации бота',
+      'Ошибка удаления настроек бота',
       { error: error instanceof Error ? error.message : 'Unknown error' },
       'bot-api'
     );
     return NextResponse.json(
-      { error: 'Ошибка деактивации бота' },
-      { status: 500, headers: corsHeaders }
+      { error: 'Ошибка удаления настроек бота' },
+      { status: 500, headers: createCorsHeaders(request) }
     );
   }
 }

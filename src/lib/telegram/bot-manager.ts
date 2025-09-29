@@ -21,7 +21,7 @@ import { run } from '@grammyjs/runner';
 import { createBot } from './bot';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import type { BotSettings } from '@/types/bonus';
+import type { BotSettings } from '@/types/api';
 import { setupGlobalErrorHandler } from './global-error-handler';
 
 // Типизация контекста (совпадает с bot.ts)

@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.1.0
+ * @version: 2.2.0
  * @author: AI Assistant + User
  */
 
@@ -1300,14 +1300,7 @@
       try {
         this.log('Полностью очищаем все промокоды');
 
-        // Очищаем промокод через Tilda API
-        if (typeof window.t_input_promocode__clearPromocode === 'function') {
-          try {
-            window.t_input_promocode__clearPromocode();
-          } catch (_) {}
-        }
-
-        // Удаляем промокод из объекта tcart (важно для корректной работы)
+        // Удаляем промокод из объекта tcart (основной метод Tilda)
         if (window.tcart && window.tcart.promocode) {
           try {
             delete window.tcart.promocode;
@@ -1318,23 +1311,32 @@
         // Сбрасываем состояние виджета
         this.state.appliedBonuses = 0;
 
-        // Пересчитываем корзину без промокода
-        if (typeof window.tcart__calcPromocode === 'function') {
+        // Используем функции Tilda для пересчета и обновления
+        if (typeof window.tcart__calcAmountWithDiscounts === 'function') {
           try {
-            window.tcart__calcPromocode();
+            window.tcart__calcAmountWithDiscounts();
+            this.log('Пересчитаны скидки в корзине');
           } catch (_) {}
         }
 
-        // Обновляем отображение
         if (typeof window.tcart__reDrawTotal === 'function') {
           try {
             window.tcart__reDrawTotal();
+            this.log('Перерисован итог корзины');
           } catch (_) {}
         }
 
-        if (typeof window.tcart__reDraw === 'function') {
+        if (typeof window.tcart__updateTotalProductsinCartObj === 'function') {
           try {
-            window.tcart__reDraw();
+            window.tcart__updateTotalProductsinCartObj();
+            this.log('Обновлено количество товаров в объекте корзины');
+          } catch (_) {}
+        }
+
+        // Дополнительно очищаем промокод через Tilda API (если доступно)
+        if (typeof window.t_input_promocode__clearPromocode === 'function') {
+          try {
+            window.t_input_promocode__clearPromocode();
           } catch (_) {}
         }
 
