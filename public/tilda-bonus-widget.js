@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.6.0
+ * @version: 1.7.0
  * @author: AI Assistant + User
  */
 
@@ -320,12 +320,18 @@
         container.innerHTML = `
           <div class="registration-prompt">
             <div class="registration-icon">🎁</div>
-            <div class="registration-title">Зарегистрируйся и получи бонусы!</div>
+            <div class="registration-title">Зарегистрируйся и получи ${settings.welcomeBonusAmount || 0} бонусов!</div>
             <div class="registration-description">
               Зарегистрируйся в нашей бонусной программе
             </div>
             <div class="registration-action">
-              Свяжитесь с администратором для регистрации
+              ${
+                settings.botUsername
+                  ? `<a href="https://t.me/${settings.botUsername}" target="_blank" class="registration-button">
+                  Для участия в акции перейдите в бота
+                </a>`
+                  : 'Свяжитесь с администратором для регистрации'
+              }
             </div>
           </div>
         `;
