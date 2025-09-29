@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.0.0
+ * @version: 2.1.0
  * @author: AI Assistant + User
  */
 
@@ -294,10 +294,69 @@
       if (buttonEl) buttonEl.style.display = 'block';
     },
 
+    // Очистка ресурсов для предотвращения утечек памяти
+    cleanup: function () {
+      this.log('Очистка ресурсов виджета');
+
+      // Отменяем активные запросы
+      if (this.state.activeFetchController) {
+        try {
+          this.state.activeFetchController.abort();
+        } catch (_) {}
+        this.state.activeFetchController = null;
+      }
+
+      // Очищаем таймеры
+      if (this.state.balanceDebounceTimer) {
+        clearTimeout(this.state.balanceDebounceTimer);
+        this.state.balanceDebounceTimer = null;
+      }
+      if (this.state.cartOpenDebounceTimer) {
+        clearTimeout(this.state.cartOpenDebounceTimer);
+        this.state.cartOpenDebounceTimer = null;
+      }
+
+      // Отключаем observers
+      if (this.state._cartObserver) {
+        try {
+          this.state._cartObserver.disconnect();
+        } catch (_) {}
+        this.state._cartObserver = null;
+      }
+      if (this.state._bodyObserver) {
+        try {
+          this.state._bodyObserver.disconnect();
+        } catch (_) {}
+        this.state._bodyObserver = null;
+      }
+
+      // Очищаем состояние
+      this.state = {
+        userEmail: null,
+        userPhone: null,
+        bonusBalance: 0,
+        appliedBonuses: 0,
+        initialized: false,
+        balanceDebounceTimer: null,
+        activeFetchController: null,
+        cartOpenDebounceTimer: null,
+        _bodyObserver: null,
+        _cartObserver: null,
+        mode: 'bonus',
+        levelInfo: null,
+        originalCartTotal: 0
+      };
+
+      this.log('Ресурсы виджета очищены');
+    },
+
     // Получить настройки проекта для плашки регистрации
     loadProjectSettings: async function () {
       try {
         const cacheBuster = Date.now(); // Предотвращаем кэширование
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+
         const response = await fetch(
           `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`,
           {
@@ -305,9 +364,12 @@
             headers: {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-cache'
-            }
+            },
+            signal: controller.signal
           }
         );
+
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const settings = await response.json();
@@ -315,10 +377,18 @@
             welcomeBonusAmount: Number(settings?.welcomeBonusAmount || 0),
             botUsername: settings?.botUsername || null
           };
+        } else {
+          this.log('API вернул ошибку:', response.status, response.statusText);
         }
       } catch (error) {
-        this.log('Ошибка загрузки настроек проекта:', error);
+        if (error.name === 'AbortError') {
+          this.log('Таймаут загрузки настроек проекта');
+        } else {
+          this.log('Ошибка загрузки настроек проекта:', error);
+        }
       }
+      // Возвращаем значения по умолчанию в случае ошибки
+      this.log('Используем значения по умолчанию для настроек проекта');
       return { welcomeBonusAmount: 0, botUsername: null };
     },
 
@@ -367,20 +437,27 @@
           return;
         }
 
+        // Экранируем данные для безопасности
+        const welcomeBonusAmount = Number(settings.welcomeBonusAmount || 0);
+        const botUsername = String(settings.botUsername || '').replace(
+          /[<>'"&]/g,
+          ''
+        );
+
         // Создаем плашку регистрации внутри поля промокода
         const promptDiv = document.createElement('div');
         promptDiv.className = 'registration-prompt-inline';
         promptDiv.innerHTML = `
           <div class="registration-prompt">
             <div class="registration-icon">🎁</div>
-            <div class="registration-title">Зарегистрируйся и получи ${settings.welcomeBonusAmount || 0} бонусов!</div>
+            <div class="registration-title">Зарегистрируйся и получи ${welcomeBonusAmount} бонусов!</div>
             <div class="registration-description">
               Зарегистрируйся в нашей бонусной программе
             </div>
             <div class="registration-action">
               ${
-                settings.botUsername
-                  ? `<a href="https://t.me/${settings.botUsername}" target="_blank" class="registration-button">
+                botUsername
+                  ? `<a href="https://t.me/${botUsername}" target="_blank" class="registration-button">
                       Для участия в акции перейдите в бота
                     </a>`
                   : 'Свяжитесь с администратором для регистрации'
@@ -732,11 +809,15 @@
       // Сбрасываем промокоды
       this.clearAllPromocodes();
 
-      // Скрываем обычный виджет и показываем плашку регистрации
-      this.removeWidget();
+      // Полная очистка ресурсов
+      this.cleanup();
+
+      // Показываем плашку регистрации
       this.showRegistrationPrompt();
 
-      this.log('✅ Данные пользователя очищены, показана плашка регистрации');
+      this.log(
+        '✅ Данные пользователя очищены, ресурсы очищены, показана плашка регистрации'
+      );
     },
 
     // Обработка изменения данных пользователя
