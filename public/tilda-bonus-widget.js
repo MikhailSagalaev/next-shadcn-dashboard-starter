@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.1
+ * @version: 2.9.2
  * @author: AI Assistant + User
  */
 
@@ -578,10 +578,9 @@
 
         // Экранируем данные для безопасности
         const welcomeBonusAmount = Number(settings.welcomeBonusAmount || 500);
-        const botUsername = String(settings.botUsername || '').replace(
-          /[<>'"&]/g,
-          ''
-        );
+        const botUsername = String(settings.botUsername || '')
+          .replace(/[<>'"&]/g, '') // Экранируем HTML
+          .replace('@', ''); // Убираем @ из имени бота
 
         // Используем настройки шаблона или значения по умолчанию
         const widgetSettings = settings.widgetSettings || {};
@@ -628,20 +627,20 @@
         promptDiv.className = 'registration-prompt-inline';
         // Используем стилевые настройки или значения по умолчанию
         const styles = {
-          backgroundColor: widgetSettings.backgroundColor || '#667eea',
-          backgroundGradient: widgetSettings.backgroundGradient || '#764ba2',
-          textColor: widgetSettings.textColor || '#ffffff',
+          backgroundColor: widgetSettings?.backgroundColor || '#667eea',
+          backgroundGradient: widgetSettings?.backgroundGradient || '#764ba2',
+          textColor: widgetSettings?.textColor || '#ffffff',
           buttonBackgroundColor:
-            widgetSettings.buttonBackgroundColor || 'rgba(255,255,255,0.2)',
+            widgetSettings?.buttonBackgroundColor || 'rgba(255,255,255,0.2)',
           buttonBorderColor:
-            widgetSettings.buttonBorderColor || 'rgba(255,255,255,0.3)',
+            widgetSettings?.buttonBorderColor || 'rgba(255,255,255,0.3)',
           buttonHoverColor:
-            widgetSettings.buttonHoverColor || 'rgba(255,255,255,0.3)',
-          borderRadius: widgetSettings.borderRadius || '8px',
-          padding: widgetSettings.padding || '16px',
-          fontSize: widgetSettings.fontSize || '14px',
-          titleFontSize: widgetSettings.titleFontSize || '18px',
-          iconEmoji: widgetSettings.iconEmoji || '🎁'
+            widgetSettings?.buttonHoverColor || 'rgba(255,255,255,0.3)',
+          borderRadius: widgetSettings?.borderRadius || '12px',
+          padding: widgetSettings?.padding || '16px',
+          fontSize: widgetSettings?.fontSize || '14px',
+          titleFontSize: widgetSettings?.titleFontSize || '18px',
+          iconEmoji: widgetSettings?.iconEmoji || '🎁'
         };
 
         promptDiv.innerHTML = `
@@ -813,9 +812,14 @@
           self.log('🔥 НЕМЕДЛЕННО удаляем промокод');
 
           // НЕМЕДЛЕННО удаляем промокод при первом признаке изменения
-          if (self.state.appliedBonuses > 0) {
+          // Проверяем как наличие примененных бонусов в state, так и наличие промокода в tcart
+          const hasAppliedBonuses = self.state.appliedBonuses > 0;
+          const hasPromocode = window.tcart && window.tcart.promocode;
+
+          if (hasAppliedBonuses || hasPromocode) {
             console.log(
-              '🎯 TildaBonusWidget: Есть примененные бонусы, удаляем промокод'
+              '🎯 TildaBonusWidget: Есть примененные бонусы или промокод, удаляем промокод',
+              { hasAppliedBonuses, hasPromocode }
             );
             // Принудительно удаляем промокод БЕЗ задержки
             if (window.tcart && window.tcart.promocode) {
@@ -835,7 +839,7 @@
             }
           } else {
             console.log(
-              '🎯 TildaBonusWidget: Нет примененных бонусов, пропускаем удаление'
+              '🎯 TildaBonusWidget: Нет примененных бонусов и промокода, пропускаем удаление'
             );
           }
 
