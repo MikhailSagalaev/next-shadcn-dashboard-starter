@@ -106,6 +106,9 @@ export function ProjectIntegrationView({
     iconEmoji: '🎁',
     iconColor: '#ffffff',
 
+    // Шрифты
+    fontFamily: 'system-ui, -apple-system, sans-serif', // По умолчанию системный
+
     // Дополнительные настройки
     maxWidth: '100%',
     textAlign: 'center',
@@ -124,6 +127,26 @@ export function ProjectIntegrationView({
     // Формируем короткий URL загрузчика виджета
     const currentUrl = window.location.origin;
     setWidgetUrl(`${currentUrl}/widget/${projectId}`);
+
+    // Подключаем Google Fonts для предварительного просмотра
+    if (!document.querySelector('link[href*="fonts.googleapis.com"]')) {
+      const fontLink = document.createElement('link');
+      fontLink.rel = 'preconnect';
+      fontLink.href = 'https://fonts.googleapis.com';
+      document.head.appendChild(fontLink);
+
+      const fontLink2 = document.createElement('link');
+      fontLink2.rel = 'preconnect';
+      fontLink2.href = 'https://fonts.gstatic.com';
+      fontLink2.crossOrigin = 'anonymous';
+      document.head.appendChild(fontLink2);
+
+      const fontLink3 = document.createElement('link');
+      fontLink3.rel = 'stylesheet';
+      fontLink3.href =
+        'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&family=Poppins:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700&family=Rubik:wght@400;500;600;700&display=swap';
+      document.head.appendChild(fontLink3);
+    }
 
     // Загружаем данные проекта
     loadProject();
@@ -258,6 +281,11 @@ export function ProjectIntegrationView({
               iconEmoji: functionalSettings.widgetSettings.iconEmoji || '🎁',
               iconColor:
                 functionalSettings.widgetSettings.iconColor || '#ffffff',
+
+              // Шрифты
+              fontFamily:
+                functionalSettings.widgetSettings.fontFamily ||
+                'system-ui, -apple-system, sans-serif',
 
               // Дополнительные настройки
               maxWidth: functionalSettings.widgetSettings.maxWidth || '100%',
@@ -951,6 +979,55 @@ export function ProjectIntegrationView({
 
                   <Separator />
 
+                  <h4 className='text-sm font-medium'>Шрифты</h4>
+                  <div className='grid gap-4 md:grid-cols-1'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='fontFamily'>Шрифт</Label>
+                      <select
+                        id='fontFamily'
+                        value={widgetSettings.fontFamily}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            fontFamily: e.target.value
+                          })
+                        }
+                        className='w-full rounded-md border p-2'
+                      >
+                        <option value='system-ui, -apple-system, sans-serif'>
+                          Системный (по умолчанию)
+                        </option>
+                        <option value="'Montserrat', sans-serif">
+                          Montserrat (похож на Avenir Next)
+                        </option>
+                        <option value="'Nunito Sans', sans-serif">
+                          Nunito Sans (мягкий и округлый)
+                        </option>
+                        <option value="'Poppins', sans-serif">
+                          Poppins (геометрический)
+                        </option>
+                        <option value="'Work Sans', sans-serif">
+                          Work Sans (современный)
+                        </option>
+                        <option value="'Inter', sans-serif">
+                          Inter (популярный системный)
+                        </option>
+                        <option value="'Fira Sans', sans-serif">
+                          Fira Sans (технологичный)
+                        </option>
+                        <option value="'Rubik', sans-serif">
+                          Rubik (геометрический)
+                        </option>
+                      </select>
+                      <p className='text-muted-foreground text-xs'>
+                        Montserrat наиболее близок к Avenir Next по стилю и
+                        геометрии
+                      </p>
+                    </div>
+                  </div>
+
+                  <Separator />
+
                   <h4 className='text-sm font-medium'>Размеры и отступы</h4>
                   <div className='grid gap-4 md:grid-cols-3'>
                     <div className='space-y-2'>
@@ -1404,7 +1481,10 @@ export function ProjectIntegrationView({
                           | 'left'
                           | 'center'
                           | 'right',
-                        fontSize: widgetSettings.fontSize || '14px'
+                        fontSize: widgetSettings.fontSize || '14px',
+                        fontFamily:
+                          widgetSettings.fontFamily ||
+                          'system-ui, -apple-system, sans-serif'
                       }}
                     >
                       {/* Иконка */}

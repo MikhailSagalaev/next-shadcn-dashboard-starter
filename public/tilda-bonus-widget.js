@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.6
+ * @version: 2.9.7
  * @author: AI Assistant + User
  */
 
@@ -134,6 +134,26 @@
 
     // Создание UI элементов
     initUI: function () {
+      // Подключаем Google Fonts для кастомных шрифтов
+      if (!document.querySelector('link[href*="fonts.googleapis.com"]')) {
+        const fontLink = document.createElement('link');
+        fontLink.rel = 'preconnect';
+        fontLink.href = 'https://fonts.googleapis.com';
+        document.head.appendChild(fontLink);
+
+        const fontLink2 = document.createElement('link');
+        fontLink2.rel = 'preconnect';
+        fontLink2.href = 'https://fonts.gstatic.com';
+        fontLink2.crossOrigin = 'anonymous';
+        document.head.appendChild(fontLink2);
+
+        const fontLink3 = document.createElement('link');
+        fontLink3.rel = 'stylesheet';
+        fontLink3.href =
+          'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&family=Poppins:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700&family=Rubik:wght@400;500;600;700&display=swap';
+        document.head.appendChild(fontLink3);
+      }
+
       // Стили для виджета
       const style = document.createElement('style');
       style.textContent = `
@@ -767,6 +787,11 @@
           iconEmoji: widgetSettings?.iconEmoji || '🎁',
           iconColor: widgetSettings?.iconColor || '#ffffff',
 
+          // Шрифты
+          fontFamily:
+            widgetSettings?.fontFamily ||
+            'system-ui, -apple-system, sans-serif',
+
           // Дополнительные настройки
           maxWidth: widgetSettings?.maxWidth || '100%',
           textAlign: widgetSettings?.textAlign || 'center',
@@ -787,6 +812,7 @@
             box-shadow: ${styles.boxShadow};
             max-width: ${styles.maxWidth};
             font-size: ${styles.fontSize};
+            font-family: ${styles.fontFamily};
           ">`;
 
         // Иконка
