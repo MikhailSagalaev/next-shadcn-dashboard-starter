@@ -110,7 +110,8 @@ export function ProjectIntegrationView({
     maxWidth: '100%',
     textAlign: 'center',
     buttonWidth: 'auto',
-    buttonDisplay: 'inline-block'
+    buttonDisplay: 'inline-block',
+    fontSize: '14px'
   });
   const [saving, setSaving] = useState(false);
   const [botUsername, setBotUsername] = useState<string | null>(null);
@@ -266,7 +267,8 @@ export function ProjectIntegrationView({
                 functionalSettings.widgetSettings.buttonWidth || 'auto',
               buttonDisplay:
                 functionalSettings.widgetSettings.buttonDisplay ||
-                'inline-block'
+                'inline-block',
+              fontSize: functionalSettings.widgetSettings.fontSize || '14px'
             });
           }
         }
@@ -1398,8 +1400,11 @@ export function ProjectIntegrationView({
                         padding: widgetSettings.padding,
                         marginBottom: widgetSettings.marginBottom,
                         maxWidth: widgetSettings.maxWidth,
-                        textAlign: widgetSettings.textAlign,
-                        fontSize: widgetSettings.fontSize
+                        textAlign: widgetSettings.textAlign as
+                          | 'left'
+                          | 'center'
+                          | 'right',
+                        fontSize: widgetSettings.fontSize || '14px'
                       }}
                     >
                       {/* Иконка */}
@@ -1464,12 +1469,12 @@ export function ProjectIntegrationView({
                           }}
                           onMouseEnter={(e) => {
                             if (widgetSettings.buttonHoverColor) {
-                              e.target.style.background =
+                              (e.target as HTMLElement).style.background =
                                 widgetSettings.buttonHoverColor;
                             }
                           }}
                           onMouseLeave={(e) => {
-                            e.target.style.background =
+                            (e.target as HTMLElement).style.background =
                               widgetSettings.buttonBackgroundColor;
                           }}
                         >
