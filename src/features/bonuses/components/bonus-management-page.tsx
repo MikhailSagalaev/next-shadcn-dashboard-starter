@@ -46,6 +46,8 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Label } from '@/components/ui/label';
 import {
   Search,
   Download,
@@ -100,6 +102,7 @@ export function BonusManagementPageRefactored({
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Custom hooks
   const {
@@ -113,6 +116,11 @@ export function BonusManagementPageRefactored({
     autoSelectFirst: true,
     fallbackProjectId: 'cmdkloj85000cv8o0611rblp3' // Fallback project ID
   });
+
+  // Создаем стабильные значения для useProjectUsers
+  const stableProjectId = useMemo(() => currentProjectId, [currentProjectId]);
+  const stablePageSize = useMemo(() => pageSize, [pageSize]);
+  const stableSearchTerm = useMemo(() => searchTerm, [searchTerm]);
 
   const {
     users,
@@ -131,9 +139,9 @@ export function BonusManagementPageRefactored({
     setSearchTerm,
     exportUsers
   } = useProjectUsers({
-    projectId: currentProjectId,
-    pageSize,
-    searchTerm
+    projectId: stableProjectId,
+    pageSize: stablePageSize,
+    searchTerm: stableSearchTerm
   });
 
   // Обработчики пагинации и поиска
@@ -169,7 +177,7 @@ export function BonusManagementPageRefactored({
     [totalUsers, activeUsers, totalBonuses]
   );
 
-  const isLoading = projectsLoading || usersLoading;
+  const isLoading = projectsLoading || usersLoading || exportLoading;
   const hasError = projectsError || usersError;
 
   // Event handlers
@@ -177,7 +185,7 @@ export function BonusManagementPageRefactored({
     (term: string) => {
       setSearchTermState(term);
       setSearchTerm(term); // Устанавливаем search term в хуке
-      setSelectedUsers(new Set()); // Сбрасываем выбор при поиске
+      setSelectedUsers([]); // Сбрасываем выбор при поиске
 
       // При поиске возвращаемся на первую страницу
       loadUsers(1);
@@ -197,13 +205,11 @@ export function BonusManagementPageRefactored({
   const handleUserSelection = useCallback(
     (userId: string, selected: boolean) => {
       setSelectedUsers((prev) => {
-        const newSet = new Set(prev);
         if (selected) {
-          newSet.add(userId);
+          return prev.includes(userId) ? prev : [...prev, userId];
         } else {
-          newSet.delete(userId);
+          return prev.filter((id) => id !== userId);
         }
-        return newSet;
       });
     },
     []
@@ -237,9 +243,9 @@ export function BonusManagementPageRefactored({
   const handleSelectAll = useCallback(
     (selected: boolean) => {
       if (selected) {
-        setSelectedUsers(new Set(filteredUsers.map((user) => user.id)));
+        setSelectedUsers(filteredUsers.map((user) => user.id));
       } else {
-        setSelectedUsers(new Set());
+        setSelectedUsers([]);
       }
     },
     [filteredUsers]
@@ -349,7 +355,7 @@ export function BonusManagementPageRefactored({
         return;
       }
 
-      setIsLoading(true);
+      setExportLoading(true);
 
       // Получаем все данные без пагинации
       const response = await fetch(
@@ -444,7 +450,7 @@ export function BonusManagementPageRefactored({
         'bonus-management'
       );
     } finally {
-      setIsLoading(false);
+      setExportLoading(false);
     }
   }, [currentProjectId, toast]);
 
@@ -457,7 +463,7 @@ export function BonusManagementPageRefactored({
       );
 
       await refreshUsers();
-      setSelectedUsers(new Set()); // Сбрасываем выбор
+      setSelectedUsers([]); // Сбрасываем выбор
 
       toast({
         title: 'Данные обновлены',
@@ -667,7 +673,7 @@ export function BonusManagementPageRefactored({
       <RichNotificationDialog
         open={showRichNotificationDialog}
         onOpenChange={setShowRichNotificationDialog}
-        selectedUserIds={Array.from(selectedUsers)}
+        selectedUserIds={selectedUsers}
         projectId={currentProjectId || ''}
       />
 
@@ -904,7 +910,7 @@ export function BonusManagementPageRefactored({
  */
 interface UsersDisplayAreaProps {
   users: User[];
-  selectedUsers: Set<string>;
+  selectedUsers: string[];
   isLoading: boolean;
   onUserSelection: (userId: string, selected: boolean) => void;
   onSelectAll: (selected: boolean) => void;
@@ -994,7 +1000,7 @@ const UsersDisplayArea = memo<UsersDisplayAreaProps>(
               <TableHead className='w-12'>
                 <Checkbox
                   checked={
-                    selectedUsers.size === users.length && users.length > 0
+                    selectedUsers.length === users.length && users.length > 0
                   }
                   onCheckedChange={(checked) => onSelectAll(checked as boolean)}
                 />
@@ -1011,11 +1017,11 @@ const UsersDisplayArea = memo<UsersDisplayAreaProps>(
             {users.map((user) => (
               <TableRow
                 key={user.id}
-                className={selectedUsers.has(user.id) ? 'bg-muted/50' : ''}
+                className={selectedUsers.includes(user.id) ? 'bg-muted/50' : ''}
               >
                 <TableCell>
                   <Checkbox
-                    checked={selectedUsers.has(user.id)}
+                    checked={selectedUsers.includes(user.id)}
                     onCheckedChange={(checked) =>
                       onUserSelection(user.id, checked as boolean)
                     }
