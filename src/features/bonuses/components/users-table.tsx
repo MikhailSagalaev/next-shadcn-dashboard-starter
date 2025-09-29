@@ -286,25 +286,24 @@ export function UsersTable({
       columnVisibility,
       rowSelection
     },
-    manualPagination: false, // Включаем внутреннюю пагинацию
-    pageCount: Math.ceil(totalCount / pageSize),
-    onPaginationChange: (updater) => {
-      const newPagination =
-        typeof updater === 'function' ? updater(pagination) : updater;
-      setPagination(newPagination);
-
-      // Уведомляем родителя об изменении страницы
-      const newPage = newPagination.pageIndex + 1;
-      const newPageSize = newPagination.pageSize;
-
-      if (newPage !== currentPage && onPageChange) {
-        onPageChange(newPage);
-      }
-      if (newPageSize !== pageSize && onPageSizeChange) {
-        onPageSizeChange(newPageSize);
-      }
-    }
+    manualPagination: true,
+    pageCount: Math.ceil(totalCount / pageSize)
   });
+
+  // Синхронизируем пагинацию только при первом рендере
+  useEffect(() => {
+    setPagination({
+      pageIndex: currentPage - 1,
+      pageSize
+    });
+  }, []); // Пустой массив зависимостей - только при монтировании
+
+  // Обработчик изменений размера страницы
+  useEffect(() => {
+    if (pageSize !== pagination.pageSize && onPageSizeChange) {
+      onPageSizeChange(pageSize);
+    }
+  }, [pageSize, pagination.pageSize, onPageSizeChange]);
 
   // Обработчик изменений выбора
   useEffect(() => {
