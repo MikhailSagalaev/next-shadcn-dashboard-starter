@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.3
+ * @version: 2.9.4
  * @author: AI Assistant + User
  */
 
@@ -148,6 +148,37 @@
         @keyframes bonus-spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+
+        /* Анимации для иконок */
+        .pulse {
+          animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+          100% { transform: scale(1); }
+        }
+
+        .bounce {
+          animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-10px); }
+          60% { transform: translateY(-5px); }
+        }
+
+        .shake {
+          animation: shake 0.5s infinite;
+        }
+
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+          20%, 40%, 60%, 80% { transform: translateX(2px); }
         }
 
         /* Стили для плашки регистрации */
@@ -652,61 +683,139 @@
         promptDiv.className = 'registration-prompt-inline';
         // Используем стилевые настройки или значения по умолчанию
         const styles = {
+          // Цветовые настройки
           backgroundColor: widgetSettings?.backgroundColor || '#667eea',
           backgroundGradient: widgetSettings?.backgroundGradient || '#764ba2',
           textColor: widgetSettings?.textColor || '#ffffff',
+          titleColor: widgetSettings?.titleColor || '#ffffff',
+          descriptionColor: widgetSettings?.descriptionColor || '#ffffff',
+          fallbackTextColor: widgetSettings?.fallbackTextColor || '#ffffff',
+          buttonTextColor: widgetSettings?.buttonTextColor || '#ffffff',
           buttonBackgroundColor:
             widgetSettings?.buttonBackgroundColor || 'rgba(255,255,255,0.2)',
           buttonBorderColor:
             widgetSettings?.buttonBorderColor || 'rgba(255,255,255,0.3)',
           buttonHoverColor:
             widgetSettings?.buttonHoverColor || 'rgba(255,255,255,0.3)',
+          fallbackBackgroundColor:
+            widgetSettings?.fallbackBackgroundColor || 'rgba(0,0,0,0.1)',
+
+          // Размеры и отступы
           borderRadius: widgetSettings?.borderRadius || '12px',
           padding: widgetSettings?.padding || '16px',
-          fontSize: widgetSettings?.fontSize || '14px',
+          marginBottom: widgetSettings?.marginBottom || '12px',
+          iconSize: widgetSettings?.iconSize || '24px',
           titleFontSize: widgetSettings?.titleFontSize || '18px',
-          iconEmoji: widgetSettings?.iconEmoji || '🎁'
+          titleFontWeight: widgetSettings?.titleFontWeight || 'bold',
+          descriptionFontSize: widgetSettings?.descriptionFontSize || '14px',
+          buttonFontSize: widgetSettings?.buttonFontSize || '14px',
+          buttonFontWeight: widgetSettings?.buttonFontWeight || '500',
+          buttonPadding: widgetSettings?.buttonPadding || '8px 16px',
+          buttonBorderRadius: widgetSettings?.buttonBorderRadius || '6px',
+          fallbackFontSize: widgetSettings?.fallbackFontSize || '14px',
+          fallbackPadding: widgetSettings?.fallbackPadding || '8px',
+          fallbackBorderRadius: widgetSettings?.fallbackBorderRadius || '4px',
+
+          // Эффекты и тени
+          boxShadow: widgetSettings?.boxShadow || '0 4px 6px rgba(0,0,0,0.1)',
+          buttonBoxShadow: widgetSettings?.buttonBoxShadow || 'none',
+          iconAnimation: widgetSettings?.iconAnimation || 'none',
+
+          // Эмодзи и иконки
+          iconEmoji: widgetSettings?.iconEmoji || '🎁',
+          iconColor: widgetSettings?.iconColor || '#ffffff',
+
+          // Дополнительные настройки
+          maxWidth: widgetSettings?.maxWidth || '100%',
+          textAlign: widgetSettings?.textAlign || 'center',
+          buttonWidth: widgetSettings?.buttonWidth || 'auto',
+          buttonDisplay: widgetSettings?.buttonDisplay || 'inline-block',
+          fontSize: widgetSettings?.fontSize || '14px'
         };
 
-        promptDiv.innerHTML = `
+        // Собираем HTML для плашки с учетом настроек видимости
+        let htmlContent = `
           <div class="registration-prompt" style="
             background: linear-gradient(135deg, ${styles.backgroundColor} 0%, ${styles.backgroundGradient} 100%);
             color: ${styles.textColor};
             padding: ${styles.padding};
             border-radius: ${styles.borderRadius};
-            margin-bottom: 12px;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          ">
-            <div class="registration-icon" style="font-size: 24px; margin-bottom: 8px;">${styles.iconEmoji}</div>
-            <div class="registration-title" style="font-size: ${styles.titleFontSize}; font-weight: bold; margin-bottom: 8px;">
-              ${templates.registrationTitle.replace('{bonusAmount}', welcomeBonusAmount)}
-            </div>
-            <div class="registration-description" style="font-size: ${styles.fontSize}; margin-bottom: 12px; opacity: 0.9;">
-              ${templates.registrationDescription}
-            </div>
-            <div class="registration-action">
-              ${
-                botUsername
-                  ? `<a href="https://t.me/${botUsername}" target="_blank" class="registration-button" style="
-                      display: inline-block;
-                      background: ${styles.buttonBackgroundColor};
-                      color: ${styles.textColor};
-                      padding: 8px 16px;
-                      border-radius: 6px;
-                      text-decoration: none;
-                      font-weight: 500;
-                      transition: all 0.3s ease;
-                      border: 1px solid ${styles.buttonBorderColor};
-                      font-size: ${styles.fontSize};
-                    " onmouseover="this.style.background='${styles.buttonHoverColor}'" onmouseout="this.style.background='${styles.buttonBackgroundColor}'">
-                      ${templates.registrationButtonText}
-                    </a>`
-                  : `<div style="font-size: ${styles.fontSize}; opacity: 0.8;">${templates.registrationFallbackText}</div>`
-              }
-            </div>
-          </div>
-        `;
+            margin-bottom: ${styles.marginBottom};
+            text-align: ${styles.textAlign};
+            box-shadow: ${styles.boxShadow};
+            max-width: ${styles.maxWidth};
+            font-size: ${styles.fontSize};
+          ">`;
+
+        // Иконка
+        if (settings.showIcon) {
+          htmlContent += `
+            <div class="registration-icon" style="
+              font-size: ${styles.iconSize};
+              margin-bottom: 8px;
+              color: ${styles.iconColor};
+              ${styles.iconAnimation !== 'none' ? 'animation: ' + styles.iconAnimation + ' 2s infinite;' : ''}
+            ">${styles.iconEmoji}</div>`;
+        }
+
+        // Заголовок
+        if (settings.showTitle) {
+          htmlContent += `
+            <div class="registration-title" style="
+              font-size: ${styles.titleFontSize};
+              font-weight: ${styles.titleFontWeight};
+              margin-bottom: 8px;
+              color: ${styles.titleColor};
+            ">${templates.registrationTitle.replace('{bonusAmount}', welcomeBonusAmount)}</div>`;
+        }
+
+        // Описание
+        if (settings.showDescription) {
+          htmlContent += `
+            <div class="registration-description" style="
+              font-size: ${styles.descriptionFontSize};
+              margin-bottom: 12px;
+              opacity: 0.9;
+              color: ${styles.descriptionColor};
+            ">${templates.registrationDescription}</div>`;
+        }
+
+        // Кнопка или текст без бота
+        htmlContent += `<div class="registration-action">`;
+
+        if (settings.showButton && botUsername) {
+          htmlContent += `
+            <a href="https://t.me/${botUsername}" target="_blank" class="registration-button" style="
+              display: ${styles.buttonDisplay};
+              background: ${styles.buttonBackgroundColor};
+              color: ${styles.buttonTextColor};
+              padding: ${styles.buttonPadding};
+              border-radius: ${styles.buttonBorderRadius};
+              text-decoration: none;
+              font-weight: ${styles.buttonFontWeight};
+              font-size: ${styles.buttonFontSize};
+              border: 1px solid ${styles.buttonBorderColor};
+              width: ${styles.buttonWidth};
+              box-shadow: ${styles.buttonBoxShadow};
+              transition: all 0.3s ease;
+            " onmouseover="this.style.background='${styles.buttonHoverColor}'" onmouseout="this.style.background='${styles.buttonBackgroundColor}'">
+              ${templates.registrationButtonText}
+            </a>`;
+        } else if (settings.showFallbackText) {
+          htmlContent += `
+            <div style="
+              font-size: ${styles.fallbackFontSize};
+              color: ${styles.fallbackTextColor};
+              background: ${styles.fallbackBackgroundColor};
+              padding: ${styles.fallbackPadding};
+              border-radius: ${styles.fallbackBorderRadius};
+              opacity: 0.8;
+            ">${templates.registrationFallbackText}</div>`;
+        }
+
+        htmlContent += `</div></div>`;
+
+        promptDiv.innerHTML = htmlContent;
 
         // НЕ скрываем поле промокода - плашка должна быть дополнительным элементом
         // Добавляем плашку ПЕРЕД полем промокода, а не заменяем его
