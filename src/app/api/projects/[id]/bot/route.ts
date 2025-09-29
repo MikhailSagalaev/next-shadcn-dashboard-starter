@@ -335,9 +335,20 @@ export async function PUT(
     }
 
     // Проверяем валидность токена бота (базовая проверка формата)
-    if (!body.botToken.startsWith('bot') || body.botToken.length < 45) {
+    // Telegram bot tokens format: <bot_id>:<token>
+    // Example: 123456789:AAHmCIAAIfasYFQQB_3fSqcP_BB0_YykG7Y
+    const tokenParts = body.botToken.split(':');
+    if (
+      tokenParts.length !== 2 ||
+      !/^\d+$/.test(tokenParts[0]) || // bot ID should be numeric
+      !tokenParts[1].startsWith('AA') || // token should start with AA
+      body.botToken.length < 45
+    ) {
       return NextResponse.json(
-        { error: 'Неверный формат токена бота' },
+        {
+          error:
+            'Неверный формат токена бота. Токен должен быть в формате: <bot_id>:<token>'
+        },
         { status: 400, headers: createCorsHeaders(request) }
       );
     }

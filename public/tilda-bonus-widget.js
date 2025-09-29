@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.0
+ * @version: 2.9.1
  * @author: AI Assistant + User
  */
 
@@ -17,7 +17,7 @@
       apiUrl: 'https://bonus.example.com',
       bonusToRuble: 1,
       minOrderAmount: 100,
-      debug: false,
+      debug: true, // ВКЛЮЧЕНО для отладки
       debounceMs: 400
     },
 
@@ -40,6 +40,9 @@
 
     // Инициализация виджета
     init: function (userConfig) {
+      console.log('🎯 TildaBonusWidget: НАЧАЛО ИНИЦИАЛИЗАЦИИ');
+      console.log('🎯 TildaBonusWidget: Опции:', userConfig);
+
       // Объединяем конфигурацию
       this.config = Object.assign({}, this.config, userConfig);
 
@@ -791,21 +794,49 @@
 
       // Слушаем события изменения количества товаров
       document.addEventListener('click', (event) => {
+        console.log('🎯 TildaBonusWidget: КЛИК ОБНАРУЖЕН');
+        console.log('🎯 TildaBonusWidget: Цель клика:', event.target);
+        console.log(
+          '🎯 TildaBonusWidget: Классы цели:',
+          event.target.className
+        );
+
         if (
           event.target.closest(
             '.t706__product-plus, .t706__product-minus, .t706__product-del'
           )
         ) {
+          console.log(
+            '🎯 TildaBonusWidget: КЛИК ПО КНОПКЕ ИЗМЕНЕНИЯ КОЛИЧЕСТВА!'
+          );
           self.log('🚨 КРИТИЧНО: Клик по кнопке изменения количества товара');
           self.log('🔥 НЕМЕДЛЕННО удаляем промокод');
 
           // НЕМЕДЛЕННО удаляем промокод при первом признаке изменения
           if (self.state.appliedBonuses > 0) {
+            console.log(
+              '🎯 TildaBonusWidget: Есть примененные бонусы, удаляем промокод'
+            );
             // Принудительно удаляем промокод БЕЗ задержки
             if (window.tcart && window.tcart.promocode) {
+              console.log(
+                '🎯 TildaBonusWidget: Найден промокод, удаляем:',
+                window.tcart.promocode
+              );
               delete window.tcart.promocode;
               self.log('✅ НЕМЕДЛЕННО удален window.tcart.promocode');
+              console.log(
+                '🎯 TildaBonusWidget: Промокод удален из window.tcart'
+              );
+            } else {
+              console.log(
+                '🎯 TildaBonusWidget: Промокод не найден в window.tcart'
+              );
             }
+          } else {
+            console.log(
+              '🎯 TildaBonusWidget: Нет примененных бонусов, пропускаем удаление'
+            );
           }
 
           setTimeout(() => {

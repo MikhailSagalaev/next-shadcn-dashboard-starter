@@ -73,6 +73,7 @@ export function ProjectIntegrationView({
     iconEmoji: '🎁'
   });
   const [saving, setSaving] = useState(false);
+  const [botUsername, setBotUsername] = useState<string | null>(null);
   const resolvedParams = useParams();
   const projectId = resolvedParams?.id as string;
 
@@ -103,6 +104,9 @@ export function ProjectIntegrationView({
         if (botResponse.ok) {
           const botData = await botResponse.json();
           const functionalSettings = botData.functionalSettings || {};
+
+          // Set botUsername from bot settings
+          setBotUsername(botData.botUsername || null);
 
           if (functionalSettings.widgetSettings) {
             setWidgetSettings({
@@ -179,7 +183,7 @@ export function ProjectIntegrationView({
 
       // Получаем текущие настройки бота
       const botResponse = await fetch(`/api/projects/${projectId}/bot`);
-      let currentBotSettings = {};
+      let currentBotSettings: any = {};
 
       if (botResponse.ok) {
         currentBotSettings = await botResponse.json();
@@ -247,7 +251,7 @@ export function ProjectIntegrationView({
 
   const webhookUrl = `${window.location.origin}/api/webhook/${project.webhookSecret}`;
 
-  const widgetCode = `<script src="${widgetUrl}?v=5"></script>`;
+  const widgetCode = `<script src="${widgetUrl}?v=25"></script>`;
 
   const testWebhookData = JSON.stringify(
     {
@@ -609,7 +613,7 @@ export function ProjectIntegrationView({
                         {widgetSettings.registrationDescription}
                       </div>
                       <div>
-                        {project?.botUsername ? (
+                        {botUsername ? (
                           <div
                             className='inline-block cursor-pointer rounded-md px-4 py-2 transition-all'
                             style={{
