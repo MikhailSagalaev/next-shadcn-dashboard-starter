@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.8.0
+ * @version: 2.9.0
  * @author: AI Assistant + User
  */
 
@@ -768,7 +768,20 @@
 
       // Слушаем события обновления корзины Tilda
       document.addEventListener('tcart:updated', (event) => {
-        self.log('🚨 Получено событие tcart:updated');
+        self.log('🚨 КРИТИЧНО: Получено событие tcart:updated');
+
+        // НЕМЕДЛЕННО удаляем промокод если были применены бонусы
+        if (
+          self.state.appliedBonuses > 0 &&
+          window.tcart &&
+          window.tcart.promocode
+        ) {
+          delete window.tcart.promocode;
+          self.log(
+            '✅ НЕМЕДЛЕННО удален window.tcart.promocode при tcart:updated'
+          );
+        }
+
         // Автоматически корректируем бонусы при изменении корзины
         setTimeout(() => {
           self.adjustBonusesForCartChange();
@@ -783,7 +796,18 @@
             '.t706__product-plus, .t706__product-minus, .t706__product-del'
           )
         ) {
-          self.log('🚨 Клик по кнопке изменения количества товара');
+          self.log('🚨 КРИТИЧНО: Клик по кнопке изменения количества товара');
+          self.log('🔥 НЕМЕДЛЕННО удаляем промокод');
+
+          // НЕМЕДЛЕННО удаляем промокод при первом признаке изменения
+          if (self.state.appliedBonuses > 0) {
+            // Принудительно удаляем промокод БЕЗ задержки
+            if (window.tcart && window.tcart.promocode) {
+              delete window.tcart.promocode;
+              self.log('✅ НЕМЕДЛЕННО удален window.tcart.promocode');
+            }
+          }
+
           setTimeout(() => {
             self.adjustBonusesForCartChange();
             self.updateBalanceDisplay();
@@ -1633,22 +1657,35 @@
     // Принудительное удаление промокода (более агрессивный метод)
     forceDeletePromocode: function () {
       try {
-        this.log('🔥 ПРИНУДИТЕЛЬНОЕ удаление промокода');
+        this.log('🔥 ПРИНУДИТЕЛЬНОЕ удаление промокода - НАЧАЛО');
 
-        // 1. Удаляем из window.tcart всеми способами
+        // 1. ОБЯЗАТЕЛЬНО удаляем из window.tcart.promocode как просил пользователь
         if (window.tcart) {
+          this.log('📦 window.tcart найден, проверяем промокод');
+
           if (window.tcart.promocode) {
+            this.log('⚠️ Найден промокод:', window.tcart.promocode);
             delete window.tcart.promocode;
-            this.log('✅ Удален window.tcart.promocode');
+            this.log('✅ УДАЛЕН window.tcart.promocode');
+          } else {
+            this.log('ℹ️ window.tcart.promocode уже отсутствует');
           }
 
           // Также удаляем другие возможные поля промокода
           if (window.tcart.promo) {
             delete window.tcart.promo;
+            this.log('✅ УДАЛЕН window.tcart.promo');
           }
           if (window.tcart.discount) {
             delete window.tcart.discount;
+            this.log('✅ УДАЛЕН window.tcart.discount');
           }
+          if (window.tcart.discountvalue) {
+            delete window.tcart.discountvalue;
+            this.log('✅ УДАЛЕН window.tcart.discountvalue');
+          }
+        } else {
+          this.log('❌ window.tcart не найден!');
         }
 
         // 2. Очищаем ВСЕ поля ввода промокода

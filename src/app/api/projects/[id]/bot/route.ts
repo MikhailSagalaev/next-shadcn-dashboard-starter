@@ -33,7 +33,7 @@ export async function OPTIONS(request: NextRequest) {
   });
 }
 
-// GET /api/projects/[id]/bot - Получение настроек бота
+// GET /api/projects/[id]/bot - Получение настроек бота (публичный endpoint для виджета)
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -41,9 +41,15 @@ export async function GET(
   try {
     const { id } = await context.params;
 
+    logger.info('GET /api/projects/[id]/bot запрос', {
+      projectId: id,
+      origin: request.headers.get('origin')
+    });
+
     // Проверяем существование проекта
     const project = await ProjectService.getProjectById(id);
     if (!project) {
+      logger.warn('Проект не найден', { projectId: id });
       return NextResponse.json(
         { error: 'Проект не найден' },
         { status: 404, headers: createCorsHeaders(request) }
@@ -286,6 +292,35 @@ export async function PUT(
         {
           ...updatedSettings,
           message: 'Функциональные настройки бота успешно обновлены'
+        },
+        { headers: createCorsHeaders(request) }
+      );
+    }
+
+    // Если не передан botToken и нет существующих настроек - создаем базовые настройки
+    if (!body.botToken && !existingBotSettings) {
+      logger.info(
+        'Создаем базовые настройки бота с функциональными настройками',
+        {
+          projectId: id
+        }
+      );
+
+      // Создаем базовые настройки бота с пустым токеном (можно будет обновить позже)
+      const newSettings = await db.botSettings.create({
+        data: {
+          projectId: id,
+          botToken: '', // Пустой токен, будет обновлен позже
+          botUsername: '',
+          isActive: false,
+          functionalSettings: body.functionalSettings || {}
+        }
+      });
+
+      return NextResponse.json(
+        {
+          ...newSettings,
+          message: 'Базовые настройки бота созданы'
         },
         { headers: createCorsHeaders(request) }
       );

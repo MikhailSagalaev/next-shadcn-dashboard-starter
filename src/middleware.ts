@@ -7,9 +7,12 @@ const PROTECTED_MATCHERS = ['/dashboard', '/api/admin', '/api/projects'];
 // 1) Баланс пользователя для Tilda:
 //    GET /api/projects/:id/users/balance?email=...&phone=...
 // 2) Вебхуки проектов
+// 3) Настройки бота для виджета (GET only)
+//    GET /api/projects/:id/bot
 const PUBLIC_API_PATTERNS: RegExp[] = [
   /^\/api\/projects\/[^/]+\/users\/balance(?:\/?|$)/i,
-  /^\/api\/webhook\//i
+  /^\/api\/webhook\//i,
+  /^\/api\/projects\/[^/]+\/bot$/i
 ];
 
 export default async function middleware(req: NextRequest) {
