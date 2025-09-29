@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProjectUsers } from '@/features/bonuses/hooks/use-project-users';
+import { BonusStatsCards } from '@/features/bonuses/components/bonus-stats-cards';
 import {
   ArrowLeft,
   Plus,
@@ -104,6 +105,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     isLoading: usersLoading,
     error: usersError,
     totalUsers,
+    activeUsers,
+    totalBonuses,
     currentPage,
     totalPages,
     loadUsers
@@ -128,6 +131,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     },
     [loadUsers]
   );
+
+  // Stats data
+  const statsData = {
+    totalUsers,
+    activeUsers,
+    totalBonuses,
+    expiringSoonBonuses: Math.floor(totalBonuses * 0.15), // Mock для демо
+    monthlyGrowth: 12 // Mock для демо
+  };
 
   // Dialog states
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
@@ -442,7 +454,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
 
       <Separator />
 
-      {/* Stats Cards */}
+      {/* Statistics */}
+      <BonusStatsCards
+        stats={statsData}
+        isLoading={usersLoading}
+        error={usersError}
+      />
+
+      {/* Legacy Stats Cards - temporarily hidden */}
+      {/*
       <div className='grid grid-cols-1 gap-6 overflow-x-hidden pr-2 md:grid-cols-5'>
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
@@ -517,6 +537,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           </CardContent>
         </Card>
       </div>
+      */}
 
       {/* Search */}
       <div className='flex items-center space-x-2'>
