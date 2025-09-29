@@ -456,20 +456,25 @@
       try {
         this.log('📡 Загружаем настройки проекта для плашки...');
 
-        // Проверяем локальное хранилище сначала
-        const cachedSettings = this.getCachedProjectSettings();
-        if (cachedSettings) {
-          this.log('📋 Используем кэшированные настройки:', cachedSettings);
-          return cachedSettings;
+        // Проверяем, нужно ли форсировать обновление (если прошло больше 30 секунд с последнего обновления)
+        const forceRefresh = this.shouldForceRefreshSettings();
+
+        if (!forceRefresh) {
+          // Проверяем локальное хранилище сначала
+          const cachedSettings = this.getCachedProjectSettings();
+          if (cachedSettings) {
+            this.log('📋 Используем кэшированные настройки:', cachedSettings);
+            return cachedSettings;
+          }
         }
 
-        this.log('🌐 Кэш пуст, загружаем из API...');
+        this.log('🌐 Загружаем свежие настройки из API...');
 
-        // Если нет в кэше, пытаемся загрузить из API с упрощенным методом
+        // Загружаем свежие данные из API
         const settings = await this.loadProjectSettingsSimple();
 
-        // Сохраняем в кэш на 1 час
-        this.cacheProjectSettings(settings, 60 * 60 * 1000);
+        // Сохраняем в кэш с timestamp последней загрузки
+        this.cacheProjectSettings(settings, 30 * 60 * 1000); // 30 минут
 
         this.log('✅ Настройки загружены и сохранены в кэш:', settings);
         return settings;
@@ -482,6 +487,25 @@
         };
         this.log('🔄 Используем значения по умолчанию:', defaultSettings);
         return defaultSettings;
+      }
+    },
+
+    // Проверяем, нужно ли форсировать обновление настроек
+    shouldForceRefreshSettings: function () {
+      try {
+        const cacheKey = `tilda_bonus_${this.config.projectId}_settings`;
+        const cached = localStorage.getItem(cacheKey);
+        if (!cached) return true; // Нет кэша - нужно загрузить
+
+        const cacheData = JSON.parse(cached);
+        const now = Date.now();
+        const timeSinceLastLoad = now - (cacheData.lastLoad || 0);
+
+        // Форсируем обновление если прошло больше 30 секунд с момента последней загрузки из API
+        return timeSinceLastLoad > 30 * 1000;
+      } catch (error) {
+        this.log('Ошибка проверки необходимости обновления настроек:', error);
+        return true; // В случае ошибки - обновляем
       }
     },
 
@@ -536,7 +560,8 @@
       try {
         const cacheData = {
           settings: settings,
-          timestamp: Date.now(),
+          timestamp: Date.now(), // Время создания кэша
+          lastLoad: Date.now(), // Время последней загрузки из API
           ttl: ttlMs
         };
         localStorage.setItem(
