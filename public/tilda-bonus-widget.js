@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.3.0
+ * @version: 1.4.0
  * @author: AI Assistant + User
  */
 
@@ -414,7 +414,7 @@
 
       // Слушаем события обновления корзины Tilda
       document.addEventListener('tcart:updated', (event) => {
-        self.log('Получено событие обновления корзины Tilda');
+        self.log('🚨 Получено событие tcart:updated');
         // Автоматически корректируем бонусы при изменении корзины
         setTimeout(() => {
           self.adjustBonusesForCartChange();
@@ -429,17 +429,18 @@
             '.t706__product-plus, .t706__product-minus, .t706__product-del'
           )
         ) {
+          self.log('🚨 Клик по кнопке изменения количества товара');
           setTimeout(() => {
             self.adjustBonusesForCartChange();
             self.updateBalanceDisplay();
-            self.log('Обновляем виджет после изменения количества товаров');
+            self.log('✅ Обновляем виджет после изменения количества товаров');
           }, 200);
         }
       });
 
       // Слушаем события изменения количества через API Tilda
       document.addEventListener('tcart:quantity:changed', (event) => {
-        self.log('Количество товаров изменено через API Tilda');
+        self.log('🚨 Получено событие tcart:quantity:changed');
         setTimeout(() => {
           self.adjustBonusesForCartChange();
           self.updateBalanceDisplay();
@@ -449,12 +450,75 @@
 
       // Слушаем события пересчета корзины
       document.addEventListener('tcart:recalculated', (event) => {
-        self.log('Корзина пересчитана');
+        self.log('🚨 Получено событие tcart:recalculated');
         setTimeout(() => {
           self.adjustBonusesForCartChange();
           self.updateBalanceDisplay();
         }, 100);
       });
+
+      // Добавляем MutationObserver для надежного отслеживания изменений корзины
+      const observeCartChanges = () => {
+        const cartWindow = document.querySelector('.t706__cartwin');
+        if (cartWindow) {
+          // Наблюдаем за изменениями в корзине
+          const cartObserver = new MutationObserver((mutations) => {
+            let shouldCheckBonuses = false;
+
+            mutations.forEach((mutation) => {
+              // Проверяем изменения в дочерних элементах
+              if (
+                mutation.type === 'childList' &&
+                mutation.addedNodes.length > 0
+              ) {
+                // Проверим, добавились ли элементы, связанные с товарами или суммой
+                Array.from(mutation.addedNodes).forEach((node) => {
+                  if (
+                    node.nodeType === 1 &&
+                    (node.classList?.contains('t706__product') ||
+                      node.classList?.contains('t706__cartwin-totalamount') ||
+                      node.querySelector?.(
+                        '.t706__product, .t706__cartwin-totalamount'
+                      ))
+                  ) {
+                    shouldCheckBonuses = true;
+                  }
+                });
+              }
+
+              // Проверяем изменения атрибутов
+              if (
+                mutation.type === 'attributes' &&
+                (mutation.attributeName === 'data-total' ||
+                  mutation.attributeName === 'data-quantity')
+              ) {
+                shouldCheckBonuses = true;
+              }
+            });
+
+            if (shouldCheckBonuses && self.state.appliedBonuses > 0) {
+              self.log(
+                '🔄 Обнаружено изменение в корзине через MutationObserver'
+              );
+              setTimeout(() => {
+                self.adjustBonusesForCartChange();
+              }, 200);
+            }
+          });
+
+          cartObserver.observe(cartWindow, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['data-total', 'data-quantity', 'class']
+          });
+
+          self.log('✅ MutationObserver для корзины установлен');
+        }
+      };
+
+      // Запускаем наблюдение за корзиной
+      observeCartChanges();
     },
 
     onCartOpenDebounced: function () {
@@ -485,8 +549,13 @@
 
       // Получаем email/телефон пользователя
       const userContact = this.getUserContact();
-      if (userContact) {
+      if (userContact && (userContact.email || userContact.phone)) {
+        // У пользователя есть контактные данные - проверяем баланс
         this.loadUserBalance(userContact);
+      } else {
+        // У пользователя нет контактных данных - показываем плашку регистрации
+        this.log('Пользователь не авторизован - показываем плашку регистрации');
+        this.showRegistrationPrompt();
       }
     },
 
@@ -544,6 +613,18 @@
       } else if (input.type === 'tel' || input.name === 'phone') {
         this.state.userPhone = value;
         localStorage.setItem('tilda_user_phone', value);
+      }
+
+      // Если есть контактные данные, переключаемся с плашки на обычный виджет
+      if (this.state.userEmail || this.state.userPhone) {
+        // Если сейчас показывается плашка регистрации, переключаемся на обычный виджет
+        const container = document.querySelector('.bonus-widget-container');
+        if (container && container.querySelector('.registration-prompt')) {
+          this.log(
+            'Пользователь ввел контактные данные - переключаемся на обычный виджет'
+          );
+          this.createWidget(); // Пересоздаем виджет с обычным интерфейсом
+        }
       }
 
       // Загружаем баланс с дебаунсом
@@ -663,13 +744,30 @@
     // Автоматическая корректировка бонусов при изменении корзины
     adjustBonusesForCartChange: function () {
       try {
+        this.log('🔍 Проверяем необходимость корректировки бонусов');
+
         // Если нет примененных бонусов, ничего не делаем
         if (this.state.appliedBonuses <= 0) {
+          this.log('ℹ️ Нет примененных бонусов, пропускаем');
           return;
         }
 
+        // Проверяем, изменилась ли корзина
+        const currentTotal = this.getCartTotal();
         this.log(
-          'Обнаружено изменение корзины с примененными бонусами - удаляем промокод'
+          `💰 Текущая сумма корзины: ${currentTotal}, сохраненная: ${this.state.originalCartTotal}`
+        );
+
+        // Если сумма корзины не изменилась значительно, возможно ничего не произошло
+        if (Math.abs(currentTotal - this.state.originalCartTotal) < 0.01) {
+          this.log(
+            'ℹ️ Сумма корзины не изменилась, проверяем другие признаки изменений'
+          );
+          // Все равно проверяем, может быть изменилось количество товаров
+        }
+
+        this.log(
+          '🚨 Обнаружено изменение корзины с примененными бонусами - удаляем промокод'
         );
 
         // Полностью очищаем промокод при любом изменении корзины
@@ -687,9 +785,12 @@
           'Бонусы отменены из-за изменения корзины. Примените заново при необходимости.'
         );
 
-        this.log('Промокод полностью удален из-за изменения корзины');
+        // Обновляем сохраненную сумму корзины
+        this.state.originalCartTotal = currentTotal;
+
+        this.log('✅ Промокод полностью удален из-за изменения корзины');
       } catch (error) {
-        this.log('Ошибка при корректировке бонусов:', error);
+        this.log('❌ Ошибка при корректировке бонусов:', error);
       }
     },
 
