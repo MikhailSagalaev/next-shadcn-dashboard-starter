@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.2
+ * @version: 2.9.3
  * @author: AI Assistant + User
  */
 
@@ -870,7 +870,7 @@
 
           setTimeout(() => {
             self.adjustBonusesForCartChange();
-            self.updateBalanceDisplay();
+            self.updateCartTotalAndMaxBonuses();
             self.log('✅ Обновляем виджет после изменения количества товаров');
           }, 200);
         }
@@ -881,7 +881,7 @@
         self.log('🚨 Получено событие tcart:quantity:changed');
         setTimeout(() => {
           self.adjustBonusesForCartChange();
-          self.updateBalanceDisplay();
+          self.updateCartTotalAndMaxBonuses();
           self.forceUpdateCartDisplay();
         }, 150);
       });
@@ -891,7 +891,7 @@
         self.log('🚨 Получено событие tcart:recalculated');
         setTimeout(() => {
           self.adjustBonusesForCartChange();
-          self.updateBalanceDisplay();
+          self.updateCartTotalAndMaxBonuses();
         }, 100);
       });
 
@@ -934,12 +934,13 @@
               }
             });
 
-            if (shouldCheckBonuses && self.state.appliedBonuses > 0) {
+            if (shouldCheckBonuses) {
               self.log(
                 '🔄 Обнаружено изменение в корзине через MutationObserver'
               );
               setTimeout(() => {
                 self.adjustBonusesForCartChange();
+                self.updateCartTotalAndMaxBonuses();
               }, 200);
             }
           });
@@ -1333,6 +1334,26 @@
         this.log('✅ Промокод принудительно удален из-за изменения корзины');
       } catch (error) {
         this.log('❌ Ошибка при корректировке бонусов:', error);
+      }
+    },
+
+    // Обновление суммы корзины и максимальной суммы бонусов при изменении корзины
+    updateCartTotalAndMaxBonuses: function () {
+      try {
+        this.log('🔄 Обновляем сумму корзины и максимум бонусов');
+
+        // Всегда обновляем originalCartTotal на текущую сумму корзины
+        const currentTotal = this.getCartTotal();
+        if (currentTotal > 0) {
+          this.state.originalCartTotal = currentTotal;
+          this.log(`💰 Обновлена сумма корзины: ${currentTotal}`);
+        }
+
+        // Обновляем отображение баланса и максимальную сумму
+        this.updateBalanceDisplay();
+        this.log('✅ Максимальная сумма бонусов обновлена');
+      } catch (error) {
+        this.log('❌ Ошибка при обновлении суммы корзины:', error);
       }
     },
 
