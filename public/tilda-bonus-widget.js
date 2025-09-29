@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 1.0.0
+ * @version: 1.1.0
  * @author: AI Assistant + User
  */
 
@@ -288,8 +288,9 @@
       // Слушаем события обновления корзины Tilda
       document.addEventListener('tcart:updated', (event) => {
         self.log('Получено событие обновления корзины Tilda');
-        // Обновляем отображение виджета при изменении корзины
+        // Автоматически корректируем бонусы при изменении корзины
         setTimeout(() => {
+          self.adjustBonusesForCartChange();
           self.updateBalanceDisplay();
         }, 100);
       });
@@ -302,6 +303,7 @@
           )
         ) {
           setTimeout(() => {
+            self.adjustBonusesForCartChange();
             self.updateBalanceDisplay();
             self.log('Обновляем виджет после изменения количества товаров');
           }, 200);
@@ -312,6 +314,7 @@
       document.addEventListener('tcart:quantity:changed', (event) => {
         self.log('Количество товаров изменено через API Tilda');
         setTimeout(() => {
+          self.adjustBonusesForCartChange();
           self.updateBalanceDisplay();
           self.forceUpdateCartDisplay();
         }, 150);
@@ -321,6 +324,7 @@
       document.addEventListener('tcart:recalculated', (event) => {
         self.log('Корзина пересчитана');
         setTimeout(() => {
+          self.adjustBonusesForCartChange();
           self.updateBalanceDisplay();
         }, 100);
       });
@@ -529,6 +533,57 @@
     },
 
     // Обновление отображения баланса
+    // Автоматическая корректировка бонусов при изменении корзины
+    adjustBonusesForCartChange: function () {
+      try {
+        // Если нет примененных бонусов, ничего не делаем
+        if (this.state.appliedBonuses <= 0) {
+          return;
+        }
+
+        // Рассчитываем новый максимум для текущей корзины
+        const originalCartTotal = this.getOriginalCartTotal();
+        let newMaxBonuses = Math.min(
+          this.state.bonusBalance,
+          originalCartTotal
+        );
+
+        // Применяем ограничение по уровню пользователя
+        if (this.state.levelInfo && this.state.levelInfo.paymentPercent < 100) {
+          const maxByLevel =
+            (originalCartTotal * this.state.levelInfo.paymentPercent) / 100;
+          newMaxBonuses = Math.min(newMaxBonuses, maxByLevel);
+        }
+
+        // Если текущие примененные бонусы превышают новый максимум
+        if (this.state.appliedBonuses > newMaxBonuses) {
+          const oldAmount = this.state.appliedBonuses;
+          const newAmount = Math.min(oldAmount, newMaxBonuses);
+
+          this.log(
+            `Корректируем бонусы: ${oldAmount} → ${newAmount} (новый максимум: ${newMaxBonuses})`
+          );
+
+          // Сохраняем новое значение
+          this.state.appliedBonuses = newAmount;
+          localStorage.setItem('tilda_applied_bonuses', newAmount);
+
+          // Обновляем скрытое поле
+          this.updateHiddenBonusField(newAmount);
+
+          // Переприменяем бонусы с новым количеством
+          this.reapplyBonusesWithAmount(newAmount);
+
+          // Показываем уведомление пользователю
+          this.showInfo(
+            `Количество бонусов скорректировано до ${newAmount}₽ из-за изменения корзины`
+          );
+        }
+      } catch (error) {
+        this.log('Ошибка при корректировке бонусов:', error);
+      }
+    },
+
     updateBalanceDisplay: function () {
       const balanceElement = document.querySelector('.bonus-balance');
       const balanceAmount = document.querySelector('.bonus-balance-amount');
@@ -663,6 +718,159 @@
         }
       } catch (error) {
         this.log('Ошибка при переприменении бонусов:', error);
+      }
+    },
+
+    // Переприменение бонусов с указанным количеством (для автоматической корректировки)
+    reapplyBonusesWithAmount: function (amount) {
+      try {
+        if (amount <= 0) {
+          this.clearAllPromocodes();
+          return;
+        }
+
+        this.log('Переприменяем бонусы с количеством:', amount);
+
+        // Полностью очищаем промокод и пересчитываем корзину
+        this.clearAllPromocodes();
+
+        // Ждем полной очистки, затем применяем бонусы заново с указанным количеством
+        setTimeout(() => {
+          this.applyBonusesDirect(amount);
+        }, 500);
+      } catch (error) {
+        this.log('Ошибка при переприменении бонусов с количеством:', error);
+      }
+    },
+
+    // Прямое применение бонусов без валидации (для автоматической корректировки)
+    applyBonusesDirect: async function (amount) {
+      try {
+        this.showLoading(true);
+
+        // Сохраняем примененные бонусы
+        this.state.appliedBonuses = amount;
+        localStorage.setItem('tilda_applied_bonuses', amount);
+
+        // Добавляем скрытое поле с бонусами для отправки в webhook
+        this.addHiddenBonusField(amount);
+
+        // Применяем скидку через нативный механизм Тильды как промокод с фиксированным дискаунтом
+        try {
+          // Полностью очищаем все промокоды перед применением новых
+          this.clearAllPromocodes();
+
+          // Ждем очистки
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          // Применяем новый промокод с бонусами
+          if (typeof window.t_input_promocode__addPromocode === 'function') {
+            window.t_input_promocode__addPromocode({
+              promocode: 'GUPIL',
+              discountsum: amount
+            });
+
+            // Вызываем пересчет промокода
+            if (typeof window.tcart__calcPromocode === 'function') {
+              try {
+                window.tcart__calcPromocode();
+              } catch (_) {}
+            }
+
+            // Пересчитываем суммы с учетом скидок
+            if (typeof window.tcart__calcAmountWithDiscounts === 'function') {
+              try {
+                window.tcart__calcAmountWithDiscounts();
+              } catch (_) {}
+            }
+
+            // Полностью перерисовываем корзину
+            if (typeof window.tcart__reDrawTotal === 'function') {
+              try {
+                window.tcart__reDrawTotal();
+              } catch (_) {}
+            }
+
+            if (typeof window.tcart__reDraw === 'function') {
+              try {
+                window.tcart__reDraw();
+              } catch (_) {}
+            }
+          } else {
+            this.showError(
+              'Не поддерживается применение промокодов в этой корзине'
+            );
+            return;
+          }
+        } catch (e) {
+          this.log('applyPromocode error', e);
+        }
+
+        // Обновляем отображение
+        this.updateBalanceDisplay();
+
+        this.showLoading(false);
+        this.showSuccess(`Применено ${amount} бонусов`);
+
+        this.log('Бонусы успешно применены напрямую:', amount);
+      } catch (error) {
+        this.showLoading(false);
+        this.showError('Ошибка применения бонусов');
+        this.log('Ошибка прямого применения бонусов:', error);
+      }
+    },
+
+    // Обновление скрытого поля с бонусами
+    updateHiddenBonusField: function (amount) {
+      try {
+        // Удаляем старое поле
+        const existingField = document.getElementById('tilda-applied-bonuses');
+        if (existingField) {
+          existingField.remove();
+        }
+
+        // Добавляем новое поле
+        this.addHiddenBonusField(amount);
+      } catch (error) {
+        this.log('Ошибка обновления скрытого поля бонусов:', error);
+      }
+    },
+
+    // Показ информационного сообщения
+    showInfo: function (message) {
+      try {
+        // Создаем или обновляем информационное сообщение
+        let infoElement = document.getElementById('bonus-info-message');
+        if (!infoElement) {
+          infoElement = document.createElement('div');
+          infoElement.id = 'bonus-info-message';
+          infoElement.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #2196F3;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-size: 14px;
+            max-width: 300px;
+            word-wrap: break-word;
+          `;
+          document.body.appendChild(infoElement);
+        }
+
+        infoElement.textContent = message;
+
+        // Автоматически скрываем через 5 секунд
+        setTimeout(() => {
+          if (infoElement && infoElement.parentNode) {
+            infoElement.remove();
+          }
+        }, 5000);
+      } catch (error) {
+        this.log('Ошибка показа информационного сообщения:', error);
       }
     },
 
