@@ -9,7 +9,15 @@
 
 'use client';
 
-import { useState, useMemo, useCallback, memo, Fragment } from 'react';
+import {
+  useState,
+  useMemo,
+  useCallback,
+  memo,
+  Fragment,
+  Component,
+  ReactNode
+} from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -77,6 +85,82 @@ import { UsersTable } from './users-table';
 // Types
 import type { DisplayUser as User } from '../types';
 
+// Error Boundary для обработки ошибок инициализации
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+class BonusManagementErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    console.error('[BonusManagementErrorBoundary] Error caught:', error);
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error(
+      '[BonusManagementErrorBoundary] Error details:',
+      error,
+      errorInfo
+    );
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        this.props.fallback || (
+          <Card className='mx-auto mt-8 w-full max-w-4xl'>
+            <CardHeader>
+              <CardTitle className='text-red-600'>Ошибка загрузки</CardTitle>
+              <CardDescription>
+                Произошла ошибка при загрузке страницы управления бонусами
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className='space-y-4'>
+                <p className='text-muted-foreground text-sm'>
+                  Пожалуйста, попробуйте перезагрузить страницу или обратитесь к
+                  администратору.
+                </p>
+                <div className='flex gap-2'>
+                  <Button
+                    onClick={() => window.location.reload()}
+                    variant='outline'
+                  >
+                    Перезагрузить страницу
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      this.setState({ hasError: false, error: undefined })
+                    }
+                  >
+                    Попробовать снова
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 interface BonusManagementPageProps {
   className?: string;
 }
@@ -114,6 +198,20 @@ export function BonusManagementPageRefactored({
     fallbackProjectId: 'cmdkloj85000cv8o0611rblp3' // Fallback project ID
   });
 
+  // Состояние для условной инициализации useProjectUsers
+  const [isProjectReady, setIsProjectReady] = useState(false);
+
+  // Инициализируем useProjectUsers только после загрузки проекта
+  useEffect(() => {
+    if (currentProjectId && !isProjectReady) {
+      console.log(
+        '[BonusManagementPage] Project ready, initializing useProjectUsers:',
+        currentProjectId
+      );
+      setIsProjectReady(true);
+    }
+  }, [currentProjectId, isProjectReady]);
+
   const {
     users,
     isLoading: usersLoading,
@@ -131,7 +229,7 @@ export function BonusManagementPageRefactored({
     setSearchTerm,
     exportUsers
   } = useProjectUsers({
-    projectId: currentProjectId,
+    projectId: isProjectReady ? currentProjectId : undefined,
     pageSize,
     searchTerm
   });
@@ -631,7 +729,7 @@ export function BonusManagementPageRefactored({
           )}
 
           {/* Users List */}
-          {currentProjectId ? (
+          {isProjectReady && currentProjectId ? (
             <UsersTable
               data={filteredUsers}
               onExport={handleExportAll}
@@ -649,7 +747,11 @@ export function BonusManagementPageRefactored({
             <div className='flex items-center justify-center p-8'>
               <div className='text-center'>
                 <div className='border-primary mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2'></div>
-                <p className='text-muted-foreground'>Загрузка проекта...</p>
+                <p className='text-muted-foreground'>
+                  {currentProjectId
+                    ? 'Загрузка пользователей...'
+                    : 'Загрузка проекта...'}
+                </p>
               </div>
             </div>
           )}
@@ -1086,4 +1188,13 @@ const UsersDisplayArea = memo<UsersDisplayAreaProps>(
 
 UsersDisplayArea.displayName = 'UsersDisplayArea';
 
-export default BonusManagementPageRefactored;
+// Обертка с Error Boundary для предотвращения ошибок инициализации
+function BonusManagementPageWithErrorBoundary(props: BonusManagementPageProps) {
+  return (
+    <BonusManagementErrorBoundary>
+      <BonusManagementPageRefactored {...props} />
+    </BonusManagementErrorBoundary>
+  );
+}
+
+export default BonusManagementPageWithErrorBoundary;

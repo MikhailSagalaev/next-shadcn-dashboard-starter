@@ -47,6 +47,15 @@ export function useProjectUsers({
   pageSize = 50,
   searchTerm = ''
 }: UseProjectUsersOptions = {}): UseProjectUsersReturn {
+  // Защита от ошибок инициализации - проверяем базовые типы
+  if (typeof pageSize !== 'number' || pageSize <= 0) {
+    console.warn(
+      '[useProjectUsers] Invalid pageSize, using default:',
+      pageSize
+    );
+    pageSize = 50;
+  }
+
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,10 +79,25 @@ export function useProjectUsers({
    */
   const loadUsers = useCallback(
     async (page = 1) => {
-      if (!projectId) {
+      // Дополнительная защита от ошибок инициализации
+      if (
+        !projectId ||
+        typeof projectId !== 'string' ||
+        projectId.trim() === ''
+      ) {
         logger.warn(
-          'Cannot load users: projectId not provided',
-          {},
+          'Cannot load users: invalid projectId',
+          { projectId, type: typeof projectId },
+          'use-project-users'
+        );
+        return;
+      }
+
+      // Проверяем, что все необходимые зависимости инициализированы
+      if (typeof pageSize !== 'number' || pageSize <= 0) {
+        logger.warn(
+          'Cannot load users: invalid pageSize',
+          { pageSize, type: typeof pageSize },
           'use-project-users'
         );
         return;
