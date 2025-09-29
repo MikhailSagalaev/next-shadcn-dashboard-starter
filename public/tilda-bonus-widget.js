@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.5
+ * @version: 2.9.6
  * @author: AI Assistant + User
  */
 
@@ -790,7 +790,7 @@
           ">`;
 
         // Иконка
-        if (settings.showIcon) {
+        if (widgetSettings.showIcon) {
           htmlContent += `
             <div class="registration-icon" style="
               font-size: ${styles.iconSize};
@@ -801,7 +801,7 @@
         }
 
         // Заголовок
-        if (settings.showTitle) {
+        if (widgetSettings.showTitle) {
           htmlContent += `
             <div class="registration-title" style="
               font-size: ${styles.titleFontSize};
@@ -812,7 +812,7 @@
         }
 
         // Описание
-        if (settings.showDescription) {
+        if (widgetSettings.showDescription) {
           htmlContent += `
             <div class="registration-description" style="
               font-size: ${styles.descriptionFontSize};
@@ -825,7 +825,7 @@
         // Кнопка или текст без бота
         htmlContent += `<div class="registration-action">`;
 
-        if (settings.showButton && botUsername) {
+        if (widgetSettings.showButton && botUsername) {
           htmlContent += `
             <a href="https://t.me/${botUsername}" target="_blank" class="registration-button" style="
               display: ${styles.buttonDisplay};
@@ -843,7 +843,7 @@
             " onmouseover="this.style.background='${styles.buttonHoverColor}'" onmouseout="this.style.background='${styles.buttonBackgroundColor}'">
               ${templates.registrationButtonText}
             </a>`;
-        } else if (settings.showFallbackText) {
+        } else if (widgetSettings.showFallbackText) {
           htmlContent += `
             <div style="
               font-size: ${styles.fallbackFontSize};
