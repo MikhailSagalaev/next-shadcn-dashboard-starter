@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.7
+ * @version: 2.9.8
  * @author: AI Assistant + User
  */
 
@@ -129,6 +129,53 @@
     log: function () {
       if (this.config.debug) {
         console.log('[TildaBonusWidget]', ...arguments);
+      }
+    },
+
+    // Получить email пользователя из localStorage или куки
+    getUserEmail: function () {
+      try {
+        // Проверяем localStorage
+        const savedEmail = localStorage.getItem('tilda_user_email');
+        if (savedEmail) {
+          return savedEmail;
+        }
+
+        // Проверяем куки (на случай если данные хранятся там)
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+          const [name, value] = cookie.trim().split('=');
+          if (name === 'user_email' || name === 'tilda_user_email') {
+            return decodeURIComponent(value);
+          }
+        }
+
+        return null;
+      } catch (error) {
+        this.log('Ошибка получения email пользователя:', error);
+        return null;
+      }
+    },
+
+    // Проверить, привязан ли Telegram
+    isTelegramLinked: function () {
+      try {
+        // Проверяем localStorage на наличие признака привязки
+        const telegramLinked = localStorage.getItem('tilda_telegram_linked');
+        if (telegramLinked === 'true') {
+          return true;
+        }
+
+        // Дополнительная проверка - наличие telegram ID или username
+        const telegramId = localStorage.getItem('tilda_telegram_id');
+        const telegramUsername = localStorage.getItem(
+          'tilda_telegram_username'
+        );
+
+        return !!(telegramId || telegramUsername);
+      } catch (error) {
+        this.log('Ошибка проверки привязки Telegram:', error);
+        return false;
       }
     },
 
@@ -2066,8 +2113,45 @@
       }
     },
 
+    // Определение состояния пользователя
+    getUserState: function () {
+      // Проверяем localStorage и куки
+      const userEmail = this.getUserEmail();
+      const telegramLinked = this.isTelegramLinked();
+
+      if (!userEmail && !telegramLinked) {
+        return 'not_registered'; // 🔴 Состояние 1
+      } else if (userEmail && !telegramLinked) {
+        return 'registered_not_confirmed'; // 🟡 Состояние 2
+      } else if (userEmail && telegramLinked) {
+        return 'fully_activated'; // 🟢 Состояние 3
+      }
+      return 'unknown';
+    },
+
+    // Проверка возможности использования бонусов
+    canSpendBonuses: function () {
+      const userState = this.getUserState();
+      return userState === 'fully_activated'; // Только подтвердившие пользователи
+    },
+
     // Применение бонусов
     applyBonuses: async function () {
+      // Проверяем, может ли пользователь тратить бонусы
+      if (!this.canSpendBonuses()) {
+        const userState = this.getUserState();
+        if (userState === 'not_registered') {
+          this.showError(
+            'Для использования бонусов необходимо зарегистрироваться и подтвердить аккаунт в Telegram боте'
+          );
+        } else if (userState === 'registered_not_confirmed') {
+          this.showError(
+            'Для использования бонусов необходимо подтвердить аккаунт в Telegram боте'
+          );
+        }
+        return;
+      }
+
       const amountInput = document.getElementById('bonus-amount-input');
       const amount = parseFloat(amountInput.value) || 0;
 
