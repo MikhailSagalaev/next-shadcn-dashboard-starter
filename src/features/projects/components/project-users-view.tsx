@@ -50,6 +50,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Pagination,
   PaginationContent,
@@ -98,6 +99,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const [bulkOperation, setBulkOperation] = useState<
     'bonus_award' | 'bonus_deduct' | 'notification'
   >('bonus_award');
+  const [profileUser, setProfileUser] = useState<UserWithBonuses | null>(null);
 
   // Users management hook
   const {
@@ -131,6 +133,10 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     },
     [loadUsers]
   );
+
+  const handleUserProfile = useCallback((user: UserWithBonuses) => {
+    setProfileUser(user);
+  }, []);
 
   // Stats data
   const statsData = {
@@ -629,6 +635,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 createdAt: new Date(user.registeredAt),
                 updatedAt: new Date(user.registeredAt)
               }))}
+              onSelectionChange={setSelectedUsers}
+              onProfileClick={handleUserProfile}
               onHistoryClick={(userId) => {
                 const user = users.find((u) => u.id === userId);
                 if (user) handleOpenBonusDialog(user);
@@ -672,6 +680,90 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           onSuccess={handleBonusSuccess}
         />
       )}
+
+      {/* User Profile Dialog */}
+      <Dialog
+        open={!!profileUser}
+        onOpenChange={(o) => !o && setProfileUser(null)}
+      >
+        <DialogContent className='max-w-2xl'>
+          <DialogHeader>
+            <DialogTitle>Профиль пользователя</DialogTitle>
+          </DialogHeader>
+          {profileUser && (
+            <div className='space-y-6'>
+              <div className='flex items-center space-x-4'>
+                <Avatar className='h-16 w-16'>
+                  <AvatarImage
+                    src={`https://api.slingacademy.com/public/sample-users/${(parseInt(profileUser.id.slice(-2), 16) % 10) + 1}.png`}
+                  />
+                  <AvatarFallback className='text-lg'>
+                    {profileUser.firstName?.[0] || ''}
+                    {profileUser.lastName?.[0] || ''}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className='text-xl font-semibold'>{profileUser.name}</h3>
+                  <p className='text-muted-foreground'>
+                    ID: {profileUser.id.slice(0, 8)}...
+                  </p>
+                </div>
+              </div>
+
+              <div className='grid grid-cols-2 gap-4'>
+                <div>
+                  <Label className='text-sm font-medium'>Email</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.email || 'Не указан'}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>Телефон</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.phone || 'Не указан'}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>Активные бонусы</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.activeBonuses} ₽
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    Всего заработано
+                  </Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.totalBonuses} ₽
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    Дата регистрации
+                  </Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {new Date(profileUser.registeredAt).toLocaleDateString(
+                      'ru-RU'
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    Последняя активность
+                  </Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.lastActivity
+                      ? new Date(profileUser.lastActivity).toLocaleDateString(
+                          'ru-RU'
+                        )
+                      : 'Неизвестно'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Диалог списания бонусов */}
       {selectedUser && (

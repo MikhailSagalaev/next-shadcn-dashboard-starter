@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.11
+ * @version: 2.9.12
  * @author: AI Assistant + User
  * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
@@ -2118,6 +2118,29 @@
           if (this.ensureWidgetMounted()) {
             this.state.bonusBalance = data.balance || 0;
             this.state.levelInfo = data.levelInfo || null;
+
+            // Синхронизируем статус Telegram из API с localStorage
+            if (data.user.telegramLinked) {
+              this.safeSetStorage('tilda_telegram_linked', 'true');
+              if (data.user.telegramId) {
+                this.safeSetStorage(
+                  'tilda_telegram_id',
+                  String(data.user.telegramId)
+                );
+              }
+              if (data.user.telegramUsername) {
+                this.safeSetStorage(
+                  'tilda_telegram_username',
+                  data.user.telegramUsername
+                );
+              }
+              this.log('✅ Синхронизирован статус Telegram из API');
+            } else {
+              // Если API говорит что не привязан, очищаем localStorage
+              localStorage.removeItem('tilda_telegram_linked');
+              localStorage.removeItem('tilda_telegram_id');
+              localStorage.removeItem('tilda_telegram_username');
+            }
 
             // Обновляем изначальную сумму корзины, если она ещё не установлена
             const currentTotal = this.getCartTotal();

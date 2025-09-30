@@ -122,7 +122,8 @@ export async function GET(
           phone: user.phone,
           firstName: user.firstName,
           lastName: user.lastName,
-          currentLevel: user.currentLevel
+          currentLevel: user.currentLevel,
+          telegramLinked: Boolean(user.telegramId)
         },
         balanceDetails: {
           currentBalance: Number(userBalance.currentBalance),
