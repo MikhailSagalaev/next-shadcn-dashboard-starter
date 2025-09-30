@@ -2,13 +2,30 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.10
+ * @version: 2.9.11
  * @author: AI Assistant + User
  * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
 
 (function () {
   'use strict';
+
+  // Безопасная инициализация - проверяем что DOM готов
+  function safeInit() {
+    if (typeof document === 'undefined' || !document.body) {
+      // DOM еще не готов, ждем
+      if (typeof document !== 'undefined') {
+        document.addEventListener('DOMContentLoaded', initWidget);
+      }
+      return;
+    }
+    initWidget();
+  }
+
+  function initWidget() {
+    // Теперь DOM точно готов - можно безопасно работать с элементами
+    console.log('🎯 TildaBonusWidget: DOM готов, виджет готов к инициализации');
+  }
 
   // Глобальный объект для виджета
   window.TildaBonusWidget = {
@@ -64,6 +81,15 @@
     init: function (userConfig) {
       console.log('🎯 TildaBonusWidget: НАЧАЛО ИНИЦИАЛИЗАЦИИ');
       console.log('🎯 TildaBonusWidget: Опции:', userConfig);
+
+      // Проверяем что DOM готов
+      if (typeof document === 'undefined' || !document.body) {
+        console.error(
+          '❌ TildaBonusWidget: DOM не готов, откладываем инициализацию'
+        );
+        setTimeout(() => this.init(userConfig), 100);
+        return;
+      }
 
       // Объединяем конфигурацию
       this.config = Object.assign({}, this.config, userConfig);
@@ -572,7 +598,6 @@
           signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
             ...options.headers
           }
         };
@@ -1646,12 +1671,10 @@
 
       // Слушаем события изменения количества товаров
       document.addEventListener('click', (event) => {
-        console.log('🎯 TildaBonusWidget: КЛИК ОБНАРУЖЕН');
-        console.log('🎯 TildaBonusWidget: Цель клика:', event.target);
-        console.log(
-          '🎯 TildaBonusWidget: Классы цели:',
-          event.target.className
-        );
+        // Логируем только в режиме отладки
+        if (this.config.debug) {
+          this.log('Клик обнаружен:', event.target.className);
+        }
 
         if (
           event.target.closest(
@@ -3032,10 +3055,6 @@
     }
   };
 
-  // Автоматическая инициализация при загрузке
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      // Виджет будет инициализирован вручную через TildaBonusWidget.init()
-    });
-  }
+  // Безопасная инициализация виджета
+  safeInit();
 })();
