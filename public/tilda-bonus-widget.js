@@ -2,8 +2,9 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.8
+ * @version: 2.9.10
  * @author: AI Assistant + User
+ * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
 
 (function () {
@@ -17,8 +18,13 @@
       apiUrl: 'https://bonus.example.com',
       bonusToRuble: 1,
       minOrderAmount: 100,
-      debug: true, // ВКЛЮЧЕНО для отладки
-      debounceMs: 400
+      debug: false, // ВЫКЛЮЧЕНО для продакшена
+      debounceMs: 400,
+      maxRetries: 3,
+      timeout: 10000,
+      enableLogging: false, // Полностью отключаем логирование в продакшене
+      rateLimitMs: 1000, // Минимальный интервал между API запросами
+      maxConcurrentRequests: 2 // Максимум одновременных запросов
     },
 
     // Состояние
@@ -35,7 +41,23 @@
       _cartObserver: null,
       mode: 'bonus',
       levelInfo: null, // информация об уровне пользователя
-      originalCartTotal: 0 // изначальная сумма корзины без бонусов
+      originalCartTotal: 0, // изначальная сумма корзины без бонусов
+      // Новые поля для управления памятью
+      timers: new Set(), // Храним все активные таймеры
+      observers: new Set(), // Храним все observers
+      abortControllers: new Set(), // Храним все AbortController'ы
+      isDestroyed: false, // Флаг уничтожения виджета
+      // Rate limiting
+      lastApiCall: 0, // Timestamp последнего API вызова
+      activeRequests: 0, // Количество активных запросов
+      requestQueue: [], // Очередь запросов для rate limiting
+      apiAvailable: undefined, // Доступность API
+      // Кэш DOM элементов для оптимизации
+      domCache: new Map(), // Кэш найденных элементов
+      // Архитектурные улучшения
+      errorRecoveryAttempts: 0, // Количество попыток восстановления после ошибок
+      lastErrorTime: 0, // Время последней ошибки
+      healthCheckTimer: null // Таймер проверки здоровья
     },
 
     // Инициализация виджета
@@ -51,6 +73,12 @@
         console.error('[TildaBonusWidget] Ошибка: projectId не указан');
         return;
       }
+
+      // Проверяем доступность API
+      this.checkApiAvailability();
+
+      // Запускаем периодическую очистку кэша
+      this.scheduleCacheCleanup();
 
       // Если apiUrl не указан, определяем по src текущего скрипта
       try {
@@ -89,55 +117,585 @@
     // Загрузка данных пользователя из localStorage при инициализации
     loadUserDataFromStorage: function () {
       try {
-        const savedEmail = localStorage.getItem('tilda_user_email');
-        const savedPhone = localStorage.getItem('tilda_user_phone');
-        const savedAppliedBonuses = localStorage.getItem(
+        const savedEmail = this.safeGetStorage('tilda_user_email');
+        const savedPhone = this.safeGetStorage('tilda_user_phone');
+        const savedAppliedBonuses = this.safeGetStorage(
           'tilda_applied_bonuses'
         );
 
-        if (savedEmail) {
+        if (savedEmail && this.validateEmail(savedEmail)) {
           this.state.userEmail = savedEmail;
-          this.log(
-            '📧 Загружен email из localStorage:',
-            savedEmail.substring(0, 3) + '***'
-          );
+          this.log('📧 Загружен валидный email из localStorage');
         }
 
-        if (savedPhone) {
+        if (savedPhone && this.validatePhone(savedPhone)) {
           this.state.userPhone = savedPhone;
-          this.log(
-            '📱 Загружен телефон из localStorage:',
-            savedPhone.substring(0, 3) + '***'
-          );
+          this.log('📱 Загружен валидный телефон из localStorage');
         }
 
         if (savedAppliedBonuses) {
-          this.state.appliedBonuses = parseFloat(savedAppliedBonuses) || 0;
-          this.log(
-            '💰 Загружены примененные бонусы из localStorage:',
-            this.state.appliedBonuses
-          );
+          const bonusAmount = parseFloat(savedAppliedBonuses);
+          if (!isNaN(bonusAmount) && bonusAmount >= 0 && bonusAmount <= 10000) {
+            this.state.appliedBonuses = bonusAmount;
+            this.log('💰 Загружены примененные бонусы:', bonusAmount);
+          }
         }
 
-        this.log('✅ Данные пользователя загружены из localStorage');
+        this.log('✅ Данные пользователя загружены и валидированы');
       } catch (error) {
-        this.log('❌ Ошибка загрузки данных из localStorage:', error);
+        this.logError('Ошибка загрузки данных пользователя', error);
       }
     },
 
-    // Логирование (только в debug режиме)
+    // Безопасное логирование (только в режиме отладки)
     log: function () {
-      if (this.config.debug) {
-        console.log('[TildaBonusWidget]', ...arguments);
+      if (
+        this.config.debug &&
+        this.config.enableLogging &&
+        typeof console !== 'undefined'
+      ) {
+        try {
+          // Фильтруем чувствительные данные
+          const args = Array.from(arguments).map((arg) => {
+            if (
+              typeof arg === 'string' &&
+              (arg.includes('@') || arg.match(/\d{10,}/))
+            ) {
+              return arg.replace(/./g, '*'); // Маскируем персональные данные
+            }
+            return arg;
+          });
+          console.log('[TildaBonusWidget]', ...args);
+        } catch (e) {
+          // Silent fail - не логируем ошибки логирования
+        }
       }
+    },
+
+    // Логирование ошибок (всегда активно, но с фильтрами)
+    logError: function (message, error) {
+      if (!this.config.enableLogging) return;
+
+      try {
+        const safeMessage = message.replace(/./g, '*'); // Маскируем потенциально чувствительные сообщения
+        console.error(
+          '[TildaBonusWidget Error]',
+          safeMessage,
+          error?.message || 'Unknown error'
+        );
+
+        // Автоматическое восстановление после критических ошибок
+        this.handleErrorRecovery(error);
+      } catch (e) {
+        // Silent fail
+      }
+    },
+
+    // Система восстановления после ошибок
+    handleErrorRecovery: function (error) {
+      const now = Date.now();
+      const timeSinceLastError = now - this.state.lastErrorTime;
+
+      // Если прошло менее 5 минут с последней ошибки, увеличиваем счетчик
+      if (timeSinceLastError < 5 * 60 * 1000) {
+        this.state.errorRecoveryAttempts++;
+      } else {
+        this.state.errorRecoveryAttempts = 1;
+      }
+
+      this.state.lastErrorTime = now;
+
+      // Если слишком много ошибок подряд, переходим в safe mode
+      if (this.state.errorRecoveryAttempts >= 5) {
+        this.log('🚨 Слишком много ошибок, переходим в безопасный режим');
+        this.enterSafeMode();
+        return;
+      }
+
+      // Для некоторых типов ошибок пытаемся восстановиться
+      if (error?.name === 'TypeError' && error?.message?.includes('null')) {
+        this.log('🔧 Пытаемся восстановить после null reference ошибки');
+        this.safeSetTimeout(() => {
+          this.validateState();
+          this.cleanDomCache();
+        }, 1000);
+      }
+    },
+
+    // Безопасный режим работы
+    enterSafeMode: function () {
+      this.log('🛡️ Включаем безопасный режим');
+
+      // Отключаем все observers и таймеры
+      this.destroy();
+
+      // Показываем упрощенное сообщение
+      this.showSafeModeMessage();
+
+      // Периодически пытаемся восстановиться
+      this.scheduleRecoveryCheck();
+    },
+
+    // Показать сообщение безопасного режима
+    showSafeModeMessage: function () {
+      const message = document.createElement('div');
+      message.id = 'tilda-bonus-safe-mode';
+      message.innerHTML = `
+        <div style="
+          position: fixed;
+          bottom: 20px;
+          left: 20px;
+          background: #fff3cd;
+          border: 1px solid #ffeaa7;
+          border-radius: 8px;
+          padding: 12px 16px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 10001;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 14px;
+          color: #856404;
+          max-width: 300px;
+        ">
+          🔧 Виджет работает в безопасном режиме. Обновите страницу для восстановления.
+        </div>
+      `;
+
+      document.body.appendChild(message);
+    },
+
+    // Планирование проверки восстановления
+    scheduleRecoveryCheck: function () {
+      this.safeSetTimeout(() => {
+        if (!this.state.isDestroyed) {
+          this.attemptRecovery();
+        }
+      }, 30 * 1000); // Проверяем каждые 30 секунд
+    },
+
+    // Попытка восстановления
+    attemptRecovery: function () {
+      try {
+        this.log('🔄 Пытаемся восстановить нормальную работу...');
+
+        // Проверяем основные компоненты
+        const cartWindow = this.getCachedElement('.t706__cartwin', true);
+        if (cartWindow) {
+          // Если основные элементы доступны, пытаемся переинициализировать
+          this.state.errorRecoveryAttempts = 0;
+          this.init(this.config);
+          return;
+        }
+
+        // Если не удалось, планируем следующую попытку
+        this.scheduleRecoveryCheck();
+      } catch (error) {
+        this.logError('Не удалось восстановить работу', error);
+        this.scheduleRecoveryCheck();
+      }
+    },
+
+    // Безопасное создание таймера
+    safeSetTimeout: function (callback, delay) {
+      if (this.state.isDestroyed) return null;
+
+      const timer = setTimeout(() => {
+        if (!this.state.isDestroyed) {
+          callback();
+        }
+        this.state.timers.delete(timer);
+      }, delay);
+
+      this.state.timers.add(timer);
+      return timer;
+    },
+
+    // Безопасная очистка таймера
+    safeClearTimeout: function (timer) {
+      if (timer) {
+        clearTimeout(timer);
+        this.state.timers.delete(timer);
+      }
+    },
+
+    // Безопасное создание AbortController
+    createAbortController: function () {
+      if (this.state.isDestroyed) return null;
+
+      const controller = new AbortController();
+      this.state.abortControllers.add(controller);
+
+      // Автоматическая очистка при abort
+      controller.signal.addEventListener('abort', () => {
+        this.state.abortControllers.delete(controller);
+      });
+
+      return controller;
+    },
+
+    // Безопасное создание observer
+    createObserver: function (callback, options) {
+      if (this.state.isDestroyed) return null;
+
+      const observer = new MutationObserver((mutations, obs) => {
+        if (!this.state.isDestroyed) {
+          callback(mutations, obs);
+        }
+      });
+
+      this.state.observers.add(observer);
+      return observer;
+    },
+
+    // Проверка доступности API
+    checkApiAvailability: async function () {
+      if (this.state.apiAvailable !== undefined) return this.state.apiAvailable;
+
+      try {
+        const testUrl = `${this.config.apiUrl}/api/health`;
+        const response = await Promise.race([
+          fetch(testUrl, { method: 'HEAD', mode: 'no-cors' }),
+          new Promise((_, reject) =>
+            this.safeSetTimeout(() => reject(new Error('timeout')), 3000)
+          )
+        ]);
+
+        this.state.apiAvailable = true;
+        this.log('✅ API доступен');
+        return true;
+      } catch (error) {
+        this.state.apiAvailable = false;
+        this.log('⚠️ API недоступен, переходим в offline режим');
+        this.enterOfflineMode();
+        return false;
+      }
+    },
+
+    // Режим работы без API
+    enterOfflineMode: function () {
+      this.log('🔌 Переход в offline режим');
+
+      // Показываем базовую информацию без API данных
+      if (this.getUserContact()) {
+        this.ensureWidgetMounted();
+        this.showLoading(false);
+        this.updateBalanceDisplay();
+      } else {
+        this.showRegistrationPrompt();
+      }
+
+      // Показываем сообщение о недоступности
+      this.safeSetTimeout(() => {
+        this.showOfflineMessage();
+      }, 2000);
+    },
+
+    // Безопасный поиск DOM элементов с кэшированием
+    getCachedElement: function (selector, refresh = false) {
+      if (!refresh && this.state.domCache.has(selector)) {
+        const cached = this.state.domCache.get(selector);
+        if (cached.element && document.contains(cached.element)) {
+          return cached.element;
+        }
+        // Элемент больше не существует, удаляем из кэша
+        this.state.domCache.delete(selector);
+      }
+
+      try {
+        const element = document.querySelector(selector);
+        if (element) {
+          this.state.domCache.set(selector, {
+            element: element,
+            timestamp: Date.now()
+          });
+        }
+        return element;
+      } catch (error) {
+        this.logError('Error finding element', error);
+        return null;
+      }
+    },
+
+    // Очистка устаревшего кэша DOM элементов
+    cleanDomCache: function () {
+      const now = Date.now();
+      const maxAge = 5 * 60 * 1000; // 5 минут
+
+      for (const [selector, cached] of this.state.domCache.entries()) {
+        if (
+          now - cached.timestamp > maxAge ||
+          !document.contains(cached.element)
+        ) {
+          this.state.domCache.delete(selector);
+        }
+      }
+    },
+
+    // Планирование периодической очистки кэша
+    scheduleCacheCleanup: function () {
+      this.safeSetTimeout(
+        () => {
+          if (!this.state.isDestroyed) {
+            this.cleanDomCache();
+            this.validateState(); // Проверяем корректность состояния
+            this.scheduleCacheCleanup(); // Рекурсивный вызов
+          }
+        },
+        5 * 60 * 1000
+      ); // Каждые 5 минут
+    },
+
+    // Валидация состояния виджета
+    validateState: function () {
+      try {
+        // Проверяем корректность числовых значений
+        if (
+          typeof this.state.bonusBalance !== 'number' ||
+          isNaN(this.state.bonusBalance)
+        ) {
+          this.state.bonusBalance = 0;
+        }
+        if (
+          typeof this.state.appliedBonuses !== 'number' ||
+          isNaN(this.state.appliedBonuses)
+        ) {
+          this.state.appliedBonuses = 0;
+        }
+        if (
+          typeof this.state.originalCartTotal !== 'number' ||
+          isNaN(this.state.originalCartTotal)
+        ) {
+          this.state.originalCartTotal = 0;
+        }
+
+        // Проверяем строковые значения
+        if (typeof this.state.userEmail !== 'string') {
+          this.state.userEmail = null;
+        }
+        if (typeof this.state.userPhone !== 'string') {
+          this.state.userPhone = null;
+        }
+
+        // Проверяем логические значения
+        if (typeof this.state.initialized !== 'boolean') {
+          this.state.initialized = false;
+        }
+
+        // Ограничиваем размеры коллекций для предотвращения memory leaks
+        if (this.state.domCache.size > 100) {
+          this.log('⚠️ Слишком большой DOM кэш, очищаем...');
+          this.state.domCache.clear();
+        }
+
+        if (this.state.requestQueue.length > 10) {
+          this.log('⚠️ Слишком большая очередь запросов, очищаем...');
+          this.state.requestQueue = [];
+        }
+      } catch (error) {
+        this.logError('Ошибка валидации состояния', error);
+      }
+    },
+
+    // Показать сообщение о недоступности
+    showOfflineMessage: function () {
+      const message = document.createElement('div');
+      message.id = 'tilda-bonus-offline-message';
+      message.innerHTML = `
+        <div style="
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #fff3cd;
+          border: 1px solid #ffeaa7;
+          border-radius: 8px;
+          padding: 12px 16px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 10001;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 14px;
+          color: #856404;
+          max-width: 300px;
+        ">
+          🔄 Сервис бонусов временно недоступен. Попробуйте позже.
+        </div>
+      `;
+
+      document.body.appendChild(message);
+
+      // Автоматическое скрытие через 5 секунд
+      this.safeSetTimeout(() => {
+        if (message.parentNode) {
+          message.remove();
+        }
+      }, 5000);
+    },
+
+    // Rate limited API запрос с retry logic
+    makeApiRequest: async function (url, options = {}, retryCount = 0) {
+      if (this.state.isDestroyed) return null;
+
+      // Rate limiting
+      const now = Date.now();
+      const timeSinceLastCall = now - this.state.lastApiCall;
+
+      if (timeSinceLastCall < this.config.rateLimitMs) {
+        await new Promise((resolve) =>
+          this.safeSetTimeout(
+            resolve,
+            this.config.rateLimitMs - timeSinceLastCall
+          )
+        );
+      }
+
+      // Проверка на максимум одновременных запросов
+      if (this.state.activeRequests >= this.config.maxConcurrentRequests) {
+        // Добавляем в очередь
+        return new Promise((resolve, reject) => {
+          this.state.requestQueue.push({
+            url,
+            options,
+            retryCount,
+            resolve,
+            reject
+          });
+        });
+      }
+
+      this.state.lastApiCall = Date.now();
+      this.state.activeRequests++;
+
+      try {
+        const controller = this.createAbortController();
+        if (!controller) throw new Error('Cannot create AbortController');
+
+        const fetchOptions = {
+          ...options,
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...options.headers
+          }
+        };
+
+        this.log('Making API request:', url);
+
+        const response = await fetch(url, fetchOptions);
+        this.state.activeRequests--;
+
+        // Обработка очереди
+        if (
+          this.state.requestQueue.length > 0 &&
+          this.state.activeRequests < this.config.maxConcurrentRequests
+        ) {
+          const nextRequest = this.state.requestQueue.shift();
+          this.safeSetTimeout(() => {
+            this.makeApiRequest(
+              nextRequest.url,
+              nextRequest.options,
+              nextRequest.retryCount
+            )
+              .then(nextRequest.resolve)
+              .catch(nextRequest.reject);
+          }, 100);
+        }
+
+        // Проверка статуса ответа
+        if (!response.ok) {
+          if (response.status >= 500 && retryCount < this.config.maxRetries) {
+            this.log(
+              `API request failed with ${response.status}, retrying... (${retryCount + 1}/${this.config.maxRetries})`
+            );
+            await new Promise((resolve) =>
+              this.safeSetTimeout(resolve, Math.pow(2, retryCount) * 1000)
+            ); // Exponential backoff
+            return this.makeApiRequest(url, options, retryCount + 1);
+          }
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        this.state.activeRequests--;
+
+        if (error.name === 'AbortError') {
+          this.log('Request was aborted');
+          return null;
+        }
+
+        // Retry на сетевые ошибки
+        if (
+          (error.name === 'TypeError' || error.name === 'NetworkError') &&
+          retryCount < this.config.maxRetries
+        ) {
+          this.log(
+            `Network error, retrying... (${retryCount + 1}/${this.config.maxRetries})`,
+            error.message
+          );
+          await new Promise((resolve) =>
+            this.safeSetTimeout(resolve, Math.pow(2, retryCount) * 1000)
+          );
+          return this.makeApiRequest(url, options, retryCount + 1);
+        }
+
+        this.logError('API request failed after retries', error);
+        throw error;
+      }
+    },
+
+    // Безопасное получение данных из localStorage
+    safeGetStorage: function (key) {
+      try {
+        if (typeof Storage === 'undefined') return null;
+        const value = localStorage.getItem(key);
+        if (!value) return null;
+
+        // Базовая валидация - проверяем на потенциально опасный контент
+        if (value.length > 1000) return null; // Защита от oversized данных
+        if (/<script|javascript:|data:/i.test(value)) return null; // Защита от XSS
+
+        return value;
+      } catch (error) {
+        this.logError('Storage access error', error);
+        return null;
+      }
+    },
+
+    // Безопасная запись в localStorage
+    safeSetStorage: function (key, value) {
+      try {
+        if (typeof Storage === 'undefined') return false;
+        if (typeof value !== 'string') value = String(value);
+        if (value.length > 1000) return false; // Ограничение размера
+
+        localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        this.logError('Storage write error', error);
+        return false;
+      }
+    },
+
+    // Валидация email
+    validateEmail: function (email) {
+      if (!email || typeof email !== 'string') return false;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email) && email.length <= 254;
+    },
+
+    // Валидация телефона
+    validatePhone: function (phone) {
+      if (!phone || typeof phone !== 'string') return false;
+      const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/;
+      return phoneRegex.test(phone.replace(/\s/g, ''));
     },
 
     // Получить email пользователя из localStorage или куки
     getUserEmail: function () {
       try {
         // Проверяем localStorage
-        const savedEmail = localStorage.getItem('tilda_user_email');
-        if (savedEmail) {
+        const savedEmail = this.safeGetStorage('tilda_user_email');
+        if (savedEmail && this.validateEmail(savedEmail)) {
           return savedEmail;
         }
 
@@ -145,14 +703,17 @@
         const cookies = document.cookie.split(';');
         for (let cookie of cookies) {
           const [name, value] = cookie.trim().split('=');
-          if (name === 'user_email' || name === 'tilda_user_email') {
-            return decodeURIComponent(value);
+          if ((name === 'user_email' || name === 'tilda_user_email') && value) {
+            const decodedValue = decodeURIComponent(value);
+            if (this.validateEmail(decodedValue)) {
+              return decodedValue;
+            }
           }
         }
 
         return null;
       } catch (error) {
-        this.log('Ошибка получения email пользователя:', error);
+        this.logError('Error getting user email', error);
         return null;
       }
     },
@@ -161,20 +722,24 @@
     isTelegramLinked: function () {
       try {
         // Проверяем localStorage на наличие признака привязки
-        const telegramLinked = localStorage.getItem('tilda_telegram_linked');
+        const telegramLinked = this.safeGetStorage('tilda_telegram_linked');
         if (telegramLinked === 'true') {
           return true;
         }
 
         // Дополнительная проверка - наличие telegram ID или username
-        const telegramId = localStorage.getItem('tilda_telegram_id');
-        const telegramUsername = localStorage.getItem(
-          'tilda_telegram_username'
-        );
+        const telegramId = this.safeGetStorage('tilda_telegram_id');
+        const telegramUsername = this.safeGetStorage('tilda_telegram_username');
 
-        return !!(telegramId || telegramUsername);
+        // Валидируем данные
+        const isValidId =
+          telegramId && /^\d+$/.test(telegramId) && telegramId.length < 20;
+        const isValidUsername =
+          telegramUsername && /^[a-zA-Z0-9_]{3,32}$/.test(telegramUsername);
+
+        return !!(isValidId || isValidUsername);
       } catch (error) {
-        this.log('Ошибка проверки привязки Telegram:', error);
+        this.logError('Error checking Telegram link', error);
         return false;
       }
     },
@@ -437,19 +1002,46 @@
       if (buttonEl) buttonEl.style.display = 'block';
     },
 
-    // Очистка ресурсов для предотвращения утечек памяти
-    cleanup: function () {
-      this.log('Очистка ресурсов виджета');
+    // Полная очистка ресурсов для предотвращения утечек памяти
+    destroy: function () {
+      this.log('🧹 Начинаем полную очистку ресурсов виджета');
 
-      // Отменяем активные запросы
-      if (this.state.activeFetchController) {
+      // Устанавливаем флаг уничтожения
+      this.state.isDestroyed = true;
+
+      // Отменяем все активные AbortController'ы
+      for (const controller of this.state.abortControllers) {
         try {
-          this.state.activeFetchController.abort();
-        } catch (_) {}
-        this.state.activeFetchController = null;
+          if (!controller.signal.aborted) {
+            controller.abort();
+          }
+        } catch (error) {
+          this.logError('Error aborting controller', error);
+        }
       }
+      this.state.abortControllers.clear();
 
-      // Очищаем таймеры
+      // Очищаем все таймеры
+      for (const timer of this.state.timers) {
+        try {
+          clearTimeout(timer);
+        } catch (error) {
+          this.logError('Error clearing timer', error);
+        }
+      }
+      this.state.timers.clear();
+
+      // Отключаем все observers
+      for (const observer of this.state.observers) {
+        try {
+          observer.disconnect();
+        } catch (error) {
+          this.logError('Error disconnecting observer', error);
+        }
+      }
+      this.state.observers.clear();
+
+      // Очищаем старые поля состояния для совместимости
       if (this.state.balanceDebounceTimer) {
         clearTimeout(this.state.balanceDebounceTimer);
         this.state.balanceDebounceTimer = null;
@@ -458,8 +1050,14 @@
         clearTimeout(this.state.cartOpenDebounceTimer);
         this.state.cartOpenDebounceTimer = null;
       }
+      if (this.state.activeFetchController) {
+        try {
+          this.state.activeFetchController.abort();
+        } catch (_) {}
+        this.state.activeFetchController = null;
+      }
 
-      // Отключаем observers
+      // Отключаем старые observers
       if (this.state._cartObserver) {
         try {
           this.state._cartObserver.disconnect();
@@ -487,41 +1085,47 @@
         _cartObserver: null,
         mode: 'bonus',
         levelInfo: null,
-        originalCartTotal: 0
+        originalCartTotal: 0,
+        timers: new Set(),
+        observers: new Set(),
+        abortControllers: new Set(),
+        isDestroyed: true,
+        lastApiCall: 0,
+        activeRequests: 0,
+        requestQueue: [],
+        apiAvailable: undefined,
+        domCache: new Map(),
+        errorRecoveryAttempts: 0,
+        lastErrorTime: 0,
+        healthCheckTimer: null
       };
 
-      this.log('Ресурсы виджета очищены');
+      this.log('✅ Все ресурсы виджета полностью очищены');
+    },
+
+    // Псевдоним для обратной совместимости
+    cleanup: function () {
+      this.destroy();
     },
 
     // Получить настройки проекта для плашки регистрации
     loadProjectSettings: async function () {
       try {
         const cacheBuster = Date.now(); // Предотвращаем кэширование
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
-
-        const response = await fetch(
+        const settings = await this.makeApiRequest(
           `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`,
           {
-            method: 'GET',
             headers: {
-              'Content-Type': 'application/json',
               'Cache-Control': 'no-cache'
-            },
-            signal: controller.signal
+            }
           }
         );
 
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const settings = await response.json();
+        if (settings) {
           return {
             welcomeBonusAmount: Number(settings?.welcomeBonusAmount || 0),
             botUsername: settings?.botUsername || null
           };
-        } else {
-          this.log('API вернул ошибку:', response.status, response.statusText);
         }
       } catch (error) {
         if (error.name === 'AbortError') {
@@ -985,7 +1589,7 @@
     // Наблюдение за корзиной (без тяжёлого отслеживания style по всему документу)
     observeCart: function () {
       const attachCartObserver = () => {
-        const cartWindow = document.querySelector('.t706__cartwin');
+        const cartWindow = this.getCachedElement('.t706__cartwin');
         if (!cartWindow) return false;
         const onChange = () => {
           const isOpen = cartWindow.style.display !== 'none';
@@ -1480,15 +2084,11 @@
         if (contact.email) params.append('email', contact.email);
         if (contact.phone) params.append('phone', contact.phone);
 
-        const response = await fetch(
-          `${this.config.apiUrl}/api/projects/${this.config.projectId}/users/balance?${params}`,
-          {
-            method: 'GET',
-            signal: controller.signal
-          }
+        const data = await this.makeApiRequest(
+          `${this.config.apiUrl}/api/projects/${this.config.projectId}/users/balance?${params}`
         );
 
-        const data = await response.json();
+        if (!data) return; // Request was aborted or failed
 
         if (data && data.success && data.user) {
           // Пользователь найден — монтируем виджет при необходимости и обновляем

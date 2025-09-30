@@ -225,3 +225,55 @@ enum AdminRole {
   ADMIN
   MANAGER
 }
+
+enum AlphaTesterStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ACTIVE
+  INACTIVE
+}
+
+model AlphaTesterApplication {
+  id              String              @id @default(cuid())
+
+  // Информация о компании
+  companyName     String
+  companySize     String
+  website         String
+  industry        String
+
+  // Контактная информация
+  contactName     String
+  contactEmail    String              @unique
+  contactPhone    String?
+  contactPosition String
+
+  // Опыт и мотивация
+  currentBonusSystem String?
+  experienceLevel    String
+  motivation         String
+  expectations       String?
+
+  // Техническая информация
+  cms              String
+  technicalSkills  String
+  availableTime    String
+
+  // Согласия
+  agreeToTerms     Boolean
+  agreeToNDA       Boolean
+  agreeToMarketing Boolean             @default(false)
+
+  // Статус и управление
+  status           AlphaTesterStatus   @default(PENDING)
+  notes            String?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+
+  // Метаданные
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@map("alpha_tester_applications")
+}
