@@ -69,15 +69,20 @@ export async function POST(
 ) {
   try {
     const { id: projectId } = await context.params;
-    const body: CreateFlowRequest = await request.json();
+    const body = await request.json();
 
     logger.info('POST /api/projects/[id]/flows', {
       projectId,
+      bodyKeys: Object.keys(body),
       flowName: body.name
     });
 
     // Валидируем входные данные
     if (!body.name?.trim()) {
+      logger.warn('Flow creation failed: name is required', {
+        projectId,
+        body
+      });
       return NextResponse.json(
         {
           success: false,
@@ -87,7 +92,49 @@ export async function POST(
       );
     }
 
+    // Проверяем структуру данных
+    if (body.nodes && !Array.isArray(body.nodes)) {
+      logger.warn('Flow creation failed: nodes must be array', {
+        projectId,
+        nodesType: typeof body.nodes
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Неверный формат данных: nodes должен быть массивом'
+        },
+        { status: 400 }
+      );
+    }
+
+    if (body.connections && !Array.isArray(body.connections)) {
+      logger.warn('Flow creation failed: connections must be array', {
+        projectId,
+        connectionsType: typeof body.connections
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Неверный формат данных: connections должен быть массивом'
+        },
+        { status: 400 }
+      );
+    }
+
+    logger.info('Creating flow with data', {
+      projectId,
+      name: body.name,
+      nodesCount: body.nodes?.length || 0,
+      connectionsCount: body.connections?.length || 0
+    });
+
     const flow = await BotFlowService.createFlow(projectId, body);
+
+    logger.info('Flow created successfully', {
+      projectId,
+      flowId: flow.id,
+      flowName: flow.name
+    });
 
     return NextResponse.json({
       success: true,
@@ -97,7 +144,8 @@ export async function POST(
     const { id: projectId } = await context.params;
     logger.error('Failed to create flow', {
       projectId,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     });
 
     return NextResponse.json(

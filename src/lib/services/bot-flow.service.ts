@@ -30,18 +30,35 @@ export class BotFlowService {
     data: CreateFlowRequest
   ): Promise<BotFlow> {
     try {
-      logger.info('Creating new bot flow', { projectId, flowName: data.name });
+      logger.info('Creating new bot flow', {
+        projectId,
+        flowName: data.name,
+        nodesCount: data.nodes?.length || 0,
+        connectionsCount: data.connections?.length || 0
+      });
+
+      // Подготавливаем данные для создания
+      const createData = {
+        projectId,
+        name: data.name,
+        description: data.description,
+        nodes: JSON.parse(JSON.stringify(data.nodes || [])),
+        connections: JSON.parse(JSON.stringify(data.connections || [])),
+        variables: JSON.parse(JSON.stringify(data.variables || [])),
+        settings: JSON.parse(JSON.stringify(data.settings || {}))
+      };
+
+      logger.info('Creating flow in database', {
+        projectId,
+        createData: {
+          ...createData,
+          nodes: `${createData.nodes.length} nodes`,
+          connections: `${createData.connections.length} connections`
+        }
+      });
 
       const flow = await db.botFlow.create({
-        data: {
-          projectId,
-          name: data.name,
-          description: data.description,
-          nodes: JSON.parse(JSON.stringify(data.nodes || [])),
-          connections: JSON.parse(JSON.stringify(data.connections || [])),
-          variables: JSON.parse(JSON.stringify(data.variables || [])),
-          settings: JSON.parse(JSON.stringify(data.settings || {}))
-        }
+        data: createData
       });
 
       logger.info('Bot flow created successfully', {
@@ -54,7 +71,13 @@ export class BotFlowService {
     } catch (error) {
       logger.error('Failed to create bot flow', {
         projectId,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        data: {
+          name: data.name,
+          nodesCount: data.nodes?.length || 0,
+          connectionsCount: data.connections?.length || 0
+        }
       });
       throw error;
     }
