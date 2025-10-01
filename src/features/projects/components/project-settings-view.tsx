@@ -21,7 +21,9 @@ import {
   Coins,
   Share2,
   Code,
-  Bell as IconBell
+  Bell as IconBell,
+  Zap,
+  BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -460,6 +462,34 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   Интеграция на сайт
                 </Button>
               </Link>
+
+              {/* Новые функции конструктора ботов */}
+              <Separator className='my-3' />
+              <div className='text-muted-foreground mb-2 text-sm font-medium'>
+                🤖 Конструктор ботов
+              </div>
+
+              <Link href={`/dashboard/projects/${projectId}/constructor`}>
+                <Button variant='outline' className='w-full justify-start'>
+                  <Zap className='mr-2 h-4 w-4' />
+                  Визуальный конструктор
+                </Button>
+              </Link>
+
+              <Link href={`/dashboard/projects/${projectId}/analytics`}>
+                <Button variant='outline' className='mt-2 w-full justify-start'>
+                  <BarChart3 className='mr-2 h-4 w-4' />
+                  Аналитика ботов
+                </Button>
+              </Link>
+
+              <Link href={`/dashboard/templates`}>
+                <Button variant='outline' className='mt-2 w-full justify-start'>
+                  <BookOpen className='mr-2 h-4 w-4' />
+                  Библиотека шаблонов
+                </Button>
+              </Link>
+
               {/* Кнопка логов интеграции удалена */}
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import {
   IconAlertTriangle,
   IconArrowRight,
   IconBell,
+  IconBot,
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
@@ -72,5 +73,6 @@ export const Icons = {
   github: IconBrandGithub,
   twitter: IconBrandTwitter,
   check: IconCheck,
-  bonus: IconCoins
+  bonus: IconCoins,
+  bot: IconBot
 };

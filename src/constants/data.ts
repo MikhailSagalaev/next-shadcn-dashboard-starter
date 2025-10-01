@@ -36,6 +36,14 @@ export const navItems: NavItem[] = [
     isActive: false,
     shortcut: ['b', 'n'],
     items: []
+  },
+  {
+    title: 'Шаблоны ботов',
+    url: '/dashboard/templates',
+    icon: 'bot',
+    isActive: false,
+    shortcut: ['t', 'm'],
+    items: []
   }
 ];
 
