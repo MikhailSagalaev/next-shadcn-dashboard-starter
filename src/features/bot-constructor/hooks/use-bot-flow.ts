@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { BotFlowService } from '@/lib/services/bot-flow.service';
 import { useToast } from '@/hooks/use-toast';
 import type {
   BotFlow,
@@ -29,8 +28,12 @@ export function useBotFlow(projectId: string) {
   const loadFlows = useCallback(async () => {
     try {
       setIsLoading(true);
-      const projectFlows = await BotFlowService.getFlowsByProject(projectId);
-      setFlows(projectFlows);
+      const response = await fetch(`/api/projects/${projectId}/flows`);
+      if (!response.ok) {
+        throw new Error('Failed to load flows');
+      }
+      const data = await response.json();
+      setFlows(data.flows || []);
     } catch (error) {
       console.error('Failed to load flows:', error);
       toast({
@@ -48,7 +51,14 @@ export function useBotFlow(projectId: string) {
     async (flowId: string) => {
       try {
         setIsLoading(true);
-        const flow = await BotFlowService.getFlowById(flowId);
+        const response = await fetch(
+          `/api/projects/${projectId}/flows/${flowId}`
+        );
+        if (!response.ok) {
+          throw new Error('Failed to load flow');
+        }
+        const data = await response.json();
+        const flow = data.flow;
         if (flow && flow.projectId === projectId) {
           setCurrentFlow(flow);
           return flow;
@@ -75,7 +85,20 @@ export function useBotFlow(projectId: string) {
     async (data: CreateFlowRequest) => {
       try {
         setIsSaving(true);
-        const newFlow = await BotFlowService.createFlow(projectId, data);
+        const response = await fetch(`/api/projects/${projectId}/flows`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create flow');
+        }
+
+        const result = await response.json();
+        const newFlow = result.flow;
 
         // Update local state
         setFlows((prev) => [...prev, newFlow]);
@@ -107,7 +130,23 @@ export function useBotFlow(projectId: string) {
     async (flowId: string, data: UpdateFlowRequest) => {
       try {
         setIsSaving(true);
-        const updatedFlow = await BotFlowService.updateFlow(flowId, data);
+        const response = await fetch(
+          `/api/projects/${projectId}/flows/${flowId}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to update flow');
+        }
+
+        const result = await response.json();
+        const updatedFlow = result.flow;
 
         // Update local state
         setFlows((prev) =>
@@ -131,7 +170,7 @@ export function useBotFlow(projectId: string) {
         setIsSaving(false);
       }
     },
-    [currentFlow, toast]
+    [currentFlow, projectId, toast]
   );
 
   // Save current flow (convenience method)
@@ -163,7 +202,16 @@ export function useBotFlow(projectId: string) {
     async (flowId: string) => {
       try {
         setIsSaving(true);
-        await BotFlowService.deleteFlow(flowId);
+        const response = await fetch(
+          `/api/projects/${projectId}/flows/${flowId}`,
+          {
+            method: 'DELETE'
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to delete flow');
+        }
 
         // Update local state
         setFlows((prev) => prev.filter((flow) => flow.id !== flowId));
@@ -187,7 +235,7 @@ export function useBotFlow(projectId: string) {
         setIsSaving(false);
       }
     },
-    [currentFlow, toast]
+    [currentFlow, projectId, toast]
   );
 
   // Clone flow
@@ -195,7 +243,23 @@ export function useBotFlow(projectId: string) {
     async (flowId: string, newName: string) => {
       try {
         setIsSaving(true);
-        const clonedFlow = await BotFlowService.cloneFlow(flowId, newName);
+        const response = await fetch(
+          `/api/projects/${projectId}/flows/${flowId}/clone`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: newName })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to clone flow');
+        }
+
+        const result = await response.json();
+        const clonedFlow = result.flow;
 
         // Update local state
         setFlows((prev) => [...prev, clonedFlow]);
@@ -219,7 +283,7 @@ export function useBotFlow(projectId: string) {
         setIsSaving(false);
       }
     },
-    [toast]
+    [projectId, toast]
   );
 
   // Validate current flow
@@ -227,10 +291,19 @@ export function useBotFlow(projectId: string) {
     if (!currentFlow) return null;
 
     try {
-      const validation = BotFlowService.validateFlow(
-        currentFlow.nodes,
-        currentFlow.connections
+      const response = await fetch(
+        `/api/projects/${projectId}/flows/${currentFlow.id}/validate`,
+        {
+          method: 'POST'
+        }
       );
+
+      if (!response.ok) {
+        throw new Error('Failed to validate flow');
+      }
+
+      const data = await response.json();
+      const validation = data.validation;
 
       if (!validation.isValid) {
         toast({
@@ -255,7 +328,7 @@ export function useBotFlow(projectId: string) {
       });
       return null;
     }
-  }, [currentFlow, toast]);
+  }, [currentFlow, projectId, toast]);
 
   // Load flows on mount
   useEffect(() => {
