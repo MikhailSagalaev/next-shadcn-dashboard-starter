@@ -36,24 +36,42 @@ export async function GET() {
 
       // Проверяем BotFlow таблицу
       try {
-        const botFlowsCount = await db.botFlow.count();
-        dbStatus.tables.botFlows = botFlowsCount;
+        logger.info('Checking if BotFlow model exists');
+        if (typeof db.botFlow !== 'undefined') {
+          const botFlowsCount = await db.botFlow.count();
+          dbStatus.tables.botFlows = botFlowsCount;
+          logger.info('BotFlow table exists', { count: botFlowsCount });
+        } else {
+          dbStatus.tables.botFlowsError = 'BotFlow model is undefined';
+          logger.error('BotFlow model is undefined');
+        }
       } catch (botFlowError) {
         dbStatus.tables.botFlowsError =
           botFlowError instanceof Error
             ? botFlowError.message
             : 'Unknown error';
+        logger.error('BotFlow table check failed', { error: botFlowError });
       }
 
       // Проверяем BotSession таблицу
       try {
-        const botSessionsCount = await db.botSession.count();
-        dbStatus.tables.botSessions = botSessionsCount;
+        logger.info('Checking if BotSession model exists');
+        if (typeof db.botSession !== 'undefined') {
+          const botSessionsCount = await db.botSession.count();
+          dbStatus.tables.botSessions = botSessionsCount;
+          logger.info('BotSession table exists', { count: botSessionsCount });
+        } else {
+          dbStatus.tables.botSessionsError = 'BotSession model is undefined';
+          logger.error('BotSession model is undefined');
+        }
       } catch (botSessionError) {
         dbStatus.tables.botSessionsError =
           botSessionError instanceof Error
             ? botSessionError.message
             : 'Unknown error';
+        logger.error('BotSession table check failed', {
+          error: botSessionError
+        });
       }
     } catch (connectionError) {
       dbStatus.connectionError =

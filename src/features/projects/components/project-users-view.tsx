@@ -68,6 +68,7 @@ import type { DisplayUser } from '@/features/bonuses/types';
 import { UserCreateDialog } from './user-create-dialog';
 import { UsersTable } from '../../bonuses/components/users-table';
 import { BonusAwardDialog } from './bonus-award-dialog';
+import { BulkBonusAwardDialog } from './bulk-bonus-award-dialog';
 import { EnhancedBulkActionsToolbar } from '@/features/bonuses/components/enhanced-bulk-actions-toolbar';
 import { RichNotificationDialog } from '@/features/bonuses/components/rich-notification-dialog';
 
@@ -154,6 +155,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     useState(false);
   const [showBonusDialog, setShowBonusDialog] = useState(false);
   const [showDeductionDialog, setShowDeductionDialog] = useState(false);
+  const [showBulkBonusDialog, setShowBulkBonusDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithBonuses | null>(
     null
   );
@@ -455,6 +457,23 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           />
         </div>
         <div className='flex items-center space-x-2'>
+          <Button
+            variant='outline'
+            onClick={() => {
+              if (selectedUsers.length === 0) {
+                toast({
+                  title: 'Выберите пользователей',
+                  description: 'Сначала отметьте пользователей в таблице',
+                  variant: 'destructive'
+                });
+                return;
+              }
+              setShowBulkBonusDialog(true);
+            }}
+          >
+            <Gift className='mr-2 h-4 w-4' />
+            Начислить бонусы
+          </Button>
           <Button onClick={() => setShowCreateUserDialog(true)}>
             <Plus className='mr-2 h-4 w-4' />
             Добавить пользователя
@@ -638,6 +657,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 const user = users.find((u) => u.id === userId);
                 if (user) handleOpenBonusDialog(user);
               }}
+              onProfileClick={handleUserProfile}
               onExport={handleExportAll}
               loading={usersLoading}
               totalCount={totalUsers}
@@ -678,8 +698,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         />
       )}
 
-      {/* User Profile Dialog - Disabled for now due to type mismatch */}
-      {/*
+      {/* User Profile Dialog */}
       <Dialog
         open={!!profileUser}
         onOpenChange={(o) => !o && setProfileUser(null)}
@@ -701,7 +720,11 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className='text-xl font-semibold'>{profileUser.name}</h3>
+                  <h3 className='text-xl font-semibold'>
+                    {profileUser.firstName && profileUser.lastName
+                      ? `${profileUser.firstName} ${profileUser.lastName}`.trim()
+                      : profileUser.email || 'Без имени'}
+                  </h3>
                   <p className='text-muted-foreground'>
                     ID: {profileUser.id.slice(0, 8)}...
                   </p>
@@ -746,15 +769,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   </p>
                 </div>
                 <div>
-                  <Label className='text-sm font-medium'>
-                    Последняя активность
-                  </Label>
+                  <Label className='text-sm font-medium'>Статус</Label>
                   <p className='text-muted-foreground text-sm'>
-                    {profileUser.lastActivity
-                      ? new Date(profileUser.lastActivity).toLocaleDateString(
-                          'ru-RU'
-                        )
-                      : 'Неизвестно'}
+                    {profileUser.isActive ? 'Активный' : 'Неактивный'}
                   </p>
                 </div>
               </div>
@@ -762,7 +779,6 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           )}
         </DialogContent>
       </Dialog>
-      */}
 
       {/* Диалог списания бонусов */}
       {selectedUser && (
@@ -942,8 +958,12 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         onClearSelection={() => setSelectedUsers([])}
         onShowRichNotifications={() => setShowRichNotificationDialog(true)}
         onBulkBonusAction={(action) => {
-          setBulkOperation(action === 'ADD' ? 'bonus_award' : 'bonus_deduct');
-          setShowBulkDialog(true);
+          if (action === 'ADD') {
+            setShowBulkBonusDialog(true);
+          } else {
+            setBulkOperation('bonus_deduct');
+            setShowBulkDialog(true);
+          }
         }}
         onDeleteSelected={handleDeleteSelected}
       />
@@ -954,6 +974,19 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         onOpenChange={setShowRichNotificationDialog}
         selectedUserIds={selectedUsers}
         projectId={projectId}
+      />
+
+      {/* Bulk Bonus Award Dialog */}
+      <BulkBonusAwardDialog
+        projectId={projectId}
+        userIds={selectedUsers}
+        userCount={selectedUsers.length}
+        open={showBulkBonusDialog}
+        onOpenChange={setShowBulkBonusDialog}
+        onSuccess={() => {
+          loadUsers(currentPage);
+          setSelectedUsers([]);
+        }}
       />
     </div>
   );
