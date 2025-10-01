@@ -24,6 +24,7 @@ model Project {
   bonusLevels     BonusLevel[]
   botSettings     BotSettings?
   referralProgram ReferralProgram?
+  botFlows        BotFlow[]     // Потоки бота для конструктора
   users           User[]
   webhookLogs     WebhookLog[]
   notifications   Notification[]
@@ -77,6 +78,43 @@ model BotSettings {
   project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("bot_settings")
+}
+
+model BotFlow {
+  id          String     @id @default(cuid())
+  projectId   String     @map("project_id")
+  name        String
+  description String?
+  version     Int        @default(1)
+  isActive    Boolean    @default(false) @map("is_active")
+  nodes       Json       // Массив нод конструктора
+  connections Json       // Связи между нодами
+  variables   Json?      // Переменные бота
+  settings    Json?      // Общие настройки потока
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessions    BotSession[] // Активные сессии этого потока
+
+  @@map("bot_flows")
+}
+
+model BotSession {
+  id        String    @id @default(cuid())
+  projectId String    @map("project_id")
+  userId    String    @map("user_id") // Telegram user ID (BigInt as string)
+  flowId    String    @map("flow_id")
+  state     Json      // Текущее состояние диалога
+  variables Json?     // Переменные сессии
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  flow       BotFlow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId, flowId])
+  @@map("bot_sessions")
 }
 
 model User {

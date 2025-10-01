@@ -3,12 +3,16 @@ import { UserService, BonusService } from '@/lib/services/user.service';
 import { ProjectService } from '@/lib/services/project.service';
 import { BonusLevelService } from '@/lib/services/bonus-level.service';
 import { ReferralService } from '@/lib/services/referral.service';
+import {
+  BotSessionService,
+  BotConstructorSession
+} from '@/lib/services/bot-session.service';
 import { logger } from '@/lib/logger';
 
-// Интерфейс для сессии
-interface SessionData {
+// Интерфейс для сессии (расширен для конструктора)
+interface SessionData extends BotConstructorSession {
+  // Legacy fields for backward compatibility
   step?: string;
-  projectId?: string;
   awaitingContact?: boolean;
   awaitingEmail?: boolean;
   linkingMethod?: 'phone' | 'email';
@@ -20,12 +24,10 @@ type MyContext = Context & SessionFlavor<SessionData>;
 export function createBot(token: string, projectId: string, botSettings?: any) {
   const bot = new Bot<MyContext>(token);
 
-  // Добавляем middleware для сессий
-  bot.use(
-    session({
-      initial: (): SessionData => ({})
-    })
-  );
+  // Добавляем middleware для сессий с интеграцией БД
+  bot.use(BotSessionService.createSessionMiddleware(projectId));
+  bot.use(BotSessionService.createActivityMiddleware());
+  bot.use(BotSessionService.createTimeoutMiddleware());
 
   // Диагностический middleware для логирования всех сообщений
   bot.use(async (ctx, next) => {
