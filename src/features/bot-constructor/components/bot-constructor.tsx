@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -58,7 +58,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState<BotNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<BotConnection>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Custom hooks
   const {
@@ -69,8 +69,38 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
     updateFlow,
     deleteFlow,
     loadFlow,
-    saveFlow
+    saveFlow,
+    exportFlow,
+    importFlow
   } = useBotFlow(projectId);
+
+  // Convert BotConnection[] to Edge[]
+  const botConnectionsToEdges = useCallback(
+    (connections: BotConnection[]): Edge[] => {
+      return connections.map((connection) => ({
+        id: connection.id,
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle,
+        targetHandle: connection.targetHandle,
+        type: connection.type || 'default',
+        animated: connection.animated,
+        style: connection.style
+      }));
+    },
+    []
+  );
+
+  // Sync currentFlow with React Flow state
+  useEffect(() => {
+    if (currentFlow) {
+      setNodes(currentFlow.nodes);
+      setEdges(botConnectionsToEdges(currentFlow.connections));
+    } else {
+      setNodes([]);
+      setEdges([]);
+    }
+  }, [currentFlow, setNodes, setEdges, botConnectionsToEdges]);
 
   // Handle adding new nodes
   const handleAddNode = useCallback(
@@ -93,18 +123,20 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
   // Handle connections
   const onConnect = useCallback(
     (params: Connection) => {
-      const newEdge: BotConnection = {
+      const edgeType =
+        params.sourceHandle === 'true'
+          ? 'true'
+          : params.sourceHandle === 'false'
+            ? 'false'
+            : 'default';
+
+      const newEdge: Edge = {
         id: `edge-${params.source}-${params.target}-${Date.now()}`,
-        sourceNodeId: params.source!,
-        targetNodeId: params.target!,
+        source: params.source!,
+        target: params.target!,
         sourceHandle: params.sourceHandle,
         targetHandle: params.targetHandle,
-        type:
-          params.sourceHandle === 'true'
-            ? 'true'
-            : params.sourceHandle === 'false'
-              ? 'false'
-              : 'default',
+        type: edgeType,
         animated: true
       };
 
@@ -123,6 +155,24 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
     setSelectedNode(null);
   }, []);
 
+  // Convert Edge[] to BotConnection[]
+  const edgesToBotConnections = useCallback(
+    (rfEdges: Edge[]): BotConnection[] => {
+      return rfEdges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle,
+        type:
+          edge.type === 'true' || edge.type === 'false' ? edge.type : 'default',
+        animated: edge.animated,
+        style: edge.style
+      }));
+    },
+    []
+  );
+
   // Handle node changes
   const onNodesChangeWithSave = useCallback(
     (changes: any[]) => {
@@ -131,12 +181,19 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
       if (currentFlow && changes.length > 0) {
         const updatedFlow: Partial<BotFlow> = {
           nodes,
-          connections: edges
+          connections: edgesToBotConnections(edges)
         };
         updateFlow(currentFlow.id, updatedFlow);
       }
     },
-    [onNodesChange, nodes, edges, currentFlow, updateFlow]
+    [
+      onNodesChange,
+      nodes,
+      edges,
+      currentFlow,
+      updateFlow,
+      edgesToBotConnections
+    ]
   );
 
   // Handle edge changes
@@ -147,12 +204,19 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
       if (currentFlow && changes.length > 0) {
         const updatedFlow: Partial<BotFlow> = {
           nodes,
-          connections: edges
+          connections: edgesToBotConnections(edges)
         };
         updateFlow(currentFlow.id, updatedFlow);
       }
     },
-    [onEdgesChange, nodes, edges, currentFlow, updateFlow]
+    [
+      onEdgesChange,
+      nodes,
+      edges,
+      currentFlow,
+      updateFlow,
+      edgesToBotConnections
+    ]
   );
 
   // Memoized flow data for React Flow
@@ -167,19 +231,10 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
       selected: selectedNode?.id === node.id
     }));
 
-    const rfEdges: Edge[] = currentFlow.connections.map((connection) => ({
-      id: connection.id,
-      source: connection.sourceNodeId,
-      target: connection.targetNodeId,
-      sourceHandle: connection.sourceHandle,
-      targetHandle: connection.targetHandle,
-      type: 'default',
-      animated: connection.animated,
-      style: connection.style
-    }));
+    const rfEdges: Edge[] = botConnectionsToEdges(currentFlow.connections);
 
     return { nodes: rfNodes, edges: rfEdges };
-  }, [currentFlow, selectedNode]);
+  }, [currentFlow, selectedNode, botConnectionsToEdges]);
 
   if (isLoading) {
     return (
@@ -209,6 +264,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
         onFlowImport={importFlow}
         isPreviewMode={isPreviewMode}
         onPreviewToggle={setIsPreviewMode}
+        isSaving={false}
       />
 
       {/* Main content - занимает всё оставшееся пространство */}

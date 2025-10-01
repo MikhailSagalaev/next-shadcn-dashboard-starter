@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -63,7 +64,7 @@ import type {
 } from '@/lib/services/bot-templates/bot-templates.service';
 
 interface TemplatesLibraryProps {
-  projectId: string;
+  projectId?: string; // Опциональный для просмотра библиотеки
   userId: string;
   onTemplateInstalled?: (flowId: string) => void;
 }
@@ -236,6 +237,7 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
     null
   );
   const [activeTab, setActiveTab] = useState('browse');
+  const { toast } = useToast();
 
   useEffect(() => {
     loadTemplates();
@@ -311,6 +313,11 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   };
 
   const handleInstallTemplate = async (template: BotTemplate) => {
+    if (!projectId) {
+      alert('Необходимо выбрать проект для установки шаблона');
+      return;
+    }
+
     setInstallingTemplate(template.id);
     try {
       const response = await fetch('/api/templates/install', {

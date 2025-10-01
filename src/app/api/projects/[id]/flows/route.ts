@@ -25,6 +25,20 @@ export async function GET(
 
     logger.info('GET /api/projects/[id]/flows', { projectId });
 
+    // Проверяем существование проекта
+    const { db } = await import('@/lib/db');
+    const project = await db.project.findUnique({
+      where: { id: projectId }
+    });
+
+    if (!project) {
+      logger.warn('Project not found', { projectId });
+      return NextResponse.json(
+        { success: false, error: 'Проект не найден' },
+        { status: 404 }
+      );
+    }
+
     const flows = await BotFlowService.getFlowsByProject(projectId);
 
     return NextResponse.json({

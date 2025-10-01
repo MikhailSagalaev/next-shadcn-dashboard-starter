@@ -8,8 +8,8 @@
  */
 
 import { Composer, Context } from 'grammy';
-import { router } from '@grammyjs/router';
-import { SessionFlavor } from 'grammy';
+// import { router } from '@grammyjs/router';
+// import { SessionFlavor } from 'grammy';
 import { logger } from '@/lib/logger';
 import { FlowExecutor } from './flow-executor';
 

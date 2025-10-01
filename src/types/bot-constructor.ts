@@ -29,7 +29,12 @@ export interface Position {
   y: number;
 }
 
-export interface BotNode {
+import type {
+  Node as ReactFlowNode,
+  Edge as ReactFlowEdge
+} from '@xyflow/react';
+
+export interface BotNode extends ReactFlowNode {
   id: string;
   type: NodeType;
   position: Position;
@@ -38,7 +43,7 @@ export interface BotNode {
   dragging?: boolean;
 }
 
-export interface NodeData {
+export interface NodeData extends Record<string, unknown> {
   label: string;
   description?: string;
   config: NodeConfig;
@@ -243,15 +248,18 @@ export interface BotFlow {
   updatedAt: Date;
 }
 
-export interface BotConnection {
+export interface BotConnection extends ReactFlowEdge {
   id: string;
-  sourceNodeId: string;
-  targetNodeId: string;
+  source: string; // React Flow использует source/target вместо sourceNodeId/targetNodeId
+  target: string;
   sourceHandle?: string;
   targetHandle?: string;
   type: ConnectionType;
   animated?: boolean;
   style?: Record<string, any>;
+  // Legacy поля для обратной совместимости
+  sourceNodeId?: string;
+  targetNodeId?: string;
 }
 
 export interface FlowVariable {

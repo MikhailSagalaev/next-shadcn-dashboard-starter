@@ -37,10 +37,10 @@ export class BotFlowService {
           projectId,
           name: data.name,
           description: data.description,
-          nodes: data.nodes || [],
-          connections: data.connections || [],
-          variables: data.variables || [],
-          settings: data.settings || {}
+          nodes: JSON.parse(JSON.stringify(data.nodes || [])),
+          connections: JSON.parse(JSON.stringify(data.connections || [])),
+          variables: JSON.parse(JSON.stringify(data.variables || [])),
+          settings: JSON.parse(JSON.stringify(data.settings || {}))
         }
       });
 
@@ -115,11 +115,14 @@ export class BotFlowService {
       if (data.name !== undefined) updateData.name = data.name;
       if (data.description !== undefined)
         updateData.description = data.description;
-      if (data.nodes !== undefined) updateData.nodes = data.nodes;
+      if (data.nodes !== undefined)
+        updateData.nodes = JSON.parse(JSON.stringify(data.nodes));
       if (data.connections !== undefined)
-        updateData.connections = data.connections;
-      if (data.variables !== undefined) updateData.variables = data.variables;
-      if (data.settings !== undefined) updateData.settings = data.settings;
+        updateData.connections = JSON.parse(JSON.stringify(data.connections));
+      if (data.variables !== undefined)
+        updateData.variables = JSON.parse(JSON.stringify(data.variables));
+      if (data.settings !== undefined)
+        updateData.settings = JSON.parse(JSON.stringify(data.settings));
       if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
       const flow = await db.botFlow.update({
@@ -183,10 +186,10 @@ export class BotFlowService {
           projectId: originalFlow.projectId,
           name: newName,
           description: originalFlow.description,
-          nodes: originalFlow.nodes,
-          connections: originalFlow.connections,
-          variables: originalFlow.variables,
-          settings: originalFlow.settings
+          nodes: JSON.parse(JSON.stringify(originalFlow.nodes)),
+          connections: JSON.parse(JSON.stringify(originalFlow.connections)),
+          variables: JSON.parse(JSON.stringify(originalFlow.variables)),
+          settings: JSON.parse(JSON.stringify(originalFlow.settings))
         }
       });
 

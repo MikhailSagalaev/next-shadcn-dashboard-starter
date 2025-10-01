@@ -123,7 +123,7 @@ export function BotConstructorProperties({
 
       <TabsContent value='message' className='mt-4 space-y-4'>
         <MessageEditor
-          config={localNode.data.config.message || {}}
+          config={localNode.data.config.message || { text: '' }}
           onChange={(messageConfig) =>
             updateNodeData({
               config: {

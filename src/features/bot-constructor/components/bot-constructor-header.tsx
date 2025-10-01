@@ -70,6 +70,7 @@ interface BotConstructorHeaderProps {
   onFlowImport: (file: File) => Promise<BotFlow>;
   isPreviewMode: boolean;
   onPreviewToggle: (preview: boolean) => void;
+  isSaving?: boolean;
 }
 
 export function BotConstructorHeader({
@@ -85,7 +86,8 @@ export function BotConstructorHeader({
   onFlowExport,
   onFlowImport,
   isPreviewMode,
-  onPreviewToggle
+  onPreviewToggle,
+  isSaving = false
 }: BotConstructorHeaderProps) {
   const router = useRouter();
   const { toast } = useToast();

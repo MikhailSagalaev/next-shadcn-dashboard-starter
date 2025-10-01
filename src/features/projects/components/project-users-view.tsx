@@ -63,7 +63,7 @@ import {
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import type { Project, User, Bonus } from '@/types/bonus';
+import type { Project, User, Bonus, DisplayUser } from '@/types/bonus';
 import { UserCreateDialog } from './user-create-dialog';
 import { UsersTable } from '../../bonuses/components/users-table';
 import { BonusAwardDialog } from './bonus-award-dialog';
@@ -99,7 +99,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const [bulkOperation, setBulkOperation] = useState<
     'bonus_award' | 'bonus_deduct' | 'notification'
   >('bonus_award');
-  const [profileUser, setProfileUser] = useState<UserWithBonuses | null>(null);
+  const [profileUser, setProfileUser] = useState<DisplayUser | null>(null);
 
   // Users management hook
   const {
@@ -181,8 +181,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       );
       const ok = responses.every((r) => r.ok);
       if (ok) {
-        setUsers((prev) => prev.filter((u) => !selectedUsers.includes(u.id)));
         setSelectedUsers([]);
+        loadUsers(currentPage); // Перезагружаем данные
         toast({ title: 'Пользователи удалены' });
       } else {
         toast({
@@ -234,8 +234,6 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   // Функция для экспорта всех пользователей
   const handleExportAll = useCallback(async () => {
     try {
-      setLoading(true);
-
       // Получаем все данные без пагинации
       const response = await fetch(
         `/api/projects/${projectId}/users?limit=10000`
@@ -267,8 +265,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           : user.email || '',
         user.email || '',
         user.phone || '',
-        user.activeBonuses || 0,
-        user.totalBonuses || 0,
+        user.bonusBalance || 0,
+        user.totalEarned || 0,
         user.registeredAt
           ? new Date(user.registeredAt).toLocaleDateString('ru-RU')
           : '',
@@ -313,22 +311,20 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         description: errorMessage,
         variant: 'destructive'
       });
-    } finally {
-      setLoading(false);
     }
   }, [projectId, toast]);
 
   const handleCreateUser = (newUser: UserWithBonuses) => {
     console.log('Создан новый пользователь в проекте:', newUser); // Для отладки
 
-    // Добавляем пользователя в локальный список для мгновенного отображения
-    setUsers((prevUsers) => [newUser, ...prevUsers]);
+    // Показываем уведомление сразу
+    toast({
+      title: 'Успех',
+      description: `Пользователь ${newUser.email} создан`
+    });
 
-    // Перезагружаем данные из API через небольшую задержку для синхронизации
-    setTimeout(() => {
-      console.log('Перезагружаем пользователей проекта из API...');
-      loadData();
-    }, 1000);
+    // Перезагружаем данные из API
+    loadUsers(currentPage);
 
     toast({
       title: 'Успех',
@@ -337,16 +333,16 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   };
 
   const handleBonusSuccess = () => {
-    loadData(); // Перезагружаем данные для обновления балансов
+    loadUsers(currentPage); // Перезагружаем данные для обновления балансов
     setSelectedUser(null);
   };
 
-  const handleOpenBonusDialog = (user: UserWithBonuses) => {
+  const handleOpenBonusDialog = (user: DisplayUser) => {
     setSelectedUser(user);
     setShowBonusDialog(true);
   };
 
-  const handleOpenDeductionDialog = (user: UserWithBonuses) => {
+  const handleOpenDeductionDialog = (user: DisplayUser) => {
     setSelectedUser(user);
     setDeductionAmount('');
     setDeductionDescription('');
@@ -363,7 +359,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       return;
     }
 
-    if (parseFloat(deductionAmount) > selectedUser.activeBonuses) {
+    if (parseFloat(deductionAmount) > selectedUser.bonusBalance) {
       toast({
         title: 'Ошибка',
         description: 'Недостаточно бонусов на балансе пользователя',
@@ -404,7 +400,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       setShowDeductionDialog(false);
       setDeductionAmount('');
       setDeductionDescription('');
-      loadData(); // Перезагружаем данные
+      loadUsers(currentPage); // Перезагружаем данные
     } catch (error) {
       toast({
         title: 'Ошибка',
@@ -630,8 +626,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   user.firstName && user.lastName
                     ? `${user.firstName} ${user.lastName}`.trim()
                     : user.email || 'Без имени',
-                bonusBalance: user.activeBonuses || 0,
-                totalEarned: user.totalBonuses || 0,
+                bonusBalance: user.bonusBalance || 0,
+                totalEarned: user.totalEarned || 0,
                 createdAt: new Date(user.registeredAt),
                 updatedAt: new Date(user.registeredAt)
               }))}
@@ -726,7 +722,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 <div>
                   <Label className='text-sm font-medium'>Активные бонусы</Label>
                   <p className='text-muted-foreground text-sm'>
-                    {profileUser.activeBonuses} ₽
+                    {profileUser.bonusBalance} ₽
                   </p>
                 </div>
                 <div>
@@ -734,7 +730,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     Всего заработано
                   </Label>
                   <p className='text-muted-foreground text-sm'>
-                    {profileUser.totalBonuses} ₽
+                    {profileUser.totalEarned} ₽
                   </p>
                 </div>
                 <div>
@@ -780,7 +776,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   ? `${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim()
                   : 'Без имени'}
                 <br />
-                Доступно: {selectedUser.activeBonuses}₽
+                Доступно: {selectedUser.bonusBalance}₽
               </DialogDescription>
             </DialogHeader>
 
@@ -797,7 +793,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   onChange={(e) => setDeductionAmount(e.target.value)}
                   className='col-span-3'
                   min='0'
-                  max={selectedUser.activeBonuses}
+                  max={selectedUser.bonusBalance}
                 />
               </div>
               <div className='grid grid-cols-4 items-center gap-4'>

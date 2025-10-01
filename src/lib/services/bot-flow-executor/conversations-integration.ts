@@ -8,8 +8,8 @@
  */
 
 import { Composer, Context } from 'grammy';
-import { conversations, createConversation } from '@grammyjs/conversations';
-import { SessionFlavor } from 'grammy';
+// import { conversations, createConversation } from '@grammyjs/conversations';
+// import { SessionFlavor } from 'grammy';
 import { logger } from '@/lib/logger';
 import { BotSessionService } from '../bot-session.service';
 

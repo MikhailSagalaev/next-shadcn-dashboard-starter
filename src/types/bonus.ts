@@ -365,6 +365,7 @@ export interface UserWithBonuses extends User {
   activeBonuses: number;
   totalEarned: number;
   totalSpent: number;
+  totalBonuses: number; // Общее количество заработанных бонусов
   level?: BonusLevel;
   progressToNext?: {
     nextLevel: BonusLevel;

@@ -218,7 +218,7 @@ class BotTemplatesService {
       }
 
       // Создаем поток
-      const flow = await BotFlowService.createFlow(flowData);
+      const flow = await BotFlowService.createFlow(projectId, flowData);
 
       // Записываем установку
       const installation: TemplateInstallation = {
@@ -452,7 +452,9 @@ class BotTemplatesService {
         author,
         version: data.templateVersion || '1.0.0',
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+
+        isPublic: false // Импортированные шаблоны по умолчанию не публичны
       };
 
       this.templates.push(template);
