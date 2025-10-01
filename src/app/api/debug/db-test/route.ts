@@ -14,43 +14,71 @@ export async function GET() {
   try {
     logger.info('Testing database connection');
 
-    // Тестируем подключение к БД
-    const projectsCount = await db.project.count();
-    const botFlowsCount = await db.botFlow.count();
-    const usersCount = await db.user.count();
+    // Проверяем подключение к БД
+    const dbStatus = {
+      connected: false,
+      tables: {}
+    };
 
-    // Тестируем конкретный проект
-    const testProjectId = 'cmfa8oqx000019e372pk9547l';
-    const project = await db.project.findUnique({
-      where: { id: testProjectId },
-      select: { id: true, name: true, createdAt: true }
-    });
+    try {
+      // Тестируем подключение к БД
+      await db.$connect();
+      dbStatus.connected = true;
 
-    const botFlows = await db.botFlow.findMany({
-      where: { projectId: testProjectId },
-      select: { id: true, name: true, createdAt: true }
-    });
+      // Проверяем существующие таблицы
+      const projectsCount = await db.project.count();
+      const usersCount = await db.user.count();
+
+      dbStatus.tables = {
+        projects: projectsCount,
+        users: usersCount
+      };
+
+      // Проверяем BotFlow таблицу
+      try {
+        const botFlowsCount = await db.botFlow.count();
+        dbStatus.tables.botFlows = botFlowsCount;
+      } catch (botFlowError) {
+        dbStatus.tables.botFlowsError =
+          botFlowError instanceof Error
+            ? botFlowError.message
+            : 'Unknown error';
+      }
+
+      // Проверяем BotSession таблицу
+      try {
+        const botSessionsCount = await db.botSession.count();
+        dbStatus.tables.botSessions = botSessionsCount;
+      } catch (botSessionError) {
+        dbStatus.tables.botSessionsError =
+          botSessionError instanceof Error
+            ? botSessionError.message
+            : 'Unknown error';
+      }
+    } catch (connectionError) {
+      dbStatus.connectionError =
+        connectionError instanceof Error
+          ? connectionError.message
+          : 'Unknown error';
+    }
 
     return NextResponse.json({
       success: true,
-      data: {
-        projectsCount,
-        botFlowsCount,
-        usersCount,
-        testProject: project,
-        testProjectBotFlows: botFlows
-      }
+      data: dbStatus,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     logger.error('Database test failed', {
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     });
 
     return NextResponse.json(
       {
         success: false,
         error:
-          error instanceof Error ? error.message : 'Database connection failed'
+          error instanceof Error ? error.message : 'Database connection failed',
+        stack: error instanceof Error ? error.stack : undefined
       },
       { status: 500 }
     );
