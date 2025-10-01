@@ -48,6 +48,7 @@ import {
   MessageSquare,
   ShoppingCart,
   Calendar,
+  Target,
   BarChart3,
   GraduationCap,
   Gamepad2,
@@ -56,11 +57,9 @@ import {
   UserCheck
 } from 'lucide-react';
 
-import {
-  botTemplates,
+import type {
   BotTemplate,
-  BotTemplateCategory,
-  TemplateFilter
+  BotTemplateCategory
 } from '@/lib/services/bot-templates/bot-templates.service';
 
 interface TemplatesLibraryProps {
@@ -249,10 +248,12 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const result = await botTemplates.getTemplates({
-        limit: 100 // Загружаем все шаблоны
-      });
-      setTemplates(result.templates);
+      const response = await fetch('/api/templates?limit=100');
+      if (!response.ok) {
+        throw new Error('Failed to load templates');
+      }
+      const data = await response.json();
+      setTemplates(data.templates || []);
     } catch (error) {
       console.error('Failed to load templates:', error);
     } finally {
@@ -306,18 +307,31 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   const handleInstallTemplate = async (template: BotTemplate) => {
     setInstallingTemplate(template.id);
     try {
-      const result = await botTemplates.installTemplate(
-        template.id,
-        projectId,
-        userId
-      );
+      const response = await fetch('/api/templates/install', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          templateId: template.id,
+          projectId,
+          userId,
+          customName: `${template.name} (шаблон)`
+        })
+      });
 
-      if (result.success && result.flowId) {
+      if (!response.ok) {
+        throw new Error('Failed to install template');
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.flow) {
         // Уведомляем родительский компонент
-        onTemplateInstalled?.(result.flowId);
+        onTemplateInstalled?.(result.flow.id);
 
         // Показываем успех
-        console.log('Template installed successfully:', result.flowId);
+        console.log('Template installed successfully:', result.flow.id);
       } else {
         console.error('Failed to install template:', result.error);
       }
