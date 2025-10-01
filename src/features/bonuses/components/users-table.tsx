@@ -28,7 +28,8 @@ import {
   MoreHorizontal,
   History,
   Eye,
-  Coins
+  Coins,
+  Gift
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,7 @@ interface UsersTableProps {
   onSelectionChange?: (selectedIds: string[]) => void;
   onProfileClick?: (user: User) => void;
   onHistoryClick?: (userId: string) => void;
+  onBonusAwardClick?: (user: User) => void;
   loading?: boolean;
   totalCount?: number;
   onPageChange?: (page: number) => void;
@@ -77,6 +79,7 @@ export function UsersTable({
   onSelectionChange,
   onProfileClick,
   onHistoryClick,
+  onBonusAwardClick,
   loading = false,
   totalCount = data.length,
   onPageChange,
@@ -276,6 +279,10 @@ export function UsersTable({
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end'>
               <DropdownMenuLabel>Действия</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => onBonusAwardClick?.(user)}>
+                <Gift className='mr-2 h-4 w-4' />
+                Начислить бонусы
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onHistoryClick(user.id)}>
                 <Coins className='mr-2 h-4 w-4' />
                 История бонусов

@@ -75,6 +75,7 @@ import { BulkActionsToolbar } from './bulk-actions-toolbar';
 import { EnhancedBulkActionsToolbar } from './enhanced-bulk-actions-toolbar';
 import { RichNotificationDialog } from './rich-notification-dialog';
 import { UsersTable } from './users-table';
+import { BonusAwardDialog } from '../../projects/components/bonus-award-dialog';
 
 // Types
 import type { DisplayUser as User } from '../types';
@@ -95,6 +96,10 @@ export function BonusManagementPageRefactored({
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
   const [showRichNotificationDialog, setShowRichNotificationDialog] =
     useState(false);
+  const [showBonusDialog, setShowBonusDialog] = useState(false);
+  const [selectedUserForBonus, setSelectedUserForBonus] = useState<User | null>(
+    null
+  );
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [pageSize, setPageSize] = useState(50);
   const [historyUserId, setHistoryUserId] = useState<string | null>(null);
@@ -218,6 +223,16 @@ export function BonusManagementPageRefactored({
   const handleProfileClick = useCallback((user: User) => {
     setProfileUser(user);
   }, []);
+
+  const handleBonusAwardClick = useCallback((user: User) => {
+    setSelectedUserForBonus(user);
+    setShowBonusDialog(true);
+  }, []);
+
+  const handleBonusSuccess = useCallback(() => {
+    refreshUsers(); // Перезагружаем данные для обновления балансов
+    setSelectedUserForBonus(null);
+  }, [refreshUsers]);
 
   const openHistory = useCallback(
     async (userId: string, page = 1) => {
@@ -674,6 +689,7 @@ export function BonusManagementPageRefactored({
             onExport={handleExportAll}
             onSelectionChange={setSelectedUsers}
             onProfileClick={handleProfileClick}
+            onBonusAwardClick={handleBonusAwardClick}
             onHistoryClick={openHistory}
             loading={isLoading}
             totalCount={totalCount}
@@ -708,6 +724,27 @@ export function BonusManagementPageRefactored({
         selectedUserIds={selectedUsers}
         projectId={currentProjectId || ''}
       />
+
+      {/* Bonus Award Dialog */}
+      {selectedUserForBonus && (
+        <BonusAwardDialog
+          projectId={currentProjectId || ''}
+          userId={selectedUserForBonus.id}
+          userName={
+            selectedUserForBonus.firstName || selectedUserForBonus.lastName
+              ? `${selectedUserForBonus.firstName || ''} ${selectedUserForBonus.lastName || ''}`.trim()
+              : selectedUserForBonus.email || 'Без имени'
+          }
+          userContact={
+            selectedUserForBonus.email ||
+            selectedUserForBonus.phone ||
+            `ID: ${selectedUserForBonus.id.slice(0, 8)}...`
+          }
+          open={showBonusDialog}
+          onOpenChange={setShowBonusDialog}
+          onSuccess={handleBonusSuccess}
+        />
+      )}
 
       {/* User Profile Dialog */}
       <Dialog
