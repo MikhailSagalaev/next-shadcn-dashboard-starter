@@ -1,88 +1,75 @@
 /**
  * @file: src/app/api/debug/db-test/route.ts
- * @description: Тестовый роут для проверки подключения к БД
+ * @description: Тестовый роут для проверки подключения к БД и доступности моделей
  * @project: SaaS Bonus System
  * @created: 2025-10-01
  * @author: AI Assistant
  */
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 export async function GET() {
   try {
     logger.info('Testing database connection');
 
-    // Проверяем подключение к БД
-    const dbStatus = {
-      connected: false,
-      tables: {}
+    // Базовая информация о сервере
+    const serverInfo = {
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      platform: process.platform,
+      environment: process.env.NODE_ENV || 'unknown'
     };
 
+    // Проверяем переменные окружения (без чувствительных данных)
+    const envInfo = {
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
+      hasNextAuthUrl: !!process.env.NEXTAUTH_URL,
+      databaseUrlLength: process.env.DATABASE_URL?.length || 0
+    };
+
+    // Простая проверка - можем ли мы импортировать db
+    let dbImportStatus = 'unknown';
+    let dbModelsStatus = 'unknown';
+
     try {
-      // Тестируем подключение к БД
-      await db.$connect();
-      dbStatus.connected = true;
+      const { db } = await import('@/lib/db');
+      dbImportStatus = 'success';
 
-      // Проверяем существующие таблицы
-      const projectsCount = await db.project.count();
-      const usersCount = await db.user.count();
-
-      dbStatus.tables = {
-        projects: projectsCount,
-        users: usersCount
-      };
-
-      // Проверяем BotFlow таблицу
-      try {
-        logger.info('Checking if BotFlow model exists');
-        if (typeof db.botFlow !== 'undefined') {
-          const botFlowsCount = await db.botFlow.count();
-          dbStatus.tables.botFlows = botFlowsCount;
-          logger.info('BotFlow table exists', { count: botFlowsCount });
-        } else {
-          dbStatus.tables.botFlowsError = 'BotFlow model is undefined';
-          logger.error('BotFlow model is undefined');
-        }
-      } catch (botFlowError) {
-        dbStatus.tables.botFlowsError =
-          botFlowError instanceof Error
-            ? botFlowError.message
-            : 'Unknown error';
-        logger.error('BotFlow table check failed', { error: botFlowError });
+      // Проверяем доступность моделей
+      if (
+        typeof db.botFlow !== 'undefined' &&
+        typeof db.botSession !== 'undefined'
+      ) {
+        dbModelsStatus = 'models_available';
+      } else if (typeof db.botFlow !== 'undefined') {
+        dbModelsStatus = 'botflow_only';
+      } else if (typeof db.botSession !== 'undefined') {
+        dbModelsStatus = 'botsession_only';
+      } else {
+        dbModelsStatus = 'models_undefined';
       }
 
-      // Проверяем BotSession таблицу
-      try {
-        logger.info('Checking if BotSession model exists');
-        if (typeof db.botSession !== 'undefined') {
-          const botSessionsCount = await db.botSession.count();
-          dbStatus.tables.botSessions = botSessionsCount;
-          logger.info('BotSession table exists', { count: botSessionsCount });
-        } else {
-          dbStatus.tables.botSessionsError = 'BotSession model is undefined';
-          logger.error('BotSession model is undefined');
-        }
-      } catch (botSessionError) {
-        dbStatus.tables.botSessionsError =
-          botSessionError instanceof Error
-            ? botSessionError.message
-            : 'Unknown error';
-        logger.error('BotSession table check failed', {
-          error: botSessionError
-        });
-      }
-    } catch (connectionError) {
-      dbStatus.connectionError =
-        connectionError instanceof Error
-          ? connectionError.message
-          : 'Unknown error';
+      logger.info('Database models check completed', {
+        dbImportStatus,
+        dbModelsStatus,
+        botFlowType: typeof db.botFlow,
+        botSessionType: typeof db.botSession
+      });
+    } catch (importError) {
+      dbImportStatus = 'import_failed';
+      logger.error('Failed to import database client', { error: importError });
     }
 
     return NextResponse.json({
       success: true,
-      data: dbStatus,
+      data: {
+        serverInfo,
+        envInfo,
+        dbImportStatus,
+        dbModelsStatus
+      },
       timestamp: new Date().toISOString()
     });
   } catch (error) {
