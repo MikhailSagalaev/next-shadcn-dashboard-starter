@@ -23,7 +23,9 @@ import {
   Code,
   Bell as IconBell,
   Zap,
-  BookOpen
+  BookOpen,
+  Wrench,
+  Library
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -469,23 +471,30 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 🤖 Конструктор ботов
               </div>
 
-              <Link href={`/dashboard/projects/${projectId}/constructor`}>
-                <Button variant='outline' className='w-full justify-start'>
-                  <Zap className='mr-2 h-4 w-4' />
-                  Визуальный конструктор
-                </Button>
-              </Link>
+              {projectId && (
+                <>
+                  <Link href={`/dashboard/projects/${projectId}/constructor`}>
+                    <Button variant='outline' className='w-full justify-start'>
+                      <Wrench className='mr-2 h-4 w-4' />
+                      Визуальный конструктор
+                    </Button>
+                  </Link>
 
-              <Link href={`/dashboard/projects/${projectId}/analytics`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
-                  <BarChart3 className='mr-2 h-4 w-4' />
-                  Аналитика ботов
-                </Button>
-              </Link>
+                  <Link href={`/dashboard/projects/${projectId}/analytics`}>
+                    <Button
+                      variant='outline'
+                      className='mt-2 w-full justify-start'
+                    >
+                      <BarChart3 className='mr-2 h-4 w-4' />
+                      Аналитика ботов
+                    </Button>
+                  </Link>
+                </>
+              )}
 
               <Link href={`/dashboard/templates`}>
                 <Button variant='outline' className='mt-2 w-full justify-start'>
-                  <BookOpen className='mr-2 h-4 w-4' />
+                  <Library className='mr-2 h-4 w-4' />
                   Библиотека шаблонов
                 </Button>
               </Link>

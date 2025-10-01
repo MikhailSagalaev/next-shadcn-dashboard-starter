@@ -2,7 +2,6 @@ import {
   IconAlertTriangle,
   IconArrowRight,
   IconBell,
-  IconBot,
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
@@ -17,6 +16,7 @@ import {
   IconLoader2,
   IconLogin,
   IconProps,
+  IconRobot,
   IconShoppingBag,
   IconMoon,
   IconDotsVertical,
@@ -74,5 +74,5 @@ export const Icons = {
   twitter: IconBrandTwitter,
   check: IconCheck,
   bonus: IconCoins,
-  bot: IconBot
+  bot: IconRobot
 };
