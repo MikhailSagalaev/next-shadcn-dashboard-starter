@@ -44,14 +44,6 @@ export const navItems: NavItem[] = [
     isActive: false,
     shortcut: ['t', 'm'],
     items: []
-  },
-  {
-    title: 'Маркетплейс',
-    url: '/dashboard/marketplace',
-    icon: 'shopping-bag',
-    isActive: false,
-    shortcut: ['m', 'k'],
-    items: []
   }
 ];
 

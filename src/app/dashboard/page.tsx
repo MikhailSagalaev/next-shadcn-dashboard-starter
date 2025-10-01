@@ -270,10 +270,10 @@ export default function DashboardPage() {
               <Button
                 variant='outline'
                 className='mt-2 justify-start'
-                onClick={() => router.push('/dashboard/kanban')}
+                onClick={() => router.push('/dashboard/templates')}
               >
-                <Activity className='mr-2 h-4 w-4' />
-                Канбан доска
+                <Bot className='mr-2 h-4 w-4' />
+                Библиотека шаблонов
               </Button>
             </div>
           </CardContent>
