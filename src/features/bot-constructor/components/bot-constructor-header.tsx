@@ -153,12 +153,20 @@ export function BotConstructorHeader({
             <h1 className='text-2xl font-bold tracking-tight'>
               🤖 Конструктор бота
             </h1>
-            {currentFlow && (
-              <p className='text-muted-foreground text-sm'>
-                {currentFlow.description ||
-                  'Визуальный конструктор Telegram ботов'}
-              </p>
-            )}
+            <div className='flex items-center gap-2'>
+              {currentFlow && (
+                <p className='text-muted-foreground text-sm'>
+                  {currentFlow.description ||
+                    'Визуальный конструктор Telegram ботов'}
+                </p>
+              )}
+              <div className='text-muted-foreground bg-muted rounded px-2 py-1 text-xs'>
+                💡 Поток - это сценарий работы бота (диалог, команды, условия)
+              </div>
+              <div className='rounded bg-blue-50 px-2 py-1 text-xs text-blue-600'>
+                🔗 После создания поток нужно активировать в настройках бота
+              </div>
+            </div>
           </div>
 
           {/* Actions */}

@@ -193,7 +193,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
   }
 
   return (
-    <div className='flex h-screen flex-col'>
+    <div className='flex h-full flex-col'>
       {/* Header */}
       <BotConstructorHeader
         projectId={projectId}
@@ -209,13 +209,13 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
         onPreviewToggle={setIsPreviewMode}
       />
 
-      {/* Main content */}
-      <div className='flex flex-1'>
+      {/* Main content - занимает всё оставшееся пространство */}
+      <div className='flex flex-1 overflow-hidden'>
         {/* Toolbar */}
         <BotConstructorToolbar onAddNode={handleAddNode} />
 
-        {/* Canvas */}
-        <div className='relative flex-1'>
+        {/* Canvas - занимает всё доступное пространство */}
+        <div className='relative flex-1 overflow-hidden'>
           <ReactFlow
             nodes={flowData.nodes}
             edges={flowData.edges}
@@ -227,6 +227,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
             nodeTypes={nodeTypes}
             fitView
             attributionPosition='bottom-left'
+            className='h-full w-full'
           >
             <Background variant={BackgroundVariant.Dots} />
             <Controls />

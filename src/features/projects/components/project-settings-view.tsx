@@ -468,7 +468,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
               {/* Новые функции конструктора ботов */}
               <Separator className='my-3' />
               <div className='text-muted-foreground mb-2 text-sm font-medium'>
-                🤖 Конструктор ботов
+                🤖 Конструктор бота
               </div>
 
               {projectId && (
