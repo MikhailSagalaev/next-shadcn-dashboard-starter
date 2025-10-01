@@ -22,7 +22,8 @@ import {
   Mail,
   CreditCard,
   Settings,
-  Eye
+  Eye,
+  ArrowRight
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
