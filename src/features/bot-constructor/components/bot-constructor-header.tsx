@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -20,7 +20,10 @@ import {
   FileText,
   Eye,
   EyeOff,
-  MoreHorizontal
+  MoreHorizontal,
+  Download,
+  Upload,
+  TestTube
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -63,6 +66,8 @@ interface BotConstructorHeaderProps {
   onFlowLoad: (flowId: string) => Promise<BotFlow | null>;
   onFlowSave: () => Promise<void>;
   onFlowDelete: (flowId: string) => Promise<void>;
+  onFlowExport: () => Promise<void>;
+  onFlowImport: (file: File) => Promise<BotFlow>;
   isPreviewMode: boolean;
   onPreviewToggle: (preview: boolean) => void;
 }
@@ -77,6 +82,8 @@ export function BotConstructorHeader({
   onFlowLoad,
   onFlowSave,
   onFlowDelete,
+  onFlowExport,
+  onFlowImport,
   isPreviewMode,
   onPreviewToggle
 }: BotConstructorHeaderProps) {
@@ -88,6 +95,9 @@ export function BotConstructorHeader({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [newFlowName, setNewFlowName] = useState('');
   const [newFlowDescription, setNewFlowDescription] = useState('');
+
+  // File input ref for import
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle flow selection
   const handleFlowSelect = async (flowId: string) => {
@@ -129,6 +139,25 @@ export function BotConstructorHeader({
       setShowDeleteDialog(false);
     } catch (error) {
       // Error handled in hook
+    }
+  };
+
+  // Handle file import
+  const handleFileImport = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      await onFlowImport(file);
+    } catch (error) {
+      // Error handled in hook
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -204,6 +233,40 @@ export function BotConstructorHeader({
               <Plus className='mr-2 h-4 w-4' />
               Новый поток
             </Button>
+
+            {/* Export/Import */}
+            {currentFlow && (
+              <>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={onFlowExport}
+                  disabled={isSaving}
+                >
+                  <Download className='mr-2 h-4 w-4' />
+                  Экспорт
+                </Button>
+
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSaving}
+                >
+                  <Upload className='mr-2 h-4 w-4' />
+                  Импорт
+                </Button>
+
+                {/* Hidden file input for import */}
+                <input
+                  ref={fileInputRef}
+                  type='file'
+                  accept='.json'
+                  style={{ display: 'none' }}
+                  onChange={handleFileImport}
+                />
+              </>
+            )}
 
             {/* Preview toggle */}
             <Button

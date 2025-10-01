@@ -248,14 +248,20 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/templates?limit=100');
-      if (!response.ok) {
-        throw new Error('Failed to load templates');
-      }
-      const data = await response.json();
-      setTemplates(data.templates || []);
+      // Используем локальный сервис шаблонов
+      const { botTemplates } = await import(
+        '@/lib/services/bot-templates/bot-templates.service'
+      );
+      const publicTemplates = botTemplates.getPublicTemplates();
+      setTemplates(publicTemplates);
+      setFilteredTemplates(publicTemplates);
     } catch (error) {
       console.error('Failed to load templates:', error);
+      toast({
+        title: 'Ошибка загрузки',
+        description: 'Не удалось загрузить шаблоны',
+        variant: 'destructive'
+      });
     } finally {
       setLoading(false);
     }

@@ -46,6 +46,9 @@ export interface BotTemplate {
   version: string;
   createdAt: Date;
   updatedAt: Date;
+
+  // Поля библиотеки шаблонов
+  isPublic: boolean; // доступен в библиотеке шаблонов
 }
 
 export type BotTemplateCategory =
@@ -571,7 +574,10 @@ class BotTemplatesService {
         author: 'SaaS Bonus System',
         version: '2.1.0',
         createdAt: new Date('2024-01-15'),
-        updatedAt: new Date('2024-09-20')
+        updatedAt: new Date('2024-09-20'),
+
+        // Поле библиотеки шаблонов
+        isPublic: true
       },
 
       // E-commerce Templates
@@ -614,7 +620,10 @@ class BotTemplatesService {
         author: 'SaaS Bonus System',
         version: '1.8.0',
         createdAt: new Date('2024-02-01'),
-        updatedAt: new Date('2024-08-15')
+        updatedAt: new Date('2024-08-15'),
+
+        // Поле библиотеки шаблонов
+        isPublic: true
       },
 
       // Lead Generation Templates
@@ -659,7 +668,10 @@ class BotTemplatesService {
         author: 'SaaS Bonus System',
         version: '2.0.0',
         createdAt: new Date('2024-03-10'),
-        updatedAt: new Date('2024-09-25')
+        updatedAt: new Date('2024-09-25'),
+
+        // Поле библиотеки шаблонов
+        isPublic: true
       },
 
       // Booking Templates
@@ -699,7 +711,10 @@ class BotTemplatesService {
         author: 'SaaS Bonus System',
         version: '1.9.0',
         createdAt: new Date('2024-04-05'),
-        updatedAt: new Date('2024-09-10')
+        updatedAt: new Date('2024-09-10'),
+
+        // Поле библиотеки шаблонов
+        isPublic: true
       },
 
       // Survey Templates
@@ -743,11 +758,19 @@ class BotTemplatesService {
         author: 'SaaS Bonus System',
         version: '1.7.0',
         createdAt: new Date('2024-05-12'),
-        updatedAt: new Date('2024-08-30')
+        updatedAt: new Date('2024-08-30'),
+
+        // Поле библиотеки шаблонов
+        isPublic: true
       }
     ];
 
     logger.info('Bot templates initialized', { count: this.templates.length });
+  }
+
+  // Получение публичных шаблонов для библиотеки
+  getPublicTemplates(): BotTemplate[] {
+    return this.templates.filter((t) => t.isPublic);
   }
 }
 

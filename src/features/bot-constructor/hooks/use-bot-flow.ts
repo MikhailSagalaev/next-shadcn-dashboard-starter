@@ -330,6 +330,99 @@ export function useBotFlow(projectId: string) {
     }
   }, [currentFlow, projectId, toast]);
 
+  // Export current flow
+  const exportFlow = useCallback(async () => {
+    if (!currentFlow) return;
+
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/flows/${currentFlow.id}/export`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to export flow');
+      }
+
+      // Создаем blob и скачиваем файл
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bot-flow-${currentFlow.name.replace(/[^a-zA-Z0-9]/g, '-')}-${currentFlow.id.slice(-8)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Экспорт завершен',
+        description: 'Поток успешно экспортирован'
+      });
+    } catch (error) {
+      console.error('Failed to export flow:', error);
+      toast({
+        title: 'Ошибка экспорта',
+        description: 'Не удалось экспортировать поток',
+        variant: 'destructive'
+      });
+    }
+  }, [currentFlow, projectId, toast]);
+
+  // Import flow from file
+  const importFlow = useCallback(
+    async (file: File) => {
+      try {
+        // Читаем содержимое файла
+        const text = await file.text();
+        const importData = JSON.parse(text);
+
+        const response = await fetch(
+          `/api/projects/${projectId}/flows/import`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(importData)
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to import flow');
+        }
+
+        const result = await response.json();
+        const importedFlow = result.flow;
+
+        // Обновляем локальное состояние
+        setFlows((prev) => [...prev, importedFlow]);
+        setCurrentFlow(importedFlow);
+
+        toast({
+          title: 'Импорт завершен',
+          description: result.message || 'Поток успешно импортирован'
+        });
+
+        return importedFlow;
+      } catch (error) {
+        console.error('Failed to import flow:', error);
+        toast({
+          title: 'Ошибка импорта',
+          description:
+            error instanceof Error
+              ? error.message
+              : 'Не удалось импортировать поток',
+          variant: 'destructive'
+        });
+        throw error;
+      }
+    },
+    [projectId, toast]
+  );
+
   // Load flows on mount
   useEffect(() => {
     loadFlows();
@@ -351,6 +444,8 @@ export function useBotFlow(projectId: string) {
     deleteFlow,
     cloneFlow,
     validateFlow,
+    exportFlow,
+    importFlow,
 
     // Utilities
     setCurrentFlow

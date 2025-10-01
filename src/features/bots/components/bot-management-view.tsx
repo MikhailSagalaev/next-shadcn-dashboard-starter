@@ -33,7 +33,8 @@ import {
   Plus,
   Trash2,
   Image,
-  Link
+  Link,
+  Wrench
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -546,6 +547,18 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
               </Button>
             </>
           )}
+
+          {/* Bot Constructor Button */}
+          <Button
+            size='sm'
+            variant='outline'
+            onClick={() =>
+              router.push(`/dashboard/projects/${projectId}/constructor`)
+            }
+          >
+            <Wrench className='mr-2 h-4 w-4' />
+            Конструктор бота
+          </Button>
         </div>
       </div>
 

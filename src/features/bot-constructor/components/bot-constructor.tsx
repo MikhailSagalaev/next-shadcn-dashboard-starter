@@ -205,6 +205,8 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
         onFlowLoad={loadFlow}
         onFlowSave={saveFlow}
         onFlowDelete={deleteFlow}
+        onFlowExport={exportFlow}
+        onFlowImport={importFlow}
         isPreviewMode={isPreviewMode}
         onPreviewToggle={setIsPreviewMode}
       />
