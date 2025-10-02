@@ -23,6 +23,7 @@ export function useBotFlow(projectId: string) {
   const [currentFlow, setCurrentFlow] = useState<BotFlow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   // Load all flows for project
   const loadFlows = useCallback(async () => {
@@ -330,6 +331,17 @@ export function useBotFlow(projectId: string) {
     }
   }, [currentFlow, projectId, toast]);
 
+  // Toggle preview mode
+  const togglePreviewMode = useCallback(() => {
+    setIsPreviewMode((prev) => !prev);
+    toast({
+      title: isPreviewMode ? 'Режим редактирования' : 'Режим предпросмотра',
+      description: isPreviewMode
+        ? 'Теперь можно редактировать поток'
+        : 'Изменения не будут сохранены'
+    });
+  }, [isPreviewMode, toast]);
+
   // Export current flow
   const exportFlow = useCallback(async () => {
     if (!currentFlow) return;
@@ -434,6 +446,7 @@ export function useBotFlow(projectId: string) {
     currentFlow,
     isLoading,
     isSaving,
+    isPreviewMode,
 
     // Actions
     loadFlows,
@@ -446,6 +459,7 @@ export function useBotFlow(projectId: string) {
     validateFlow,
     exportFlow,
     importFlow,
+    togglePreviewMode,
 
     // Utilities
     setCurrentFlow

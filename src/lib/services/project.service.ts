@@ -169,7 +169,20 @@ export class ProjectService {
       db.project.findMany({
         skip,
         take: limit,
-        include: {
+        select: {
+          id: true,
+          name: true,
+          domain: true,
+          webhookSecret: true,
+          bonusPercentage: true,
+          bonusExpiryDays: true,
+          // bonusBehavior: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+          botStatus: true,
+          botToken: true,
+          botUsername: true,
           botSettings: true,
           referralProgram: true,
           _count: {

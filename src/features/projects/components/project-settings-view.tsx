@@ -73,10 +73,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     domain: '',
     bonusPercentage: 1.0,
     bonusExpiryDays: 365,
-    bonusBehavior: 'SPEND_AND_EARN' as
-      | 'SPEND_AND_EARN'
-      | 'SPEND_ONLY'
-      | 'EARN_ONLY',
+    // bonusBehavior: 'SPEND_AND_EARN', // временно отключено
     isActive: true,
     welcomeBonusAmount: 0
   });
@@ -94,7 +91,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           domain: projectData.domain || '',
           bonusPercentage: Number(projectData.bonusPercentage) || 1.0,
           bonusExpiryDays: projectData.bonusExpiryDays || 365,
-          bonusBehavior: projectData.bonusBehavior || 'SPEND_AND_EARN',
+          // bonusBehavior: projectData.bonusBehavior || 'SPEND_AND_EARN',
           isActive: projectData.isActive ?? true,
           welcomeBonusAmount: (() => {
             const metaStr = projectData?.referralProgram?.description || null;
@@ -307,34 +304,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                     />
                   </div>
 
-                  <div className='space-y-2'>
-                    <Label htmlFor='bonusBehavior'>Поведение бонусов</Label>
-                    <Select
-                      value={formData.bonusBehavior}
-                      onValueChange={(
-                        value: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY'
-                      ) => setFormData({ ...formData, bonusBehavior: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder='Выберите поведение бонусов' />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value='SPEND_AND_EARN'>
-                          Списывать и начислять бонусы
-                        </SelectItem>
-                        <SelectItem value='SPEND_ONLY'>
-                          Только списывать бонусы
-                        </SelectItem>
-                        <SelectItem value='EARN_ONLY'>
-                          Только начислять бонусы
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className='text-muted-foreground text-xs'>
-                      Определяет поведение бонусов при покупке с использованием
-                      бонусов
-                    </p>
-                  </div>
+                  {/* Настройка поведения бонусов временно отключена */}
                 </div>
 
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
@@ -477,6 +447,12 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                     <Button variant='outline' className='w-full justify-start'>
                       <Bot className='mr-2 h-4 w-4' />
                       Настройка бота
+                    </Button>
+                  </Link>
+                  <Link href={`/dashboard/projects/${projectId}/constructor`}>
+                    <Button variant='outline' className='mt-2 w-full justify-start'>
+                      <Zap className='mr-2 h-4 w-4' />
+                      Конструктор бота
                     </Button>
                   </Link>
                 </>

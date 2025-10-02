@@ -12,21 +12,17 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@heroui/button';
+import { Card, CardBody, CardHeader } from '@heroui/card';
+import { Input } from '@heroui/input';
+import { Textarea } from '@heroui/textarea';
 import {
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+  SelectItem
+} from '@heroui/select';
+import { Switch } from '@heroui/switch';
+import { Divider } from '@heroui/divider';
+import { Tabs, Tab } from '@heroui/tabs';
 
 import { MessageEditor } from './editors/message-editor';
 import { KeyboardBuilder } from './editors/keyboard-builder';
@@ -96,18 +92,18 @@ export function BotConstructorProperties({
   const renderStartProperties = () => (
     <div className='space-y-4'>
       <div>
-        <Label>Название ноды</Label>
+        <label className="text-sm font-medium">Название ноды</label>
         <Input
           value={localNode.data.label}
-          onChange={(e) => updateNodeData({ label: e.target.value })}
+          onValueChange={(value) => updateNodeData({ label: value })}
           placeholder='Точка входа'
         />
       </div>
       <div>
-        <Label>Описание</Label>
+        <label className="text-sm font-medium">Описание</label>
         <Textarea
           value={localNode.data.description || ''}
-          onChange={(e) => updateNodeData({ description: e.target.value })}
+          onValueChange={(value) => updateNodeData({ description: value })}
           placeholder='Описание точки входа в диалог'
         />
       </div>
@@ -115,154 +111,152 @@ export function BotConstructorProperties({
   );
 
   const renderMessageProperties = () => (
-    <Tabs defaultValue='message' className='w-full'>
-      <TabsList className='grid w-full grid-cols-2'>
-        <TabsTrigger value='message'>Сообщение</TabsTrigger>
-        <TabsTrigger value='keyboard'>Клавиатура</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value='message' className='mt-4 space-y-4'>
-        <MessageEditor
-          config={localNode.data.config.message || { text: '' }}
-          onChange={(messageConfig) =>
-            updateNodeData({
-              config: {
-                ...localNode.data.config,
-                message: messageConfig
-              }
-            })
-          }
-        />
-      </TabsContent>
-
-      <TabsContent value='keyboard' className='mt-4 space-y-4'>
-        <KeyboardBuilder
-          config={
-            localNode.data.config.message?.keyboard || {
-              type: 'inline',
-              buttons: [[]]
-            }
-          }
-          onChange={(keyboardConfig) =>
-            updateNodeData({
-              config: {
-                ...localNode.data.config,
-                message: {
-                  ...localNode.data.config.message,
-                  keyboard: keyboardConfig
+    <Tabs defaultSelectedKey="message" aria-label="Message editor tabs">
+      <Tab key="message" title="Сообщение">
+        <div className='mt-4 space-y-4'>
+          <MessageEditor
+            config={localNode.data.config.message || { text: '' }}
+            onChange={(messageConfig) =>
+              updateNodeData({
+                config: {
+                  ...localNode.data.config,
+                  message: messageConfig
                 }
+              })
+            }
+          />
+        </div>
+      </Tab>
+
+      <Tab key="keyboard" title="Клавиатура">
+        <div className='mt-4 space-y-4'>
+          <KeyboardBuilder
+            config={
+              localNode.data.config.message?.keyboard || {
+                type: 'inline',
+                buttons: [[]]
               }
-            })
-          }
-        />
-      </TabsContent>
+            }
+            onChange={(keyboardConfig) =>
+              updateNodeData({
+                config: {
+                  ...localNode.data.config,
+                  message: {
+                    ...localNode.data.config.message,
+                    keyboard: keyboardConfig
+                  }
+                }
+              })
+            }
+          />
+        </div>
+      </Tab>
     </Tabs>
   );
 
   const renderCommandProperties = () => (
-    <Tabs defaultValue='settings' className='w-full'>
-      <TabsList className='grid w-full grid-cols-2'>
-        <TabsTrigger value='settings'>Настройки</TabsTrigger>
-        <TabsTrigger value='botfather'>Bot Father</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value='settings' className='mt-4 space-y-4'>
-        <div>
-          <Label>Команда (без /)</Label>
-          <Input
-            value={localNode.data.config.command?.command || ''}
-            onChange={(e) =>
-              updateNodeData({
-                config: {
-                  ...localNode.data.config,
-                  command: {
-                    ...localNode.data.config.command,
-                    command: e.target.value
+    <Tabs defaultSelectedKey="settings" aria-label="Command editor tabs">
+      <Tab key="settings" title="Настройки">
+        <div className='mt-4 space-y-4'>
+          <div>
+            <label className="text-sm font-medium">Команда (без /)</label>
+            <Input
+              value={localNode.data.config.command?.command || ''}
+              onValueChange={(value) =>
+                updateNodeData({
+                  config: {
+                    ...localNode.data.config,
+                    command: {
+                      ...localNode.data.config.command,
+                      command: value
+                    }
                   }
-                }
-              })
-            }
-            placeholder='start'
-          />
-        </div>
-
-        <div>
-          <Label>Описание</Label>
-          <Input
-            value={localNode.data.config.command?.description || ''}
-            onChange={(e) =>
-              updateNodeData({
-                config: {
-                  ...localNode.data.config,
-                  command: {
-                    ...localNode.data.config.command,
-                    description: e.target.value
-                  }
-                }
-              })
-            }
-            placeholder='Описание команды для /help'
-          />
-        </div>
-
-        <div>
-          <Label>Альтернативные имена</Label>
-          <Input
-            value={localNode.data.config.command?.aliases?.join(', ') || ''}
-            onChange={(e) =>
-              updateNodeData({
-                config: {
-                  ...localNode.data.config,
-                  command: {
-                    ...localNode.data.config.command,
-                    aliases: e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean)
-                  }
-                }
-              })
-            }
-            placeholder='go, begin (через запятую)'
-          />
-        </div>
-      </TabsContent>
-
-      <TabsContent value='botfather' className='mt-4'>
-        <BotfatherHelper
-          config={
-            localNode.data.config.command || {
-              command: '',
-              description: ''
-            }
-          }
-          onChange={(commandConfig) =>
-            updateNodeData({
-              config: {
-                ...localNode.data.config,
-                command: commandConfig
+                })
               }
-            })
-          }
-          botUsername='your_bot_username' // This would come from project settings
-        />
-      </TabsContent>
+              placeholder='start'
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Описание</label>
+            <Input
+              value={localNode.data.config.command?.description || ''}
+              onValueChange={(value) =>
+                updateNodeData({
+                  config: {
+                    ...localNode.data.config,
+                    command: {
+                      ...localNode.data.config.command,
+                      description: value
+                    }
+                  }
+                })
+              }
+              placeholder='Описание команды для /help'
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">Альтернативные имена</label>
+            <Input
+              value={localNode.data.config.command?.aliases?.join(', ') || ''}
+              onValueChange={(value) =>
+                updateNodeData({
+                  config: {
+                    ...localNode.data.config,
+                    command: {
+                      ...localNode.data.config.command,
+                      aliases: value
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                    }
+                  }
+                })
+              }
+              placeholder='go, begin (через запятую)'
+            />
+          </div>
+        </div>
+      </Tab>
+
+      <Tab key="botfather" title="Bot Father">
+        <div className='mt-4'>
+          <BotfatherHelper
+            config={
+              localNode.data.config.command || {
+                command: '',
+                description: ''
+              }
+            }
+            onChange={(commandConfig) =>
+              updateNodeData({
+                config: {
+                  ...localNode.data.config,
+                  command: commandConfig
+                }
+              })
+            }
+            botUsername='your_bot_username' // This would come from project settings
+          />
+        </div>
+      </Tab>
     </Tabs>
   );
 
   const renderCallbackProperties = () => (
     <div className='space-y-4'>
       <div>
-        <Label>Callback data</Label>
+        <label className="text-sm font-medium">Callback data</label>
         <Input
           value={localNode.data.config.callback?.data || ''}
-          onChange={(e) =>
+          onValueChange={(value) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 callback: {
                   ...localNode.data.config.callback,
-                  data: e.target.value
+                  data: value
                 }
               }
             })
@@ -272,16 +266,16 @@ export function BotConstructorProperties({
       </div>
 
       <div>
-        <Label>Регулярное выражение (опционально)</Label>
+        <label className="text-sm font-medium">Регулярное выражение (опционально)</label>
         <Input
           value={localNode.data.config.callback?.pattern || ''}
-          onChange={(e) =>
+          onValueChange={(value) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 callback: {
                   ...localNode.data.config.callback,
-                  pattern: e.target.value
+                  pattern: value
                 }
               }
             })
@@ -292,20 +286,20 @@ export function BotConstructorProperties({
 
       <div className='flex items-center space-x-2'>
         <Switch
-          checked={localNode.data.config.callback?.hideKeyboard || false}
-          onCheckedChange={(checked) =>
+          isSelected={localNode.data.config.callback?.hideKeyboard || false}
+          onValueChange={(isSelected) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 callback: {
                   ...localNode.data.config.callback,
-                  hideKeyboard: checked
+                  hideKeyboard: isSelected
                 }
               }
             })
           }
         />
-        <Label className='text-sm'>Скрыть клавиатуру после нажатия</Label>
+        <label className='text-sm font-medium'>Скрыть клавиатуру после нажатия</label>
       </div>
     </div>
   );
@@ -314,16 +308,16 @@ export function BotConstructorProperties({
   const renderInputProperties = () => (
     <div className='space-y-4'>
       <div>
-        <Label>Текст запроса</Label>
+        <label className="text-sm font-medium">Текст запроса</label>
         <Textarea
           value={localNode.data.config.input?.prompt || ''}
-          onChange={(e) =>
+          onValueChange={(value) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 input: {
                   ...localNode.data.config.input,
-                  prompt: e.target.value
+                  prompt: value
                 }
               }
             })
@@ -332,17 +326,17 @@ export function BotConstructorProperties({
         />
       </div>
       <div>
-        <Label>Таймаут (секунды)</Label>
+        <label className="text-sm font-medium">Таймаут (секунды)</label>
         <Input
           type='number'
           value={localNode.data.config.input?.timeout || 300}
-          onChange={(e) =>
+          onValueChange={(value) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 input: {
                   ...localNode.data.config.input,
-                  timeout: parseInt(e.target.value)
+                  timeout: parseInt(value) || 300
                 }
               }
             })
@@ -377,31 +371,26 @@ export function BotConstructorProperties({
   const renderActionProperties = () => (
     <div className='space-y-4'>
       <div>
-        <Label>Тип действия</Label>
+        <label className="text-sm font-medium">Тип действия</label>
         <Select
-          value={localNode.data.config.action?.type || 'grammy_api'}
-          onValueChange={(value) =>
+          selectedKeys={[localNode.data.config.action?.type || 'grammy_api']}
+          onSelectionChange={(keys) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 action: {
                   ...localNode.data.config.action,
-                  type: value as any
+                  type: Array.from(keys)[0] as any
                 }
               }
             })
           }
         >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value='grammy_api'>Grammy API</SelectItem>
-            <SelectItem value='external_api'>Внешний API</SelectItem>
-            <SelectItem value='database'>База данных</SelectItem>
-            <SelectItem value='variable'>Переменная</SelectItem>
-            <SelectItem value='notification'>Уведомление</SelectItem>
-          </SelectContent>
+          <SelectItem key='grammy_api'>Grammy API</SelectItem>
+          <SelectItem key='external_api'>Внешний API</SelectItem>
+          <SelectItem key='database'>База данных</SelectItem>
+          <SelectItem key='variable'>Переменная</SelectItem>
+          <SelectItem key='notification'>Уведомление</SelectItem>
         </Select>
       </div>
     </div>
@@ -410,31 +399,26 @@ export function BotConstructorProperties({
   const renderMiddlewareProperties = () => (
     <div className='space-y-4'>
       <div>
-        <Label>Тип middleware</Label>
+        <label className="text-sm font-medium">Тип middleware</label>
         <Select
-          value={localNode.data.config.middleware?.type || 'logging'}
-          onValueChange={(value) =>
+          selectedKeys={[localNode.data.config.middleware?.type || 'logging']}
+          onSelectionChange={(keys) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 middleware: {
                   ...localNode.data.config.middleware,
-                  type: value as any
+                  type: Array.from(keys)[0] as any
                 }
               }
             })
           }
         >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value='logging'>Логирование</SelectItem>
-            <SelectItem value='auth'>Аутентификация</SelectItem>
-            <SelectItem value='rate_limit'>Ограничение запросов</SelectItem>
-            <SelectItem value='validation'>Валидация</SelectItem>
-            <SelectItem value='custom'>Пользовательский</SelectItem>
-          </SelectContent>
+          <SelectItem key='logging'>Логирование</SelectItem>
+          <SelectItem key='auth'>Аутентификация</SelectItem>
+          <SelectItem key='rate_limit'>Ограничение запросов</SelectItem>
+          <SelectItem key='validation'>Валидация</SelectItem>
+          <SelectItem key='custom'>Пользовательский</SelectItem>
         </Select>
       </div>
     </div>
@@ -443,16 +427,16 @@ export function BotConstructorProperties({
   const renderSessionProperties = () => (
     <div className='space-y-4'>
       <div>
-        <Label>Ключ переменной</Label>
+        <label className="text-sm font-medium">Ключ переменной</label>
         <Input
           value={localNode.data.config.session?.key || ''}
-          onChange={(e) =>
+          onValueChange={(value) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 session: {
                   ...localNode.data.config.session,
-                  key: e.target.value
+                  key: value
                 }
               }
             })
@@ -462,31 +446,26 @@ export function BotConstructorProperties({
       </div>
 
       <div>
-        <Label>Операция</Label>
+        <label className="text-sm font-medium">Операция</label>
         <Select
-          value={localNode.data.config.session?.operation || 'set'}
-          onValueChange={(value) =>
+          selectedKeys={[localNode.data.config.session?.operation || 'set']}
+          onSelectionChange={(keys) =>
             updateNodeData({
               config: {
                 ...localNode.data.config,
                 session: {
                   ...localNode.data.config.session,
-                  operation: value as any
+                  operation: Array.from(keys)[0] as any
                 }
               }
             })
           }
         >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value='set'>Установить</SelectItem>
-            <SelectItem value='get'>Получить</SelectItem>
-            <SelectItem value='delete'>Удалить</SelectItem>
-            <SelectItem value='increment'>Увеличить</SelectItem>
-            <SelectItem value='decrement'>Уменьшить</SelectItem>
-          </SelectContent>
+          <SelectItem key='set'>Установить</SelectItem>
+          <SelectItem key='get'>Получить</SelectItem>
+          <SelectItem key='delete'>Удалить</SelectItem>
+          <SelectItem key='increment'>Увеличить</SelectItem>
+          <SelectItem key='decrement'>Уменьшить</SelectItem>
         </Select>
       </div>
     </div>
@@ -495,19 +474,19 @@ export function BotConstructorProperties({
   const renderEndProperties = () => (
     <div className='space-y-4'>
       <div>
-        <Label>Название ноды</Label>
+        <label className="text-sm font-medium">Название ноды</label>
         <Input
           value={localNode.data.label}
-          onChange={(e) => updateNodeData({ label: e.target.value })}
+          onValueChange={(value) => updateNodeData({ label: value })}
           placeholder='Завершение диалога'
         />
       </div>
 
       <div>
-        <Label>Прощальное сообщение (опционально)</Label>
+        <label className="text-sm font-medium">Прощальное сообщение (опционально)</label>
         <Textarea
           value={localNode.data.description || ''}
-          onChange={(e) => updateNodeData({ description: e.target.value })}
+          onValueChange={(value) => updateNodeData({ description: value })}
           placeholder='Спасибо за использование нашего бота!'
         />
       </div>
@@ -519,7 +498,7 @@ export function BotConstructorProperties({
       {/* Header */}
       <div className='flex items-center justify-between border-b p-4'>
         <h3 className='text-sm font-semibold'>Свойства ноды</h3>
-        <Button variant='ghost' size='sm' onClick={onClose}>
+        <Button variant='light' size='sm' onClick={onClose}>
           <X className='h-4 w-4' />
         </Button>
       </div>
@@ -528,9 +507,9 @@ export function BotConstructorProperties({
       <div className='flex-1 overflow-y-auto p-4'>
         <Card>
           <CardHeader className='pb-3'>
-            <CardTitle className='text-sm'>{localNode.data.label}</CardTitle>
+            <h4 className='text-sm font-semibold'>{localNode.data.label}</h4>
           </CardHeader>
-          <CardContent>{renderProperties()}</CardContent>
+          <CardBody>{renderProperties()}</CardBody>
         </Card>
       </div>
     </div>

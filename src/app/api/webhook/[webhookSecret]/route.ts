@@ -96,14 +96,14 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
   // Получаем настройки проекта для определения поведения бонусов
   const project = await db.project.findUnique({
     where: { id: projectId },
-    select: { bonusBehavior: true }
+    // select: { bonusBehavior: true }
   });
 
   if (!project) {
     throw new Error('Проект не найден');
   }
 
-  const bonusBehavior = project.bonusBehavior as
+  const bonusBehavior = 'SPEND_AND_EARN' as
     | 'SPEND_AND_EARN'
     | 'SPEND_ONLY'
     | 'EARN_ONLY';

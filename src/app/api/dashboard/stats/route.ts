@@ -37,7 +37,20 @@ export async function GET() {
           orderBy: {
             createdAt: 'desc'
           },
-          include: {
+          select: {
+            id: true,
+            name: true,
+            domain: true,
+            webhookSecret: true,
+            bonusPercentage: true,
+            bonusExpiryDays: true,
+            // bonusBehavior: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+            botStatus: true,
+            botToken: true,
+            botUsername: true,
             _count: {
               select: {
                 users: true

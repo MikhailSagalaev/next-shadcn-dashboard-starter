@@ -28,7 +28,24 @@ export async function initializeAllBots() {
           isActive: true,
           botToken: { not: '' }
         },
-        include: { project: true }
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              webhookSecret: true,
+              bonusPercentage: true,
+              bonusExpiryDays: true,
+              // bonusBehavior: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+              botStatus: true,
+              botToken: true,
+              botUsername: true
+            }
+          }
+        }
       });
     } catch (error: unknown) {
       logger.error(

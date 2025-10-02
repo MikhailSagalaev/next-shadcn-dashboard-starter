@@ -25,6 +25,7 @@ import {
   Panel
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import '../bot-constructor.css';
 
 // Components
 import { BotConstructorToolbar } from './bot-constructor-toolbar';
@@ -54,7 +55,6 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
   // State
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<BotNode | null>(null);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState<BotNode>([]);
@@ -65,13 +65,15 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
     flows,
     currentFlow,
     isLoading,
+    isPreviewMode,
     createFlow,
     updateFlow,
     deleteFlow,
     loadFlow,
     saveFlow,
     exportFlow,
-    importFlow
+    importFlow,
+    togglePreviewMode
   } = useBotFlow(projectId);
 
   // Convert BotConnection[] to Edge[]
@@ -263,7 +265,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
         onFlowExport={exportFlow}
         onFlowImport={importFlow}
         isPreviewMode={isPreviewMode}
-        onPreviewToggle={setIsPreviewMode}
+        onPreviewToggle={togglePreviewMode}
         isSaving={false}
       />
 

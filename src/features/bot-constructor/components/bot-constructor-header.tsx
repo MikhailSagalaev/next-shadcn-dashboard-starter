@@ -26,32 +26,27 @@ import {
   TestTube
 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@heroui/button';
 import {
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
+  SelectItem
+} from '@heroui/select';
 import {
+  Dropdown,
+  DropdownTrigger,
   DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+  DropdownItem,
+  DropdownSection
+} from '@heroui/dropdown';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+  Modal,
+  ModalContent,
+  ModalBody,
+  ModalFooter,
+  ModalHeader
+} from '@heroui/modal';
+import { Input } from '@heroui/input';
+import { Badge } from '@heroui/badge';
 import { useToast } from '@/hooks/use-toast';
 
 import type { BotFlow, CreateFlowRequest } from '@/types/bot-constructor';
@@ -69,7 +64,7 @@ interface BotConstructorHeaderProps {
   onFlowExport: () => Promise<void>;
   onFlowImport: (file: File) => Promise<BotFlow>;
   isPreviewMode: boolean;
-  onPreviewToggle: (preview: boolean) => void;
+  onPreviewToggle: () => void;
   isSaving?: boolean;
 }
 
@@ -204,31 +199,31 @@ export function BotConstructorHeader({
           <div className='flex items-center space-x-2'>
             {/* Flow selector */}
             <Select
-              value={selectedFlowId || ''}
-              onValueChange={handleFlowSelect}
+              selectedKeys={selectedFlowId ? [selectedFlowId] : []}
+              onSelectionChange={(keys) => {
+                const selected = Array.from(keys)[0] as string;
+                handleFlowSelect(selected);
+              }}
+              placeholder='Выберите поток'
+              className='w-[200px]'
             >
-              <SelectTrigger className='w-[200px]'>
-                <SelectValue placeholder='Выберите поток' />
-              </SelectTrigger>
-              <SelectContent>
-                {flows.map((flow) => (
-                  <SelectItem key={flow.id} value={flow.id}>
-                    <div className='flex w-full items-center justify-between'>
-                      <span>{flow.name}</span>
-                      {flow.isActive && (
-                        <Badge variant='secondary' className='ml-2 text-xs'>
-                          Активен
-                        </Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
+              {flows.map((flow) => (
+                <SelectItem key={flow.id} value={flow.id}>
+                  <div className='flex w-full items-center justify-between'>
+                    <span>{flow.name}</span>
+                    {flow.isActive && (
+                      <Badge color='success' size='sm' className='ml-2'>
+                        Активен
+                      </Badge>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
             </Select>
 
             {/* Create flow */}
             <Button
-              variant='outline'
+              variant='bordered'
               size='sm'
               onClick={() => setShowCreateDialog(true)}
             >
@@ -240,7 +235,7 @@ export function BotConstructorHeader({
             {currentFlow && (
               <>
                 <Button
-                  variant='outline'
+                  variant='bordered'
                   size='sm'
                   onClick={onFlowExport}
                   disabled={isSaving}
@@ -250,7 +245,7 @@ export function BotConstructorHeader({
                 </Button>
 
                 <Button
-                  variant='outline'
+                  variant='bordered'
                   size='sm'
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isSaving}
@@ -274,7 +269,7 @@ export function BotConstructorHeader({
             <Button
               variant={isPreviewMode ? 'default' : 'outline'}
               size='sm'
-              onClick={() => onPreviewToggle(!isPreviewMode)}
+              onClick={onPreviewToggle}
             >
               {isPreviewMode ? (
                 <EyeOff className='mr-2 h-4 w-4' />
@@ -286,7 +281,7 @@ export function BotConstructorHeader({
 
             {/* Save */}
             <Button
-              variant='outline'
+              variant='bordered'
               size='sm'
               onClick={onFlowSave}
               disabled={!currentFlow}
@@ -297,103 +292,106 @@ export function BotConstructorHeader({
 
             {/* More actions */}
             {currentFlow && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant='outline' size='sm'>
+              <Dropdown>
+                <DropdownTrigger>
+                  <Button variant='bordered' size='sm'>
                     <MoreHorizontal className='h-4 w-4' />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align='end'>
-                  <DropdownMenuItem>
-                    <FileText className='mr-2 h-4 w-4' />
-                    Экспорт в JSON
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Settings className='mr-2 h-4 w-4' />
-                    Настройки потока
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className='text-destructive'
-                    onClick={() => setShowDeleteDialog(true)}
-                  >
-                    Удалить поток
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </DropdownTrigger>
+                <DropdownMenu aria-label="Flow actions">
+                  <DropdownSection>
+                    <DropdownItem key="export" startContent={<FileText className='h-4 w-4' />}>
+                      Экспорт в JSON
+                    </DropdownItem>
+                    <DropdownItem key="settings" startContent={<Settings className='h-4 w-4' />}>
+                      Настройки потока
+                    </DropdownItem>
+                  </DropdownSection>
+                  <DropdownSection>
+                    <DropdownItem
+                      key="delete"
+                      className='text-danger'
+                      color='danger'
+                      onClick={() => setShowDeleteDialog(true)}
+                    >
+                      Удалить поток
+                    </DropdownItem>
+                  </DropdownSection>
+                </DropdownMenu>
+              </Dropdown>
             )}
           </div>
         </div>
       </div>
 
-      {/* Create Flow Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Создать новый поток</DialogTitle>
-            <DialogDescription>
+      {/* Create Flow Modal */}
+      <Modal isOpen={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <ModalContent>
+          <ModalHeader>
+            <h3 className="text-lg font-semibold">Создать новый поток</h3>
+            <p className="text-sm text-muted-foreground">
               Создайте новый поток для вашего Telegram бота
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </ModalHeader>
 
-          <div className='space-y-4'>
-            <div>
-              <Label htmlFor='flow-name'>Название потока</Label>
-              <Input
-                id='flow-name'
-                value={newFlowName}
-                onChange={(e) => setNewFlowName(e.target.value)}
-                placeholder='Например: Основной чатбот'
-              />
+          <ModalBody>
+            <div className='space-y-4'>
+              <div>
+                <label className="text-sm font-medium">Название потока</label>
+                <Input
+                  value={newFlowName}
+                  onValueChange={setNewFlowName}
+                  placeholder='Например: Основной чатбот'
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Описание (опционально)</label>
+                <Input
+                  value={newFlowDescription}
+                  onValueChange={setNewFlowDescription}
+                  placeholder='Краткое описание назначения потока'
+                />
+              </div>
             </div>
+          </ModalBody>
 
-            <div>
-              <Label htmlFor='flow-description'>Описание (опционально)</Label>
-              <Input
-                id='flow-description'
-                value={newFlowDescription}
-                onChange={(e) => setNewFlowDescription(e.target.value)}
-                placeholder='Краткое описание назначения потока'
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
+          <ModalFooter>
             <Button
-              variant='outline'
+              variant='bordered'
               onClick={() => setShowCreateDialog(false)}
             >
               Отмена
             </Button>
             <Button onClick={handleCreateFlow}>Создать поток</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
-      {/* Delete Flow Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Удалить поток</DialogTitle>
-            <DialogDescription>
+      {/* Delete Flow Modal */}
+      <Modal isOpen={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <ModalContent>
+          <ModalHeader>
+            <h3 className="text-lg font-semibold">Удалить поток</h3>
+            <p className="text-sm text-muted-foreground">
               Вы уверены, что хотите удалить поток "{currentFlow?.name}"? Это
               действие нельзя отменить.
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </ModalHeader>
 
-          <DialogFooter>
+          <ModalFooter>
             <Button
-              variant='outline'
+              variant='bordered'
               onClick={() => setShowDeleteDialog(false)}
             >
               Отмена
             </Button>
-            <Button variant='destructive' onClick={handleDeleteFlow}>
+            <Button color='danger' onClick={handleDeleteFlow}>
               Удалить
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </>
   );
 }
