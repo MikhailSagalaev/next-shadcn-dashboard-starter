@@ -239,22 +239,15 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   const [activeTab, setActiveTab] = useState('browse');
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadTemplates();
-  }, []);
-
-  useEffect(() => {
-    filterTemplates();
-  }, [templates, selectedCategory, selectedDifficulty, searchQuery, sortBy]);
-
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      // Используем локальный сервис шаблонов
-      const { botTemplates } = await import(
-        '@/lib/services/bot-templates/bot-templates.service'
-      );
-      const publicTemplates = botTemplates.getPublicTemplates();
+      // Используем API endpoint вместо прямого импорта сервиса
+      const response = await fetch('/api/templates');
+      if (!response.ok) throw new Error('Failed to load templates');
+
+      const data = await response.json();
+      const publicTemplates = data.templates || [];
       setTemplates(publicTemplates);
       setFilteredTemplates(publicTemplates);
     } catch (error) {
@@ -268,6 +261,14 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  useEffect(() => {
+    filterTemplates();
+  }, [templates, selectedCategory, selectedDifficulty, searchQuery, sortBy]);
 
   const filterTemplates = () => {
     let filtered = [...templates];
