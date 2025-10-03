@@ -2330,39 +2330,58 @@
     // Применение промокода из поля ввода
     applyPromocode: function () {
       try {
-        var input = document.getElementById('promo-code-input');
-        if (!input) return;
-        var code = (input.value || '').trim();
-        if (!code) {
-          var ps = document.getElementById('promo-status');
-          if (ps) {
-            ps.style.display = 'block';
-            ps.innerHTML = 'Укажите промокод';
-            setTimeout(function () {
-              ps.style.display = 'none';
-            }, 2000);
-          }
+        console.log('🎫 applyPromocode: НАЧАЛО');
+        const input = document.getElementById('promo-code-input');
+        console.log('📝 applyPromocode: input =', input);
+
+        if (!input) {
+          this.showError('Поле промокода не найдено');
           return;
         }
-        if (typeof window.t_input_promocode__addPromocode === 'function') {
-          window.t_input_promocode__addPromocode({ promocode: code });
-          if (typeof window.tcart__calcPromocode === 'function') {
-            try {
-              window.tcart__calcPromocode();
-            } catch (_) {}
-          }
-          if (typeof window.tcart__reDraw === 'function') {
-            try {
-              window.tcart__reDraw();
-            } catch (_) {}
-          }
-          this.showSuccess('Промокод применён');
-        } else {
-          this.showError('Промокоды не поддерживаются в этой корзине');
+
+        const code = (input.value || '').trim();
+        console.log('🔑 applyPromocode: code =', code);
+
+        if (!code) {
+          this.showError('Укажите промокод');
+          return;
         }
+
+        // Проверяем наличие функции Tilda
+        if (typeof window.t_input_promocode__addPromocode !== 'function') {
+          console.error(
+            '❌ applyPromocode: функция t_input_promocode__addPromocode не найдена'
+          );
+          this.showError('Промокоды не поддерживаются в этой корзине');
+          return;
+        }
+
+        console.log('✅ applyPromocode: применяем промокод через Tilda API');
+
+        // Применяем промокод через Tilda API
+        window.t_input_promocode__addPromocode({ promocode: code });
+
+        // Пересчитываем корзину
+        if (typeof window.tcart__calcPromocode === 'function') {
+          window.tcart__calcPromocode();
+          console.log('✅ applyPromocode: tcart__calcPromocode выполнен');
+        }
+
+        if (typeof window.tcart__reDrawTotal === 'function') {
+          window.tcart__reDrawTotal();
+          console.log('✅ applyPromocode: tcart__reDrawTotal выполнен');
+        }
+
+        if (typeof window.tcart__reDraw === 'function') {
+          window.tcart__reDraw();
+          console.log('✅ applyPromocode: tcart__reDraw выполнен');
+        }
+
+        this.showSuccess(`Промокод "${code}" применён`);
+        console.log('✅ applyPromocode: УСПЕХ');
       } catch (e) {
+        console.error('❌ applyPromocode: ошибка', e);
         this.showError('Ошибка применения промокода');
-        this.log('applyPromocode error', e);
       }
     },
 
