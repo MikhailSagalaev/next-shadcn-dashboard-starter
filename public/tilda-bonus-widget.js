@@ -127,6 +127,18 @@
       // Инициализируем UI
       this.initUI();
 
+      // Создаём виджет сразу (с переключателем бонусы/промокод)
+      this.createWidget();
+
+      // Скрываем поле промокода Tilda по умолчанию (показываем только при переключении на таб "Промокод")
+      const tildaPromoWrapper = document.querySelector(
+        '.t-inputpromocode__wrapper'
+      );
+      if (tildaPromoWrapper) {
+        tildaPromoWrapper.style.display = 'none';
+        this.state.promoWrapper = tildaPromoWrapper;
+      }
+
       // Отслеживаем изменения в корзине
       this.observeCart();
 
@@ -949,15 +961,7 @@
           background: #f9fafb;
         }
         
-        /* Скрываем ВСЕ оригинальные поля промокода Tilda когда виджет активен */
-        body .t-inputpromocode__wrapper:not(.bonus-widget-container),
-        body .t-inputpromocode:not(#promo-code-input),
-        body .js-inputpromocode:not(#promo-code-input),
-        body input[name="promocode"]:not(#promo-code-input),
-        body .t-input-promocode:not(#promo-code-input) {
-          display: none !important;
-          visibility: hidden !important;
-        }
+        /* НЕ скрываем оригинальное поле промокода - оно нужно для работы */
       `;
       document.head.appendChild(style);
       // Контейнер создаём лениво — только когда пользователь найден
@@ -1003,23 +1007,14 @@
             Применить бонусы
           </button>
         </div>
-        <div id="promo-section" class="bonus-input-group" style="display: none;">
-          <input type="text" 
-                 class="bonus-input" 
-                 id="promo-code-input" 
-                 placeholder="Введите промокод">
-          <button class="bonus-button" type="button"
-                  id="apply-promo-button" 
-                  onclick="TildaBonusWidget.applyPromocode()">
-            Применить промокод
-          </button>
-        </div>
         <div id="bonus-status"></div>
       `;
 
-      // Вставляем виджет вместо поля промокода
-      promocodeWrapper.parentNode.replaceChild(container, promocodeWrapper);
-      this.state.promoWrapper = promocodeWrapper; // Сохраняем ссылку на оригинальный wrapper
+      // Вставляем виджет ПЕРЕД полем промокода, а не вместо него
+      promocodeWrapper.parentNode.insertBefore(container, promocodeWrapper);
+
+      // Сохраняем ссылку на оригинальный wrapper промокода
+      this.state.promoWrapper = promocodeWrapper;
 
       this.log('Виджет добавлен вместо поля промокода');
 
@@ -1029,7 +1024,10 @@
 
     // Гарантированно вставить виджет, если его ещё нет
     ensureWidgetMounted: function () {
-      if (!document.querySelector('.bonus-widget-container')) {
+      // Виджет уже создан при инициализации, просто проверяем его наличие
+      const exists = !!document.querySelector('.bonus-widget-container');
+      if (!exists) {
+        console.warn('⚠️ Виджет не найден, создаём заново');
         this.createWidget();
       }
       return !!document.querySelector('.bonus-widget-container');
@@ -1902,32 +1900,55 @@
 
     // Переключение режима: бонусы | промокод
     switchMode: function (mode) {
+      console.log('🔄 switchMode: переключение на режим', mode);
       this.state.mode = mode === 'promo' ? 'promo' : 'bonus';
-      var bonusTab = document.getElementById('bonus-tab');
-      var promoTab = document.getElementById('promo-tab');
-      var bonusSection = document.getElementById('bonus-section');
-      var promoSection = document.getElementById('promo-section');
 
-      if (!bonusTab || !promoTab || !bonusSection || !promoSection) return;
+      const bonusTab = document.getElementById('bonus-tab');
+      const promoTab = document.getElementById('promo-tab');
+      const bonusSection = document.getElementById('bonus-section');
+      const bonusBalance = document.querySelector('.bonus-balance');
+      const tildaPromoWrapper =
+        this.state.promoWrapper ||
+        document.querySelector('.t-inputpromocode__wrapper');
+
+      if (!bonusTab || !promoTab || !bonusSection) {
+        console.warn('⚠️ switchMode: не найдены необходимые элементы');
+        return;
+      }
 
       if (this.state.mode === 'promo') {
-        // Переключаемся на режим промокода
+        // Переключаемся на режим промокода Tilda
+        console.log('🎫 switchMode: режим промокода');
         bonusTab.classList.remove('active');
         promoTab.classList.add('active');
-        bonusSection.style.display = 'none';
-        promoSection.style.display = 'block';
 
-        this.log('Переключено на режим промокода');
+        // Скрываем секцию бонусов
+        bonusSection.style.display = 'none';
+        if (bonusBalance) bonusBalance.style.display = 'none';
+
+        // Показываем оригинальное поле промокода Tilda
+        if (tildaPromoWrapper) {
+          tildaPromoWrapper.style.display = 'block';
+          console.log('✅ switchMode: показано поле промокода Tilda');
+        }
       } else {
         // Переключаемся на режим бонусов
+        console.log('💰 switchMode: режим бонусов');
         promoTab.classList.remove('active');
         bonusTab.classList.add('active');
-        bonusSection.style.display = 'flex';
-        promoSection.style.display = 'none';
 
-        this.log('Переключено на режим бонусов');
+        // Показываем секцию бонусов
+        bonusSection.style.display = 'flex';
+        if (bonusBalance) bonusBalance.style.display = 'block';
+
+        // Скрываем поле промокода Tilda
+        if (tildaPromoWrapper) {
+          tildaPromoWrapper.style.display = 'none';
+          console.log('✅ switchMode: скрыто поле промокода Tilda');
+        }
       }
-      // Переключение режима всегда сбрасывает ранее применённые бонусы/визуальные изменения
+
+      // Сбрасываем применённые бонусы при переключении
       this.resetAppliedBonuses();
     },
 
