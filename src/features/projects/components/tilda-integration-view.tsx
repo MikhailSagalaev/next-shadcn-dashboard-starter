@@ -1824,7 +1824,7 @@ export function ProjectIntegrationView({
                     </div>
                   </div>
 
-                  <div className='grid gap-4 md:grid-cols-2'>
+                  <div className='grid gap-4 md:grid-cols-3'>
                     <div className='space-y-2'>
                       <Label htmlFor='widgetButtonBackground'>
                         Цвет кнопки
@@ -1878,6 +1878,182 @@ export function ProjectIntegrationView({
                             })
                           }
                           placeholder='#ffffff'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetButtonHover'>
+                        Кнопка при наведении
+                      </Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetButtonHover'
+                          type='color'
+                          value={widgetSettings.widgetButtonHover}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetButtonHover: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetButtonHover}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetButtonHover: e.target.value
+                            })
+                          }
+                          placeholder='#2563eb'
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-4 md:grid-cols-3'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetLabelColor'>
+                        Цвет подписей (labels)
+                      </Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetLabelColor'
+                          type='color'
+                          value={widgetSettings.widgetLabelColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetLabelColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetLabelColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetLabelColor: e.target.value
+                            })
+                          }
+                          placeholder='#6b7280'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetBalanceColor'>Цвет баланса</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetBalanceColor'
+                          type='color'
+                          value={widgetSettings.widgetBalanceColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetBalanceColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetBalanceColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetBalanceColor: e.target.value
+                            })
+                          }
+                          placeholder='#059669'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetSuccessColor'>
+                        Цвет успешных уведомлений
+                      </Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetSuccessColor'
+                          type='color'
+                          value={widgetSettings.widgetSuccessColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetSuccessColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetSuccessColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetSuccessColor: e.target.value
+                            })
+                          }
+                          placeholder='#059669'
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-4 md:grid-cols-2'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetErrorColor'>Цвет ошибок</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetErrorColor'
+                          type='color'
+                          value={widgetSettings.widgetErrorColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetErrorColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetErrorColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetErrorColor: e.target.value
+                            })
+                          }
+                          placeholder='#dc2626'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetInputText'>
+                        Цвет текста в полях ввода
+                      </Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetInputText'
+                          type='color'
+                          value={widgetSettings.widgetInputText}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetInputText: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetInputText}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetInputText: e.target.value
+                            })
+                          }
+                          placeholder='#111827'
                         />
                       </div>
                     </div>
