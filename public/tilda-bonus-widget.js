@@ -977,7 +977,7 @@
           <button id="bonus-tab" type="button" class="bonus-toggle-btn active" onclick="TildaBonusWidget.switchMode('bonus')">Списать бонусы</button>
           <button id="promo-tab" type="button" class="bonus-toggle-btn" onclick="TildaBonusWidget.switchMode('promo')">Промокод</button>
         </div>
-        <div class="bonus-balance" style="display: none;">
+        <div class="bonus-balance">
           Ваш баланс: <span class="bonus-balance-amount">0</span> бонусов
         </div>
         <div id="bonus-section" class="bonus-input-group">
@@ -985,16 +985,24 @@
                  class="bonus-input" 
                  id="bonus-amount-input" 
                  placeholder="Количество бонусов" 
-                 min="0"
-                 style="display: none;">
+                 min="0">
           <button class="bonus-button" type="button"
                   id="apply-bonus-button" 
-                  onclick="TildaBonusWidget.applyOrReapplyBonuses()"
-                  style="display: none;">
+                  onclick="TildaBonusWidget.applyOrReapplyBonuses()">
             Применить бонусы
           </button>
         </div>
-        <!-- Стандартный блок промокода Тильды будет показан/скрыт переключателем -->
+        <div id="promo-section" class="bonus-input-group" style="display: none;">
+          <input type="text" 
+                 class="bonus-input" 
+                 id="promo-code-input" 
+                 placeholder="Введите промокод">
+          <button class="bonus-button" type="button"
+                  id="apply-promo-button" 
+                  onclick="TildaBonusWidget.applyPromocode()">
+            Применить промокод
+          </button>
+        </div>
         <div id="bonus-status"></div>
       `;
 
@@ -1887,35 +1895,26 @@
       var bonusTab = document.getElementById('bonus-tab');
       var promoTab = document.getElementById('promo-tab');
       var bonusSection = document.getElementById('bonus-section');
-      if (!bonusTab || !promoTab || !bonusSection) return;
+      var promoSection = document.getElementById('promo-section');
+
+      if (!bonusTab || !promoTab || !bonusSection || !promoSection) return;
 
       if (this.state.mode === 'promo') {
         // Переключаемся на режим промокода
         bonusTab.classList.remove('active');
         promoTab.classList.add('active');
         bonusSection.style.display = 'none';
+        promoSection.style.display = 'block';
 
-        // НЕ восстанавливаем поле промокода - просто скрываем секцию бонусов
-        // Виджет остается на месте, но показывает только табы
-        this.log('Переключено на режим промокода - скрыта секция бонусов');
+        this.log('Переключено на режим промокода');
       } else {
         // Переключаемся на режим бонусов
         promoTab.classList.remove('active');
         bonusTab.classList.add('active');
-
-        // Восстанавливаем виджет вместо поля промокода
-        const promoWrapper = document.querySelector(
-          '.t-inputpromocode__wrapper'
-        );
-        if (
-          promoWrapper &&
-          !document.querySelector('.bonus-widget-container')
-        ) {
-          this.state.promoWrapper = promoWrapper;
-          this.createWidget();
-          this.log('Переключено на режим бонусов - восстановлен виджет');
-        }
         bonusSection.style.display = 'flex';
+        promoSection.style.display = 'none';
+
+        this.log('Переключено на режим бонусов');
       }
       // Переключение режима всегда сбрасывает ранее применённые бонусы/визуальные изменения
       this.resetAppliedBonuses();
