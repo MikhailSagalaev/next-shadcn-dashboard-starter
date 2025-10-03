@@ -1011,8 +1011,6 @@
 
       // Скрываем поле промокода Tilda по умолчанию (показываем при переключении на таб)
       promocodeWrapper.style.display = 'none';
-      // Сохраняем оригинальные стили поля промокода для восстановления
-      promocodeWrapper.style.width = '100%';
       this.state.promoWrapper = promocodeWrapper;
 
       console.log('✅ Виджет создан и добавлен перед полем промокода');
