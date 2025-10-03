@@ -992,20 +992,24 @@
           <button id="bonus-tab" type="button" class="bonus-toggle-btn active" onclick="TildaBonusWidget.switchMode('bonus')">Списать бонусы</button>
           <button id="promo-tab" type="button" class="bonus-toggle-btn" onclick="TildaBonusWidget.switchMode('promo')">Промокод</button>
         </div>
-        <div class="bonus-balance">
-          Ваш баланс: <span class="bonus-balance-amount">0</span> бонусов
-        </div>
-        <div id="bonus-section" class="bonus-input-group">
-          <input type="number" 
-                 class="bonus-input" 
-                 id="bonus-amount-input" 
-                 placeholder="Количество бонусов" 
-                 min="0">
-          <button class="bonus-button" type="button"
-                  id="apply-bonus-button" 
-                  onclick="TildaBonusWidget.applyOrReapplyBonuses()">
-            Применить бонусы
-          </button>
+        <div id="bonus-content-area">
+          <!-- Здесь будет баланс и форма бонусов ИЛИ плашка регистрации -->
+          <div class="bonus-balance" style="display: none;">
+            Ваш баланс: <span class="bonus-balance-amount">0</span> бонусов
+          </div>
+          <div id="bonus-section" class="bonus-input-group" style="display: none;">
+            <input type="number" 
+                   class="bonus-input" 
+                   id="bonus-amount-input" 
+                   placeholder="Количество бонусов" 
+                   min="0">
+            <button class="bonus-button" type="button"
+                    id="apply-bonus-button" 
+                    onclick="TildaBonusWidget.applyOrReapplyBonuses()">
+              Применить бонусы
+            </button>
+          </div>
+          <div id="registration-prompt-container"></div>
         </div>
         <div id="bonus-status"></div>
       `;
@@ -1016,10 +1020,7 @@
       // Сохраняем ссылку на оригинальный wrapper промокода
       this.state.promoWrapper = promocodeWrapper;
 
-      this.log('Виджет добавлен вместо поля промокода');
-
-      // Показываем баланс и элементы управления
-      this.showWidgetControls();
+      console.log('✅ Виджет добавлен перед полем промокода');
     },
 
     // Гарантированно вставить виджет, если его ещё нет
@@ -1415,25 +1416,19 @@
           botUsername
         });
 
-        // Ищем контейнер поля промокода
-        const promocodeWrapper = document.querySelector(
-          '.t-inputpromocode__wrapper'
+        // Ищем контейнер для плашки внутри виджета
+        const promptContainer = document.getElementById(
+          'registration-prompt-container'
         );
-        if (!promocodeWrapper) {
-          this.log('❌ Контейнер поля промокода не найден при отрисовке');
+        if (!promptContainer) {
+          console.error('❌ Контейнер для плашки не найден');
           return;
         }
 
         // Удаляем существующую плашку перед добавлением новой
-        const existingPrompt = promocodeWrapper.querySelector(
-          '.registration-prompt-inline'
-        );
-        if (existingPrompt) {
-          existingPrompt.remove();
-          this.log('🗑️ Удалена существующая плашка');
-        }
+        promptContainer.innerHTML = '';
 
-        // Создаем плашку регистрации внутри поля промокода
+        // Создаем плашку регистрации внутри виджета
         const promptDiv = document.createElement('div');
         promptDiv.className = 'registration-prompt-inline';
         // Используем стилевые настройки или значения по умолчанию
@@ -1578,9 +1573,8 @@
 
         promptDiv.innerHTML = htmlContent;
 
-        // НЕ скрываем поле промокода - плашка должна быть дополнительным элементом
-        // Добавляем плашку ПЕРЕД полем промокода, а не заменяем его
-        promocodeWrapper.insertBefore(promptDiv, promocodeWrapper.firstChild);
+        // Добавляем плашку в контейнер внутри виджета
+        promptContainer.appendChild(promptDiv);
 
         this.log('✅ Плашка регистрации успешно отображена:', {
           welcomeBonusAmount,
