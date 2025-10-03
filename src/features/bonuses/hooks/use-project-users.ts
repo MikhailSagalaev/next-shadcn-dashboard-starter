@@ -109,7 +109,7 @@ export function useProjectUsers({
       try {
         logger.info(
           'Loading project users',
-          { projectId, page, pageSize },
+          { projectId, page, pageSize, searchTerm: currentSearchTerm },
           'use-project-users'
         );
 
@@ -124,7 +124,10 @@ export function useProjectUsers({
         }
 
         const response = await fetch(
-          `/api/projects/${projectId}/users?${params}`
+          `/api/projects/${projectId}/users?${params}`,
+          {
+            cache: 'no-store' // Отключаем кеш для актуальных данных
+          }
         );
 
         if (!response.ok) {
@@ -171,7 +174,8 @@ export function useProjectUsers({
             lastName: user.lastName,
             birthDate: user.birthDate,
             registeredAt: user.registeredAt,
-            currentLevel: user.currentLevel
+            currentLevel: user.currentLevel,
+            telegramUsername: user.telegramUsername
           })
         );
 
@@ -196,7 +200,8 @@ export function useProjectUsers({
             count: formattedUsers.length,
             totalUsers: totalCount,
             page,
-            totalPages: totalPagesCount
+            totalPages: totalPagesCount,
+            searchTerm: currentSearchTerm
           },
           'use-project-users'
         );
@@ -227,7 +232,7 @@ export function useProjectUsers({
         setIsLoading(false);
       }
     },
-    [projectId]
+    [projectId, pageSize, currentSearchTerm]
   );
 
   /**
@@ -344,16 +349,9 @@ export function useProjectUsers({
     [users]
   );
 
-  const setSearchTerm = useCallback(
-    (term: string) => {
-      setCurrentSearchTerm(term);
-      // Автоматически загружаем пользователей с новым термином поиска
-      if (projectId) {
-        loadUsers(1); // Сбрасываем на первую страницу при поиске
-      }
-    },
-    [projectId, loadUsers]
-  );
+  const setSearchTerm = useCallback((term: string) => {
+    setCurrentSearchTerm(term);
+  }, []);
 
   /**
    * Экспорт пользователей в CSV
@@ -419,12 +417,13 @@ export function useProjectUsers({
     }
   }, [users, projectId]);
 
-  // Загружаем пользователей при изменении projectId
+  // Загружаем пользователей при изменении projectId или searchTerm
   useEffect(() => {
     if (projectId) {
-      loadUsers();
+      // При изменении поискового запроса возвращаемся на первую страницу
+      loadUsers(1);
     }
-  }, [projectId, loadUsers]);
+  }, [projectId, currentSearchTerm, loadUsers]);
 
   return {
     users,

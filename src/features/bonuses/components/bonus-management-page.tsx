@@ -189,11 +189,8 @@ export function BonusManagementPageRefactored({
   const handleSearch = useCallback(
     (term: string) => {
       setSearchTermState(term);
-      setSearchTerm(term); // Устанавливаем search term в хуке
+      setSearchTerm(term); // Устанавливаем search term в хуке (автоматически триггерит loadUsers через useEffect)
       setSelectedUsers([]); // Сбрасываем выбор при поиске
-
-      // При поиске возвращаемся на первую страницу
-      loadUsers(1);
 
       logger.debug(
         'Users search performed',
@@ -204,7 +201,7 @@ export function BonusManagementPageRefactored({
         'bonus-management'
       );
     },
-    [loadUsers, currentProjectId, setSearchTerm]
+    [currentProjectId, setSearchTerm]
   );
 
   const handleUserSelection = useCallback(
