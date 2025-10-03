@@ -1011,6 +1011,8 @@
 
       // Скрываем поле промокода Tilda по умолчанию (показываем при переключении на таб)
       promocodeWrapper.style.display = 'none';
+      // Сохраняем оригинальные стили поля промокода для восстановления
+      promocodeWrapper.style.width = '100%';
       this.state.promoWrapper = promocodeWrapper;
 
       console.log('✅ Виджет создан и добавлен перед полем промокода');
@@ -1598,6 +1600,12 @@
         // Добавляем плашку ПЕРЕД полем промокода
         promocodeWrapper.parentNode.insertBefore(promptDiv, promocodeWrapper);
 
+        // Поле промокода остаётся видимым для неавторизованных (не скрываем его)
+        promocodeWrapper.style.display = 'block';
+        console.log(
+          '✅ Плашка добавлена, поле промокода Tilda остаётся видимым'
+        );
+
         this.log('✅ Плашка регистрации успешно отображена:', {
           welcomeBonusAmount,
           botUsername,
@@ -1956,10 +1964,32 @@
           console.log('✅ switchMode: скрыт bonus-content-area');
         }
 
-        // Показываем оригинальное поле промокода Tilda
+        // Показываем оригинальное поле промокода Tilda с правильными стилями
         if (tildaPromoWrapper) {
           tildaPromoWrapper.style.display = 'block';
-          console.log('✅ switchMode: показано поле промокода Tilda');
+          tildaPromoWrapper.style.width = '100%';
+
+          // Восстанавливаем стили для внутренних элементов (input и button)
+          const promoInput = tildaPromoWrapper.querySelector(
+            '.t-input.t-inputpromocode'
+          );
+          const promoButton = tildaPromoWrapper.querySelector(
+            '.t-inputpromocode__btn'
+          );
+
+          if (promoInput) {
+            promoInput.style.display = 'table-cell';
+            promoInput.style.width = 'auto';
+          }
+
+          if (promoButton) {
+            promoButton.style.display = 'table-cell';
+            promoButton.style.width = 'auto';
+          }
+
+          console.log(
+            '✅ switchMode: показано поле промокода Tilda с корректной вёрсткой'
+          );
         }
       } else {
         // Переключаемся на режим бонусов
