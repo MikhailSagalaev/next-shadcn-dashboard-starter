@@ -435,36 +435,6 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 </Button>
               </Link>
 
-              {/* Новые функции конструктора ботов */}
-              <Separator className='my-3' />
-              <div className='text-muted-foreground mb-2 text-sm font-medium'>
-                🤖 Управление ботом
-              </div>
-
-              {projectId && (
-                <>
-                  <Link href={`/dashboard/projects/${projectId}/bot`}>
-                    <Button variant='outline' className='w-full justify-start'>
-                      <Bot className='mr-2 h-4 w-4' />
-                      Настройка бота
-                    </Button>
-                  </Link>
-                  <Link href={`/dashboard/projects/${projectId}/constructor`}>
-                    <Button variant='outline' className='mt-2 w-full justify-start'>
-                      <Zap className='mr-2 h-4 w-4' />
-                      Конструктор бота
-                    </Button>
-                  </Link>
-                </>
-              )}
-
-              <Link href={`/dashboard/templates`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
-                  <Library className='mr-2 h-4 w-4' />
-                  Библиотека шаблонов
-                </Button>
-              </Link>
-
               {/* Кнопка логов интеграции удалена */}
             </CardContent>
           </Card>
