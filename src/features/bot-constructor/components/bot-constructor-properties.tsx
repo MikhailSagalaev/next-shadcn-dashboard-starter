@@ -12,14 +12,21 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 
-import { Button } from '@heroui/button';
-import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Input } from '@heroui/input';
-import { Textarea } from '@heroui/textarea';
-import { Select, SelectItem } from '@heroui/select';
-import { Switch } from '@heroui/switch';
-import { Divider } from '@heroui/divider';
-import { Tabs, Tab } from '@heroui/tabs';
+// HeroUI: импортируем из @heroui/react для совместимости бандла
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Input,
+  Textarea,
+  Select,
+  SelectItem,
+  Switch,
+  Divider,
+  Tabs,
+  Tab
+} from '@heroui/react';
 
 import { MessageEditor } from './editors/message-editor';
 import { KeyboardBuilder } from './editors/keyboard-builder';
