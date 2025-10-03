@@ -14,7 +14,8 @@ import { X } from 'lucide-react';
 
 import { Button } from '@heroui/button';
 import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Input, Textarea } from '@heroui/input';
+import { Input } from '@heroui/input';
+import { Textarea } from '@heroui/textarea';
 import { Select, SelectItem } from '@heroui/select';
 import { Switch } from '@heroui/switch';
 import { Divider } from '@heroui/divider';
