@@ -14,12 +14,8 @@ import { X } from 'lucide-react';
 
 import { Button } from '@heroui/button';
 import { Card, CardBody, CardHeader } from '@heroui/card';
-import { Input } from '@heroui/input';
-import { Textarea } from '@heroui/textarea';
-import {
-  Select,
-  SelectItem
-} from '@heroui/select';
+import { Input, Textarea } from '@heroui/input';
+import { Select, SelectItem } from '@heroui/select';
 import { Switch } from '@heroui/switch';
 import { Divider } from '@heroui/divider';
 import { Tabs, Tab } from '@heroui/tabs';
@@ -92,7 +88,7 @@ export function BotConstructorProperties({
   const renderStartProperties = () => (
     <div className='space-y-4'>
       <div>
-        <label className="text-sm font-medium">Название ноды</label>
+        <label className='text-sm font-medium'>Название ноды</label>
         <Input
           value={localNode.data.label}
           onValueChange={(value) => updateNodeData({ label: value })}
@@ -100,7 +96,7 @@ export function BotConstructorProperties({
         />
       </div>
       <div>
-        <label className="text-sm font-medium">Описание</label>
+        <label className='text-sm font-medium'>Описание</label>
         <Textarea
           value={localNode.data.description || ''}
           onValueChange={(value) => updateNodeData({ description: value })}
@@ -111,8 +107,8 @@ export function BotConstructorProperties({
   );
 
   const renderMessageProperties = () => (
-    <Tabs defaultSelectedKey="message" aria-label="Message editor tabs">
-      <Tab key="message" title="Сообщение">
+    <Tabs defaultSelectedKey='message' aria-label='Message editor tabs'>
+      <Tab key='message' title='Сообщение'>
         <div className='mt-4 space-y-4'>
           <MessageEditor
             config={localNode.data.config.message || { text: '' }}
@@ -128,7 +124,7 @@ export function BotConstructorProperties({
         </div>
       </Tab>
 
-      <Tab key="keyboard" title="Клавиатура">
+      <Tab key='keyboard' title='Клавиатура'>
         <div className='mt-4 space-y-4'>
           <KeyboardBuilder
             config={
@@ -155,11 +151,11 @@ export function BotConstructorProperties({
   );
 
   const renderCommandProperties = () => (
-    <Tabs defaultSelectedKey="settings" aria-label="Command editor tabs">
-      <Tab key="settings" title="Настройки">
+    <Tabs defaultSelectedKey='settings' aria-label='Command editor tabs'>
+      <Tab key='settings' title='Настройки'>
         <div className='mt-4 space-y-4'>
           <div>
-            <label className="text-sm font-medium">Команда (без /)</label>
+            <label className='text-sm font-medium'>Команда (без /)</label>
             <Input
               value={localNode.data.config.command?.command || ''}
               onValueChange={(value) =>
@@ -178,7 +174,7 @@ export function BotConstructorProperties({
           </div>
 
           <div>
-            <label className="text-sm font-medium">Описание</label>
+            <label className='text-sm font-medium'>Описание</label>
             <Input
               value={localNode.data.config.command?.description || ''}
               onValueChange={(value) =>
@@ -197,7 +193,7 @@ export function BotConstructorProperties({
           </div>
 
           <div>
-            <label className="text-sm font-medium">Альтернативные имена</label>
+            <label className='text-sm font-medium'>Альтернативные имена</label>
             <Input
               value={localNode.data.config.command?.aliases?.join(', ') || ''}
               onValueChange={(value) =>
@@ -220,7 +216,7 @@ export function BotConstructorProperties({
         </div>
       </Tab>
 
-      <Tab key="botfather" title="Bot Father">
+      <Tab key='botfather' title='Bot Father'>
         <div className='mt-4'>
           <BotfatherHelper
             config={
@@ -247,7 +243,7 @@ export function BotConstructorProperties({
   const renderCallbackProperties = () => (
     <div className='space-y-4'>
       <div>
-        <label className="text-sm font-medium">Callback data</label>
+        <label className='text-sm font-medium'>Callback data</label>
         <Input
           value={localNode.data.config.callback?.data || ''}
           onValueChange={(value) =>
@@ -266,7 +262,9 @@ export function BotConstructorProperties({
       </div>
 
       <div>
-        <label className="text-sm font-medium">Регулярное выражение (опционально)</label>
+        <label className='text-sm font-medium'>
+          Регулярное выражение (опционально)
+        </label>
         <Input
           value={localNode.data.config.callback?.pattern || ''}
           onValueChange={(value) =>
@@ -299,7 +297,9 @@ export function BotConstructorProperties({
             })
           }
         />
-        <label className='text-sm font-medium'>Скрыть клавиатуру после нажатия</label>
+        <label className='text-sm font-medium'>
+          Скрыть клавиатуру после нажатия
+        </label>
       </div>
     </div>
   );
@@ -308,7 +308,7 @@ export function BotConstructorProperties({
   const renderInputProperties = () => (
     <div className='space-y-4'>
       <div>
-        <label className="text-sm font-medium">Текст запроса</label>
+        <label className='text-sm font-medium'>Текст запроса</label>
         <Textarea
           value={localNode.data.config.input?.prompt || ''}
           onValueChange={(value) =>
@@ -326,7 +326,7 @@ export function BotConstructorProperties({
         />
       </div>
       <div>
-        <label className="text-sm font-medium">Таймаут (секунды)</label>
+        <label className='text-sm font-medium'>Таймаут (секунды)</label>
         <Input
           type='number'
           value={localNode.data.config.input?.timeout || 300}
@@ -371,7 +371,7 @@ export function BotConstructorProperties({
   const renderActionProperties = () => (
     <div className='space-y-4'>
       <div>
-        <label className="text-sm font-medium">Тип действия</label>
+        <label className='text-sm font-medium'>Тип действия</label>
         <Select
           selectedKeys={[localNode.data.config.action?.type || 'grammy_api']}
           onSelectionChange={(keys) =>
@@ -399,7 +399,7 @@ export function BotConstructorProperties({
   const renderMiddlewareProperties = () => (
     <div className='space-y-4'>
       <div>
-        <label className="text-sm font-medium">Тип middleware</label>
+        <label className='text-sm font-medium'>Тип middleware</label>
         <Select
           selectedKeys={[localNode.data.config.middleware?.type || 'logging']}
           onSelectionChange={(keys) =>
@@ -427,7 +427,7 @@ export function BotConstructorProperties({
   const renderSessionProperties = () => (
     <div className='space-y-4'>
       <div>
-        <label className="text-sm font-medium">Ключ переменной</label>
+        <label className='text-sm font-medium'>Ключ переменной</label>
         <Input
           value={localNode.data.config.session?.key || ''}
           onValueChange={(value) =>
@@ -446,7 +446,7 @@ export function BotConstructorProperties({
       </div>
 
       <div>
-        <label className="text-sm font-medium">Операция</label>
+        <label className='text-sm font-medium'>Операция</label>
         <Select
           selectedKeys={[localNode.data.config.session?.operation || 'set']}
           onSelectionChange={(keys) =>
@@ -474,7 +474,7 @@ export function BotConstructorProperties({
   const renderEndProperties = () => (
     <div className='space-y-4'>
       <div>
-        <label className="text-sm font-medium">Название ноды</label>
+        <label className='text-sm font-medium'>Название ноды</label>
         <Input
           value={localNode.data.label}
           onValueChange={(value) => updateNodeData({ label: value })}
@@ -483,7 +483,9 @@ export function BotConstructorProperties({
       </div>
 
       <div>
-        <label className="text-sm font-medium">Прощальное сообщение (опционально)</label>
+        <label className='text-sm font-medium'>
+          Прощальное сообщение (опционально)
+        </label>
         <Textarea
           value={localNode.data.description || ''}
           onValueChange={(value) => updateNodeData({ description: value })}
