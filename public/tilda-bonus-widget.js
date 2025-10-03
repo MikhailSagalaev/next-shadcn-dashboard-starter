@@ -1029,13 +1029,37 @@
 
     // Показывает элементы управления виджета
     showWidgetControls: function () {
-      const balanceEl = document.querySelector('.bonus-balance');
-      const inputEl = document.getElementById('bonus-amount-input');
-      const buttonEl = document.getElementById('apply-bonus-button');
+      const userState = this.getUserState();
+      console.log('📊 showWidgetControls: userState =', userState);
 
-      if (balanceEl) balanceEl.style.display = 'block';
-      if (inputEl) inputEl.style.display = 'block';
-      if (buttonEl) buttonEl.style.display = 'block';
+      const bonusSection = document.getElementById('bonus-section');
+      const balanceEl = document.querySelector('.bonus-balance');
+      const verificationNotice = document.getElementById('verification-notice');
+
+      if (userState === 'registered_not_confirmed') {
+        // Показываем уведомление о необходимости верификации
+        console.log(
+          '⚠️ showWidgetControls: показываем уведомление о верификации'
+        );
+        if (bonusSection) bonusSection.style.display = 'none';
+        if (balanceEl) balanceEl.style.display = 'none';
+        if (verificationNotice) {
+          verificationNotice.style.display = 'block';
+          verificationNotice.innerHTML = `
+            <div style="padding: 16px; background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; text-align: center;">
+              <p style="margin: 0 0 8px 0; color: #92400E; font-weight: 600;">⚠️ Требуется верификация</p>
+              <p style="margin: 0 0 12px 0; color: #78350F; font-size: 14px;">Для использования бонусов подтвердите свой аккаунт в Telegram боте</p>
+              ${this.state.botUsername ? `<a href="https://t.me/${this.state.botUsername}" target="_blank" style="display: inline-block; padding: 8px 16px; background: #F59E0B; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">Перейти в бота</a>` : ''}
+            </div>
+          `;
+        }
+      } else if (userState === 'fully_activated') {
+        // Показываем баланс и форму
+        console.log('✅ showWidgetControls: показываем баланс и форму');
+        if (bonusSection) bonusSection.style.display = 'flex';
+        if (balanceEl) balanceEl.style.display = 'block';
+        if (verificationNotice) verificationNotice.style.display = 'none';
+      }
     },
 
     // Полная очистка ресурсов для предотвращения утечек памяти
