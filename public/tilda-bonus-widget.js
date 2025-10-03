@@ -2764,14 +2764,26 @@
       const userEmail = this.getUserEmail();
       const telegramLinked = this.isTelegramLinked();
 
-      if (!userEmail && !telegramLinked) {
-        return 'not_registered'; // 🔴 Состояние 1
-      } else if (userEmail && !telegramLinked) {
-        return 'registered_not_confirmed'; // 🟡 Состояние 2
-      } else if (userEmail && telegramLinked) {
-        return 'fully_activated'; // 🟢 Состояние 3
+      console.log('🔍 getUserState: userEmail =', userEmail);
+      console.log('🔍 getUserState: telegramLinked =', telegramLinked);
+
+      // Если Telegram привязан - пользователь активирован (даже без email)
+      if (telegramLinked) {
+        console.log('✅ getUserState: Telegram привязан → fully_activated');
+        return 'fully_activated'; // 🟢 Telegram активирован
       }
-      return 'unknown';
+
+      // Если есть email но нет Telegram
+      if (userEmail && !telegramLinked) {
+        console.log(
+          '⚠️ getUserState: Email есть, но Telegram не привязан → registered_not_confirmed'
+        );
+        return 'registered_not_confirmed'; // 🟡 Ожидает привязки Telegram
+      }
+
+      // Нет ни email ни Telegram
+      console.log('❌ getUserState: Нет email и Telegram → not_registered');
+      return 'not_registered'; // 🔴 Не зарегистрирован
     },
 
     // Проверка возможности использования бонусов
@@ -2789,15 +2801,20 @@
         console.log('❌ applyBonuses: пользователь не может тратить бонусы');
         const userState = this.getUserState();
         console.log('👤 applyBonuses: userState =', userState);
+
+        let errorMessage = '';
         if (userState === 'not_registered') {
-          this.showError(
-            'Для использования бонусов необходимо зарегистрироваться и подтвердить аккаунт в Telegram боте'
-          );
+          errorMessage =
+            'Для использования бонусов необходимо зарегистрироваться и подтвердить аккаунт в Telegram боте';
         } else if (userState === 'registered_not_confirmed') {
-          this.showError(
-            'Для использования бонусов необходимо подтвердить аккаунт в Telegram боте'
-          );
+          errorMessage =
+            'Для использования бонусов необходимо подтвердить аккаунт в Telegram боте';
+        } else {
+          errorMessage = `Ошибка проверки пользователя (состояние: ${userState}). Обратитесь в поддержку.`;
         }
+
+        this.showError(errorMessage);
+        console.error('❌ applyBonuses: ', errorMessage);
         return;
       }
 
