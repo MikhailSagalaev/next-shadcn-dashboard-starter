@@ -1962,32 +1962,10 @@
           console.log('✅ switchMode: скрыт bonus-content-area');
         }
 
-        // Показываем оригинальное поле промокода Tilda с правильными стилями
+        // Показываем оригинальное поле промокода Tilda (без изменения стилей)
         if (tildaPromoWrapper) {
           tildaPromoWrapper.style.display = 'block';
-          tildaPromoWrapper.style.width = '100%';
-
-          // Восстанавливаем стили для внутренних элементов (input и button)
-          const promoInput = tildaPromoWrapper.querySelector(
-            '.t-input.t-inputpromocode'
-          );
-          const promoButton = tildaPromoWrapper.querySelector(
-            '.t-inputpromocode__btn'
-          );
-
-          if (promoInput) {
-            promoInput.style.display = 'table-cell';
-            promoInput.style.width = 'auto';
-          }
-
-          if (promoButton) {
-            promoButton.style.display = 'table-cell';
-            promoButton.style.width = 'auto';
-          }
-
-          console.log(
-            '✅ switchMode: показано поле промокода Tilda с корректной вёрсткой'
-          );
+          console.log('✅ switchMode: показано поле промокода Tilda');
         }
       } else {
         // Переключаемся на режим бонусов
