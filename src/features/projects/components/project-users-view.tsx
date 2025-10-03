@@ -114,10 +114,12 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     totalBonuses,
     currentPage,
     totalPages,
-    loadUsers
+    loadUsers,
+    setSearchTerm
   } = useProjectUsers({
     projectId,
-    pageSize
+    pageSize,
+    searchTerm: searchQuery
   });
 
   // Обработчики пагинации
@@ -209,11 +211,14 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   };
 
   // Search handler
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    // TODO: Implement server-side search
-    // For now, just update the state
-  }, []);
+  const handleSearch = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      // Обновляем поисковый термин в хуке - это автоматически запустит поиск
+      setSearchTerm(query);
+    },
+    [setSearchTerm]
+  );
 
   // Загружаем проект при монтировании
   useEffect(() => {

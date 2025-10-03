@@ -344,9 +344,16 @@ export function useProjectUsers({
     [users]
   );
 
-  const setSearchTerm = useCallback((term: string) => {
-    setCurrentSearchTerm(term);
-  }, []);
+  const setSearchTerm = useCallback(
+    (term: string) => {
+      setCurrentSearchTerm(term);
+      // Автоматически загружаем пользователей с новым термином поиска
+      if (projectId) {
+        loadUsers(1); // Сбрасываем на первую страницу при поиске
+      }
+    },
+    [projectId, loadUsers]
+  );
 
   /**
    * Экспорт пользователей в CSV

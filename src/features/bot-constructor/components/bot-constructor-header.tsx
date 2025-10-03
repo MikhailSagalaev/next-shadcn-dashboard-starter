@@ -26,27 +26,31 @@ import {
   TestTube
 } from 'lucide-react';
 
-import { Button } from '@heroui/button';
+import { Button } from '@/components/ui/button';
 import {
   Select,
-  SelectItem
-} from '@heroui/select';
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import {
-  Dropdown,
-  DropdownTrigger,
   DropdownMenu,
-  DropdownItem,
-  DropdownSection
-} from '@heroui/dropdown';
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuGroup
+} from '@/components/ui/dropdown-menu';
 import {
-  Modal,
-  ModalContent,
-  ModalBody,
-  ModalFooter,
-  ModalHeader
-} from '@heroui/modal';
-import { Input } from '@heroui/input';
-import { Badge } from '@heroui/badge';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 
 import type { BotFlow, CreateFlowRequest } from '@/types/bot-constructor';
@@ -298,18 +302,24 @@ export function BotConstructorHeader({
                     <MoreHorizontal className='h-4 w-4' />
                   </Button>
                 </DropdownTrigger>
-                <DropdownMenu aria-label="Flow actions">
+                <DropdownMenu aria-label='Flow actions'>
                   <DropdownSection>
-                    <DropdownItem key="export" startContent={<FileText className='h-4 w-4' />}>
+                    <DropdownItem
+                      key='export'
+                      startContent={<FileText className='h-4 w-4' />}
+                    >
                       Экспорт в JSON
                     </DropdownItem>
-                    <DropdownItem key="settings" startContent={<Settings className='h-4 w-4' />}>
+                    <DropdownItem
+                      key='settings'
+                      startContent={<Settings className='h-4 w-4' />}
+                    >
                       Настройки потока
                     </DropdownItem>
                   </DropdownSection>
                   <DropdownSection>
                     <DropdownItem
-                      key="delete"
+                      key='delete'
                       className='text-danger'
                       color='danger'
                       onClick={() => setShowDeleteDialog(true)}
@@ -328,8 +338,8 @@ export function BotConstructorHeader({
       <Modal isOpen={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <ModalContent>
           <ModalHeader>
-            <h3 className="text-lg font-semibold">Создать новый поток</h3>
-            <p className="text-sm text-muted-foreground">
+            <h3 className='text-lg font-semibold'>Создать новый поток</h3>
+            <p className='text-muted-foreground text-sm'>
               Создайте новый поток для вашего Telegram бота
             </p>
           </ModalHeader>
@@ -337,7 +347,7 @@ export function BotConstructorHeader({
           <ModalBody>
             <div className='space-y-4'>
               <div>
-                <label className="text-sm font-medium">Название потока</label>
+                <label className='text-sm font-medium'>Название потока</label>
                 <Input
                   value={newFlowName}
                   onValueChange={setNewFlowName}
@@ -346,7 +356,9 @@ export function BotConstructorHeader({
               </div>
 
               <div>
-                <label className="text-sm font-medium">Описание (опционально)</label>
+                <label className='text-sm font-medium'>
+                  Описание (опционально)
+                </label>
                 <Input
                   value={newFlowDescription}
                   onValueChange={setNewFlowDescription}
@@ -372,8 +384,8 @@ export function BotConstructorHeader({
       <Modal isOpen={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <ModalContent>
           <ModalHeader>
-            <h3 className="text-lg font-semibold">Удалить поток</h3>
-            <p className="text-sm text-muted-foreground">
+            <h3 className='text-lg font-semibold'>Удалить поток</h3>
+            <p className='text-muted-foreground text-sm'>
               Вы уверены, что хотите удалить поток "{currentFlow?.name}"? Это
               действие нельзя отменить.
             </p>
