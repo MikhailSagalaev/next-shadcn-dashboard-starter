@@ -1045,11 +1045,18 @@
         if (balanceEl) balanceEl.style.display = 'none';
         if (verificationNotice) {
           verificationNotice.style.display = 'block';
+          // Используем кастомную ссылку или ссылку на бота
+          const verificationButtonUrl =
+            this.state.widgetSettings?.registrationButtonUrl ||
+            (this.state.botUsername
+              ? `https://t.me/${this.state.botUsername}`
+              : null);
+
           verificationNotice.innerHTML = `
             <div style="padding: 16px; background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; text-align: center;">
               <p style="margin: 0 0 8px 0; color: #92400E; font-weight: 600;">⚠️ Требуется верификация</p>
               <p style="margin: 0 0 12px 0; color: #78350F; font-size: 14px;">Для использования бонусов подтвердите свой аккаунт в Telegram боте</p>
-              ${this.state.botUsername ? `<a href="https://t.me/${this.state.botUsername}" target="_blank" style="display: inline-block; padding: 8px 16px; background: #F59E0B; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">Перейти в бота</a>` : ''}
+              ${verificationButtonUrl ? `<a href="${verificationButtonUrl}" target="_blank" style="display: inline-block; padding: 8px 16px; background: #F59E0B; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">Перейти в бота</a>` : ''}
             </div>
           `;
         }
@@ -1184,7 +1191,8 @@
         if (settings) {
           return {
             welcomeBonusAmount: Number(settings?.welcomeBonusAmount || 0),
-            botUsername: settings?.botUsername || null
+            botUsername: settings?.botUsername || null,
+            widgetSettings: settings?.functionalSettings?.widgetSettings || {}
           };
         }
       } catch (error) {
@@ -1196,7 +1204,7 @@
       }
       // Возвращаем значения по умолчанию в случае ошибки
       this.log('Используем значения по умолчанию для настроек проекта');
-      return { welcomeBonusAmount: 0, botUsername: null };
+      return { welcomeBonusAmount: 0, botUsername: null, widgetSettings: {} };
     },
 
     // Скрыть плашку регистрации
@@ -1246,7 +1254,8 @@
             // Показываем плашку с базовыми данными
             const defaultSettings = {
               welcomeBonusAmount: 500, // Базовое значение
-              botUsername: null
+              botUsername: null,
+              widgetSettings: {}
             };
             this.renderRegistrationPrompt(defaultSettings);
           });
@@ -1287,7 +1296,8 @@
         // Возвращаем значения по умолчанию
         const defaultSettings = {
           welcomeBonusAmount: 500, // Базовое значение
-          botUsername: null
+          botUsername: null,
+          widgetSettings: {}
         };
         this.log('🔄 Используем значения по умолчанию:', defaultSettings);
         return defaultSettings;
@@ -1411,6 +1421,10 @@
           .replace(/[<>'"&]/g, '') // Экранируем HTML
           .replace('@', ''); // Убираем @ из имени бота
 
+        // Сохраняем настройки в state для использования в других частях виджета
+        this.state.widgetSettings = settings.widgetSettings || {};
+        this.state.botUsername = botUsername;
+
         // Используем настройки шаблона или значения по умолчанию
         const widgetSettings = settings.widgetSettings || {};
         const templates = {
@@ -1421,8 +1435,8 @@
             widgetSettings.registrationDescription ||
             'Зарегистрируйся в нашей бонусной программе',
           registrationButtonText:
-            widgetSettings.registrationButtonText ||
-            'Для участия в акции перейдите в бота',
+            widgetSettings.registrationButtonText || 'Зарегистрироваться',
+          registrationButtonUrl: widgetSettings.registrationButtonUrl || '', // Кастомная ссылка
           registrationFallbackText:
             widgetSettings.registrationFallbackText ||
             'Свяжитесь с администратором для регистрации'
@@ -1561,9 +1575,14 @@
         // Кнопка или текст без бота
         htmlContent += `<div class="registration-action">`;
 
-        if (widgetSettings.showButton && botUsername) {
+        // Определяем ссылку для кнопки: кастомная ссылка или ссылка на бота
+        const buttonUrl =
+          templates.registrationButtonUrl ||
+          (botUsername ? `https://t.me/${botUsername}` : null);
+
+        if (widgetSettings.showButton && buttonUrl) {
           htmlContent += `
-            <a href="https://t.me/${botUsername}" target="_blank" class="registration-button" style="
+            <a href="${buttonUrl}" target="_blank" class="registration-button" style="
               display: ${styles.buttonDisplay};
               background: ${styles.buttonBackgroundColor};
               color: ${styles.buttonTextColor};

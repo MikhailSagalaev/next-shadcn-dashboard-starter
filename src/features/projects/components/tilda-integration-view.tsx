@@ -59,6 +59,7 @@ export function ProjectIntegrationView({
     registrationTitle: 'Зарегистрируйся и получи {bonusAmount} бонусов!',
     registrationDescription: 'Зарегистрируйся в нашей бонусной программе',
     registrationButtonText: 'Для участия в акции перейдите в бота',
+    registrationButtonUrl: '', // Кастомная ссылка (если пустая - используется ссылка на бота)
     registrationFallbackText: 'Свяжитесь с администратором для регистрации',
 
     // Настройки видимости элементов
@@ -184,6 +185,8 @@ export function ProjectIntegrationView({
               registrationButtonText:
                 functionalSettings.widgetSettings.registrationButtonText ||
                 'Для участия в акции перейдите в бота',
+              registrationButtonUrl:
+                functionalSettings.widgetSettings.registrationButtonUrl || '',
               registrationFallbackText:
                 functionalSettings.widgetSettings.registrationFallbackText ||
                 'Свяжитесь с администратором для регистрации',
@@ -564,25 +567,56 @@ export function ProjectIntegrationView({
                         placeholder='Зарегистрируйся в нашей бонусной программе'
                       />
                     </div>
-                    <div className='space-y-2'>
-                      <Label htmlFor='registrationButtonText'>
-                        Текст кнопки (с ботом)
-                      </Label>
-                      <Input
-                        id='registrationButtonText'
-                        value={widgetSettings.registrationButtonText}
-                        onChange={(e) =>
-                          setWidgetSettings({
-                            ...widgetSettings,
-                            registrationButtonText: e.target.value
-                          })
-                        }
-                        placeholder='Для участия в акции перейдите в бота'
-                      />
+                  </div>
+
+                  <div className='space-y-4'>
+                    <h4 className='text-sm font-medium'>Кнопка действия</h4>
+                    <div className='grid gap-4 md:grid-cols-2'>
+                      <div className='space-y-2'>
+                        <Label htmlFor='registrationButtonText'>
+                          Текст кнопки
+                        </Label>
+                        <Input
+                          id='registrationButtonText'
+                          value={widgetSettings.registrationButtonText}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              registrationButtonText: e.target.value
+                            })
+                          }
+                          placeholder='Зарегистрироваться'
+                        />
+                      </div>
+                      <div className='space-y-2'>
+                        <Label htmlFor='registrationButtonUrl'>
+                          Ссылка кнопки
+                          <span className='text-muted-foreground ml-2 text-xs'>
+                            (опционально, по умолчанию - ссылка на бота)
+                          </span>
+                        </Label>
+                        <Input
+                          id='registrationButtonUrl'
+                          value={widgetSettings.registrationButtonUrl}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              registrationButtonUrl: e.target.value
+                            })
+                          }
+                          placeholder='https://example.com/register'
+                        />
+                        <p className='text-muted-foreground text-xs'>
+                          Если не указано, используется ссылка на Telegram бота
+                        </p>
+                      </div>
                     </div>
+                  </div>
+
+                  <div className='grid gap-4'>
                     <div className='space-y-2'>
                       <Label htmlFor='registrationFallbackText'>
-                        Текст без бота
+                        Текст запасного варианта (если нет бота и ссылки)
                       </Label>
                       <Input
                         id='registrationFallbackText'
