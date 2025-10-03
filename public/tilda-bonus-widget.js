@@ -948,6 +948,16 @@
           border-radius: 8px;
           background: #f9fafb;
         }
+        
+        /* Скрываем ВСЕ оригинальные поля промокода Tilda когда виджет активен */
+        body .t-inputpromocode__wrapper:not(.bonus-widget-container),
+        body .t-inputpromocode:not(#promo-code-input),
+        body .js-inputpromocode:not(#promo-code-input),
+        body input[name="promocode"]:not(#promo-code-input),
+        body .t-input-promocode:not(#promo-code-input) {
+          display: none !important;
+          visibility: hidden !important;
+        }
       `;
       document.head.appendChild(style);
       // Контейнер создаём лениво — только когда пользователь найден
