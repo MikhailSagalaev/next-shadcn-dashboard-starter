@@ -819,12 +819,13 @@
         .bonus-balance-amount { font-weight: 600; }
         
         .bonus-input-group {
-          display: flex;
+          display: flex !important;
+          width: 100% !important;
           gap: 8px;
           margin-bottom: 12px;
         }
         
-        .bonus-input { flex: 1; padding: 10px 12px; border: 1px solid #000; border-radius: 8px; font-size: 14px; color:#000 }
+        .bonus-input { flex: 1 !important; width: auto !important; padding: 10px 12px; border: 1px solid #000; border-radius: 8px; font-size: 14px; color:#000 }
         
         .bonus-button { padding: 10px 16px; background:#000; color:#fff; border:1px solid #000; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; transition: background .2s }
         .bonus-button:hover { background:#222 }
