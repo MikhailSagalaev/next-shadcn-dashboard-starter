@@ -337,7 +337,7 @@ export function BotConstructorProperties({
         <label className='text-sm font-medium'>Таймаут (секунды)</label>
         <Input
           type='number'
-          value={localNode.data.config.input?.timeout || 300}
+          value={String(localNode.data.config.input?.timeout || 300)}
           onValueChange={(value) =>
             updateNodeData({
               config: {
