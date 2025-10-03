@@ -24,7 +24,7 @@ model Project {
   bonusLevels     BonusLevel[]
   botSettings     BotSettings?
   referralProgram ReferralProgram?
-  botFlows        BotFlow[]     // Потоки бота для конструктора
+  botFlows        BotFlow[] // Потоки бота для конструктора
   users           User[]
   webhookLogs     WebhookLog[]
   notifications   Notification[]
@@ -81,70 +81,70 @@ model BotSettings {
 }
 
 model BotFlow {
-  id          String     @id @default(cuid())
-  projectId   String     @map("project_id")
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
   name        String
   description String?
-  version     Int        @default(1)
-  isActive    Boolean    @default(false) @map("is_active")
-  nodes       Json       // Массив нод конструктора
-  connections Json       // Связи между нодами
-  variables   Json?      // Переменные бота
-  settings    Json?      // Общие настройки потока
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  version     Int      @default(1)
+  isActive    Boolean  @default(false) @map("is_active")
+  nodes       Json // Массив нод конструктора
+  connections Json // Связи между нодами
+  variables   Json? // Переменные бота
+  settings    Json? // Общие настройки потока
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sessions    BotSession[] // Активные сессии этого потока
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessions BotSession[] // Активные сессии этого потока
 
   @@map("bot_flows")
 }
 
 model BotSession {
-  id        String    @id @default(cuid())
-  projectId String    @map("project_id")
-  userId    String    @map("user_id") // Telegram user ID (BigInt as string)
-  flowId    String    @map("flow_id")
-  state     Json      // Текущее состояние диалога
-  variables Json?     // Переменные сессии
-  expiresAt DateTime  @map("expires_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id") // Telegram user ID (BigInt as string)
+  flowId    String   @map("flow_id")
+  state     Json // Текущее состояние диалога
+  variables Json? // Переменные сессии
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  flow       BotFlow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  flow BotFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId, flowId])
   @@map("bot_sessions")
 }
 
 model User {
-  id               String        @id @default(cuid())
-  projectId        String        @map("project_id")
+  id               String         @id @default(cuid())
+  projectId        String         @map("project_id")
   email            String?
   phone            String?
-  firstName        String?       @map("first_name")
-  lastName         String?       @map("last_name")
-  birthDate        DateTime?     @map("birth_date") @db.Date
-  telegramId       BigInt?       @map("telegram_id")
-  telegramUsername String?       @map("telegram_username")
-  isActive         Boolean       @default(true) @map("is_active")
-  registeredAt     DateTime      @default(now()) @map("registered_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
-  currentLevel     String        @default("Базовый") @map("current_level")
-  referralCode     String?       @unique @map("referral_code")
-  referredBy       String?       @map("referred_by")
-  totalPurchases   Decimal       @default(0) @map("total_purchases") @db.Decimal(10, 2)
-  utmCampaign      String?       @map("utm_campaign")
-  utmContent       String?       @map("utm_content")
-  utmMedium        String?       @map("utm_medium")
-  utmSource        String?       @map("utm_source")
-  utmTerm          String?       @map("utm_term")
+  firstName        String?        @map("first_name")
+  lastName         String?        @map("last_name")
+  birthDate        DateTime?      @map("birth_date") @db.Date
+  telegramId       BigInt?        @map("telegram_id")
+  telegramUsername String?        @map("telegram_username")
+  isActive         Boolean        @default(true) @map("is_active")
+  registeredAt     DateTime       @default(now()) @map("registered_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  currentLevel     String         @default("Базовый") @map("current_level")
+  referralCode     String?        @unique @map("referral_code")
+  referredBy       String?        @map("referred_by")
+  totalPurchases   Decimal        @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  utmCampaign      String?        @map("utm_campaign")
+  utmContent       String?        @map("utm_content")
+  utmMedium        String?        @map("utm_medium")
+  utmSource        String?        @map("utm_source")
+  utmTerm          String?        @map("utm_term")
   bonuses          Bonus[]
   transactions     Transaction[]
   notifications    Notification[]
-  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  referrer         User?         @relation("UserReferrals", fields: [referredBy], references: [id])
-  referrals        User[]        @relation("UserReferrals")
+  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  referrer         User?          @relation("UserReferrals", fields: [referredBy], references: [id])
+  referrals        User[]         @relation("UserReferrals")
 
   @@unique([projectId, email])
   @@unique([projectId, phone])
@@ -209,6 +209,7 @@ model AdminAccount {
   passwordHash String    @map("password_hash")
   role         String?   @default("ADMIN")
   isActive     Boolean?  @default(true) @map("is_active")
+  metadata     Json? // Для хранения reset токенов и другой мета-информации
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
@@ -216,25 +217,25 @@ model AdminAccount {
 }
 
 model Notification {
-  id        String   @id @default(cuid())
-  projectId String   @map("project_id")
-  userId    String?  @map("user_id")
-  channel   String   // Используем строку вместо enum из-за ограничений прав
+  id        String    @id @default(cuid())
+  projectId String    @map("project_id")
+  userId    String?   @map("user_id")
+  channel   String // Используем строку вместо enum из-за ограничений прав
   title     String
   message   String
   metadata  Json?
   sentAt    DateTime? @map("sent_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
 
 enum BonusBehavior {
-  SPEND_AND_EARN    @map("spend_and_earn")
-  SPEND_ONLY        @map("spend_only")
-  EARN_ONLY         @map("earn_only")
+  SPEND_AND_EARN @map("spend_and_earn")
+  SPEND_ONLY     @map("spend_only")
+  EARN_ONLY      @map("earn_only")
 }
 
 enum BotStatus {
@@ -273,17 +274,17 @@ enum AlphaTesterStatus {
 }
 
 model AlphaTesterApplication {
-  id              String              @id @default(cuid())
+  id String @id @default(cuid())
 
   // Информация о компании
-  companyName     String
-  companySize     String
-  website         String
-  industry        String
+  companyName String
+  companySize String
+  website     String
+  industry    String
 
   // Контактная информация
   contactName     String
-  contactEmail    String              @unique
+  contactEmail    String  @unique
   contactPhone    String?
   contactPosition String
 
@@ -294,24 +295,24 @@ model AlphaTesterApplication {
   expectations       String?
 
   // Техническая информация
-  cms              String
-  technicalSkills  String
-  availableTime    String
+  cms             String
+  technicalSkills String
+  availableTime   String
 
   // Согласия
   agreeToTerms     Boolean
   agreeToNDA       Boolean
-  agreeToMarketing Boolean             @default(false)
+  agreeToMarketing Boolean @default(false)
 
   // Статус и управление
-  status           AlphaTesterStatus   @default(PENDING)
-  notes            String?
-  reviewedBy       String?
-  reviewedAt       DateTime?
+  status     AlphaTesterStatus @default(PENDING)
+  notes      String?
+  reviewedBy String?
+  reviewedAt DateTime?
 
   // Метаданные
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("alpha_tester_applications")
 }

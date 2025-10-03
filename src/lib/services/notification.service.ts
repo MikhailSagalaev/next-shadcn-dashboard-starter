@@ -1,528 +1,262 @@
 /**
- * @file: notification.service.ts
- * @description: Сервис для управления уведомлениями
- * @project: Gupil.ru - SaaS Bonus System
- * @dependencies: @/lib/db, @/types/notification, @/lib/telegram/notifications
- * @created: 2024-09-11
+ * @file: src/lib/services/notification.service.ts
+ * @description: Сервис уведомлений - Email, SMS, Push
+ * @project: SaaS Bonus System
+ * @dependencies: Prisma, Logger
+ * @created: 2025-10-02
  * @author: AI Assistant + User
  */
 
-import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import {
-  NotificationType,
-  NotificationChannel,
-  NotificationPriority,
-  NotificationTemplate,
-  NotificationSettings,
-  NotificationLog,
-  NotificationPayload
-} from '@/types/notification';
 
-export class NotificationService {
-  /**
-   * Отправка уведомления с автоматическим выбором канала
-   */
-  static async sendNotification(
-    payload: NotificationPayload
-  ): Promise<NotificationLog[]> {
-    const logs: NotificationLog[] = [];
+// Типы каналов уведомлений
+export type NotificationChannel = 'email' | 'sms' | 'push' | 'telegram';
 
+// Интерфейс провайдера уведомлений
+interface NotificationProvider {
+  send(
+    to: string,
+    subject: string,
+    content: string,
+    options?: any
+  ): Promise<boolean>;
+}
+
+// Email провайдер (заглушка, можно заменить на реальный - Resend, SendGrid и т.д.)
+class EmailProvider implements NotificationProvider {
+  async send(to: string, subject: string, content: string): Promise<boolean> {
     try {
-      // Получаем настройки уведомлений для проекта/пользователя
-      const settings = await this.getNotificationSettings(
-        payload.projectId,
-        payload.userId
-      );
+      // TODO: Интеграция с реальным email провайдером
+      logger.info('📧 Email отправлен (заглушка)', {
+        to: to.substring(0, 3) + '***',
+        subject,
+        contentLength: content.length
+      });
 
-      // Проверяем, разрешен ли этот тип уведомлений
-      if (!settings.types[payload.type]) {
-        logger.info(
-          `Notification type ${payload.type} disabled for project ${payload.projectId}`
-        );
-        return logs;
-      }
+      // В production здесь будет:
+      // - Resend: await resend.emails.send({ from, to, subject, html: content })
+      // - SendGrid: await sgMail.send({ to, from, subject, html: content })
+      // - Nodemailer: await transporter.sendMail({ to, subject, html: content })
 
-      // Определяем каналы для отправки
-      const channels = this.getAvailableChannels(settings, payload.channel);
-
-      for (const channel of channels) {
-        try {
-          const log = await this.sendToChannel(payload, channel);
-          logs.push(log);
-        } catch (error) {
-          logger.error(`Failed to send notification to ${channel}:`, {
-            error: error instanceof Error ? error.message : 'Unknown error'
-          });
-          logs.push({
-            id: `failed_${Date.now()}_${channel}`,
-            projectId: payload.projectId,
-            userId: payload.userId,
-            type: payload.type,
-            channel,
-            title: payload.title,
-            message: payload.message,
-            status: 'failed',
-            priority: payload.priority || NotificationPriority.NORMAL,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            createdAt: new Date()
-          });
-        }
-      }
-
-      return logs;
+      return true;
     } catch (error) {
-      logger.error('Failed to send notification:', {
+      logger.error('Ошибка отправки email', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        to: to.substring(0, 3) + '***'
+      });
+      return false;
+    }
+  }
+}
+
+// SMS провайдер (заглушка)
+class SMSProvider implements NotificationProvider {
+  async send(to: string, subject: string, content: string): Promise<boolean> {
+    try {
+      logger.info('📱 SMS отправлен (заглушка)', {
+        to: to.substring(0, 3) + '***',
+        contentLength: content.length
+      });
+
+      // TODO: Интеграция с SMS провайдером (Twilio, SMS.ru и т.д.)
+      return true;
+    } catch (error) {
+      logger.error('Ошибка отправки SMS', {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
-      throw error;
+      return false;
     }
   }
+}
 
-  /**
-   * Отправка уведомления в конкретный канал
-   */
-  private static async sendToChannel(
-    payload: NotificationPayload,
-    channel: NotificationChannel
-  ): Promise<NotificationLog> {
-    const logId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    // Создаем запись в логе
-    const log: NotificationLog = {
-      id: logId,
-      projectId: payload.projectId,
-      userId: payload.userId,
-      type: payload.type,
-      channel,
-      title: payload.title,
-      message: payload.message,
-      status: 'pending',
-      priority: payload.priority || NotificationPriority.NORMAL,
-      metadata: payload.metadata,
-      createdAt: new Date()
-    };
-
+// Push провайдер (заглушка)
+class PushProvider implements NotificationProvider {
+  async send(to: string, subject: string, content: string): Promise<boolean> {
     try {
-      // Отправляем в зависимости от канала
-      switch (channel) {
-        case NotificationChannel.TELEGRAM:
-          await this.sendTelegramNotification(payload);
-          break;
-        case NotificationChannel.EMAIL:
-          await this.sendEmailNotification(payload);
-          break;
-        case NotificationChannel.SMS:
-          await this.sendSmsNotification(payload);
-          break;
-        case NotificationChannel.PUSH:
-          await this.sendPushNotification(payload);
-          break;
-      }
-
-      log.status = 'sent';
-      log.sentAt = new Date();
-
-      logger.info(`Notification sent successfully via ${channel}`, {
-        logId,
-        projectId: payload.projectId
+      logger.info('🔔 Push уведомление отправлено (заглушка)', {
+        to: to.substring(0, 8) + '***',
+        subject
       });
 
-      // Фиксируем лог уведомления в БД
-      try {
-        await db.notification.create({
-          data: {
-            projectId: payload.projectId,
-            userId: payload.userId || null,
-            channel,
-            title: payload.title,
-            message: payload.message,
-            metadata: {
-              type: payload.type,
-              priority: payload.priority || NotificationPriority.NORMAL
-            },
-            sentAt: log.sentAt
-          }
-        });
-      } catch (persistError) {
-        logger.error('Failed to persist notification log', {
-          error:
-            persistError instanceof Error
-              ? persistError.message
-              : 'Unknown error'
-        });
-      }
+      // TODO: Интеграция с Push провайдером (Firebase, OneSignal и т.д.)
+      return true;
     } catch (error) {
-      log.status = 'failed';
-      log.error = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`Failed to send notification via ${channel}:`, {
-        error: log.error
+      logger.error('Ошибка отправки Push', {
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
-
-      // Пишем неудачную попытку в БД для аудита
-      try {
-        await db.notification.create({
-          data: {
-            projectId: payload.projectId,
-            userId: payload.userId || null,
-            channel,
-            title: payload.title,
-            message: payload.message,
-            metadata: {
-              type: payload.type,
-              priority: payload.priority || NotificationPriority.NORMAL,
-              error: log.error
-            }
-          }
-        });
-      } catch (persistError) {
-        logger.error('Failed to persist failed notification log', {
-          error:
-            persistError instanceof Error
-              ? persistError.message
-              : 'Unknown error'
-        });
-      }
+      return false;
     }
-
-    return log;
   }
+}
+
+// Основной сервис уведомлений
+export class NotificationService {
+  private static providers: Map<NotificationChannel, NotificationProvider> =
+    new Map([
+      ['email', new EmailProvider()],
+      ['sms', new SMSProvider()],
+      ['push', new PushProvider()]
+    ]);
 
   /**
-   * Отправка Telegram уведомления
-   */
-  private static async sendTelegramNotification(
-    payload: NotificationPayload
-  ): Promise<void> {
-    if (!payload.userId) {
-      throw new Error('User ID required for Telegram notifications');
-    }
-
-    // Получаем пользователя из БД
-    const { db } = await import('@/lib/db');
-    const user = await db.user.findUnique({
-      where: { id: payload.userId }
-    });
-
-    if (!user || !user.telegramId) {
-      throw new Error('User not found or not linked to Telegram');
-    }
-
-    // Для системных объявлений используем расширенную рассылку
-    if (payload.type === NotificationType.SYSTEM_ANNOUNCEMENT) {
-      const { sendRichBroadcastMessage } = await import(
-        '@/lib/telegram/notifications'
-      );
-
-      await sendRichBroadcastMessage(
-        payload.projectId,
-        {
-          message: payload.message,
-          imageUrl: payload.metadata?.imageUrl,
-          buttons: payload.metadata?.buttons,
-          parseMode: payload.metadata?.parseMode || 'Markdown'
-        },
-        [payload.userId]
-      );
-      return;
-    }
-
-    // Для бонусных уведомлений используем специальную функцию
-    if (payload.type === NotificationType.BONUS_EARNED) {
-      // Создаем временный объект бонуса для совместимости с существующей функцией
-      const mockBonus = {
-        id: 'notification',
-        amount: payload.metadata?.bonusAmount || 0,
-        type: payload.metadata?.bonusType || 'manual',
-        description: payload.message,
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-      };
-
-      const { sendBonusNotification } = await import(
-        '@/lib/telegram/notifications'
-      );
-
-      await sendBonusNotification(
-        user as any,
-        mockBonus as any,
-        payload.projectId
-      );
-      return;
-    }
-
-    // Для остальных типов уведомлений используем простую отправку
-    const { botManager } = await import('@/lib/telegram/bot-manager');
-    const botInstance = botManager.getBot(payload.projectId);
-
-    if (!botInstance || !botInstance.isActive) {
-      throw new Error('Bot not active for this project');
-    }
-
-    await botInstance.bot.api.sendMessage(
-      Number(user.telegramId),
-      `*${payload.title}*\n\n${payload.message}`,
-      {
-        parse_mode: 'Markdown'
-      }
-    );
-  }
-
-  /**
-   * Отправка Email уведомления (заглушка)
-   */
-  private static async sendEmailNotification(
-    payload: NotificationPayload
-  ): Promise<void> {
-    // Заглушка: реальная отправка не настроена. Логируем и считаем отправленным.
-    logger.info('Email notification (stub) sent:', {
-      to: payload.userId,
-      title: payload.title
-    });
-  }
-
-  /**
-   * Отправка SMS уведомления (заглушка)
-   */
-  private static async sendSmsNotification(
-    payload: NotificationPayload
-  ): Promise<void> {
-    // Заглушка: реальная отправка не настроена. Логируем и считаем отправленным.
-    logger.info('SMS notification (stub) sent:', {
-      to: payload.userId,
-      title: payload.title
-    });
-  }
-
-  /**
-   * Отправка Push уведомления (заглушка)
-   */
-  private static async sendPushNotification(
-    payload: NotificationPayload
-  ): Promise<void> {
-    // Заглушка: реальная отправка не настроена. Логируем и считаем отправленным.
-    logger.info('Push notification (stub) sent:', {
-      to: payload.userId,
-      title: payload.title
-    });
-  }
-
-  /**
-   * Получение настроек уведомлений
-   */
-  static async getNotificationSettings(
-    projectId: string,
-    userId?: string
-  ): Promise<NotificationSettings> {
-    // TODO: Реализовать получение настроек из БД
-    // Пока возвращаем дефолтные настройки
-    return {
-      projectId,
-      userId,
-      channels: {
-        [NotificationChannel.TELEGRAM]: true,
-        [NotificationChannel.EMAIL]: false,
-        [NotificationChannel.SMS]: false,
-        [NotificationChannel.PUSH]: false
-      },
-      types: {
-        [NotificationType.BONUS_EARNED]: true,
-        [NotificationType.BONUS_SPENT]: true,
-        [NotificationType.REFERRAL_BONUS]: true,
-        [NotificationType.WELCOME_BONUS]: true,
-        [NotificationType.LEVEL_UP]: true,
-        [NotificationType.PURCHASE_COMPLETED]: true,
-        [NotificationType.SYSTEM_ANNOUNCEMENT]: true,
-        [NotificationType.PROMOTION]: false
-      },
-      quietHours: {
-        enabled: true,
-        start: '22:00',
-        end: '08:00'
-      },
-      frequency: {
-        maxPerDay: 10,
-        maxPerHour: 3
-      }
-    };
-  }
-
-  /**
-   * Определение доступных каналов для отправки
-   */
-  private static getAvailableChannels(
-    settings: NotificationSettings,
-    preferredChannel?: NotificationChannel
-  ): NotificationChannel[] {
-    const channels: NotificationChannel[] = [];
-
-    // Если указан предпочтительный канал и он включен
-    if (preferredChannel && settings.channels[preferredChannel]) {
-      channels.push(preferredChannel);
-    } else {
-      // Иначе используем все включенные каналы
-      Object.entries(settings.channels).forEach(([channel, enabled]) => {
-        if (enabled) {
-          channels.push(channel as NotificationChannel);
-        }
-      });
-    }
-
-    return channels;
-  }
-
-  /**
-   * Получение шаблонов уведомлений для проекта
-   */
-  static async getTemplates(
-    projectId: string
-  ): Promise<NotificationTemplate[]> {
-    // TODO: Реализовать получение шаблонов из БД
-    return this.getDefaultTemplates();
-  }
-
-  /**
-   * Дефолтные шаблоны уведомлений
-   */
-  private static getDefaultTemplates(): NotificationTemplate[] {
-    return [
-      {
-        id: 'bonus_earned_default',
-        type: NotificationType.BONUS_EARNED,
-        channel: NotificationChannel.TELEGRAM,
-        title: '🎉 Бонус начислен!',
-        message:
-          'Вам начислено {{bonusAmount}} бонусов за покупку. Ваш баланс: {{totalBalance}} бонусов.',
-        variables: ['bonusAmount', 'totalBalance'],
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 'referral_bonus_default',
-        type: NotificationType.REFERRAL_BONUS,
-        channel: NotificationChannel.TELEGRAM,
-        title: '👥 Реферальный бонус!',
-        message:
-          'Вы получили {{bonusAmount}} бонусов за приглашение друга {{friendName}}. Продолжайте приглашать!',
-        variables: ['bonusAmount', 'friendName'],
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 'welcome_bonus_default',
-        type: NotificationType.WELCOME_BONUS,
-        channel: NotificationChannel.TELEGRAM,
-        title: '🎁 Добро пожаловать!',
-        message:
-          'Добро пожаловать в нашу бонусную программу! Вам начислен приветственный бонус {{bonusAmount}} бонусов.',
-        variables: ['bonusAmount'],
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 'level_up_default',
-        type: NotificationType.LEVEL_UP,
-        channel: NotificationChannel.TELEGRAM,
-        title: '⭐ Новый уровень!',
-        message:
-          'Поздравляем! Вы достигли уровня {{levelName}} и получили {{bonusAmount}} бонусов.',
-        variables: ['levelName', 'bonusAmount'],
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    ];
-  }
-
-  /**
-   * Подстановка переменных в шаблон
-   */
-  static processTemplate(
-    template: NotificationTemplate,
-    variables: Record<string, any>
-  ): { title: string; message: string } {
-    let title = template.title;
-    let message = template.message;
-
-    // Подставляем переменные
-    Object.entries(variables).forEach(([key, value]) => {
-      const placeholder = `{{${key}}}`;
-      title = title.replace(new RegExp(placeholder, 'g'), String(value));
-      message = message.replace(new RegExp(placeholder, 'g'), String(value));
-    });
-
-    return { title, message };
-  }
-
-  /**
-   * Получение логов уведомлений
-   */
-  static async getNotificationLogs(
-    projectId: string,
-    limit: number = 50,
-    offset: number = 0
-  ): Promise<NotificationLog[]> {
-    const rows = await db.notification.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip: offset
-    });
-
-    return rows.map((n: any) => ({
-      id: n.id,
-      projectId: n.projectId,
-      userId: n.userId || undefined,
-      type: (n.metadata as any)?.type || NotificationType.SYSTEM_ANNOUNCEMENT,
-      channel: n.channel as NotificationChannel,
-      title: n.title,
-      message: n.message,
-      status: 'sent',
-      priority: (n.metadata as any)?.priority || NotificationPriority.NORMAL,
-      sentAt: n.sentAt || undefined,
-      createdAt: n.createdAt,
-      metadata: (n.metadata as Record<string, any>) || undefined
-    }));
-  }
-
-  /**
-   * Получение пользователей проекта для массовой отправки уведомлений
-   */
-  static async getProjectUsers(
-    projectId: string
-  ): Promise<Array<{ id: string }>> {
-    const users = await db.user.findMany({
-      where: { projectId },
-      select: { id: true }
-    });
-
-    return users;
-  }
-
-  /**
-   * Отправка уведомления (упрощенный интерфейс для API)
+   * Отправка уведомления через указанный канал
    */
   static async send(
-    payload: NotificationPayload
-  ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const logs = await this.sendNotification(payload);
-      const hasErrors = logs.some((log) => log.status === 'failed');
+    channel: NotificationChannel,
+    to: string,
+    subject: string,
+    content: string,
+    options?: any
+  ): Promise<boolean> {
+    const provider = this.providers.get(channel);
 
-      return {
-        success: !hasErrors,
-        error: hasErrors
-          ? logs.find((log) => log.status === 'failed')?.error
-          : undefined
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+    if (!provider) {
+      logger.error('Провайдер уведомлений не найден', { channel });
+      return false;
     }
+
+    return provider.send(to, subject, content, options);
+  }
+
+  /**
+   * Отправка email для восстановления пароля
+   */
+  static async sendPasswordResetEmail(
+    email: string,
+    resetToken: string,
+    resetUrl?: string
+  ): Promise<boolean> {
+    const url =
+      resetUrl ||
+      `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${resetToken}`;
+
+    const subject = 'Восстановление пароля - SaaS Bonus System';
+    const content = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Восстановление пароля</h2>
+        <p>Вы запросили восстановление пароля для вашего аккаунта.</p>
+        <p>Перейдите по ссылке ниже для установки нового пароля:</p>
+        <a href="${url}" style="display: inline-block; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 6px; margin: 20px 0;">
+          Восстановить пароль
+        </a>
+        <p style="color: #666; font-size: 14px;">Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.</p>
+        <p style="color: #666; font-size: 14px;">Ссылка действительна в течение 1 часа.</p>
+      </div>
+    `;
+
+    return this.send('email', email, subject, content);
+  }
+
+  /**
+   * Отправка welcome email
+   */
+  static async sendWelcomeEmail(
+    email: string,
+    name?: string
+  ): Promise<boolean> {
+    const subject = 'Добро пожаловать в SaaS Bonus System!';
+    const content = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Добро пожаловать${name ? `, ${name}` : ''}!</h2>
+        <p>Спасибо за регистрацию в нашей системе управления бонусами.</p>
+        <p>Теперь вы можете:</p>
+        <ul>
+          <li>Создавать проекты бонусных программ</li>
+          <li>Настраивать Telegram ботов</li>
+          <li>Интегрировать с Tilda и другими платформами</li>
+          <li>Управлять пользователями и бонусами</li>
+        </ul>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" style="display: inline-block; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 6px; margin: 20px 0;">
+          Перейти в панель управления
+        </a>
+      </div>
+    `;
+
+    return this.send('email', email, subject, content);
+  }
+
+  /**
+   * Отправка email верификации
+   */
+  static async sendVerificationEmail(
+    email: string,
+    verificationToken: string
+  ): Promise<boolean> {
+    const url = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${verificationToken}`;
+
+    const subject = 'Подтверждение email - SaaS Bonus System';
+    const content = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Подтверждение email</h2>
+        <p>Пожалуйста, подтвердите ваш email адрес, перейдя по ссылке ниже:</p>
+        <a href="${url}" style="display: inline-block; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 6px; margin: 20px 0;">
+          Подтвердить email
+        </a>
+        <p style="color: #666; font-size: 14px;">Ссылка действительна в течение 24 часов.</p>
+      </div>
+    `;
+
+    return this.send('email', email, subject, content);
+  }
+
+  /**
+   * Пакетная отправка уведомлений
+   */
+  static async sendBatch(
+    channel: NotificationChannel,
+    recipients: Array<{ to: string; subject: string; content: string }>,
+    options?: {
+      parallel?: boolean;
+      batchSize?: number;
+    }
+  ): Promise<{ sent: number; failed: number; total: number }> {
+    const { parallel = false, batchSize = 10 } = options || {};
+
+    const results = {
+      sent: 0,
+      failed: 0,
+      total: recipients.length
+    };
+
+    if (parallel) {
+      // Параллельная отправка порциями
+      for (let i = 0; i < recipients.length; i += batchSize) {
+        const batch = recipients.slice(i, i + batchSize);
+        const promises = batch.map((r) =>
+          this.send(channel, r.to, r.subject, r.content)
+        );
+
+        const batchResults = await Promise.allSettled(promises);
+        batchResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value) {
+            results.sent++;
+          } else {
+            results.failed++;
+          }
+        });
+      }
+    } else {
+      // Последовательная отправка
+      for (const recipient of recipients) {
+        const success = await this.send(
+          channel,
+          recipient.to,
+          recipient.subject,
+          recipient.content
+        );
+        if (success) {
+          results.sent++;
+        } else {
+          results.failed++;
+        }
+      }
+    }
+
+    logger.info('Пакетная отправка завершена', {
+      channel,
+      ...results
+    });
+
+    return results;
   }
 }
