@@ -27,16 +27,21 @@ export default async function ConstructorPage({
   const { id: projectId } = await params;
 
   return (
-    <PageContainer scrollable={false}>
+    <div className='flex h-screen flex-col overflow-hidden'>
       <Suspense
         fallback={
-          <div className='flex h-96 items-center justify-center'>
-            Загрузка конструктора...
+          <div className='flex h-full items-center justify-center'>
+            <div className='text-center'>
+              <div className='border-primary mx-auto h-12 w-12 animate-spin rounded-full border-b-2'></div>
+              <p className='text-muted-foreground mt-4'>
+                Загрузка конструктора...
+              </p>
+            </div>
           </div>
         }
       >
         <BotConstructor projectId={projectId} />
       </Suspense>
-    </PageContainer>
+    </div>
   );
 }

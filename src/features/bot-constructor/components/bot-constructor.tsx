@@ -250,7 +250,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
   }
 
   return (
-    <div className='flex h-full flex-col'>
+    <div className='flex h-screen flex-col overflow-hidden'>
       {/* Header */}
       <BotConstructorHeader
         projectId={projectId}
