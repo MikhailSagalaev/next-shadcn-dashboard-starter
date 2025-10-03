@@ -796,32 +796,83 @@
         document.head.appendChild(fontLink3);
       }
 
-      // Стили для виджета
+      // Стили для виджета с CSS-переменными для кастомизации
       const style = document.createElement('style');
       style.textContent = `
+        :root {
+          --bonus-widget-bg: #ffffff;
+          --bonus-widget-border: #e5e7eb;
+          --bonus-widget-text: #1f2937;
+          --bonus-widget-label: #6b7280;
+          --bonus-widget-input-bg: #ffffff;
+          --bonus-widget-input-border: #d1d5db;
+          --bonus-widget-input-text: #111827;
+          --bonus-widget-button-bg: #3b82f6;
+          --bonus-widget-button-text: #ffffff;
+          --bonus-widget-button-hover: #2563eb;
+          --bonus-widget-balance: #059669;
+          --bonus-widget-error: #dc2626;
+          --bonus-widget-success: #059669;
+          --bonus-widget-font-family: system-ui, -apple-system, sans-serif;
+          --bonus-widget-font-size: 14px;
+          --bonus-widget-label-font-size: 13px;
+          --bonus-widget-button-font-size: 14px;
+          --bonus-widget-balance-font-size: 16px;
+          --bonus-widget-border-radius: 8px;
+          --bonus-widget-padding: 16px;
+          --bonus-widget-input-border-radius: 6px;
+          --bonus-widget-input-padding: 8px 12px;
+          --bonus-widget-button-border-radius: 6px;
+          --bonus-widget-button-padding: 10px 20px;
+          --bonus-widget-box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
         .bonus-widget-container {
-          background: #fff;
-          border: 1px solid #000;
-          border-radius: 10px;
-          padding: 12px;
+          background: var(--bonus-widget-bg);
+          border: 1px solid var(--bonus-widget-border);
+          border-radius: var(--bonus-widget-border-radius);
+          padding: var(--bonus-widget-padding);
           margin: 8px 0;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          color: #000;
+          font-family: var(--bonus-widget-font-family);
+          color: var(--bonus-widget-text);
+          font-size: var(--bonus-widget-font-size);
+          box-shadow: var(--bonus-widget-box-shadow);
         }
         
         .bonus-widget-title {
-          font-size: 16px;
+          font-size: var(--bonus-widget-balance-font-size);
           font-weight: 600;
-          color: #000;
+          color: var(--bonus-widget-text);
           margin-bottom: 8px;
         }
         .bonus-toggle{display:flex;gap:8px;margin-bottom:8px}
-        .bonus-toggle-btn{flex:1;padding:8px 12px;border:1px solid #000;background:#fff;border-radius:8px;cursor:pointer;color:#000}
-        .bonus-toggle-btn.active{background:#000;color:#fff}
+        .bonus-toggle-btn{
+          flex:1;
+          padding:8px 12px;
+          border:1px solid var(--bonus-widget-border);
+          background:var(--bonus-widget-input-bg);
+          border-radius:var(--bonus-widget-input-border-radius);
+          cursor:pointer;
+          color:var(--bonus-widget-text);
+          font-size:var(--bonus-widget-font-size);
+        }
+        .bonus-toggle-btn.active{
+          background:var(--bonus-widget-button-bg);
+          color:var(--bonus-widget-button-text);
+          border-color:var(--bonus-widget-button-bg);
+        }
         
-        .bonus-balance { font-size: 13px; color: #000; margin-bottom: 8px; }
+        .bonus-balance { 
+          font-size: var(--bonus-widget-label-font-size); 
+          color: var(--bonus-widget-label); 
+          margin-bottom: 8px; 
+        }
         
-        .bonus-balance-amount { font-weight: 600; }
+        .bonus-balance-amount { 
+          font-weight: 600; 
+          color: var(--bonus-widget-balance);
+          font-size: var(--bonus-widget-balance-font-size);
+        }
         
         .bonus-input-group {
           display: flex !important;
@@ -830,14 +881,50 @@
           margin-bottom: 12px;
         }
         
-        .bonus-input { flex: 1 !important; width: auto !important; padding: 10px 12px; border: 1px solid #000; border-radius: 8px; font-size: 14px; color:#000 }
+        .bonus-input { 
+          flex: 1 !important; 
+          width: auto !important; 
+          padding: var(--bonus-widget-input-padding); 
+          border: 1px solid var(--bonus-widget-input-border); 
+          border-radius: var(--bonus-widget-input-border-radius); 
+          font-size: var(--bonus-widget-font-size); 
+          color: var(--bonus-widget-input-text);
+          background: var(--bonus-widget-input-bg);
+          font-family: var(--bonus-widget-font-family);
+        }
         
-        .bonus-button { padding: 10px 16px; background:#000; color:#fff; border:1px solid #000; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; transition: background .2s }
-        .bonus-button:hover { background:#222 }
-        .bonus-button:disabled { opacity:.6; cursor:not-allowed }
+        .bonus-button { 
+          padding: var(--bonus-widget-button-padding); 
+          background: var(--bonus-widget-button-bg); 
+          color: var(--bonus-widget-button-text); 
+          border: none; 
+          border-radius: var(--bonus-widget-button-border-radius); 
+          cursor: pointer; 
+          font-size: var(--bonus-widget-button-font-size); 
+          font-weight: 500; 
+          transition: background .2s;
+          font-family: var(--bonus-widget-font-family);
+        }
+        .bonus-button:hover { background: var(--bonus-widget-button-hover); }
+        .bonus-button:disabled { opacity: .6; cursor: not-allowed; }
         
-        .bonus-applied { padding:8px 12px; border:1px solid #000; border-radius:8px; color:#000; background:#fff; font-size:13px }
-        .bonus-error { padding:8px 12px; border:1px solid #000; border-radius:8px; color:#000; background:#fff; font-size:13px; margin-top:8px }
+        .bonus-applied { 
+          padding: 8px 12px; 
+          border: 1px solid var(--bonus-widget-success); 
+          border-radius: var(--bonus-widget-input-border-radius); 
+          color: var(--bonus-widget-success); 
+          background: var(--bonus-widget-input-bg); 
+          font-size: var(--bonus-widget-label-font-size); 
+        }
+        .bonus-error { 
+          padding: 8px 12px; 
+          border: 1px solid var(--bonus-widget-error); 
+          border-radius: var(--bonus-widget-input-border-radius); 
+          color: var(--bonus-widget-error); 
+          background: var(--bonus-widget-input-bg); 
+          font-size: var(--bonus-widget-label-font-size); 
+          margin-top: 8px; 
+        }
         
         .bonus-loading {
           display: inline-block;
@@ -1205,6 +1292,176 @@
       // Возвращаем значения по умолчанию в случае ошибки
       this.log('Используем значения по умолчанию для настроек проекта');
       return { welcomeBonusAmount: 0, botUsername: null, widgetSettings: {} };
+    },
+
+    // Применить настройки стилей виджета через CSS переменные
+    applyWidgetStyles: function (widgetSettings) {
+      if (!widgetSettings) return;
+
+      this.log('🎨 Применяем кастомные стили виджета:', widgetSettings);
+
+      // Получаем root element для установки CSS переменных
+      const root = document.documentElement;
+
+      // Применяем цвета
+      if (widgetSettings.widgetBackgroundColor) {
+        root.style.setProperty(
+          '--bonus-widget-bg',
+          widgetSettings.widgetBackgroundColor
+        );
+      }
+      if (widgetSettings.widgetBorderColor) {
+        root.style.setProperty(
+          '--bonus-widget-border',
+          widgetSettings.widgetBorderColor
+        );
+      }
+      if (widgetSettings.widgetTextColor) {
+        root.style.setProperty(
+          '--bonus-widget-text',
+          widgetSettings.widgetTextColor
+        );
+      }
+      if (widgetSettings.widgetLabelColor) {
+        root.style.setProperty(
+          '--bonus-widget-label',
+          widgetSettings.widgetLabelColor
+        );
+      }
+      if (widgetSettings.widgetInputBackground) {
+        root.style.setProperty(
+          '--bonus-widget-input-bg',
+          widgetSettings.widgetInputBackground
+        );
+      }
+      if (widgetSettings.widgetInputBorder) {
+        root.style.setProperty(
+          '--bonus-widget-input-border',
+          widgetSettings.widgetInputBorder
+        );
+      }
+      if (widgetSettings.widgetInputText) {
+        root.style.setProperty(
+          '--bonus-widget-input-text',
+          widgetSettings.widgetInputText
+        );
+      }
+      if (widgetSettings.widgetButtonBackground) {
+        root.style.setProperty(
+          '--bonus-widget-button-bg',
+          widgetSettings.widgetButtonBackground
+        );
+      }
+      if (widgetSettings.widgetButtonText) {
+        root.style.setProperty(
+          '--bonus-widget-button-text',
+          widgetSettings.widgetButtonText
+        );
+      }
+      if (widgetSettings.widgetButtonHover) {
+        root.style.setProperty(
+          '--bonus-widget-button-hover',
+          widgetSettings.widgetButtonHover
+        );
+      }
+      if (widgetSettings.widgetBalanceColor) {
+        root.style.setProperty(
+          '--bonus-widget-balance',
+          widgetSettings.widgetBalanceColor
+        );
+      }
+      if (widgetSettings.widgetErrorColor) {
+        root.style.setProperty(
+          '--bonus-widget-error',
+          widgetSettings.widgetErrorColor
+        );
+      }
+      if (widgetSettings.widgetSuccessColor) {
+        root.style.setProperty(
+          '--bonus-widget-success',
+          widgetSettings.widgetSuccessColor
+        );
+      }
+
+      // Применяем шрифты
+      if (widgetSettings.widgetFontFamily) {
+        root.style.setProperty(
+          '--bonus-widget-font-family',
+          widgetSettings.widgetFontFamily
+        );
+      }
+      if (widgetSettings.widgetFontSize) {
+        root.style.setProperty(
+          '--bonus-widget-font-size',
+          widgetSettings.widgetFontSize
+        );
+      }
+      if (widgetSettings.widgetLabelFontSize) {
+        root.style.setProperty(
+          '--bonus-widget-label-font-size',
+          widgetSettings.widgetLabelFontSize
+        );
+      }
+      if (widgetSettings.widgetButtonFontSize) {
+        root.style.setProperty(
+          '--bonus-widget-button-font-size',
+          widgetSettings.widgetButtonFontSize
+        );
+      }
+      if (widgetSettings.widgetBalanceFontSize) {
+        root.style.setProperty(
+          '--bonus-widget-balance-font-size',
+          widgetSettings.widgetBalanceFontSize
+        );
+      }
+
+      // Применяем размеры и отступы
+      if (widgetSettings.widgetBorderRadius) {
+        root.style.setProperty(
+          '--bonus-widget-border-radius',
+          widgetSettings.widgetBorderRadius
+        );
+      }
+      if (widgetSettings.widgetPadding) {
+        root.style.setProperty(
+          '--bonus-widget-padding',
+          widgetSettings.widgetPadding
+        );
+      }
+      if (widgetSettings.widgetInputBorderRadius) {
+        root.style.setProperty(
+          '--bonus-widget-input-border-radius',
+          widgetSettings.widgetInputBorderRadius
+        );
+      }
+      if (widgetSettings.widgetInputPadding) {
+        root.style.setProperty(
+          '--bonus-widget-input-padding',
+          widgetSettings.widgetInputPadding
+        );
+      }
+      if (widgetSettings.widgetButtonBorderRadius) {
+        root.style.setProperty(
+          '--bonus-widget-button-border-radius',
+          widgetSettings.widgetButtonBorderRadius
+        );
+      }
+      if (widgetSettings.widgetButtonPadding) {
+        root.style.setProperty(
+          '--bonus-widget-button-padding',
+          widgetSettings.widgetButtonPadding
+        );
+      }
+
+      // Применяем тени
+      if (widgetSettings.widgetBoxShadow) {
+        root.style.setProperty(
+          '--bonus-widget-box-shadow',
+          widgetSettings.widgetBoxShadow
+        );
+      }
+
+      this.log('✅ Кастомные стили виджета применены');
     },
 
     // Скрыть плашку регистрации
@@ -2206,6 +2463,11 @@
           if (this.ensureWidgetMounted()) {
             this.state.bonusBalance = data.balance || 0;
             this.state.levelInfo = data.levelInfo || null;
+
+            // Применяем кастомные стили виджета если есть
+            if (this.state.widgetSettings) {
+              this.applyWidgetStyles(this.state.widgetSettings);
+            }
 
             // Синхронизируем статус Telegram из API с localStorage
             if (data.user.telegramLinked) {

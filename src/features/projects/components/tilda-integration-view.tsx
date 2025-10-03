@@ -55,21 +55,21 @@ export function ProjectIntegrationView({
   const [recentLogs, setRecentLogs] = useState<WebhookLogEntry[]>([]);
   const [recentLogsLoading, setRecentLogsLoading] = useState<boolean>(false);
   const [widgetSettings, setWidgetSettings] = useState({
-    // Текстовые настройки
+    // Текстовые настройки плашки регистрации
     registrationTitle: 'Зарегистрируйся и получи {bonusAmount} бонусов!',
     registrationDescription: 'Зарегистрируйся в нашей бонусной программе',
     registrationButtonText: 'Для участия в акции перейдите в бота',
     registrationButtonUrl: '', // Кастомная ссылка (если пустая - используется ссылка на бота)
     registrationFallbackText: 'Свяжитесь с администратором для регистрации',
 
-    // Настройки видимости элементов
+    // Настройки видимости элементов плашки
     showIcon: true,
     showTitle: true,
     showDescription: true,
     showButton: true,
     showFallbackText: true,
 
-    // Цветовые настройки
+    // Цветовые настройки плашки регистрации
     backgroundColor: '#667eea',
     backgroundGradient: '#764ba2',
     textColor: '#ffffff',
@@ -82,7 +82,7 @@ export function ProjectIntegrationView({
     buttonHoverColor: 'rgba(255,255,255,0.3)',
     fallbackBackgroundColor: 'rgba(0,0,0,0.1)',
 
-    // Размеры и отступы
+    // Размеры и отступы плашки
     borderRadius: '12px',
     padding: '16px',
     marginBottom: '12px',
@@ -98,24 +98,60 @@ export function ProjectIntegrationView({
     fallbackPadding: '8px',
     fallbackBorderRadius: '4px',
 
-    // Эффекты и тени
+    // Эффекты и тени плашки
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
     buttonBoxShadow: 'none',
     iconAnimation: 'none', // none, pulse, bounce, shake
 
-    // Эмодзи и иконки
+    // Эмодзи и иконки плашки
     iconEmoji: '🎁',
     iconColor: '#ffffff',
 
-    // Шрифты
+    // Шрифты плашки
     fontFamily: 'system-ui, -apple-system, sans-serif', // По умолчанию системный
 
-    // Дополнительные настройки
+    // Дополнительные настройки плашки
     maxWidth: '100%',
     textAlign: 'center',
     buttonWidth: 'auto',
     buttonDisplay: 'inline-block',
-    fontSize: '14px'
+    fontSize: '14px',
+
+    // ========== НАСТРОЙКИ САМОГО ВИДЖЕТА БОНУСОВ ==========
+    // Цвета виджета
+    widgetBackgroundColor: '#ffffff',
+    widgetBorderColor: '#e5e7eb',
+    widgetTextColor: '#1f2937',
+    widgetLabelColor: '#6b7280',
+    widgetInputBackground: '#ffffff',
+    widgetInputBorder: '#d1d5db',
+    widgetInputText: '#111827',
+    widgetButtonBackground: '#3b82f6',
+    widgetButtonText: '#ffffff',
+    widgetButtonHover: '#2563eb',
+    widgetBalanceColor: '#059669',
+    widgetErrorColor: '#dc2626',
+    widgetSuccessColor: '#059669',
+
+    // Шрифты виджета
+    widgetFontFamily: 'system-ui, -apple-system, sans-serif',
+    widgetFontSize: '14px',
+    widgetLabelFontSize: '13px',
+    widgetButtonFontSize: '14px',
+    widgetBalanceFontSize: '16px',
+
+    // Размеры и отступы виджета
+    widgetBorderRadius: '8px',
+    widgetPadding: '16px',
+    widgetInputBorderRadius: '6px',
+    widgetInputPadding: '8px 12px',
+    widgetButtonBorderRadius: '6px',
+    widgetButtonPadding: '10px 20px',
+
+    // Тени виджета
+    widgetBoxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    widgetInputBoxShadow: 'none',
+    widgetButtonBoxShadow: 'none'
   });
   const [saving, setSaving] = useState(false);
   const [botUsername, setBotUsername] = useState<string | null>(null);
@@ -290,7 +326,7 @@ export function ProjectIntegrationView({
                 functionalSettings.widgetSettings.fontFamily ||
                 'system-ui, -apple-system, sans-serif',
 
-              // Дополнительные настройки
+              // Дополнительные настройки плашки
               maxWidth: functionalSettings.widgetSettings.maxWidth || '100%',
               textAlign:
                 functionalSettings.widgetSettings.textAlign || 'center',
@@ -299,7 +335,81 @@ export function ProjectIntegrationView({
               buttonDisplay:
                 functionalSettings.widgetSettings.buttonDisplay ||
                 'inline-block',
-              fontSize: functionalSettings.widgetSettings.fontSize || '14px'
+              fontSize: functionalSettings.widgetSettings.fontSize || '14px',
+
+              // Настройки виджета бонусов
+              widgetBackgroundColor:
+                functionalSettings.widgetSettings.widgetBackgroundColor ||
+                '#ffffff',
+              widgetBorderColor:
+                functionalSettings.widgetSettings.widgetBorderColor ||
+                '#e5e7eb',
+              widgetTextColor:
+                functionalSettings.widgetSettings.widgetTextColor || '#1f2937',
+              widgetLabelColor:
+                functionalSettings.widgetSettings.widgetLabelColor || '#6b7280',
+              widgetInputBackground:
+                functionalSettings.widgetSettings.widgetInputBackground ||
+                '#ffffff',
+              widgetInputBorder:
+                functionalSettings.widgetSettings.widgetInputBorder ||
+                '#d1d5db',
+              widgetInputText:
+                functionalSettings.widgetSettings.widgetInputText || '#111827',
+              widgetButtonBackground:
+                functionalSettings.widgetSettings.widgetButtonBackground ||
+                '#3b82f6',
+              widgetButtonText:
+                functionalSettings.widgetSettings.widgetButtonText || '#ffffff',
+              widgetButtonHover:
+                functionalSettings.widgetSettings.widgetButtonHover ||
+                '#2563eb',
+              widgetBalanceColor:
+                functionalSettings.widgetSettings.widgetBalanceColor ||
+                '#059669',
+              widgetErrorColor:
+                functionalSettings.widgetSettings.widgetErrorColor || '#dc2626',
+              widgetSuccessColor:
+                functionalSettings.widgetSettings.widgetSuccessColor ||
+                '#059669',
+              widgetFontFamily:
+                functionalSettings.widgetSettings.widgetFontFamily ||
+                'system-ui, -apple-system, sans-serif',
+              widgetFontSize:
+                functionalSettings.widgetSettings.widgetFontSize || '14px',
+              widgetLabelFontSize:
+                functionalSettings.widgetSettings.widgetLabelFontSize || '13px',
+              widgetButtonFontSize:
+                functionalSettings.widgetSettings.widgetButtonFontSize ||
+                '14px',
+              widgetBalanceFontSize:
+                functionalSettings.widgetSettings.widgetBalanceFontSize ||
+                '16px',
+              widgetBorderRadius:
+                functionalSettings.widgetSettings.widgetBorderRadius || '8px',
+              widgetPadding:
+                functionalSettings.widgetSettings.widgetPadding || '16px',
+              widgetInputBorderRadius:
+                functionalSettings.widgetSettings.widgetInputBorderRadius ||
+                '6px',
+              widgetInputPadding:
+                functionalSettings.widgetSettings.widgetInputPadding ||
+                '8px 12px',
+              widgetButtonBorderRadius:
+                functionalSettings.widgetSettings.widgetButtonBorderRadius ||
+                '6px',
+              widgetButtonPadding:
+                functionalSettings.widgetSettings.widgetButtonPadding ||
+                '10px 20px',
+              widgetBoxShadow:
+                functionalSettings.widgetSettings.widgetBoxShadow ||
+                '0 1px 3px rgba(0,0,0,0.1)',
+              widgetInputBoxShadow:
+                functionalSettings.widgetSettings.widgetInputBoxShadow ||
+                'none',
+              widgetButtonBoxShadow:
+                functionalSettings.widgetSettings.widgetButtonBoxShadow ||
+                'none'
             });
           }
         }
@@ -1610,6 +1720,280 @@ export function ProjectIntegrationView({
                       ) : null}
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Настройки виджета бонусов */}
+            <Card>
+              <CardHeader>
+                <CardTitle className='flex items-center gap-2'>
+                  <Settings className='h-5 w-5' />
+                  Настройки виджета бонусов
+                </CardTitle>
+                <CardDescription>
+                  Настройте внешний вид виджета для авторизованных пользователей
+                  (применение бонусов и промокодов)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className='space-y-6'>
+                {/* Цвета виджета */}
+                <div className='space-y-4'>
+                  <h4 className='text-sm font-medium'>Цвета</h4>
+                  <div className='grid gap-4 md:grid-cols-3'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetBackgroundColor'>Фон виджета</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetBackgroundColor'
+                          type='color'
+                          value={widgetSettings.widgetBackgroundColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetBackgroundColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetBackgroundColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetBackgroundColor: e.target.value
+                            })
+                          }
+                          placeholder='#ffffff'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetBorderColor'>Цвет рамки</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetBorderColor'
+                          type='color'
+                          value={widgetSettings.widgetBorderColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetBorderColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetBorderColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetBorderColor: e.target.value
+                            })
+                          }
+                          placeholder='#e5e7eb'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetTextColor'>Цвет текста</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetTextColor'
+                          type='color'
+                          value={widgetSettings.widgetTextColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetTextColor: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetTextColor}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetTextColor: e.target.value
+                            })
+                          }
+                          placeholder='#1f2937'
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-4 md:grid-cols-2'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetButtonBackground'>
+                        Цвет кнопки
+                      </Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetButtonBackground'
+                          type='color'
+                          value={widgetSettings.widgetButtonBackground}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetButtonBackground: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetButtonBackground}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetButtonBackground: e.target.value
+                            })
+                          }
+                          placeholder='#3b82f6'
+                        />
+                      </div>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetButtonText'>Текст кнопки</Label>
+                      <div className='flex gap-2'>
+                        <Input
+                          id='widgetButtonText'
+                          type='color'
+                          value={widgetSettings.widgetButtonText}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetButtonText: e.target.value
+                            })
+                          }
+                          className='h-10 w-16 p-1'
+                        />
+                        <Input
+                          value={widgetSettings.widgetButtonText}
+                          onChange={(e) =>
+                            setWidgetSettings({
+                              ...widgetSettings,
+                              widgetButtonText: e.target.value
+                            })
+                          }
+                          placeholder='#ffffff'
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Шрифты */}
+                <div className='space-y-4'>
+                  <h4 className='text-sm font-medium'>Шрифты</h4>
+                  <div className='grid gap-4 md:grid-cols-2'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetFontFamily'>
+                        Семейство шрифтов
+                      </Label>
+                      <select
+                        id='widgetFontFamily'
+                        className='border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
+                        value={widgetSettings.widgetFontFamily}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            widgetFontFamily: e.target.value
+                          })
+                        }
+                      >
+                        <option value='system-ui, -apple-system, sans-serif'>
+                          Системный (по умолчанию)
+                        </option>
+                        <option value='"Inter", sans-serif'>Inter</option>
+                        <option value='"Montserrat", sans-serif'>
+                          Montserrat
+                        </option>
+                        <option value='"Poppins", sans-serif'>Poppins</option>
+                        <option value='"Roboto", sans-serif'>Roboto</option>
+                      </select>
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetFontSize'>Размер шрифта</Label>
+                      <Input
+                        id='widgetFontSize'
+                        value={widgetSettings.widgetFontSize}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            widgetFontSize: e.target.value
+                          })
+                        }
+                        placeholder='14px'
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Размеры */}
+                <div className='space-y-4'>
+                  <h4 className='text-sm font-medium'>Размеры и отступы</h4>
+                  <div className='grid gap-4 md:grid-cols-3'>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetBorderRadius'>
+                        Скругление углов
+                      </Label>
+                      <Input
+                        id='widgetBorderRadius'
+                        value={widgetSettings.widgetBorderRadius}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            widgetBorderRadius: e.target.value
+                          })
+                        }
+                        placeholder='8px'
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetPadding'>Внутренние отступы</Label>
+                      <Input
+                        id='widgetPadding'
+                        value={widgetSettings.widgetPadding}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            widgetPadding: e.target.value
+                          })
+                        }
+                        placeholder='16px'
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor='widgetBoxShadow'>Тень</Label>
+                      <Input
+                        id='widgetBoxShadow'
+                        value={widgetSettings.widgetBoxShadow}
+                        onChange={(e) =>
+                          setWidgetSettings({
+                            ...widgetSettings,
+                            widgetBoxShadow: e.target.value
+                          })
+                        }
+                        placeholder='0 1px 3px rgba(0,0,0,0.1)'
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Кнопка сохранения */}
+                <div className='flex justify-end'>
+                  <Button onClick={saveWidgetSettings} disabled={saving}>
+                    <Save className='mr-2 h-4 w-4' />
+                    {saving ? 'Сохранение...' : 'Сохранить настройки'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
