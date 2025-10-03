@@ -35,11 +35,11 @@
       apiUrl: 'https://bonus.example.com',
       bonusToRuble: 1,
       minOrderAmount: 100,
-      debug: false, // ВЫКЛЮЧЕНО для продакшена
+      debug: true, // ВКЛЮЧЕНО для отладки
       debounceMs: 400,
       maxRetries: 3,
       timeout: 10000,
-      enableLogging: false, // Полностью отключаем логирование в продакшене
+      enableLogging: true, // ВКЛЮЧЕНО для отладки
       rateLimitMs: 1000, // Минимальный интервал между API запросами
       maxConcurrentRequests: 2 // Максимум одновременных запросов
     },
@@ -2782,9 +2782,13 @@
 
     // Применение бонусов
     applyBonuses: async function () {
+      console.log('🎯 applyBonuses: НАЧАЛО');
+
       // Проверяем, может ли пользователь тратить бонусы
       if (!this.canSpendBonuses()) {
+        console.log('❌ applyBonuses: пользователь не может тратить бонусы');
         const userState = this.getUserState();
+        console.log('👤 applyBonuses: userState =', userState);
         if (userState === 'not_registered') {
           this.showError(
             'Для использования бонусов необходимо зарегистрироваться и подтвердить аккаунт в Telegram боте'
@@ -2798,7 +2802,9 @@
       }
 
       const amountInput = document.getElementById('bonus-amount-input');
+      console.log('📝 applyBonuses: amountInput =', amountInput);
       const amount = parseFloat(amountInput.value) || 0;
+      console.log('💰 applyBonuses: amount =', amount);
 
       if (amount <= 0) {
         this.showError('Укажите количество бонусов');
