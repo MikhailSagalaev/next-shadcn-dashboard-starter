@@ -127,35 +127,10 @@
       // Инициализируем UI
       this.initUI();
 
-      // Ждём полной готовности DOM перед созданием виджета
-      setTimeout(() => {
-        console.log('🔧 init: создаём виджет после задержки');
-
-        // Создаём виджет (с переключателем бонусы/промокод)
-        this.createWidget();
-
-        // Скрываем поле промокода Tilda по умолчанию
-        const tildaPromoWrapper = document.querySelector(
-          '.t-inputpromocode__wrapper'
-        );
-        if (tildaPromoWrapper) {
-          tildaPromoWrapper.style.display = 'none';
-          this.state.promoWrapper = tildaPromoWrapper;
-          console.log('✅ init: поле промокода Tilda сохранено и скрыто');
-        }
-
-        // Проверяем пользователя и показываем нужный контент
-        const userContact = this.getUserContact();
-        if (userContact) {
-          console.log('👤 init: пользователь найден, загружаем баланс');
-          this.loadUserBalance(userContact);
-        } else {
-          console.log(
-            '👤 init: пользователь не найден, показываем плашку регистрации'
-          );
-          this.showRegistrationPrompt();
-        }
-      }, 300);
+      // Виджет НЕ создаётся при init - он создаётся в зависимости от состояния:
+      // 1. not_registered -> showRegistrationPrompt() (плашка ВМЕСТО виджета)
+      // 2. registered_not_confirmed -> createWidget() + уведомление
+      // 3. fully_activated -> createWidget() + баланс
 
       // Отслеживаем изменения в корзине
       this.observeCart();
@@ -985,11 +960,11 @@
       // Контейнер создаём лениво — только когда пользователь найден
     },
 
-    // Создание виджета
+    // Создание виджета (ТОЛЬКО для зарегистрированных пользователей)
     createWidget: function () {
       // Не вставляем повторно
       if (document.querySelector('.bonus-widget-container')) {
-        this.log('Виджет уже добавлен, пропускаем');
+        console.log('✅ Виджет уже существует');
         return;
       }
 
@@ -998,7 +973,7 @@
         '.t-inputpromocode__wrapper'
       );
       if (!promocodeWrapper) {
-        this.log('Контейнер поля промокода не найден');
+        console.warn('⚠️ Контейнер поля промокода не найден');
         return;
       }
 
@@ -1011,7 +986,6 @@
           <button id="promo-tab" type="button" class="bonus-toggle-btn" onclick="TildaBonusWidget.switchMode('promo')">Промокод</button>
         </div>
         <div id="bonus-content-area">
-          <!-- Здесь будет баланс и форма бонусов ИЛИ плашка регистрации -->
           <div class="bonus-balance" style="display: none;">
             Ваш баланс: <span class="bonus-balance-amount">0</span> бонусов
           </div>
@@ -1027,18 +1001,19 @@
               Применить бонусы
             </button>
           </div>
-          <div id="registration-prompt-container"></div>
+          <div id="verification-notice" style="display: none;"></div>
         </div>
         <div id="bonus-status"></div>
       `;
 
-      // Вставляем виджет ПЕРЕД полем промокода, а не вместо него
+      // Вставляем виджет ПЕРЕД полем промокода
       promocodeWrapper.parentNode.insertBefore(container, promocodeWrapper);
 
-      // Сохраняем ссылку на оригинальный wrapper промокода
+      // Скрываем поле промокода Tilda по умолчанию (показываем при переключении на таб)
+      promocodeWrapper.style.display = 'none';
       this.state.promoWrapper = promocodeWrapper;
 
-      console.log('✅ Виджет добавлен перед полем промокода');
+      console.log('✅ Виджет создан и добавлен перед полем промокода');
     },
 
     // Гарантированно вставить виджет, если его ещё нет
@@ -1434,19 +1409,24 @@
           botUsername
         });
 
-        // Ищем контейнер для плашки внутри виджета
-        const promptContainer = document.getElementById(
-          'registration-prompt-container'
+        // Ищем контейнер поля промокода (плашка показывается ВМЕСТО виджета)
+        const promocodeWrapper = document.querySelector(
+          '.t-inputpromocode__wrapper'
         );
-        if (!promptContainer) {
-          console.error('❌ Контейнер для плашки не найден');
+        if (!promocodeWrapper) {
+          console.error('❌ Контейнер поля промокода не найден');
           return;
         }
 
-        // Удаляем существующую плашку перед добавлением новой
-        promptContainer.innerHTML = '';
+        // Удаляем существующую плашку
+        const existingPrompt = promocodeWrapper.parentNode.querySelector(
+          '.registration-prompt-inline'
+        );
+        if (existingPrompt) {
+          existingPrompt.remove();
+        }
 
-        // Создаем плашку регистрации внутри виджета
+        // Создаем плашку регистрации
         const promptDiv = document.createElement('div');
         promptDiv.className = 'registration-prompt-inline';
         // Используем стилевые настройки или значения по умолчанию
@@ -1591,8 +1571,8 @@
 
         promptDiv.innerHTML = htmlContent;
 
-        // Добавляем плашку в контейнер внутри виджета
-        promptContainer.appendChild(promptDiv);
+        // Добавляем плашку ПЕРЕД полем промокода
+        promocodeWrapper.parentNode.insertBefore(promptDiv, promocodeWrapper);
 
         this.log('✅ Плашка регистрации успешно отображена:', {
           welcomeBonusAmount,
