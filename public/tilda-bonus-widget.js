@@ -127,17 +127,35 @@
       // Инициализируем UI
       this.initUI();
 
-      // Создаём виджет сразу (с переключателем бонусы/промокод)
-      this.createWidget();
+      // Ждём полной готовности DOM перед созданием виджета
+      setTimeout(() => {
+        console.log('🔧 init: создаём виджет после задержки');
 
-      // Скрываем поле промокода Tilda по умолчанию (показываем только при переключении на таб "Промокод")
-      const tildaPromoWrapper = document.querySelector(
-        '.t-inputpromocode__wrapper'
-      );
-      if (tildaPromoWrapper) {
-        tildaPromoWrapper.style.display = 'none';
-        this.state.promoWrapper = tildaPromoWrapper;
-      }
+        // Создаём виджет (с переключателем бонусы/промокод)
+        this.createWidget();
+
+        // Скрываем поле промокода Tilda по умолчанию
+        const tildaPromoWrapper = document.querySelector(
+          '.t-inputpromocode__wrapper'
+        );
+        if (tildaPromoWrapper) {
+          tildaPromoWrapper.style.display = 'none';
+          this.state.promoWrapper = tildaPromoWrapper;
+          console.log('✅ init: поле промокода Tilda сохранено и скрыто');
+        }
+
+        // Проверяем пользователя и показываем нужный контент
+        const userContact = this.getUserContact();
+        if (userContact) {
+          console.log('👤 init: пользователь найден, загружаем баланс');
+          this.loadUserBalance(userContact);
+        } else {
+          console.log(
+            '👤 init: пользователь не найден, показываем плашку регистрации'
+          );
+          this.showRegistrationPrompt();
+        }
+      }, 300);
 
       // Отслеживаем изменения в корзине
       this.observeCart();
@@ -1899,15 +1917,27 @@
 
       const bonusTab = document.getElementById('bonus-tab');
       const promoTab = document.getElementById('promo-tab');
-      const bonusSection = document.getElementById('bonus-section');
-      const bonusBalance = document.querySelector('.bonus-balance');
+      const bonusContentArea = document.getElementById('bonus-content-area');
       const tildaPromoWrapper =
         this.state.promoWrapper ||
         document.querySelector('.t-inputpromocode__wrapper');
 
-      if (!bonusTab || !promoTab || !bonusSection) {
-        console.warn('⚠️ switchMode: не найдены необходимые элементы');
+      if (!bonusTab || !promoTab) {
+        console.warn('⚠️ switchMode: не найдены табы');
         return;
+      }
+
+      // Очищаем промокод из window.tcart при переключении
+      if (typeof window.tcart !== 'undefined' && window.tcart.promocode) {
+        delete window.tcart.promocode;
+        console.log('🧹 switchMode: очищен window.tcart.promocode');
+
+        // Пересчитываем корзину
+        if (typeof window.tcart__reDrawTotal === 'function') {
+          try {
+            window.tcart__reDrawTotal();
+          } catch (e) {}
+        }
       }
 
       if (this.state.mode === 'promo') {
@@ -1916,9 +1946,11 @@
         bonusTab.classList.remove('active');
         promoTab.classList.add('active');
 
-        // Скрываем секцию бонусов
-        bonusSection.style.display = 'none';
-        if (bonusBalance) bonusBalance.style.display = 'none';
+        // Скрываем весь контент бонусов
+        if (bonusContentArea) {
+          bonusContentArea.style.display = 'none';
+          console.log('✅ switchMode: скрыт bonus-content-area');
+        }
 
         // Показываем оригинальное поле промокода Tilda
         if (tildaPromoWrapper) {
@@ -1931,9 +1963,11 @@
         promoTab.classList.remove('active');
         bonusTab.classList.add('active');
 
-        // Показываем секцию бонусов
-        bonusSection.style.display = 'flex';
-        if (bonusBalance) bonusBalance.style.display = 'block';
+        // Показываем контент бонусов
+        if (bonusContentArea) {
+          bonusContentArea.style.display = 'block';
+          console.log('✅ switchMode: показан bonus-content-area');
+        }
 
         // Скрываем поле промокода Tilda
         if (tildaPromoWrapper) {
@@ -1942,7 +1976,7 @@
         }
       }
 
-      // Сбрасываем применённые бонусы при переключении
+      // Сбрасываем применённые бонусы
       this.resetAppliedBonuses();
     },
 
