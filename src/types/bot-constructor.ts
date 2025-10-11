@@ -155,17 +155,80 @@ export interface ConditionConfig {
 }
 
 export interface MiddlewareConfig {
-  type: 'logging' | 'auth' | 'rate_limit' | 'validation' | 'custom';
+  type:
+    | 'logging'
+    | 'auth'
+    | 'rate_limit'
+    | 'validation'
+    | 'custom'
+    | 'timeout'
+    | 'session'
+    | 'error_handler';
+  enabled?: boolean; // Включен ли middleware
   priority: number; // Порядок выполнения (0-100)
   condition?: string; // Условие выполнения (JavaScript код)
   code?: string; // Пользовательский код middleware
   skipNext?: boolean; // Прервать цепочку выполнения
+
+  // Специфичные поля для разных типов middleware
+  auth?: {
+    required: boolean;
+    checkTelegramLinked: boolean;
+    customCheck: string;
+    onFailure: string;
+  };
+  rateLimit?: {
+    maxRequests: number;
+    windowMs: number;
+    blockDuration: number;
+    customKey: string;
+  };
+  timeout?: {
+    duration: number;
+    action: 'continue' | 'stop';
+    onTimeout: string;
+    retryCount: number;
+  };
+  logging?: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    includeContext: boolean;
+    customMessage: string;
+    includeUserId: boolean;
+    includeTimestamp: boolean;
+    logVariables: string[];
+  };
+  validation?: {
+    rules: string[];
+    strict: boolean;
+    onFailure: string;
+    customValidation: string;
+  };
+  session?: {
+    required: boolean;
+    createIfMissing: boolean;
+    operations: any[];
+    variables: Record<string, any>;
+  };
+  errorHandler?: {
+    catchAll: boolean;
+    customHandler: string;
+    catchTypes: string[];
+    fallbackAction: string;
+    retryAttempts: number;
+  };
+  custom?: {
+    name: string;
+    parameters: Record<string, any>;
+    code: string;
+    async: boolean;
+    variables: string[];
+  };
 }
 
 export interface SessionConfig {
   key: string; // Ключ переменной сессии
   value: any; // Значение для установки
-  operation:
+  operation?:
     | 'set'
     | 'get'
     | 'delete'
@@ -173,7 +236,23 @@ export interface SessionConfig {
     | 'decrement'
     | 'append'
     | 'prepend';
+  operations?: SessionOperation[]; // Массив операций
   variableName?: string; // Имя переменной для сохранения результата
+}
+
+export interface SessionOperation {
+  id: string;
+  type:
+    | 'set'
+    | 'get'
+    | 'delete'
+    | 'increment'
+    | 'decrement'
+    | 'append'
+    | 'prepend';
+  value?: any;
+  deepMerge?: boolean; // Для глубокого слияния объектов
+  customCode?: string; // Пользовательский код
 }
 
 export interface ActionConfig {
@@ -184,6 +263,7 @@ export interface ActionConfig {
     | 'variable'
     | 'notification'
     | 'delay';
+  externalApi?: Record<string, any>; // Конфигурация для external API
   config: ActionDetails & {
     // Grammy-specific actions
     grammyMethod?: string; // ctx.api.sendMessage, ctx.reply и т.д.

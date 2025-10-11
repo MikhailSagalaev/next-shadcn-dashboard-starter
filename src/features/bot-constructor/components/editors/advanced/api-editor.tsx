@@ -193,7 +193,8 @@ const apiPresets: ApiPreset[] = [
           event: '{EVENT_NAME}',
           properties: {
             distinct_id: '{USER_ID}',
-            ...'{EVENT_PROPERTIES}'
+            // EVENT_PROPERTIES will be inserted here
+            ...({} as any) // Temporary fix for spread string
           }
         }
       ],

@@ -8,14 +8,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { NotificationService } from '@/lib/services/notification.service';
-import {
-  NotificationType,
-  NotificationChannel,
-  NotificationPriority
-} from '@/types/notification';
-import { logger } from '@/lib/logger';
-import { withApiRateLimit } from '@/lib';
+import { ProjectNotificationService } from '../../../../../lib/services/project-notification.service';
+import { logger } from '../../../../../lib/logger';
+import { withApiRateLimit } from '../../../../../lib/with-rate-limit';
 
 async function handleGET(
   request: NextRequest,
@@ -25,10 +20,11 @@ async function handleGET(
     const { id: projectId } = await params;
 
     // Получаем шаблоны уведомлений
-    const templates = await NotificationService.getTemplates(projectId);
+    const templates = await ProjectNotificationService.getTemplates(projectId);
 
     // Получаем логи уведомлений
-    const logs = await NotificationService.getNotificationLogs(projectId);
+    const logs =
+      await ProjectNotificationService.getNotificationLogs(projectId);
 
     return NextResponse.json({
       success: true,
@@ -56,29 +52,22 @@ async function handlePOST(
     const { id: projectId } = await params;
     const body = await request.json();
 
-    // Валидация типа уведомления
-    if (!body.type || !Object.values(NotificationType).includes(body.type)) {
-      return NextResponse.json(
-        { error: 'Неверный тип уведомления' },
-        { status: 400 }
-      );
-    }
-
-    // Валидация типа канала
-    if (
-      !body.channel ||
-      !Object.values(NotificationChannel).includes(body.channel)
-    ) {
-      return NextResponse.json(
-        { error: 'Неверный канал отправки' },
-        { status: 400 }
-      );
-    }
-
     // Валидация обязательных полей
-    if (!body.title || !body.message) {
+    if (!body.channel || !body.title || !body.message) {
       return NextResponse.json(
-        { error: 'Отсутствуют обязательные поля: title, message' },
+        { error: 'Отсутствуют обязательные поля: channel, title, message' },
+        { status: 400 }
+      );
+    }
+
+    // Валидация канала
+    const validChannels = ['telegram', 'email', 'sms', 'push'];
+    if (!validChannels.includes(body.channel)) {
+      return NextResponse.json(
+        {
+          error:
+            'Неверный канал отправки. Допустимые: telegram, email, sms, push'
+        },
         { status: 400 }
       );
     }
@@ -94,45 +83,41 @@ async function handlePOST(
       userIds = body.userIds;
     } else {
       // Отправка всем пользователям проекта
-      const users = await NotificationService.getProjectUsers(projectId);
-      userIds = users.map((user: { id: string }) => user.id);
+      const users = await ProjectNotificationService.getProjectUsers(projectId);
+      userIds = users.map((user: any) => user.id);
     }
 
-    // Готовим данные для отправки
-    const notificationData = {
-      type: body.type as NotificationType,
-      channel: body.channel as NotificationChannel,
-      priority: body.priority || NotificationPriority.MEDIUM,
-      title: body.title,
-      message: body.message,
-      imageUrl: body.imageUrl,
-      buttons: body.buttons
-    };
+    if (userIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Не найдено пользователей для отправки' },
+        { status: 400 }
+      );
+    }
 
-    // Отправляем уведомления
-    const results = await Promise.all(
-      userIds.map((userId) =>
-        NotificationService.send({
-          ...notificationData,
-          userId,
-          projectId
-        })
-      )
+    // Отправляем уведомления массово
+    const result = await ProjectNotificationService.sendBulk(
+      projectId,
+      userIds,
+      {
+        type: body.type || 'custom',
+        channel: body.channel as string,
+        title: body.title,
+        message: body.message,
+        metadata: {
+          imageUrl: body.imageUrl,
+          buttons: body.buttons,
+          priority: body.priority || 'medium'
+        }
+      }
     );
-
-    // Подсчитываем результаты
-    const sent = results.filter((r: { success: boolean }) => r.success).length;
-    const failed = results.filter(
-      (r: { success: boolean }) => !r.success
-    ).length;
 
     return NextResponse.json({
       success: true,
       data: {
-        sent,
-        failed,
-        total: userIds.length,
-        results: results.filter((r: { success: boolean }) => !r.success) // Возвращаем только ошибки
+        sent: result.sent,
+        failed: result.failed,
+        total: result.total,
+        results: result.results.filter((r) => !r.success) // Возвращаем только ошибки
       }
     });
   } catch (error) {

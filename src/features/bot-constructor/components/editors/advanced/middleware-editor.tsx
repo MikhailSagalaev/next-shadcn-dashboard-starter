@@ -111,6 +111,7 @@ const middlewareTemplates: MiddlewareTemplate[] = [
       enabled: true,
       timeout: {
         duration: 30000,
+        action: 'continue',
         onTimeout: 'continue',
         retryCount: 0
       }
@@ -129,6 +130,7 @@ const middlewareTemplates: MiddlewareTemplate[] = [
       enabled: true,
       logging: {
         level: 'info',
+        includeContext: true,
         includeUserId: true,
         includeTimestamp: true,
         customMessage: '',
@@ -149,6 +151,7 @@ const middlewareTemplates: MiddlewareTemplate[] = [
       enabled: true,
       validation: {
         rules: [],
+        strict: false,
         onFailure: 'stop',
         customValidation: ''
       }
@@ -164,6 +167,8 @@ const middlewareTemplates: MiddlewareTemplate[] = [
       type: 'session',
       enabled: true,
       session: {
+        required: true,
+        createIfMissing: true,
         operations: [],
         variables: {}
       }
@@ -179,6 +184,7 @@ const middlewareTemplates: MiddlewareTemplate[] = [
       type: 'error_handler',
       enabled: true,
       errorHandler: {
+        catchAll: true,
         catchTypes: ['all'],
         fallbackAction: 'continue',
         customHandler: '',
@@ -198,6 +204,8 @@ const middlewareTemplates: MiddlewareTemplate[] = [
       type: 'custom',
       enabled: true,
       custom: {
+        name: 'custom_middleware',
+        parameters: {},
         code: '',
         async: false,
         variables: []

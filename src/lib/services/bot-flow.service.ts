@@ -7,8 +7,8 @@
  * @author: AI Assistant + User
  */
 
-import { db } from '@/lib/db';
-import { logger } from '@/lib/logger';
+import { db } from '../db';
+import { logger } from '../logger';
 import type {
   BotFlow,
   BotSession,
@@ -19,7 +19,7 @@ import type {
   CompiledFlow,
   BotNode,
   BotConnection
-} from '@/types/bot-constructor';
+} from '../../types/bot-constructor';
 
 export class BotFlowService {
   /**
@@ -232,6 +232,170 @@ export class BotFlowService {
   }
 
   /**
+   * Создание сессии для потока
+   */
+  static async createSession(
+    projectId: string,
+    userId: string,
+    flowId: string,
+    variables: Record<string, any> = {}
+  ): Promise<BotSession> {
+    try {
+      const session = await db.botSession.create({
+        data: {
+          projectId,
+          userId,
+          flowId,
+          state: {
+            currentNodeId: null,
+            stack: [],
+            retryCount: 0,
+            lastActivity: new Date()
+          },
+          variables,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 часа
+        }
+      });
+
+      logger.info('Bot session created', {
+        sessionId: session.id,
+        flowId,
+        userId
+      });
+
+      return this.mapDbSessionToBotSession(session);
+    } catch (error) {
+      logger.error('Failed to create bot session', {
+        projectId,
+        userId,
+        flowId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение сессии пользователя
+   */
+  static async getSession(
+    projectId: string,
+    userId: string,
+    flowIdOrStatus?: string
+  ): Promise<BotSession | null> {
+    try {
+      const where: any = { projectId, userId };
+
+      // Если передан flowId, ищем сессию конкретного потока
+      if (
+        flowIdOrStatus &&
+        flowIdOrStatus !== 'active' &&
+        flowIdOrStatus !== 'all'
+      ) {
+        where.flowId = flowIdOrStatus;
+      } else {
+        // По умолчанию ищем активные сессии
+        const status = flowIdOrStatus === 'all' ? 'all' : 'active';
+        if (status === 'active') {
+          where.expiresAt = { gt: new Date() };
+        }
+      }
+
+      const session = await db.botSession.findFirst({
+        where,
+        orderBy: { createdAt: 'desc' }
+      });
+
+      return session ? this.mapDbSessionToBotSession(session) : null;
+    } catch (error) {
+      logger.error('Failed to get bot session', {
+        projectId,
+        userId,
+        flowIdOrStatus,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Обновление сессии
+   */
+  static async updateSession(
+    sessionId: string,
+    updates: Partial<{
+      state: any;
+      variables: Record<string, any>;
+      expiresAt: Date;
+    }>
+  ): Promise<BotSession> {
+    try {
+      const updateData: any = {};
+      if (updates.state !== undefined) updateData.state = updates.state;
+      if (updates.variables !== undefined)
+        updateData.variables = updates.variables;
+      if (updates.expiresAt !== undefined)
+        updateData.expiresAt = updates.expiresAt;
+
+      const session = await db.botSession.update({
+        where: { id: sessionId },
+        data: updateData
+      });
+
+      return this.mapDbSessionToBotSession(session);
+    } catch (error) {
+      logger.error('Failed to update bot session', {
+        sessionId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Удаление сессии
+   */
+  static async deleteSession(sessionId: string): Promise<void> {
+    try {
+      await db.botSession.delete({
+        where: { id: sessionId }
+      });
+
+      logger.info('Bot session deleted', { sessionId });
+    } catch (error) {
+      logger.error('Failed to delete bot session', {
+        sessionId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Удаление просроченных сессий
+   */
+  static async cleanupExpiredSessions(): Promise<number> {
+    try {
+      const result = await db.botSession.deleteMany({
+        where: {
+          expiresAt: { lt: new Date() }
+        }
+      });
+
+      logger.info('Expired sessions cleaned up', {
+        deletedCount: result.count
+      });
+
+      return result.count;
+    } catch (error) {
+      logger.error('Failed to cleanup expired sessions', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Валидация потока
    */
   static validateFlow(
@@ -419,159 +583,6 @@ export class BotFlowService {
           error instanceof Error ? error.message : 'Unknown compilation error'
         ]
       };
-    }
-  }
-
-  /**
-   * Управление сессиями
-   */
-  static async createSession(
-    projectId: string,
-    userId: string,
-    flowId: string,
-    initialState?: any
-  ): Promise<BotSession> {
-    try {
-      // Устанавливаем срок жизни сессии (24 часа)
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
-
-      const session = await db.botSession.create({
-        data: {
-          projectId,
-          userId,
-          flowId,
-          state: initialState || {
-            currentNodeId: '',
-            stack: [],
-            retryCount: 0,
-            lastActivity: new Date()
-          },
-          variables: {},
-          expiresAt
-        }
-      });
-
-      logger.info('Bot session created', {
-        projectId,
-        userId,
-        flowId,
-        sessionId: session.id
-      });
-
-      return this.mapDbSessionToBotSession(session);
-    } catch (error) {
-      logger.error('Failed to create bot session', {
-        projectId,
-        userId,
-        flowId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
-    }
-  }
-
-  static async getSession(
-    projectId: string,
-    userId: string,
-    flowId: string
-  ): Promise<BotSession | null> {
-    try {
-      const session = await db.botSession.findUnique({
-        where: {
-          projectId_userId_flowId: {
-            projectId,
-            userId,
-            flowId
-          }
-        }
-      });
-
-      if (!session) return null;
-
-      // Проверяем срок жизни
-      if (session.expiresAt < new Date()) {
-        await this.deleteSession(session.id);
-        return null;
-      }
-
-      return this.mapDbSessionToBotSession(session);
-    } catch (error) {
-      logger.error('Failed to get bot session', {
-        projectId,
-        userId,
-        flowId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
-    }
-  }
-
-  static async updateSession(
-    sessionId: string,
-    updates: Partial<BotSession>
-  ): Promise<void> {
-    try {
-      const updateData: any = {};
-
-      if (updates.state !== undefined) updateData.state = updates.state;
-      if (updates.variables !== undefined)
-        updateData.variables = updates.variables;
-      if (updates.expiresAt !== undefined)
-        updateData.expiresAt = updates.expiresAt;
-
-      updateData.updatedAt = new Date();
-
-      await db.botSession.update({
-        where: { id: sessionId },
-        data: updateData
-      });
-    } catch (error) {
-      logger.error('Failed to update bot session', {
-        sessionId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
-    }
-  }
-
-  static async deleteSession(sessionId: string): Promise<void> {
-    try {
-      await db.botSession.delete({
-        where: { id: sessionId }
-      });
-
-      logger.info('Bot session deleted', { sessionId });
-    } catch (error) {
-      logger.error('Failed to delete bot session', {
-        sessionId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Очистка истекших сессий
-   */
-  static async cleanupExpiredSessions(): Promise<number> {
-    try {
-      const result = await db.botSession.deleteMany({
-        where: {
-          expiresAt: {
-            lt: new Date()
-          }
-        }
-      });
-
-      logger.info('Expired sessions cleaned up', { count: result.count });
-
-      return result.count;
-    } catch (error) {
-      logger.error('Failed to cleanup expired sessions', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
     }
   }
 

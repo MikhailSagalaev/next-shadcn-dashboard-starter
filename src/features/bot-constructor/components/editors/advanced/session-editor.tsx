@@ -107,7 +107,10 @@ export const SessionEditor: React.FC<SessionEditorProps> = ({
   availableVariables
 }) => {
   const [operations, setOperations] = useState<SessionOperation[]>(
-    config.operations || []
+    config.operations ||
+      (config.operation
+        ? [{ id: '1', type: config.operation, value: config.value }]
+        : [])
   );
   const [selectedOperation, setSelectedOperation] =
     useState<SessionOperation | null>(null);

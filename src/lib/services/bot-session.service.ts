@@ -10,7 +10,7 @@
 import { session } from 'grammy';
 import type { Context, SessionFlavor } from 'grammy';
 import { BotFlowService } from './bot-flow.service';
-import { logger } from '@/lib/logger';
+import { logger } from '../logger';
 
 // Расширенный интерфейс сессии для конструктора ботов
 export interface BotConstructorSession {
@@ -108,11 +108,11 @@ export class BotSessionService {
               return;
             }
 
-            // Получаем или создаем сессию потока
+            // Получаем активную сессию потока
             let flowSession = await BotFlowService.getSession(
               projectId,
               userId,
-              session.currentFlowId
+              'active'
             );
 
             if (!flowSession) {
