@@ -1,0 +1,495 @@
+{
+  "id": "cmgqm22x90001v8c8yz6gj4q7",
+  "projectId": "cmgntgsdv0000v8mwfwwh30az",
+  "name": "Система лояльности (шаблон)",
+  "description": "Умная система лояльности: проверка существующих пользователей, регистрация новых и начисление приветственных бонусов",
+  "isActive": true,
+  "nodes": [
+    {
+      "id": "start-trigger",
+      "data": {
+        "label": "Команда /start",
+        "config": {
+          "trigger.command": {
+            "command": "/start"
+          }
+        }
+      },
+      "type": "trigger.command",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": -21.54884547069273,
+        "y": 208.0142095914742
+      },
+      "selected": false
+    },
+    {
+      "id": "check-existing-user",
+      "data": {
+        "label": "Проверить существующего пользователя",
+        "config": {
+          "action.database_query": {
+            "query": "check_user_by_telegram",
+            "parameters": {
+              "telegramId": "{{telegram.userId}}"
+            },
+            "assignTo": "user"
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 269.8579040852576,
+        "y": 197.3285968028419
+      },
+      "selected": false
+    },
+    {
+      "id": "user-exists-check",
+      "data": {
+        "label": "Пользователь существует?",
+        "config": {
+          "condition": {
+            "variable": "user",
+            "operator": "is_not_empty"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 580.0195381882771,
+        "y": 196.6767317939609
+      },
+      "selected": false
+    },
+    {
+      "id": "welcome-message",
+      "data": {
+        "label": "Приветствие для новых",
+        "config": {
+          "message": {
+            "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📱 Для регистрации, пожалуйста, поделитесь вашим номером телефона.\n\n✨ После регистрации вы получите:\n• 100 приветственных бонусов\n• Персональный реферальный код\n• Доступ к программе лояльности",
+            "keyboard": {
+              "type": "reply",
+              "buttons": [
+                [
+                  {
+                    "text": "📱 Поделиться номером",
+                    "request_contact": true
+                  }
+                ]
+              ]
+            }
+          }
+        },
+        "description": ""
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 890.0195381882771,
+        "y": 50.6767317939609
+      },
+      "selected": false
+    },
+    {
+      "id": "check-user",
+      "data": {
+        "label": "Проверить пользователя по контакту",
+        "config": {
+          "action.database_query": {
+            "query": "check_user_by_telegram",
+            "parameters": {
+              "phone": "{{telegram.contact.phoneNumber}}",
+              "telegramId": "{{telegram.userId}}"
+            },
+            "assignTo": "userByContact"
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1510.0195381882771,
+        "y": 50.6767317939609
+      },
+      "selected": false
+    },
+    {
+      "id": "is-new-user",
+      "data": {
+        "label": "Новый пользователь?",
+        "config": {
+          "condition": {
+            "variable": "userByContact",
+            "operator": "is_empty"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 631.1687388987567,
+        "y": 396.348134991119
+      },
+      "selected": false
+    },
+    {
+      "id": "create-user",
+      "data": {
+        "label": "Создать пользователя",
+        "config": {
+          "action.database_query": {
+            "query": "create_user",
+            "parameters": {
+              "email": "{{telegram.message.text}}",
+              "phone": "{{telegram.contact.phoneNumber}}",
+              "username": "{{telegram.username}}",
+              "firstName": "{{telegram.contact.firstName}}",
+              "telegramId": "{{telegram.userId}}"
+            }
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 967.9893428063943,
+        "y": 197.50621669627
+      },
+      "selected": false
+    },
+    {
+      "id": "add-welcome-bonus",
+      "data": {
+        "label": "Начислить бонусы",
+        "config": {
+          "action.database_query": {
+            "query": "add_bonus",
+            "parameters": {
+              "type": "welcome",
+              "amount": 100,
+              "userId": "{{user.id}}",
+              "description": "Приветственные бонусы"
+            }
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1267.410301953819,
+        "y": 198.841918294849
+      },
+      "selected": false
+    },
+    {
+      "id": "success-new-user",
+      "data": {
+        "label": "Успешная регистрация",
+        "config": {
+          "message": {
+            "text": "🎉 Поздравляем с регистрацией, {user.firstName}!\n\n💰 Вам начислено 100 приветственных бонусов!\n\n📊 Ваш профиль:\n• Баланс: {user.balanceFormatted}\n• Уровень: {user.currentLevel}\n• Реферальный код: {user.referralCode}\n\n✨ Используйте бонусы для покупок и приглашайте друзей!"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 1560.152753108348,
+        "y": 193.4991119005329
+      },
+      "selected": false
+    },
+    {
+      "id": "existing-user-message",
+      "data": {
+        "label": "Уже зарегистрирован",
+        "config": {
+          "message": {
+            "text": "👋 Рады видеть вас снова, {user.firstName}!\n\n💰 Ваш текущий баланс: {user.balanceFormatted}\n\n📊 Статистика:\n• Заработано: {user.totalEarnedFormatted}\n• Потрачено: {user.totalSpentFormatted}\n• Покупок на сумму: {user.totalPurchasesFormatted}\n• Уровень: {user.currentLevel}\n\n🛍️ Продолжайте делать покупки и копить бонусы!\n\n🎁 Реферальная программа:\nВаш код: {user.referralCode}\nСсылка: {user.referralLink}"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 1016.07460035524,
+        "y": 458.9484902309059
+      },
+      "selected": false
+    },
+    {
+      "id": "end-node",
+      "data": {
+        "label": "Завершение",
+        "config": {
+          "flow.end": {
+            "success": true
+          }
+        }
+      },
+      "type": "flow.end",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 78
+      },
+      "position": {
+        "x": 1341.321492007105,
+        "y": 750.3090586145647
+      },
+      "selected": false
+    }
+  ],
+  "connections": [
+    {
+      "id": "start-to-check-existing",
+      "type": "default",
+      "source": "start-trigger",
+      "target": "check-existing-user",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "check-existing-to-condition",
+      "type": "default",
+      "source": "check-existing-user",
+      "target": "user-exists-check",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "condition-to-welcome",
+      "type": "false",
+      "source": "user-exists-check",
+      "target": "welcome-message",
+      "sourceHandle": "false",
+      "targetHandle": "input"
+    },
+    {
+      "id": "welcome-to-check",
+      "type": "default",
+      "source": "welcome-message",
+      "target": "check-user",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "check-to-condition",
+      "type": "default",
+      "source": "check-user",
+      "target": "is-new-user",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "condition-to-create",
+      "type": "true",
+      "source": "is-new-user",
+      "target": "create-user",
+      "sourceHandle": "true",
+      "targetHandle": "input"
+    },
+    {
+      "id": "create-to-bonus",
+      "type": "default",
+      "source": "create-user",
+      "target": "add-welcome-bonus",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "bonus-to-success",
+      "type": "default",
+      "source": "add-welcome-bonus",
+      "target": "success-new-user",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "success-to-end",
+      "type": "default",
+      "source": "success-new-user",
+      "target": "end-node",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "condition-to-existing",
+      "type": "false",
+      "source": "is-new-user",
+      "target": "existing-user-message",
+      "sourceHandle": "false",
+      "targetHandle": "input"
+    },
+    {
+      "id": "user-exists-to-existing",
+      "type": "true",
+      "source": "user-exists-check",
+      "target": "existing-user-message",
+      "sourceHandle": "true",
+      "targetHandle": "input"
+    },
+    {
+      "id": "existing-to-end",
+      "type": "default",
+      "source": "existing-user-message",
+      "target": "end-node",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    },
+    {
+      "id": "edge-start-trigger-check-existing-user-1760449336408",
+      "type": "default",
+      "source": "start-trigger",
+      "target": "check-existing-user",
+      "animated": true
+    },
+    {
+      "id": "edge-check-existing-user-user-exists-check-1760449336409",
+      "type": "default",
+      "source": "check-existing-user",
+      "target": "user-exists-check",
+      "animated": true
+    },
+    {
+      "id": "edge-user-exists-check-welcome-message-1760449336410",
+      "type": "default",
+      "source": "user-exists-check",
+      "target": "welcome-message",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-user-exists-check-existing-user-message-1760449336411",
+      "type": "default",
+      "source": "user-exists-check",
+      "target": "existing-user-message",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-welcome-message-check-user-1760449344083",
+      "type": "default",
+      "source": "welcome-message",
+      "target": "check-user",
+      "animated": true
+    },
+    {
+      "id": "edge-check-user-is-new-user-1760449346456",
+      "type": "default",
+      "source": "check-user",
+      "target": "is-new-user",
+      "animated": true
+    },
+    {
+      "id": "edge-is-new-user-create-user-1760449350187",
+      "type": "default",
+      "source": "is-new-user",
+      "target": "create-user",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-create-user-add-welcome-bonus-1760449354323",
+      "type": "default",
+      "source": "create-user",
+      "target": "add-welcome-bonus",
+      "animated": true
+    },
+    {
+      "id": "edge-add-welcome-bonus-success-new-user-1760449360667",
+      "type": "default",
+      "source": "add-welcome-bonus",
+      "target": "success-new-user",
+      "animated": true
+    },
+    {
+      "id": "edge-success-new-user-end-node-1760449365359",
+      "type": "default",
+      "source": "success-new-user",
+      "target": "end-node",
+      "animated": true
+    },
+    {
+      "id": "edge-is-new-user-existing-user-message-1760449369999",
+      "type": "default",
+      "source": "is-new-user",
+      "target": "existing-user-message",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-existing-user-message-end-node-1760449371883",
+      "type": "default",
+      "source": "existing-user-message",
+      "target": "end-node",
+      "animated": true
+    }
+  ],
+  "variables": [
+    {
+      "id": "user",
+      "name": "user",
+      "type": "object",
+      "description": "Данные пользователя",
+      "defaultValue": null
+    },
+    {
+      "id": "welcome_bonus",
+      "name": "welcome_bonus",
+      "type": "number",
+      "description": "Размер приветственного бонуса",
+      "defaultValue": 100
+    }
+  ],
+  "settings": {
+    "retryAttempts": 3,
+    "maxExecutionTime": 60000
+  },
+  "createdAt": "2025-10-14T13:41:36.717Z",
+  "updatedAt": "2025-10-15T07:17:53.403Z"
+}

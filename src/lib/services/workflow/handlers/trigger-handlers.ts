@@ -1,0 +1,117 @@
+/**
+ * @file: src/lib/services/workflow/handlers/trigger-handlers.ts
+ * @description: Обработчики для trigger нод
+ * @project: SaaS Bonus System
+ * @dependencies: BaseNodeHandler, ExecutionContext
+ * @created: 2025-01-13
+ * @author: AI Assistant + User
+ */
+
+import { BaseNodeHandler } from './base-handler';
+import type {
+  WorkflowNode,
+  WorkflowNodeType,
+  ExecutionContext,
+  ValidationResult
+} from '@/types/workflow';
+
+/**
+ * Обработчик для trigger.command
+ */
+export class CommandTriggerHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'trigger.command';
+  }
+
+  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+    this.logStep(context, node, 'Executing command trigger', 'debug', {
+      command: node.data.config?.['trigger.command']?.command
+    });
+
+    // Trigger ноды просто передают управление следующей ноде
+    // Логика триггера уже проверена до вызова этого handler'а
+    // Следующий нод определяется по connections
+    return null;
+  }
+
+  async validate(config: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    if (!config?.command || typeof config.command !== 'string') {
+      errors.push('Command is required and must be a string');
+    }
+
+    if (config.command && !config.command.startsWith('/')) {
+      errors.push('Command must start with "/"');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+}
+
+/**
+ * Обработчик для trigger.message
+ */
+export class MessageTriggerHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'trigger.message';
+  }
+
+  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+    this.logStep(context, node, 'Executing message trigger', 'debug', {
+      pattern: node.data.config?.['trigger.message']?.pattern
+    });
+
+    // Следующий нод определяется по connections
+    return null;
+  }
+
+  async validate(config: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    // Message trigger может работать без паттерна (любое сообщение)
+    // или с паттерном регулярного выражения
+    if (config?.pattern && typeof config.pattern !== 'string') {
+      errors.push('Pattern must be a string');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+}
+
+/**
+ * Обработчик для trigger.callback
+ */
+export class CallbackTriggerHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'trigger.callback';
+  }
+
+  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+    this.logStep(context, node, 'Executing callback trigger', 'debug', {
+      callbackData: node.data.config?.['trigger.callback']?.callbackData
+    });
+
+    // Следующий нод определяется по connections
+    return null;
+  }
+
+  async validate(config: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    if (!config?.callbackData || typeof config.callbackData !== 'string') {
+      errors.push('Callback data is required and must be a string');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+}

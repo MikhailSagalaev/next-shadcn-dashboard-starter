@@ -8,15 +8,24 @@
  */
 
 import { Composer, Context } from 'grammy';
-// import { router } from '@grammyjs/router';
-// import { SessionFlavor } from 'grammy';
 import { logger } from '@/lib/logger';
 import { FlowExecutor } from './flow-executor';
 
 import type { BotConstructorSession } from '../bot-session.service';
 
+// Временные заглушки для Grammy Router
+type SessionFlavor<T> = {
+  session: T;
+};
+
 // Расширенный контекст
 type BotConstructorContext = Context & SessionFlavor<BotConstructorSession>;
+
+// Заглушка для router
+const router = (routes: Record<string, any>) => ({
+  route: (key: string | ((ctx: any) => string | number | symbol)) => (ctx: any) => {},
+  otherwise: (handler: any) => (ctx: any) => {}
+});
 
 export class RouterIntegration {
   private composer: Composer<BotConstructorContext>;
@@ -39,7 +48,7 @@ export class RouterIntegration {
    */
   private setupRouter(): void {
     // Создаем роутер на основе типа обновления
-    const route = router<BotConstructorContext>((ctx) => {
+    const route = router((ctx) => {
       const update = ctx.update;
 
       if (update.message) {
@@ -71,21 +80,29 @@ export class RouterIntegration {
     });
 
     // Обработчики для разных типов обновлений
-    this.composer.use(route);
+    this.composer.use(route.route((ctx) => {
+      const update = ctx.update;
+      if (update.message?.text?.startsWith('/')) return 'command';
+      if (update.message?.text) return 'text';
+      if (update.callback_query) return 'callback';
+      if (update.message) return 'other_message';
+      if (update.inline_query) return 'inline';
+      return 'unknown';
+    }));
 
     // Обработка команд
-    this.composer.route('command', this.handleCommand.bind(this));
+    this.composer.route((ctx) => 'command', this.handleCommand.bind(this));
 
     // Обработка текстовых сообщений
-    this.composer.route('text', this.handleTextMessage.bind(this));
+    this.composer.route((ctx) => 'text', this.handleTextMessage.bind(this));
 
     // Обработка callback'ов
-    this.composer.route('callback', this.handleCallback.bind(this));
+    this.composer.route((ctx) => 'callback', this.handleCallback.bind(this));
 
     // Обработка других типов
-    this.composer.route('other_message', this.handleOtherMessage.bind(this));
-    this.composer.route('inline', this.handleInlineQuery.bind(this));
-    this.composer.route('unknown', this.handleUnknown.bind(this));
+    this.composer.route((ctx) => 'other_message', this.handleOtherMessage.bind(this));
+    this.composer.route((ctx) => 'inline', this.handleInlineQuery.bind(this));
+    this.composer.route((ctx) => 'unknown', this.handleUnknown.bind(this));
   }
 
   /**

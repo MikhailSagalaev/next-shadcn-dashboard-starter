@@ -79,38 +79,16 @@ export class TelegramBotValidationService {
         logger.warn('Failed to get webhook info', { error: webhookError });
       }
 
-      // Проверяем возможность получения обновлений
-      let canReceiveUpdates = false;
-      let lastUpdate = null;
-
-      try {
-        // Пытаемся получить последние обновления (limit=1, timeout=1)
-        const updates = await tempBot.api.getUpdates({ limit: 1, timeout: 1 });
-        canReceiveUpdates = true;
-        if (updates.length > 0) {
-          const firstUpdate = updates[0];
-          if (firstUpdate.message?.date) {
-            lastUpdate = new Date(
-              firstUpdate.message.date * 1000
-            ).toISOString();
-          }
-        }
-      } catch (updateError) {
-        // Если getUpdates не работает из-за webhook, это нормально
-        const errorMessage =
-          updateError instanceof Error
-            ? updateError.message
-            : String(updateError);
-        if (errorMessage.includes('webhook')) {
-          canReceiveUpdates = true; // webhook активен, значит бот может получать обновления
-        }
-        logger.warn('Failed to check updates', { error: errorMessage });
-      }
+      // Определяем режим получения обновлений без вызова getUpdates,
+      // чтобы не сбивать активный long polling в BotManager
+      const hasWebhook = Boolean(webhookInfo?.url);
+      const canReceiveUpdates = hasWebhook || process.env.NODE_ENV !== 'production';
+      const lastUpdate = null;
 
       logger.info('Bot status checked successfully', {
         botId: botInfo.id.toString(),
         username: botInfo.username,
-        hasWebhook: webhookInfo?.url ? true : false,
+        hasWebhook,
         canReceiveUpdates
       });
 
@@ -124,7 +102,7 @@ export class TelegramBotValidationService {
           firstName: botInfo.first_name
         },
         connection: {
-          hasWebhook: webhookInfo?.url ? true : false,
+          hasWebhook,
           lastUpdate,
           canReceiveUpdates
         }
@@ -238,31 +216,10 @@ export class TelegramBotValidationService {
         webhookStatus = 'check failed';
       }
 
-      // 3. Проверяем возможность получения обновлений
-      let canReceiveUpdates = false;
-      let lastUpdateTime = null;
-
-      try {
-        const updates = await tempBot.api.getUpdates({ limit: 1, timeout: 2 });
-        canReceiveUpdates = true;
-        if (updates.length > 0) {
-          const firstUpdate = updates[0];
-          if (firstUpdate?.message?.date) {
-            lastUpdateTime = new Date(
-              firstUpdate.message.date * 1000
-            ).toLocaleString('ru-RU');
-          }
-        }
-      } catch (updateError) {
-        const updMsg =
-          updateError instanceof Error
-            ? updateError.message
-            : String(updateError);
-        if (updMsg.includes('webhook')) {
-          canReceiveUpdates = true;
-          webhookStatus = 'webhook active (polling disabled)';
-        }
-      }
+      // 3. Оцениваем возможность получения обновлений без getUpdates,
+      // чтобы не провоцировать конфликт polling/webhook
+      const canReceiveUpdates = webhookStatus !== 'not set' || process.env.NODE_ENV !== 'production';
+      const lastUpdateTime = null;
 
       // 4. Если указан тестовый чат, отправляем сообщение
       let canSendMessages = false;

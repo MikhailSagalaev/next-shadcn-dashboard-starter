@@ -8,6 +8,7 @@
  */
 
 import { Metadata } from 'next';
+import PageContainer from '@/components/layout/page-container';
 import { BotTemplatesLibrary } from '@/features/bot-templates/components/bot-templates-library';
 import { getCurrentAdmin } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -27,15 +28,10 @@ export default async function TemplatesPage() {
   }
 
   return (
-    <div className='container mx-auto py-6'>
+    <PageContainer scrollable={false}>
       <BotTemplatesLibrary
         userId={admin.sub} // Используем sub из JWT как userId
-        onTemplateInstalled={(flowId) => {
-          // Обработка успешной установки шаблона
-          console.log('Template installed:', flowId);
-          // Можно добавить toast уведомление или перенаправление
-        }}
       />
-    </div>
+    </PageContainer>
   );
 }

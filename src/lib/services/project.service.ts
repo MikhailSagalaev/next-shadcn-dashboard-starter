@@ -9,12 +9,57 @@ import type {
 } from '@/types/bonus';
 
 export class ProjectService {
+  /**
+   * Нормализация домена - принимает любой формат и приводит к стандартному виду
+   */
+  private static normalizeDomain(domain?: string): string | undefined {
+    if (!domain || domain.trim() === '') {
+      return undefined;
+    }
+
+    let normalized = domain.trim().toLowerCase();
+
+    // Убираем протокол если есть
+    normalized = normalized.replace(/^https?:\/\//, '');
+    
+    // Убираем www если есть
+    normalized = normalized.replace(/^www\./, '');
+    
+    // Убираем завершающий слеш
+    normalized = normalized.replace(/\/$/, '');
+    
+    // Убираем путь если есть (оставляем только домен)
+    normalized = normalized.split('/')[0];
+    
+    // Проверяем, что это валидный домен
+    const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+    
+    if (!domainRegex.test(normalized)) {
+      logger.warn('Некорректный формат домена', {
+        original: domain,
+        normalized,
+        component: 'project-service'
+      });
+      return undefined;
+    }
+
+    logger.info('Домен нормализован', {
+      original: domain,
+      normalized,
+      component: 'project-service'
+    });
+
+    return normalized;
+  }
+
   // Создание нового проекта
   static async createProject(data: CreateProjectInput): Promise<Project> {
+    const normalizedDomain = this.normalizeDomain(data.domain);
+    
     const project = await db.project.create({
       data: {
         name: data.name,
-        domain: data.domain,
+        domain: normalizedDomain,
         bonusPercentage: data.bonusPercentage || 1.0,
         bonusExpiryDays: data.bonusExpiryDays || 365
       },

@@ -753,7 +753,8 @@ export class BotAnalyticsService {
 
     return Array.from(stats.entries())
       .map(([location, count]) => ({
-        [field]: location,
+        country: field === 'country' ? location : '',
+        city: field === 'city' ? location : '',
         count,
         percentage: total > 0 ? (count / total) * 100 : 0
       }))

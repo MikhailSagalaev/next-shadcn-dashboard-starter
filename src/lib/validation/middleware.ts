@@ -239,7 +239,7 @@ export const ValidationMiddleware = {
       body: z.object({
         name: z.string().min(1).max(100),
         description: z.string().max(500).optional(),
-        domain: z.string().url().optional(),
+        domain: z.string().min(1).optional(),
         bonusPercentage: z.number().min(0).max(100).default(5),
         bonusExpiryDays: z.number().int().min(1).max(3650).default(365)
       })

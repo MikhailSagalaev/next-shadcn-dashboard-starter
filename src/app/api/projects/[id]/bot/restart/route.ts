@@ -12,13 +12,15 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { botManager } from '@/lib/telegram/bot-manager';
 
-// POST /api/projects/[id]/bot/restart - Принудительный перезапуск бота
+// POST /api/projects/[id]/bot/restart - Принудительный перезапуск или остановка бота
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: projectId } = await context.params;
+    const body = await request.json().catch(() => ({}));
+    const shouldStop = body.stop === true;
 
     // Проверяем существование проекта
     const project = await db.project.findUnique({
@@ -39,9 +41,30 @@ export async function POST(
       );
     }
 
-    // Останавливаем существующий бот
-    await botManager.stopBot(projectId);
-    logger.info('Bot stopped for restart', { projectId }, 'bot-restart');
+    logger.info('🔄 RESTART API ВЫЗВАН', {
+      projectId,
+      shouldStop,
+      botToken: project.botSettings.botToken ? '***' + project.botSettings.botToken.slice(-4) : 'none',
+      allBotsInManager: botManager.getAllBotsStatus(),
+      component: 'bot-restart'
+    });
+
+    // Если нужно просто остановить бота
+    if (shouldStop) {
+      // ЭКСТРЕННО ОСТАНАВЛИВАЕМ ВСЕ БОТЫ для предотвращения 409 конфликтов
+      await botManager.emergencyStopAll();
+      logger.info('🛑 ВСЕ БОТЫ ЭКСТРЕННО ОСТАНОВЛЕНЫ', { projectId }, 'bot-restart');
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Бот успешно остановлен'
+      });
+    }
+
+    // Иначе перезапускаем
+    // ЭКСТРЕННО ОСТАНАВЛИВАЕМ ВСЕ БОТЫ для предотвращения 409 конфликтов
+    await botManager.emergencyStopAll();
+    logger.info('🚨 ВСЕ БОТЫ ЭКСТРЕННО ОСТАНОВЛЕНЫ', { projectId }, 'bot-restart');
 
     // Создаем новый экземпляр бота
     const botInstance = await botManager.createBot(

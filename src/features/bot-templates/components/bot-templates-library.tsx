@@ -22,7 +22,6 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -34,8 +33,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import {
   Search,
-  Filter,
-  Star,
   Download,
   Clock,
   Users,
@@ -55,7 +52,8 @@ import {
   Gamepad2,
   Settings,
   Megaphone,
-  UserCheck
+  UserCheck,
+  Star
 } from 'lucide-react';
 
 import type {
@@ -66,7 +64,6 @@ import type {
 interface TemplatesLibraryProps {
   projectId?: string; // Опциональный для просмотра библиотеки
   userId: string;
-  onTemplateInstalled?: (flowId: string) => void;
 }
 
 interface TemplateCardProps {
@@ -121,45 +118,33 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
   const Icon = categoryIcons[template.category] || Settings;
 
   return (
-    <Card className='group cursor-pointer transition-all hover:shadow-lg'>
+    <Card className='group transition-all hover:shadow-lg'>
       <CardHeader className='pb-3'>
-        <div className='flex items-start justify-between'>
-          <div className='flex items-center gap-3'>
-            <div
-              className='flex h-12 w-12 items-center justify-center rounded-lg text-2xl'
-              style={{
-                backgroundColor: template.color + '20',
-                color: template.color
-              }}
-            >
-              {template.icon}
-            </div>
-            <div>
-              <CardTitle className='group-hover:text-primary text-lg transition-colors'>
-                {template.name}
-              </CardTitle>
-              <div className='mt-1 flex items-center gap-2'>
-                <Badge variant='secondary' className='text-xs'>
-                  <Icon className='mr-1 h-3 w-3' />
-                  {categoryLabels[template.category]}
-                </Badge>
-                <Badge
-                  className={`text-xs ${difficultyColors[template.difficulty]}`}
-                >
-                  {difficultyLabels[template.difficulty]}
-                </Badge>
-              </div>
-            </div>
+        <div className='flex items-start gap-3'>
+          <div
+            className='flex h-12 w-12 items-center justify-center rounded-lg text-2xl'
+            style={{
+              backgroundColor: template.color + '20',
+              color: template.color
+            }}
+          >
+            {template.icon}
           </div>
-
-          <div className='flex items-center gap-1'>
-            <Star className='h-4 w-4 fill-yellow-400 text-yellow-400' />
-            <span className='text-sm font-medium'>
-              {template.rating.toFixed(1)}
-            </span>
-            <span className='text-muted-foreground text-xs'>
-              ({template.reviews})
-            </span>
+          <div className='flex-1'>
+            <CardTitle className='text-lg'>
+              {template.name}
+            </CardTitle>
+            <div className='mt-1 flex items-center gap-2'>
+              <Badge variant='secondary' className='text-xs'>
+                <Icon className='mr-1 h-3 w-3' />
+                {categoryLabels[template.category]}
+              </Badge>
+              <Badge
+                className={`text-xs ${difficultyColors[template.difficulty]}`}
+              >
+                {difficultyLabels[template.difficulty]}
+              </Badge>
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -212,10 +197,14 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
   );
 };
 
+interface Project {
+  id: string;
+  name: string;
+}
+
 export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
-  projectId,
-  userId,
-  onTemplateInstalled
+  projectId: initialProjectId,
+  userId
 }) => {
   const [templates, setTemplates] = useState<BotTemplate[]>([]);
   const [filteredTemplates, setFilteredTemplates] = useState<BotTemplate[]>([]);
@@ -236,8 +225,33 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   const [selectedTemplate, setSelectedTemplate] = useState<BotTemplate | null>(
     null
   );
-  const [activeTab, setActiveTab] = useState('browse');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId || null);
+  const [showInstallDialog, setShowInstallDialog] = useState(false);
+  const [templateToInstall, setTemplateToInstall] = useState<BotTemplate | null>(null);
   const { toast } = useToast();
+
+  const loadProjects = async () => {
+    try {
+      const response = await fetch('/api/projects');
+      if (!response.ok) throw new Error('Failed to load projects');
+      
+      const data = await response.json();
+      setProjects(data.projects || []);
+      
+      // Если нет выбранного проекта и есть проекты, выбираем первый
+      if (!selectedProjectId && data.projects && data.projects.length > 0) {
+        setSelectedProjectId(data.projects[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+      toast({
+        title: 'Ошибка загрузки',
+        description: 'Не удалось загрузить список проектов',
+        variant: 'destructive'
+      });
+    }
+  };
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -263,6 +277,7 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   };
 
   useEffect(() => {
+    loadProjects();
     loadTemplates();
   }, []);
 
@@ -313,13 +328,22 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
     setFilteredTemplates(filtered);
   };
 
-  const handleInstallTemplate = async (template: BotTemplate) => {
-    if (!projectId) {
-      alert('Необходимо выбрать проект для установки шаблона');
+  const openInstallDialog = (template: BotTemplate) => {
+    setTemplateToInstall(template);
+    setShowInstallDialog(true);
+  };
+
+  const handleInstallTemplate = async () => {
+    if (!selectedProjectId || !templateToInstall) {
+      toast({
+        title: 'Ошибка',
+        description: 'Необходимо выбрать проект',
+        variant: 'destructive'
+      });
       return;
     }
 
-    setInstallingTemplate(template.id);
+    setInstallingTemplate(templateToInstall.id);
     try {
       const response = await fetch('/api/templates/install', {
         method: 'POST',
@@ -327,10 +351,10 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          templateId: template.id,
-          projectId,
+          templateId: templateToInstall.id,
+          projectId: selectedProjectId,
           userId,
-          customName: `${template.name} (шаблон)`
+          customName: `${templateToInstall.name} (шаблон)`
         })
       });
 
@@ -340,33 +364,36 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
 
       const result = await response.json();
 
-      if (result.success && result.flow) {
-        // Уведомляем родительский компонент
-        onTemplateInstalled?.(result.flow.id);
-
-        // Показываем успех
-        console.log('Template installed successfully:', result.flow.id);
+      if (result.success && result.workflowId) {
+        toast({
+          title: 'Успех',
+          description: `Шаблон "${templateToInstall.name}" установлен в проект`,
+          variant: 'default'
+        });
+        
+        setShowInstallDialog(false);
+        setTemplateToInstall(null);
       } else {
         console.error('Failed to install template:', result.error);
+        
+        toast({
+          title: 'Ошибка',
+          description: result.error || 'Не удалось установить шаблон',
+          variant: 'destructive'
+        });
       }
     } catch (error) {
       console.error('Installation error:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Произошла ошибка при установке шаблона',
+        variant: 'destructive'
+      });
     } finally {
       setInstallingTemplate(null);
     }
   };
 
-  const getPopularTemplates = () => {
-    return templates.sort((a, b) => b.installs - a.installs).slice(0, 6);
-  };
-
-  const getRecommendedTemplates = () => {
-    // В реальной реализации здесь будет логика рекомендаций на основе истории пользователя
-    return templates
-      .filter((t) => t.rating >= 4.5)
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, 6);
-  };
 
   if (loading) {
     return (
@@ -384,9 +411,9 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
       {/* Заголовок */}
       <div className='flex items-center justify-between'>
         <div>
-          <h1 className='text-3xl font-bold'>Библиотека шаблонов</h1>
+          <h1 className='text-2xl font-bold'>Библиотека шаблонов</h1>
           <p className='text-muted-foreground'>
-            Готовые решения для автоматизации бизнеса
+            Готовые workflow для быстрого создания ботов
           </p>
         </div>
         <div className='text-right'>
@@ -395,140 +422,206 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
         </div>
       </div>
 
-      {/* Вкладки */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className='grid w-full grid-cols-3'>
-          <TabsTrigger value='browse'>Все шаблоны</TabsTrigger>
-          <TabsTrigger value='popular'>Популярные</TabsTrigger>
-          <TabsTrigger value='recommended'>Рекомендации</TabsTrigger>
-        </TabsList>
+      {/* Выбор проекта */}
+      {projects.length > 0 && (
+        <Card>
+          <CardContent className='p-4'>
+            <div className='flex items-center gap-4'>
+              <label className='text-sm font-medium whitespace-nowrap'>
+                Установить в проект:
+              </label>
+              <Select
+                value={selectedProjectId || ''}
+                onValueChange={setSelectedProjectId}
+              >
+                <SelectTrigger className='w-full md:w-80'>
+                  <SelectValue placeholder='Выберите проект' />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value='browse' className='space-y-6'>
-          {/* Фильтры и поиск */}
+      {/* Фильтры и поиск */}
+      <div className='flex gap-4'>
+        {/* Левая панель фильтров */}
+        <div className='w-64 flex-shrink-0'>
           <Card>
-            <CardContent className='p-4'>
-              <div className='flex flex-col gap-4 md:flex-row'>
-                <div className='flex-1'>
-                  <div className='relative'>
-                    <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform' />
-                    <Input
-                      placeholder='Поиск шаблонов...'
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className='pl-10'
-                    />
-                  </div>
+            <CardHeader>
+              <CardTitle className='text-base'>Фильтры</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              {/* Поиск */}
+              <div>
+                <label className='text-sm font-medium mb-2 block'>Поиск</label>
+                <div className='relative'>
+                  <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform' />
+                  <Input
+                    placeholder='Название, описание...'
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className='pl-10'
+                  />
                 </div>
+              </div>
 
+              {/* Категория */}
+              <div>
+                <label className='text-sm font-medium mb-2 block'>Категория</label>
                 <Select
                   value={selectedCategory}
                   onValueChange={(value: any) => setSelectedCategory(value)}
                 >
-                  <SelectTrigger className='w-48'>
-                    <SelectValue placeholder='Категория' />
+                  <SelectTrigger>
+                    <SelectValue placeholder='Все категории' />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value='all'>Все категории</SelectItem>
                     {Object.entries(categoryLabels).map(([key, label]) => (
                       <SelectItem key={key} value={key}>
-                        {label}
+                        <div className='flex items-center gap-2'>
+                          {React.createElement(categoryIcons[key] || Settings, { className: 'h-4 w-4' })}
+                          {label}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
 
+              {/* Сложность */}
+              <div>
+                <label className='text-sm font-medium mb-2 block'>Сложность</label>
                 <Select
                   value={selectedDifficulty}
                   onValueChange={(value: any) => setSelectedDifficulty(value)}
                 >
-                  <SelectTrigger className='w-40'>
-                    <SelectValue placeholder='Сложность' />
+                  <SelectTrigger>
+                    <SelectValue placeholder='Любая сложность' />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='all'>Все уровни</SelectItem>
+                    <SelectItem value='all'>Любая сложность</SelectItem>
                     <SelectItem value='beginner'>Начинающий</SelectItem>
                     <SelectItem value='intermediate'>Средний</SelectItem>
                     <SelectItem value='advanced'>Продвинутый</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
 
+              {/* Сортировка */}
+              <div>
+                <label className='text-sm font-medium mb-2 block'>Сортировка</label>
                 <Select
                   value={sortBy}
                   onValueChange={(value: any) => setSortBy(value)}
                 >
-                  <SelectTrigger className='w-40'>
-                    <SelectValue />
+                  <SelectTrigger>
+                    <SelectValue placeholder='Сортировка' />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='popular'>По популярности</SelectItem>
+                    <SelectItem value='popular'>Популярные</SelectItem>
                     <SelectItem value='rating'>По рейтингу</SelectItem>
-                    <SelectItem value='newest'>Сначала новые</SelectItem>
+                    <SelectItem value='newest'>Новые</SelectItem>
                     <SelectItem value='name'>По названию</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Активные фильтры */}
+              {(selectedCategory !== 'all' || selectedDifficulty !== 'all' || searchQuery) && (
+                <div className='space-y-2'>
+                  <label className='text-sm font-medium'>Активные фильтры</label>
+                  <div className='space-y-1'>
+                    {searchQuery && (
+                      <Badge variant='secondary' className='gap-1'>
+                        <Search className='h-3 w-3' />
+                        "{searchQuery}"
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className='ml-1 hover:text-destructive'
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedCategory !== 'all' && (
+                      <Badge variant='secondary' className='gap-1'>
+                        {React.createElement(categoryIcons[selectedCategory] || Settings, { className: 'h-3 w-3' })}
+                        {categoryLabels[selectedCategory]}
+                        <button
+                          onClick={() => setSelectedCategory('all')}
+                          className='ml-1 hover:text-destructive'
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedDifficulty !== 'all' && (
+                      <Badge variant='secondary' className='gap-1'>
+                        {difficultyLabels[selectedDifficulty]}
+                        <button
+                          onClick={() => setSelectedDifficulty('all')}
+                          className='ml-1 hover:text-destructive'
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    )}
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSelectedCategory('all');
+                        setSelectedDifficulty('all');
+                      }}
+                      className='text-xs'
+                    >
+                      Очистить все
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
+        </div>
 
+        {/* Основной контент */}
+        <div className='flex-1'>
           {/* Сетка шаблонов */}
-          {filteredTemplates.length === 0 ? (
+          <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
+            {filteredTemplates.map((template) => (
+              <TemplateCard
+                key={template.id}
+                template={template}
+                onInstall={openInstallDialog}
+                isInstalling={installingTemplate === template.id}
+              />
+            ))}
+          </div>
+
+          {/* Пустое состояние */}
+          {filteredTemplates.length === 0 && (
             <Card>
-              <CardContent className='p-8 text-center'>
-                <BookOpen className='text-muted-foreground mx-auto mb-4 h-12 w-12' />
-                <h3 className='mb-2 text-lg font-medium'>Шаблоны не найдены</h3>
-                <p className='text-muted-foreground'>
-                  Попробуйте изменить критерии поиска или фильтры
+              <CardContent className='flex flex-col items-center justify-center py-12'>
+                <Search className='mb-4 h-12 w-12 text-muted-foreground' />
+                <h3 className='mb-2 text-lg font-semibold'>Шаблоны не найдены</h3>
+                <p className='text-center text-muted-foreground'>
+                  Попробуйте изменить фильтры или поисковый запрос
                 </p>
               </CardContent>
             </Card>
-          ) : (
-            <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
-              {filteredTemplates.map((template) => (
-                <TemplateCard
-                  key={template.id}
-                  template={template}
-                  onInstall={handleInstallTemplate}
-                  isInstalling={installingTemplate === template.id}
-                />
-              ))}
-            </div>
           )}
-        </TabsContent>
-
-        <TabsContent value='popular' className='space-y-6'>
-          <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
-            {getPopularTemplates().map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                onInstall={handleInstallTemplate}
-                isInstalling={installingTemplate === template.id}
-              />
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value='recommended' className='space-y-6'>
-          <Alert>
-            <Heart className='h-4 w-4' />
-            <AlertDescription>
-              Рекомендации основаны на вашем опыте использования и популярных
-              шаблонах в вашей нише.
-            </AlertDescription>
-          </Alert>
-
-          <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
-            {getRecommendedTemplates().map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                onInstall={handleInstallTemplate}
-                isInstalling={installingTemplate === template.id}
-              />
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       {/* Диалог детальной информации о шаблоне */}
       {selectedTemplate && (
@@ -577,7 +670,7 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                   <div>
                     <div className='flex items-center justify-center gap-1 text-2xl font-bold'>
                       <Star className='h-4 w-4 fill-yellow-400 text-yellow-400' />
-                      {selectedTemplate.rating.toFixed(1)}
+                      {(selectedTemplate.rating || 0).toFixed(1)}
                     </div>
                     <div className='text-muted-foreground text-xs'>
                       {selectedTemplate.reviews} отзывов
@@ -633,7 +726,7 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                 >
                   Закрыть
                 </Button>
-                <Button onClick={() => handleInstallTemplate(selectedTemplate)}>
+                <Button onClick={() => openInstallDialog(selectedTemplate)}>
                   Установить шаблон
                 </Button>
               </div>
@@ -641,6 +734,74 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Модальное окно установки */}
+      <Dialog open={showInstallDialog} onOpenChange={setShowInstallDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Установка шаблона</DialogTitle>
+          </DialogHeader>
+          <div className='space-y-4'>
+            <div>
+              <p className='text-sm text-muted-foreground mb-4'>
+                Вы устанавливаете шаблон <strong>{templateToInstall?.name}</strong>
+              </p>
+              
+              <label className='text-sm font-medium mb-2 block'>
+                Выберите проект для установки:
+              </label>
+              <Select
+                value={selectedProjectId || ''}
+                onValueChange={setSelectedProjectId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder='Выберите проект' />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Alert>
+              <AlertCircle className='h-4 w-4' />
+              <AlertDescription>
+                Шаблон будет создан как новый workflow в выбранном проекте. 
+                Вы сможете настроить его в конструкторе workflow.
+              </AlertDescription>
+            </Alert>
+
+            <div className='flex justify-end gap-2'>
+              <Button
+                variant='outline'
+                onClick={() => {
+                  setShowInstallDialog(false);
+                  setTemplateToInstall(null);
+                }}
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={handleInstallTemplate}
+                disabled={!selectedProjectId || installingTemplate === templateToInstall?.id}
+              >
+                {installingTemplate === templateToInstall?.id ? (
+                  <>
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                    Установка...
+                  </>
+                ) : (
+                  'Установить'
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

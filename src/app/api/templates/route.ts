@@ -8,8 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-// Temporary: using any to bypass import issues
-const botTemplates: any = {};
+import { botTemplates } from '@/lib/services/bot-templates/bot-templates.service';
 const logger: any = { info: console.log, error: console.error };
 type BotTemplateCategory = string;
 

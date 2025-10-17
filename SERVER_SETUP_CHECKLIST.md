@@ -20,7 +20,7 @@ yarn install
 **Вариант B: Через psql**
 ```bash
 # Замените креды на свои
-psql -h localhost -U admin -d bonus_system -c "ALTER TABLE admin_accounts ADD COLUMN IF NOT EXISTS metadata JSONB;"
+psql -h localhost -U bonus_admin -d bonus_system -c "ALTER TABLE admin_accounts ADD COLUMN IF NOT EXISTS metadata JSONB;"
 ```
 
 **Вариант C: Если PostgreSQL на другом хосте**

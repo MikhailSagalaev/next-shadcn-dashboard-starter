@@ -10,7 +10,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Bold, Italic, Link, List, Code, Eye, EyeOff } from 'lucide-react';
+import { Bold, Italic, Link, List, Code, Eye, EyeOff, Plus, Trash2, GripVertical } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,15 +25,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 import type { MessageConfig } from '@/types/bot-constructor';
 
 interface MessageEditorProps {
   config: MessageConfig;
   onChange: (config: MessageConfig) => void;
+  availableNodes?: Array<{ id: string; data: { label: string } }>;
 }
 
-export function MessageEditor({ config, onChange }: MessageEditorProps) {
+export function MessageEditor({ config, onChange, availableNodes = [] }: MessageEditorProps) {
   const [text, setText] = useState(config.text || '');
   const [parseMode, setParseMode] = useState(config.parseMode || 'Markdown');
   const [showPreview, setShowPreview] = useState(true);
@@ -45,7 +48,8 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
       text,
       parseMode: parseMode as 'Markdown' | 'HTML' | 'MarkdownV2'
     });
-  }, [text, parseMode, config, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, parseMode]);
 
   // Format text helpers
   const insertFormat = useCallback(
@@ -157,7 +161,7 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
 
         <Separator orientation='vertical' className='h-6' />
 
-        <Select value={parseMode} onValueChange={setParseMode}>
+        <Select value={parseMode} onValueChange={(value) => setParseMode(value as "Markdown" | "HTML" | "MarkdownV2")}>
           <SelectTrigger className='w-32'>
             <SelectValue />
           </SelectTrigger>
@@ -182,10 +186,10 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
       </div>
 
       {/* Editor and Preview */}
-      <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
+      <div className='grid grid-cols-1 gap-4'>
         {/* Editor */}
-        <Card>
-          <CardHeader className='pb-3'>
+        <Card className='w-full'>
+          <CardHeader className='pb-2'>
             <CardTitle className='flex items-center justify-between text-sm'>
               Редактор
               <Badge variant='outline' className='text-xs'>
@@ -193,12 +197,12 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className='pt-2'>
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder='Введите текст сообщения...'
-              className='min-h-[200px] font-mono text-sm'
+              className='min-h-[200px] w-full font-mono text-sm'
               style={{ fontFamily: 'monospace' }}
             />
           </CardContent>
@@ -206,8 +210,8 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
 
         {/* Preview */}
         {showPreview && (
-          <Card>
-            <CardHeader className='pb-3'>
+          <Card className='w-full'>
+            <CardHeader className='pb-2'>
               <CardTitle className='flex items-center justify-between text-sm'>
                 Превью в Telegram
                 <Badge variant='secondary' className='text-xs'>
@@ -215,8 +219,8 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className='min-h-[200px] rounded-lg bg-gray-100 p-3 dark:bg-gray-800'>
+            <CardContent className='pt-2'>
+              <div className='min-h-[200px] w-full rounded-lg bg-gray-100 p-3 dark:bg-gray-800'>
                 <div className='max-w-sm rounded-lg bg-white p-3 shadow-sm dark:bg-gray-700'>
                   {/* Telegram-style message bubble */}
                   <div className='flex items-start space-x-2'>
@@ -244,10 +248,10 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
 
       {/* Message Options */}
       <Card>
-        <CardHeader className='pb-3'>
+        <CardHeader className='pb-2'>
           <CardTitle className='text-sm'>Опции сообщения</CardTitle>
         </CardHeader>
-        <CardContent className='space-y-4'>
+        <CardContent className='space-y-3 pt-2'>
           <div className='flex items-center space-x-2'>
             <input
               type='checkbox'
@@ -276,6 +280,293 @@ export function MessageEditor({ config, onChange }: MessageEditorProps) {
             </label>
           </div>
         </CardContent>
+      </Card>
+
+      {/* ✨ НОВОЕ: Настройка кнопок */}
+      <Card>
+        <CardHeader className='pb-2'>
+          <CardTitle className='text-sm flex items-center justify-between'>
+            Кнопки
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => {
+                const keyboard = config.keyboard || { type: 'inline', buttons: [] };
+                onChange({
+                  ...config,
+                  keyboard: keyboard.buttons.length > 0 ? undefined : { type: 'inline', buttons: [[]] }
+                });
+              }}
+            >
+              {config.keyboard ? 'Удалить клавиатуру' : 'Добавить кнопки'}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        {config.keyboard && (
+          <CardContent className='space-y-3 pt-2'>
+            {/* Тип клавиатуры */}
+            <div className='space-y-2'>
+              <Label>Тип клавиатуры</Label>
+              <Select
+                value={config.keyboard.type || 'inline'}
+                onValueChange={(value) =>
+                  onChange({
+                    ...config,
+                    keyboard: { ...config.keyboard, type: value as 'inline' | 'reply', buttons: config.keyboard?.buttons || [[]] }
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='inline'>Inline (под сообщением)</SelectItem>
+                  <SelectItem value='reply'>Reply (заменяет клавиатуру)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Кнопки */}
+            <div className='space-y-3'>
+              <Label>Кнопки (по рядам)</Label>
+              {(config.keyboard.buttons || [[]]).map((row, rowIndex) => (
+                <div key={rowIndex} className='space-y-2 rounded-lg border p-3'>
+                  <div className='flex items-center justify-between'>
+                    <span className='text-sm font-medium'>Ряд {rowIndex + 1}</span>
+                    <div className='flex gap-2'>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => {
+                          const newButtons = [...(config.keyboard?.buttons || [])];
+                          newButtons[rowIndex] = [...(newButtons[rowIndex] || []), { text: 'Кнопка' }];
+                          onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                        }}
+                      >
+                        <Plus className='h-3 w-3' />
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => {
+                          const newButtons = (config.keyboard?.buttons || []).filter((_, i) => i !== rowIndex);
+                          onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                        }}
+                      >
+                        <Trash2 className='h-3 w-3' />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {row.map((button, btnIndex) => (
+                    <div key={btnIndex} className='flex items-start gap-2 rounded border p-2'>
+                      <div className='flex-1 space-y-2'>
+                        <Input
+                          placeholder='Текст кнопки'
+                          value={button.text || ''}
+                          onChange={(e) => {
+                            const newButtons = [...(config.keyboard?.buttons || [])];
+                            newButtons[rowIndex][btnIndex] = { ...button, text: e.target.value };
+                            onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                          }}
+                        />
+
+                            {config.keyboard?.type === 'inline' && (
+                              <div className='space-y-3'>
+                                {/* Тип действия */}
+                                <div>
+                                  <Label className='text-xs text-muted-foreground mb-2 block'>Тип действия кнопки</Label>
+                                  <Select
+                                    value={
+                                      (button as any).callbackData ? 'callback' :
+                                      (button as any).url ? 'url' :
+                                      (button as any).goto_node ? 'goto' : 'none'
+                                    }
+                                    onValueChange={(actionType) => {
+                                      const newButtons = [...(config.keyboard?.buttons || [])];
+                                      const updated = { ...button };
+
+                                      // Очищаем все поля действия
+                                      delete (updated as any).callbackData;
+                                      delete (updated as any).url;
+                                      delete (updated as any).goto_node;
+
+                                      // Устанавливаем выбранный тип
+                                      if (actionType === 'callback') {
+                                        (updated as any).callbackData = '';
+                                      } else if (actionType === 'url') {
+                                        (updated as any).url = '';
+                                      } else if (actionType === 'goto') {
+                                        (updated as any).goto_node = '';
+                                      }
+
+                                      newButtons[rowIndex][btnIndex] = updated;
+                                      onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Выберите тип действия" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Без действия</SelectItem>
+                                      <SelectItem value="callback">Callback данные (для обработки в коде)</SelectItem>
+                                      <SelectItem value="url">Ссылка (откроется в браузере)</SelectItem>
+                                      <SelectItem value="goto">Переход к ноде (внутри сценария)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                {/* Поля в зависимости от типа */}
+                                {(button as any).callbackData !== undefined && (
+                                  <Input
+                                    placeholder='Данные для callback (например: "btn_click")'
+                                    value={(button as any).callbackData || ''}
+                                    onChange={(e) => {
+                                      const newButtons = [...(config.keyboard?.buttons || [])];
+                                      newButtons[rowIndex][btnIndex] = { ...button, callbackData: e.target.value };
+                                      onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                                    }}
+                                  />
+                                )}
+
+                                {(button as any).url !== undefined && (
+                                  <Input
+                                    placeholder='URL ссылки (например: https://example.com)'
+                                    value={(button as any).url || ''}
+                                    onChange={(e) => {
+                                      const newButtons = [...(config.keyboard?.buttons || [])];
+                                      newButtons[rowIndex][btnIndex] = { ...button, url: e.target.value };
+                                      onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                                    }}
+                                  />
+                                )}
+
+                                {(button as any).goto_node !== undefined && (
+                                  <Select
+                                    value={(button as any).goto_node || ''}
+                                    onValueChange={(value) => {
+                                      const newButtons = [...(config.keyboard?.buttons || [])];
+                                      newButtons[rowIndex][btnIndex] = { ...button, goto_node: value } as any;
+                                      onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Выберите ноду для перехода..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {availableNodes
+                                        .filter(n => n.id !== 'current') // Исключаем текущую ноду
+                                        .map(node => (
+                                          <SelectItem key={node.id} value={node.id}>
+                                            {node.data.label} ({node.id})
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+                            )}
+
+                        {config.keyboard?.type === 'reply' && (
+                          <div className='flex gap-2'>
+                            <label className='flex items-center gap-1 text-sm'>
+                              <input
+                                type='checkbox'
+                                checked={(button as any).request_contact || false}
+                                onChange={(e) => {
+                                const newButtons = [...(config.keyboard?.buttons || [])];
+                                newButtons[rowIndex][btnIndex] = { 
+                                  text: button.text, 
+                                  request_contact: e.target.checked 
+                                } as any;
+                                onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } as any });
+                                }}
+                              />
+                              Запросить контакт
+                            </label>
+                            <label className='flex items-center gap-1 text-sm'>
+                              <input
+                                type='checkbox'
+                                checked={(button as any).request_location || false}
+                                onChange={(e) => {
+                                const newButtons = [...(config.keyboard?.buttons || [])];
+                                newButtons[rowIndex][btnIndex] = { 
+                                  text: button.text, 
+                                  request_location: e.target.checked 
+                                } as any;
+                                onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } as any });
+                                }}
+                              />
+                              Запросить локацию
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => {
+                          const newButtons = [...(config.keyboard?.buttons || [])];
+                          newButtons[rowIndex] = newButtons[rowIndex].filter((_, i) => i !== btnIndex);
+                          onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                        }}
+                      >
+                        <Trash2 className='h-3 w-3' />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => {
+                  const newButtons = [...(config.keyboard?.buttons || []), []];
+                  onChange({ ...config, keyboard: { ...config.keyboard, buttons: newButtons } });
+                }}
+              >
+                <Plus className='h-4 w-4 mr-2' />
+                Добавить ряд кнопок
+              </Button>
+            </div>
+
+            {/* Дополнительные опции для Reply клавиатуры */}
+            {config.keyboard.type === 'reply' && (
+              <div className='space-y-2 pt-2 border-t'>
+                <Label className='text-xs text-muted-foreground'>Дополнительные опции</Label>
+                <div className='flex gap-4'>
+                  <label className='flex items-center gap-2 text-sm'>
+                    <input
+                      type='checkbox'
+                      checked={(config.keyboard as any).one_time_keyboard || false}
+                      onChange={(e) =>
+                        onChange({
+                          ...config,
+                          keyboard: { ...config.keyboard, one_time_keyboard: e.target.checked } as any
+                        })
+                      }
+                    />
+                    Скрыть после нажатия
+                  </label>
+                  <label className='flex items-center gap-2 text-sm'>
+                    <input
+                      type='checkbox'
+                      checked={(config.keyboard as any).resize_keyboard !== false}
+                      onChange={(e) =>
+                        onChange({
+                          ...config,
+                          keyboard: { ...config.keyboard, resize_keyboard: e.target.checked } as any
+                        })
+                      }
+                    />
+                    Адаптировать размер
+                  </label>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        )}
       </Card>
     </div>
   );

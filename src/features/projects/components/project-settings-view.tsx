@@ -25,7 +25,8 @@ import {
   Zap,
   BookOpen,
   Wrench,
-  Library
+  Library,
+  Workflow
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -420,6 +421,12 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 <Button variant='outline' className='mt-2 w-full justify-start'>
                   <BarChart3 className='mr-2 h-4 w-4' />
                   Статистика и аналитика
+                </Button>
+              </Link>
+              <Link href={`/dashboard/projects/${projectId}/workflow`}>
+                <Button variant='outline' className='mt-2 w-full justify-start'>
+                  <Workflow className='mr-2 h-4 w-4' />
+                  Конструктор Workflow
                 </Button>
               </Link>
               <Link href={`/dashboard/projects/${projectId}/notifications`}>

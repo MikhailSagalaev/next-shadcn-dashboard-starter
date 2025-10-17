@@ -11,7 +11,7 @@ import { z } from 'zod';
 // Схема создания проекта
 export const CreateProjectSchema = z.object({
   name: z.string().min(1, 'Название проекта обязательно').max(100),
-  domain: z.string().url('Некорректный URL домена').optional(),
+  domain: z.string().min(1, 'Домен не может быть пустым').optional(),
   bonusPercentage: z.number().min(0).max(100).default(1.0),
   bonusExpiryDays: z.number().min(1).max(3650).default(365)
 });

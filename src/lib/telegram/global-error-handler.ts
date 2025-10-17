@@ -26,10 +26,13 @@ export function setupGlobalErrorHandler(): void {
         errorMessage.includes('terminated by other getUpdates') ||
         errorMessage.includes('GrammyError')
       ) {
-        logger.warn('🚨 Перехвачен 409 конфликт Grammy', {
+        logger.error('🚨 ПЕРЕХВАЧЕН 409 КОНФЛИКТ GRAMMY', {
           error: errorMessage,
+          reason: reason,
+          stack: reason instanceof Error ? reason.stack : undefined,
           type: 'unhandledRejection',
-          component: 'global-error-handler'
+          component: 'global-error-handler',
+          timestamp: new Date().toISOString()
         });
 
         // НЕ прерываем процесс для 409 ошибок
@@ -149,10 +152,12 @@ export async function safeExecute<T>(
       errorMessage.includes('409') ||
       errorMessage.includes('terminated by other getUpdates')
     ) {
-      logger.warn(`409 конфликт в ${context}`, {
+      logger.error(`❌ 409 КОНФЛИКТ В ${context}`, {
         error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
         context,
-        component: 'global-error-handler'
+        component: 'global-error-handler',
+        timestamp: new Date().toISOString()
       });
       return null; // Возвращаем null вместо ошибки
     }

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { TelegramBotValidationService } from '@/lib/services/telegram-bot-validation.service';
+import { botManager } from '@/lib/telegram/bot-manager';
 
 export async function GET(
   request: NextRequest,
@@ -58,16 +59,32 @@ export async function GET(
       });
     }
 
+    // Проверяем статус бота в BotManager
+    const botInstance = botManager.getBot(projectId);
+    const isBotRunning = botInstance && botInstance.isActive && botInstance.isPolling;
+    
     // Используем улучшенный метод проверки статуса
     const statusInfo =
       await TelegramBotValidationService.getBotStatus(botToken);
 
+    // Корректируем статус на основе реального состояния BotManager
+    let finalStatus = statusInfo.status;
+    if (isBotRunning && statusInfo.status === 'INACTIVE') {
+      finalStatus = 'ACTIVE';
+      statusInfo.status = 'ACTIVE';
+      statusInfo.message = 'Бот активен и работает';
+    } else if (!isBotRunning && statusInfo.status === 'ACTIVE') {
+      finalStatus = 'INACTIVE';
+      statusInfo.status = 'INACTIVE';
+      statusInfo.message = 'Бот неактивен';
+    }
+
     // Обновляем статус в базе данных если он изменился
-    if (project.botStatus !== statusInfo.status) {
+    if (project.botStatus !== finalStatus) {
       await db.project.update({
         where: { id: projectId },
         data: {
-          botStatus: statusInfo.status,
+          botStatus: finalStatus,
           botUsername: statusInfo.bot?.username || botUsername
         }
       });
@@ -75,8 +92,9 @@ export async function GET(
       logger.info('Bot status updated in database', {
         projectId,
         oldStatus: project.botStatus,
-        newStatus: statusInfo.status,
-        botUsername: statusInfo.bot?.username
+        newStatus: finalStatus,
+        botUsername: statusInfo.bot?.username,
+        botManagerStatus: isBotRunning ? 'RUNNING' : 'STOPPED'
       });
     }
 

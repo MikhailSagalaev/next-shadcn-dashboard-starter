@@ -1,64 +1,84 @@
 /**
- * @file: check-user.ts
- * @description: Скрипт для проверки конкретного пользователя
+ * @file: scripts/check-user.ts
+ * @description: Скрипт для проверки пользователей в базе данных
  * @project: SaaS Bonus System
- * @dependencies: Prisma, @/lib/db
- * @created: 2025-01-31
+ * @created: 2025-10-16
  * @author: AI Assistant + User
  */
 
-import { db } from '../src/lib/db';
+import { db } from '@/lib/db';
 
 async function checkUser() {
   try {
-    const userId = 'cme01k6pv0001v8nwgz62sxma';
+    console.log('🔍 Проверяем пользователей в базе данных...\n');
 
-    console.log('🔍 Проверка пользователя:', userId);
+    // Ищем пользователя по Telegram ID
+    const telegramId = '524567338';
+    console.log(`Поиск пользователя с telegramId: ${telegramId}`);
 
-    // Проверяем пользователя
-    const user = await db.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!user) {
-      console.error('❌ Пользователь не найден');
-      return;
-    }
-
-    console.log('✅ Пользователь найден:');
-    console.log('   ID:', user.id);
-    console.log('   Email:', user.email);
-    console.log('   Phone:', user.phone);
-    console.log('   First Name:', user.firstName);
-    console.log('   Last Name:', user.lastName);
-    console.log('   Telegram ID:', user.telegramId);
-    console.log('   Telegram Username:', user.telegramUsername);
-    console.log('   Is Active:', user.isActive);
-    console.log('   Project ID:', user.projectId);
-
-    // Проверяем, есть ли другие пользователи с telegramId
-    const telegramUsers = await db.user.findMany({
+    const user = await db.user.findFirst({
       where: {
-        projectId: user.projectId,
-        telegramId: { not: null },
-        isActive: true
+        telegramId: BigInt(telegramId),
+        projectId: 'cmgntgsdv0000v8mwfwwh30az' // ID проекта из логов
       },
       select: {
         id: true,
-        email: true,
         telegramId: true,
-        telegramUsername: true
+        firstName: true,
+        lastName: true,
+        isActive: true,
+        phone: true,
+        email: true,
+        currentLevel: true,
+        referralCode: true,
+        registeredAt: true
       }
     });
 
-    console.log('📱 Все пользователи с telegramId в проекте:');
-    telegramUsers.forEach(
-      (u: { id: string; email: string | null; telegramId: bigint | null }) => {
-        console.log(`   - ${u.id}: ${u.email} (${u.telegramId})`);
+    if (user) {
+      console.log('✅ Пользователь найден:');
+      console.log(`  ID: ${user.id}`);
+      console.log(`  Telegram ID: ${user.telegramId}`);
+      console.log(`  Имя: ${user.firstName} ${user.lastName || ''}`);
+      console.log(`  Активен: ${user.isActive}`);
+      console.log(`  Телефон: ${user.phone || 'Не указан'}`);
+      console.log(`  Email: ${user.email || 'Не указан'}`);
+      console.log(`  Уровень: ${user.currentLevel}`);
+      console.log(`  Реферальный код: ${user.referralCode || 'Не сгенерирован'}`);
+      console.log(`  Зарегистрирован: ${user.registeredAt}`);
+    } else {
+      console.log('❌ Пользователь не найден');
+    }
+
+    // Проверяем всех пользователей в проекте
+    console.log('\n📊 Все пользователи в проекте:');
+    const allUsers = await db.user.findMany({
+      where: {
+        projectId: 'cmgntgsdv0000v8mwfwwh30az'
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        firstName: true,
+        isActive: true,
+        phone: true,
+        email: true
+      },
+      orderBy: {
+        registeredAt: 'desc'
       }
-    );
+    });
+
+    if (allUsers.length > 0) {
+      allUsers.forEach((user, index) => {
+        console.log(`  ${index + 1}. ${user.firstName} (ID: ${user.id}, Telegram: ${user.telegramId}, Активен: ${user.isActive})`);
+      });
+    } else {
+      console.log('  Пользователи не найдены');
+    }
+
   } catch (error) {
-    console.error('❌ Ошибка:', error);
+    console.error('❌ Ошибка при проверке пользователей:', error);
   } finally {
     await db.$disconnect();
   }

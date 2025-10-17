@@ -16,7 +16,9 @@ import type { BotConstructorSession } from '../bot-session.service';
 import type { BotFlow } from '@/types/bot-constructor';
 
 // Расширенный контекст
-type BotConstructorContext = Context & SessionFlavor<BotConstructorSession>;
+type BotConstructorContext = Context & SessionFlavor<BotConstructorSession> & {
+  updateType?: string;
+};
 
 export class ErrorHandlingSystem {
   private fallbackFlows: Map<string, string> = new Map(); // projectId -> fallbackFlowId

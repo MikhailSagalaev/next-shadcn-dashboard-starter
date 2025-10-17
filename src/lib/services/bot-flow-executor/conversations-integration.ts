@@ -8,15 +8,26 @@
  */
 
 import { Composer, Context } from 'grammy';
-// import { conversations, createConversation } from '@grammyjs/conversations';
-// import { SessionFlavor } from 'grammy';
 import { logger } from '@/lib/logger';
 import { BotSessionService } from '../bot-session.service';
 
 import type { BotConstructorSession } from '../bot-session.service';
 
+// Временные заглушки для Grammy Conversations
+type SessionFlavor<T> = {
+  session: T;
+};
+
 // Расширенный контекст
-type BotConstructorContext = Context & SessionFlavor<BotConstructorSession>;
+type BotConstructorContext = Context & SessionFlavor<BotConstructorSession> & {
+  conversation?: {
+    enter: (id: string) => Promise<void>;
+  };
+};
+
+// Заглушки для функций conversations
+const conversations = () => (ctx: any) => {};
+const createConversation = (fn: any) => fn;
 
 export class ConversationsIntegration {
   private composer: Composer<BotConstructorContext>;
@@ -32,30 +43,22 @@ export class ConversationsIntegration {
   private setupConversations(): void {
     // Conversation для ввода данных
     this.composer.use(
-      createConversation(this.inputConversation.bind(this), {
-        id: 'input_conversation'
-      })
+      createConversation(this.inputConversation.bind(this))
     );
 
     // Conversation для подтверждений
     this.composer.use(
-      createConversation(this.confirmationConversation.bind(this), {
-        id: 'confirmation_conversation'
-      })
+      createConversation(this.confirmationConversation.bind(this))
     );
 
     // Conversation для выбора из списка
     this.composer.use(
-      createConversation(this.selectionConversation.bind(this), {
-        id: 'selection_conversation'
-      })
+      createConversation(this.selectionConversation.bind(this))
     );
 
     // Conversation для многошаговых форм
     this.composer.use(
-      createConversation(this.formConversation.bind(this), {
-        id: 'form_conversation'
-      })
+      createConversation(this.formConversation.bind(this))
     );
   }
 

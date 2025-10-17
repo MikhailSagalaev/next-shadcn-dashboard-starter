@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-import type { SessionConfig } from '@/types/bot-constructor';
+import type { SessionConfig, SessionOperation } from '@/types/bot-constructor';
 
 interface SessionEditorProps {
   config: SessionConfig;
@@ -43,24 +43,7 @@ interface SessionEditorProps {
   availableVariables: string[];
 }
 
-interface SessionOperation {
-  id: string;
-  type:
-    | 'get'
-    | 'set'
-    | 'delete'
-    | 'increment'
-    | 'decrement'
-    | 'merge'
-    | 'clear'
-    | 'exists'
-    | 'custom';
-  key: string;
-  value?: any;
-  source: 'literal' | 'variable' | 'expression' | 'function';
-  condition?: string;
-  description?: string;
-}
+// Используем SessionOperation из импорта
 
 const operationTypes = [
   { value: 'get', label: 'Получить значение', icon: Database, color: 'blue' },
@@ -91,6 +74,18 @@ const operationTypes = [
     label: 'Пользовательская операция',
     icon: Code,
     color: 'gray'
+  },
+  {
+    value: 'append',
+    label: 'Добавить в конец',
+    icon: Plus,
+    color: 'blue'
+  },
+  {
+    value: 'prepend',
+    label: 'Добавить в начало',
+    icon: Plus,
+    color: 'blue'
   }
 ];
 

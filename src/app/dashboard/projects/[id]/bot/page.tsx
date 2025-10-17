@@ -24,7 +24,7 @@ export default async function BotPage({ params }: BotPageProps) {
   const { id } = await params;
   
   return (
-    <PageContainer scrollable={false}>
+    <PageContainer scrollable={true}>
       <BotManagementView projectId={id} />
     </PageContainer>
   );

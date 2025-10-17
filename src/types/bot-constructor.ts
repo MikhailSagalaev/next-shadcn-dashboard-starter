@@ -249,10 +249,18 @@ export interface SessionOperation {
     | 'increment'
     | 'decrement'
     | 'append'
-    | 'prepend';
+    | 'prepend'
+    | 'custom'
+    | 'merge'
+    | 'clear'
+    | 'exists';
+  key?: string; // Ключ для операции
+  source?: string; // Источник данных
   value?: any;
   deepMerge?: boolean; // Для глубокого слияния объектов
   customCode?: string; // Пользовательский код
+  description?: string; // Описание операции
+  condition?: string; // Условие выполнения
 }
 
 export interface ActionConfig {
@@ -264,6 +272,7 @@ export interface ActionConfig {
     | 'notification'
     | 'delay';
   externalApi?: Record<string, any>; // Конфигурация для external API
+  onError?: ErrorHandlingConfig; // Обработка ошибок
   config: ActionDetails & {
     // Grammy-specific actions
     grammyMethod?: string; // ctx.api.sendMessage, ctx.reply и т.д.

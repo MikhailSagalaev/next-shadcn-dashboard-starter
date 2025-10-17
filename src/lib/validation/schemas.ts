@@ -68,7 +68,7 @@ export const createProjectSchema = z.object({
 
   description: z.string().max(500, 'Описание слишком длинное').optional(),
 
-  domain: z.string().url('Неверный формат домена').optional(),
+  domain: z.string().min(1, 'Домен не может быть пустым').optional(),
 
   bonusPercentage: percentageSchema.default(5),
 

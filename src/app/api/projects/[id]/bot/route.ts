@@ -154,6 +154,15 @@ export async function POST(
     const { id } = await context.params;
     const body = await request.json();
 
+    logger.info('🚀 POST /api/projects/[id]/bot - СОЗДАНИЕ НАСТРОЕК БОТА', {
+      projectId: id,
+      bodyKeys: Object.keys(body),
+      botToken: body.botToken ? '***' + body.botToken.slice(-4) : 'none',
+      botUsername: body.botUsername || 'none',
+      allBotsInManager: botManager.getAllBotsStatus(),
+      component: 'bot-api'
+    });
+
     // Проверяем существование проекта
     const project = await ProjectService.getProjectById(id);
     if (!project) {
@@ -172,9 +181,17 @@ export async function POST(
     }
 
     // Проверяем валидность токена бота (базовая проверка формата)
-    if (!body.botToken.startsWith('bot') || body.botToken.length < 45) {
+    // Telegram bot tokens format: <bot_id>:<token>
+    // Example: 123456789:AAHmCIAAIfasYFQQB_3fSqcP_BB0_YykG7Y
+    const tokenParts = body.botToken.split(':');
+    if (
+      tokenParts.length !== 2 ||
+      !/^\d+$/.test(tokenParts[0]) || // bot ID should be numeric
+      !tokenParts[1].startsWith('AA') || // token should start with AA
+      tokenParts[1].length < 35 // minimum token length
+    ) {
       return NextResponse.json(
-        { error: 'Неверный формат токена бота' },
+        { error: 'Неверный формат токена бота. Ожидается формат: <bot_id>:<token>' },
         { status: 400, headers: createCorsHeaders(request) }
       );
     }
@@ -258,6 +275,15 @@ export async function PUT(
   try {
     const { id } = await context.params;
     const body = await request.json();
+
+    logger.info('🔄 PUT /api/projects/[id]/bot - ОБНОВЛЕНИЕ НАСТРОЕК БОТА', {
+      projectId: id,
+      bodyKeys: Object.keys(body),
+      botToken: body.botToken ? '***' + body.botToken.slice(-4) : 'none',
+      botUsername: body.botUsername || 'none',
+      allBotsInManager: botManager.getAllBotsStatus(),
+      component: 'bot-api'
+    });
 
     // Проверяем существование проекта
     const project = await ProjectService.getProjectById(id);
@@ -363,32 +389,119 @@ export async function PUT(
       }
     });
 
-    // Переинициализируем бота
-    try {
-      await botManager.updateBot(id, {
-        id: body.id,
-        projectId: id,
-        botToken: body.botToken,
-        botUsername: body.botUsername,
-        functionalSettings: body.functionalSettings || {},
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-      logger.info(
-        'Бот успешно переинициализирован',
-        { projectId: id },
-        'bot-api'
-      );
-    } catch (botError) {
-      logger.warn(
-        'Не удалось переинициализировать бота, но настройки обновлены',
-        {
+    // Проверяем, изменился ли токен
+    const existingBot = botManager.getBot(id);
+    const tokenChanged = existingBot && existingBot.bot.token !== body.botToken;
+    
+    logger.info('🔍 ПРОВЕРКА ИЗМЕНЕНИЯ ТОКЕНА', {
+      projectId: id,
+      existingBot: existingBot ? {
+        token: '***' + existingBot.bot.token.slice(-4),
+        isActive: existingBot.isActive,
+        isPolling: existingBot.isPolling
+      } : null,
+      newToken: '***' + body.botToken.slice(-4),
+      tokenChanged,
+      allBotsInManager: botManager.getAllBotsStatus(),
+      component: 'bot-api'
+    });
+    
+    if (tokenChanged) {
+      // Если токен изменился, экстренно останавливаем ВСЕ боты с новым токеном
+      try {
+        logger.info('🔄 ТОКЕН ИЗМЕНИЛСЯ, ЭКСТРЕННАЯ ОСТАНОВКА', {
           projectId: id,
-          error: botError instanceof Error ? botError.message : 'Unknown error'
-        },
-        'bot-api'
-      );
+          oldToken: existingBot.bot.token ? '***' + existingBot.bot.token.slice(-4) : 'none',
+          newToken: '***' + body.botToken.slice(-4),
+          component: 'bot-api'
+        });
+
+        // Экстренно останавливаем все боты с новым токеном
+        await botManager.emergencyStopBotsWithToken(body.botToken);
+        
+        // Останавливаем текущий бот
+        await botManager.stopBot(id);
+        
+        // Ждем для полной очистки Telegram API
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Создаем новый бот с новым токеном
+        await botManager.createBot(id, {
+          id: body.id,
+          projectId: id,
+          botToken: body.botToken,
+          botUsername: body.botUsername,
+          functionalSettings: body.functionalSettings || {},
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        
+        logger.info('Бот успешно пересоздан с новым токеном', {
+          projectId: id,
+          component: 'bot-api'
+        });
+      } catch (botError) {
+        const errorMessage = botError instanceof Error ? botError.message : 'Unknown error';
+        
+        // Специальная обработка 409 конфликтов
+        if (errorMessage.includes('409') || errorMessage.includes('terminated by other getUpdates')) {
+          logger.warn(
+            '409 конфликт при обновлении бота - возможно запущен другой экземпляр',
+            {
+              projectId: id,
+              error: errorMessage,
+              component: 'bot-api'
+            }
+          );
+          
+          // Возвращаем успех, так как настройки сохранены
+          return NextResponse.json(
+            {
+              ...botSettings,
+              message: 'Настройки бота обновлены. Возможен конфликт с другим экземпляром бота.',
+              warning: '409 Conflict: возможно запущен другой экземпляр бота с тем же токеном'
+            },
+            { headers: createCorsHeaders(request) }
+          );
+        }
+        
+        logger.warn(
+          'Не удалось пересоздать бота, но настройки обновлены',
+          {
+            projectId: id,
+            error: errorMessage
+          },
+          'bot-api'
+        );
+      }
+    } else {
+      // Если токен не изменился, просто обновляем настройки
+      try {
+        await botManager.updateBot(id, {
+          id: body.id,
+          projectId: id,
+          botToken: body.botToken,
+          botUsername: body.botUsername,
+          functionalSettings: body.functionalSettings || {},
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        logger.info('Настройки бота обновлены', {
+          projectId: id,
+          component: 'bot-api'
+        });
+      } catch (botError) {
+        logger.warn(
+          'Не удалось обновить настройки бота',
+          {
+            projectId: id,
+            error: botError instanceof Error ? botError.message : 'Unknown error'
+          },
+          'bot-api'
+        );
+      }
     }
 
     logger.info('Настройки бота обновлены', { projectId: id }, 'bot-api');
@@ -401,10 +514,15 @@ export async function PUT(
       { headers: createCorsHeaders(request) }
     );
   } catch (error) {
+    const { id: projectId } = await context.params;
     logger.error(
       'Ошибка обновления настроек бота',
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      'bot-api'
+      { 
+        projectId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        component: 'bot-api'
+      }
     );
     return NextResponse.json(
       { error: 'Ошибка обновления настроек бота' },

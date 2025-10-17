@@ -400,10 +400,10 @@ export function KeyboardBuilder({ config, onChange }: KeyboardBuilderProps) {
                     ))}
 
                     <Button
-                      variant='dashed'
+                      variant='outline'
                       size='sm'
                       onClick={() => addButton(rowIndex)}
-                      className='h-8 min-w-[80px]'
+                      className='h-8 min-w-[80px] border-dashed'
                     >
                       <Plus className='h-4 w-4' />
                     </Button>

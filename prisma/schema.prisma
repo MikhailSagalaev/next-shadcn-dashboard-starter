@@ -25,6 +25,9 @@ model Project {
   botSettings     BotSettings?
   referralProgram ReferralProgram?
   botFlows        BotFlow[] // Потоки бота для конструктора
+  workflows       Workflow[] // Упрощенные workflow в стиле n8n
+  workflowVariables WorkflowVariable[] // Переменные workflow
+  projectVariables ProjectVariable[] // Переменные проекта для использования в сообщениях
   users           User[]
   webhookLogs     WebhookLog[]
   notifications   Notification[]
@@ -316,3 +319,134 @@ model AlphaTesterApplication {
 
   @@map("alpha_tester_applications")
 }
+
+// Упрощенные workflow в стиле n8n
+model Workflow {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  name        String
+  description String?
+  isActive    Boolean  @default(false) @map("is_active")
+  nodes       Json     @default("[]") // Массив нод workflow
+  connections Json     @default("[]") // Связи между нодами
+  variables   Json     @default("[]") // Переменные workflow
+  settings    Json     @default("{}") // Настройки workflow
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions    WorkflowVersion[]
+  executions  WorkflowExecution[]
+  variableRecords WorkflowVariable[]
+
+  @@map("workflows")
+}
+
+// ========== WORKFLOW VERSIONS (версионирование workflow) ==========
+model WorkflowVersion {
+  id          String   @id @default(cuid())
+  workflowId  String   @map("workflow_id")
+  version     Int
+  nodes       Json     // WorkflowNode[] as JSON
+  entryNodeId String   @map("entry_node_id")
+  variables   Json?    // WorkflowVariable[]
+  settings    Json?    // WorkflowSettings
+  isActive    Boolean  @default(false) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, version])
+  @@index([workflowId, isActive])
+  @@map("workflow_versions")
+}
+
+// ========== WORKFLOW EXECUTIONS (выполнения workflow) ==========
+model WorkflowExecution {
+  id             String   @id @default(cuid())
+  projectId      String   @map("project_id")
+  workflowId     String   @map("workflow_id")
+  version        Int
+  sessionId      String   @map("session_id")
+  userId         String?  @map("user_id")
+  telegramChatId String?  @map("telegram_chat_id")
+  status         String   // running|completed|failed|cancelled|waiting
+  startedAt      DateTime @default(now()) @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+  error          String?
+  stepCount      Int?     @map("step_count")
+  currentNodeId  String?  @map("current_node_id")
+  waitType       String?  @map("wait_type")
+  waitPayload    Json?    @map("wait_payload")
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  logs     WorkflowLog[]
+
+  @@index([projectId, workflowId, startedAt])
+  @@index([sessionId])
+  @@index([projectId, telegramChatId, status])
+  @@map("workflow_executions")
+}
+
+// ========== WORKFLOW LOGS (пошаговые логи выполнения) ==========
+model WorkflowLog {
+  id           BigInt   @id @default(autoincrement())
+  executionId  String   @map("execution_id")
+  step         Int
+  nodeId       String   @map("node_id")
+  nodeType     String   @map("node_type")
+  timestamp    DateTime @default(now())
+  level        String   @default("info") // info|warn|error|debug
+  message      String
+  data         Json?    // дополнительные данные
+
+  execution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId, step])
+  @@index([timestamp])
+  @@map("workflow_logs")
+}
+
+// ========== PROJECT VARIABLES (переменные проекта для использования в сообщениях) ==========
+model ProjectVariable {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  key         String   // Ключ переменной (например: username, domain, company_name)
+  value       String   // Значение переменной
+  description String?  // Описание переменной
+  isSystem    Boolean  @default(false) @map("is_system") // Системная переменная (нельзя удалить)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@index([projectId])
+  @@map("project_variables")
+}
+
+// ========== WORKFLOW VARIABLES (система переменных) ==========
+model WorkflowVariable {
+  id           BigInt   @id @default(autoincrement())
+  projectId    String   @map("project_id")
+  workflowId   String?  @map("workflow_id")
+  userId       String?  @map("user_id")
+  sessionId    String?  @map("session_id")
+  scope        String   // global|project|user|session
+  key          String
+  value        Json
+  expiresAt    DateTime? @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workflow Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  // Составной уникальный индекс для переменных по scope
+  @@unique([projectId, workflowId, userId, sessionId, scope, key], name: "unique_variable")
+  @@index([projectId, scope, key])
+  @@index([expiresAt])
+  @@map("workflow_variables")
+}
+
