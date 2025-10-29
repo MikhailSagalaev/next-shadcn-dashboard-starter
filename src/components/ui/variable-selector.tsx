@@ -161,15 +161,15 @@ export function VariableSelector({ onVariableSelect, trigger, className }: Varia
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="max-w-5xl max-h-[85vh] p-0 animate-in fade-in-0 zoom-in-95 duration-200">
-        <DialogHeader className="px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
-          <DialogTitle className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <Target className="h-5 w-5 text-blue-600" />
-            Выберите переменную для вставки
+      <DialogContent className="max-w-4xl max-h-[80vh] p-0 animate-in fade-in-0 zoom-in-95 duration-200">
+        <DialogHeader className="px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+          <DialogTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Target className="h-4 w-4 text-blue-600" />
+            Переменные
           </DialogTitle>
         </DialogHeader>
 
-        <div className="px-6 py-4 space-y-6">
+        <div className="px-4 py-3 space-y-4">
           {/* Поиск */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -195,20 +195,20 @@ export function VariableSelector({ onVariableSelect, trigger, className }: Varia
                     value={key}
                     disabled={!hasVariables}
                     className={cn(
-                      "flex flex-col items-center gap-1 p-3 text-xs font-medium transition-all duration-200",
+                      "flex flex-col items-center gap-1 p-2 text-xs font-medium transition-all duration-200",
                       "data-[state=active]:bg-background data-[state=active]:shadow-sm",
                       "data-[state=active]:border data-[state=active]:border-border",
                       "hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed",
-                      "rounded-lg min-h-[60px] justify-center",
+                      "rounded-lg min-h-[50px] justify-center",
                       isActive && "bg-background shadow-sm border border-border"
                     )}
                   >
                     <Icon className={cn(
-                      "h-4 w-4 transition-colors",
+                      "h-3 w-3 transition-colors",
                       isActive ? "text-primary" : "text-muted-foreground"
                     )} />
                     <span className={cn(
-                      "text-center leading-tight",
+                      "text-center leading-tight text-[10px]",
                       isActive ? "text-foreground" : "text-muted-foreground"
                     )}>
                       {category.title}
@@ -217,7 +217,7 @@ export function VariableSelector({ onVariableSelect, trigger, className }: Varia
                       <Badge 
                         variant="secondary" 
                         className={cn(
-                          "text-[10px] px-1.5 py-0.5 h-4",
+                          "text-[9px] px-1 py-0.5 h-3",
                           isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                         )}
                       >
@@ -231,17 +231,17 @@ export function VariableSelector({ onVariableSelect, trigger, className }: Varia
 
             {Object.entries(filteredVariables).map(([categoryKey, category]) => (
               <TabsContent key={categoryKey} value={categoryKey} className="mt-0">
-                <ScrollArea className="h-72">
-                  <div className="space-y-3 pr-4">
+                <ScrollArea className="h-64">
+                  <div className="space-y-2 pr-3">
                     {category.variables.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                          <Search className="h-8 w-8 text-gray-400" />
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                          <Search className="h-6 w-6 text-gray-400" />
                         </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-1">
                           Переменные не найдены
                         </h3>
-                        <p className="text-gray-500 max-w-sm">
+                        <p className="text-xs text-gray-500 max-w-xs">
                           Попробуйте изменить поисковый запрос или выберите другую категорию
                         </p>
                       </div>
@@ -249,31 +249,31 @@ export function VariableSelector({ onVariableSelect, trigger, className }: Varia
                       category.variables.map((variable) => (
                       <div
                         key={variable.key}
-                        className="group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-white"
+                        className="group flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all duration-200 bg-white"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-2">
+                          <div className="flex items-center gap-2 mb-1">
                             <Badge 
                               variant="outline" 
-                              className="text-xs font-mono bg-blue-50 text-blue-700 border-blue-200"
+                              className="text-[10px] font-mono bg-blue-50 text-blue-700 border-blue-200 px-1.5 py-0.5"
                             >
                               {variable.key}
                             </Badge>
-                            <span className="font-semibold text-gray-900 truncate">
+                            <span className="font-medium text-gray-900 truncate text-sm">
                               {variable.label}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-600 leading-relaxed">
+                          <p className="text-xs text-gray-600 leading-relaxed">
                             {variable.description}
                           </p>
                         </div>
-                        <div className="flex gap-2 ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="flex gap-1 ml-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => copyToClipboard(variable.key)}
                             title="Копировать в буфер обмена"
-                            className="h-8 px-3 text-xs border-gray-300 hover:border-blue-400 hover:text-blue-600"
+                            className="h-7 px-2 text-[10px] border-gray-300 hover:border-blue-400 hover:text-blue-600"
                           >
                             <Copy className="h-3 w-3 mr-1" />
                             Копировать
@@ -281,7 +281,7 @@ export function VariableSelector({ onVariableSelect, trigger, className }: Varia
                           <Button
                             size="sm"
                             onClick={() => handleVariableClick(variable.key)}
-                            className="h-8 px-4 text-xs bg-blue-600 hover:bg-blue-700"
+                            className="h-7 px-3 text-[10px] bg-blue-600 hover:bg-blue-700"
                           >
                             Вставить
                           </Button>
@@ -296,24 +296,24 @@ export function VariableSelector({ onVariableSelect, trigger, className }: Varia
           </Tabs>
 
           {/* Инструкция */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Target className="h-4 w-4 text-blue-600" />
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <div className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-md flex items-center justify-center">
+                <Target className="h-3 w-3 text-blue-600" />
               </div>
               <div>
-                <h4 className="font-semibold text-gray-900 mb-2">Как использовать переменные</h4>
-                <ul className="text-sm text-gray-700 space-y-1">
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                <h4 className="font-medium text-gray-900 mb-1 text-sm">Как использовать переменные</h4>
+                <ul className="text-xs text-gray-700 space-y-0.5">
+                  <li className="flex items-center gap-1.5">
+                    <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
                     Нажмите <strong>"Вставить"</strong> чтобы добавить переменную в текст
                   </li>
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                  <li className="flex items-center gap-1.5">
+                    <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
                     Или нажмите <strong>"Копировать"</strong> и вставьте вручную
                   </li>
-                  <li className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                  <li className="flex items-center gap-1.5">
+                    <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
                     Переменные автоматически заменяются реальными данными пользователя
                   </li>
                 </ul>

@@ -9,6 +9,7 @@
 
 import { BaseNodeHandler } from './base-handler';
 import { ConditionEvaluator } from '../condition-evaluator';
+import { resolveTemplateValue } from './utils';
 import type {
   WorkflowNode,
   WorkflowNodeType,
@@ -51,7 +52,7 @@ export class ConditionHandler extends BaseNodeHandler {
       // Сохраняем результат условия для использования в getNextNodeId
       // Убеждаемся что result - это boolean, а не Promise
       const booleanResult = Boolean(result);
-      context.variables.set('condition_result', booleanResult, 'session');
+      await context.variables.set('condition_result', booleanResult, 'session');
 
       this.logStep(context, node, `Condition result: ${result}`, 'debug');
 
@@ -85,17 +86,25 @@ export class ConditionHandler extends BaseNodeHandler {
       throw new Error('Variable is required for simple condition');
     }
 
-    // Получаем значение переменной
+    // Получаем значение переменной с поддержкой вложенных свойств
     let actualValue: any;
     try {
-      actualValue = await this.getVariable(variable, context, 'session');
+      // Используем resolveTemplateValue для поддержки вложенных переменных (user.balance, contactUser.telegramId и т.д.)
+      actualValue = await resolveTemplateValue(`{{${variable}}}`, context);
+      
+      // Если результат - это строка с {{...}}, значит переменная не найдена
+      if (actualValue === `{{${variable}}}`) {
+        actualValue = undefined;
+      }
     } catch (error) {
       this.logStep(context, {} as WorkflowNode, `Variable ${variable} not found, using undefined`, 'warn');
       actualValue = undefined;
     }
 
     // Разрешаем переменные в ожидаемом значении
-    const expectedValue = this.resolveValue(value, context);
+    const expectedValue = await this.resolveValue(value, context);
+
+    console.log(`🧮 Condition eval: variable=${variable}, actualValue=${actualValue} (${typeof actualValue}), expected=${expectedValue} (${typeof expectedValue}), operator=${operator}`);
 
     this.logStep(context, {} as WorkflowNode, 'Evaluating simple condition', 'debug', {
       variable,

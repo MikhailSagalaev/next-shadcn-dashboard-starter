@@ -90,7 +90,32 @@ export const SAFE_QUERIES = {
 
       if (user) {
         const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-        return { ...user, balance };
+        
+        // Возвращаем только сериализуемые данные пользователя
+        return {
+          id: user.id,
+          projectId: user.projectId,
+          email: user.email,
+          phone: user.phone,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          birthDate: user.birthDate,
+          telegramId: user.telegramId?.toString(),
+          telegramUsername: user.telegramUsername,
+          isActive: user.isActive,
+          registeredAt: user.registeredAt,
+          updatedAt: user.updatedAt,
+          currentLevel: user.currentLevel,
+          referralCode: user.referralCode,
+          referredBy: user.referredBy,
+          totalPurchases: Number(user.totalPurchases),
+          utmCampaign: user.utmCampaign,
+          utmContent: user.utmContent,
+          utmMedium: user.utmMedium,
+          utmSource: user.utmSource,
+          utmTerm: user.utmTerm,
+          balance
+        };
       }
     }
 
@@ -115,7 +140,32 @@ export const SAFE_QUERIES = {
 
       if (user) {
         const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-        return { ...user, balance };
+        
+        // Возвращаем только сериализуемые данные пользователя
+        return {
+          id: user.id,
+          projectId: user.projectId,
+          email: user.email,
+          phone: user.phone,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          birthDate: user.birthDate,
+          telegramId: user.telegramId?.toString(),
+          telegramUsername: user.telegramUsername,
+          isActive: user.isActive,
+          registeredAt: user.registeredAt,
+          updatedAt: user.updatedAt,
+          currentLevel: user.currentLevel,
+          referralCode: user.referralCode,
+          referredBy: user.referredBy,
+          totalPurchases: Number(user.totalPurchases),
+          utmCampaign: user.utmCampaign,
+          utmContent: user.utmContent,
+          utmMedium: user.utmMedium,
+          utmSource: user.utmSource,
+          utmTerm: user.utmTerm,
+          balance
+        };
       }
     }
 
@@ -140,7 +190,32 @@ export const SAFE_QUERIES = {
 
       if (user) {
         const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-        return { ...user, balance };
+        
+        // Возвращаем только сериализуемые данные пользователя
+        return {
+          id: user.id,
+          projectId: user.projectId,
+          email: user.email,
+          phone: user.phone,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          birthDate: user.birthDate,
+          telegramId: user.telegramId?.toString(),
+          telegramUsername: user.telegramUsername,
+          isActive: user.isActive,
+          registeredAt: user.registeredAt,
+          updatedAt: user.updatedAt,
+          currentLevel: user.currentLevel,
+          referralCode: user.referralCode,
+          referredBy: user.referredBy,
+          totalPurchases: Number(user.totalPurchases),
+          utmCampaign: user.utmCampaign,
+          utmContent: user.utmContent,
+          utmMedium: user.utmMedium,
+          utmSource: user.utmSource,
+          utmTerm: user.utmTerm,
+          balance
+        };
       }
     }
 
@@ -188,7 +263,7 @@ export const SAFE_QUERIES = {
       data: {
         userId: params.userId,
         amount: params.amount,
-        type: params.type as 'PURCHASE' | 'BIRTHDAY' | 'MANUAL' | 'REFERRAL' | 'PROMO',
+        type: params.type as 'PURCHASE' | 'BIRTHDAY' | 'MANUAL' | 'REFERRAL' | 'PROMO' | 'WELCOME',
         description: params.description,
         expiresAt: params.expiresAt
       }
@@ -418,6 +493,14 @@ export const SAFE_QUERIES = {
         .reduce((sum, t) => sum + Number(t.amount), 0)
     );
 
+    // ✨ НОВОЕ: Подсчёт истекающих бонусов в ближайшие 30 дней
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    
+    const expiringBonuses = user.bonuses
+      .filter(b => b.expiresAt && b.expiresAt <= thirtyDaysFromNow && b.expiresAt > new Date())
+      .reduce((sum, bonus) => sum + Number(bonus.amount), 0);
+
     // Форматируем историю транзакций
     const transactionHistory = user.transactions.map(t => ({
       id: t.id,
@@ -453,6 +536,7 @@ export const SAFE_QUERIES = {
       totalEarned,
       totalSpent,
       totalPurchases: Number(user.totalPurchases),
+      expiringBonuses, // ✨ НОВОЕ: Истекающие бонусы
       
       // Уровень и рефералы
       currentLevel: user.currentLevel,
@@ -490,14 +574,21 @@ export const SAFE_QUERIES = {
       return null;
     }
 
-    // Получаем настройки проекта для формирования ссылки
-    const project = await db.project.findUnique({
-      where: { id: params.projectId },
-      select: { name: true }
-    });
+    // ✨ ИСПРАВЛЕНО: Получаем настройки бота из bot_settings
+    const [project, botSettings] = await Promise.all([
+      db.project.findUnique({
+        where: { id: params.projectId },
+        select: { name: true }
+      }),
+      db.botSettings.findFirst({
+        where: { projectId: params.projectId },
+        select: { botUsername: true }
+      })
+    ]);
 
-    // Формируем реферальную ссылку
-    const referralLink = `https://t.me/your_bot_username?start=ref_${user.referralCode}`;
+    // Формируем реферальную ссылку с реальным username бота
+    const botUsername = botSettings?.botUsername || 'your_bot_username';
+    const referralLink = `https://t.me/${botUsername}?start=ref_${user.referralCode}`;
     
     return {
       referralCode: user.referralCode,
@@ -509,58 +600,118 @@ export const SAFE_QUERIES = {
   /**
    * Проверить пользователя по контакту (телефон или email)
    */
-  check_user_by_contact: async (db: PrismaClient, params: { phone?: string; email?: string; projectId: string }) => {
-    logger.debug('Executing check_user_by_contact', { params });
+        check_user_by_contact: async (db: PrismaClient, params: { phone?: string | object; email?: string; projectId: string }) => {
+          console.log('🔍 check_user_by_contact called with params', { 
+            phone: params.phone,
+            phoneType: typeof params.phone,
+            email: params.email,
+            projectId: params.projectId
+          });
 
-    let user = null;
+          let user = null;
 
-    // Ищем по телефону
-    if (params.phone) {
-      user = await db.user.findFirst({
-        where: {
-          phone: params.phone,
-          projectId: params.projectId
-        },
-        include: {
-          bonuses: {
-            where: {
-              OR: [
-                { expiresAt: null },
-                { expiresAt: { gt: new Date() } }
-              ]
+          // Обрабатываем телефон
+          if (params.phone) {
+            let phoneNumber: string;
+            
+            // Если phone - это объект contactReceived, извлекаем phoneNumber
+            if (typeof params.phone === 'object' && params.phone !== null) {
+              phoneNumber = (params.phone as any).phoneNumber || '';
+            } else if (typeof params.phone === 'string') {
+              phoneNumber = params.phone.trim();
+            } else {
+              phoneNumber = '';
+            }
+            
+            console.log('📞 Ищем по телефону:', phoneNumber);
+            
+            // Пропускаем поиск если телефон пустой или содержит неразрешенные переменные
+            if (phoneNumber && !phoneNumber.includes('{{') && !phoneNumber.includes('}}')) {
+              // Создаем варианты для поиска
+              const digits = phoneNumber.replace(/[^0-9]/g, '');
+              const variants = [
+                phoneNumber,
+                digits,
+                `+${digits}`,
+                digits.slice(-10)
+              ];
+              
+              // Добавляем варианты для российских номеров
+              if (digits.startsWith('8') && digits.length === 11) {
+                variants.push(`+7${digits.slice(1)}`);
+                variants.push(`7${digits.slice(1)}`);
+              } else if (digits.startsWith('7') && digits.length === 11) {
+                variants.push(`8${digits.slice(1)}`);
+              }
+              
+              console.log('📞 Варианты для поиска:', variants);
+
+              user = await db.user.findFirst({
+                where: {
+                  projectId: params.projectId,
+                  OR: variants.map(phone => ({ phone }))
+                }
+              });
+            } else {
+              console.log('⚠️ Пропускаем поиск по телефону - неразрешенная переменная или пустое значение');
             }
           }
-        }
-      });
-    }
 
-    // Если не нашли по телефону, ищем по email
-    if (!user && params.email) {
-      user = await db.user.findFirst({
-        where: {
-          email: params.email,
-          projectId: params.projectId
-        },
-        include: {
-          bonuses: {
-            where: {
-              OR: [
-                { expiresAt: null },
-                { expiresAt: { gt: new Date() } }
-              ]
+          // Если не нашли по телефону, ищем по email
+          if (!user && params.email) {
+            const email = (params.email || '').trim().toLowerCase();
+            console.log('📧 Ищем по email:', email);
+            
+            // Пропускаем поиск если email пустой или содержит неразрешенные переменные
+            if (email && !email.includes('{{') && !email.includes('}}')) {
+              user = await db.user.findFirst({
+                where: {
+                  email,
+                  projectId: params.projectId
+                }
+              });
+            } else {
+              console.log('⚠️ Пропускаем поиск по email - неразрешенная переменная или пустое значение');
             }
           }
-        }
-      });
-    }
 
-    if (user) {
-      const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-      return { ...user, balance };
-    }
+          if (user) {
+            console.log('✅ Пользователь найден:', {
+              userId: user.id,
+              phone: user.phone,
+              email: user.email,
+              isActive: user.isActive
+            });
+            
+            // Возвращаем только сериализуемые данные пользователя
+            return {
+              id: user.id,
+              projectId: user.projectId,
+              email: user.email,
+              phone: user.phone,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              birthDate: user.birthDate,
+              telegramId: user.telegramId?.toString(),
+              telegramUsername: user.telegramUsername,
+              isActive: user.isActive,
+              registeredAt: user.registeredAt,
+              updatedAt: user.updatedAt,
+              currentLevel: user.currentLevel,
+              referralCode: user.referralCode,
+              referredBy: user.referredBy,
+              totalPurchases: Number(user.totalPurchases),
+              utmCampaign: user.utmCampaign,
+              utmContent: user.utmContent,
+              utmMedium: user.utmMedium,
+              utmSource: user.utmSource,
+              utmTerm: user.utmTerm
+            };
+          }
 
-    return null;
-  },
+          console.log('❌ Пользователь не найден');
+          return null;
+        },
 
   /**
    * Активировать пользователя (привязать Telegram)
@@ -590,10 +741,7 @@ export const SAFE_QUERIES = {
     const welcomeBonus = await db.bonus.findFirst({
       where: {
         userId: params.userId,
-        type: 'PURCHASE', // Используем PURCHASE для приветственных бонусов
-        description: {
-          contains: 'приветственн'
-        }
+        type: 'WELCOME'
       }
     });
 

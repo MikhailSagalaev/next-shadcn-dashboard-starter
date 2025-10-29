@@ -74,9 +74,6 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
         return;
       }
 
-      // Очищаем кэш workflow
-      WorkflowRuntimeService.clearAllCache();
-
       // Определяем тип триггера
       let trigger: 'start' | 'message' | 'callback' = 'message';
       if (ctx.message?.text?.startsWith('/start')) {

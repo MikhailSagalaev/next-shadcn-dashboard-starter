@@ -29,7 +29,7 @@ export const ConditionNode = memo(({ data }: NodeProps) => {
         </CardTitle>
         <span className='text-xs text-muted-foreground'>Условие</span>
       </CardHeader>
-      <CardContent>
+      <CardContent className='space-y-2'>
         <p className='text-sm text-muted-foreground line-clamp-2'>{conditionText}</p>
       </CardContent>
       <Handle type='target' position={Position.Top} className='!bg-orange-500' />

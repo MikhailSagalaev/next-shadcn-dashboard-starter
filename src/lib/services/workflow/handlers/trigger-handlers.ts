@@ -115,3 +115,32 @@ export class CallbackTriggerHandler extends BaseNodeHandler {
     };
   }
 }
+
+/**
+ * Обработчик для trigger.webhook
+ */
+export class WebhookTriggerHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'trigger.webhook';
+  }
+
+  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+    this.logStep(context, node, 'Webhook trigger executed', 'debug', {
+      method: node.data.config?.['trigger.webhook']?.method || 'POST'
+    });
+
+    // Webhook триггеры активируются внешним запросом, handler просто передает управление дальше
+    return null;
+  }
+
+  async validate(config: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    if (!config?.webhookUrl) {
+      errors.push('webhookUrl is required');
+    }
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+}

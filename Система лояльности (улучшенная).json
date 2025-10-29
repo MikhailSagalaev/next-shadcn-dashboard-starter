@@ -33,14 +33,19 @@
         "label": "Приветствие",
         "config": {
           "message": {
-            "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📱 Для начала работы, пожалуйста, поделитесь вашим номером телефона.",
+            "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📱 Для начала работы поделитесь номером телефона кнопкой ниже ИЛИ отправьте свой email текстом в чат.",
             "keyboard": {
               "type": "reply",
               "buttons": [
                 [
                   {
-                    "text": "Поделиться контактом",
+                    "text": "📱 Поделиться контактом",
                     "request_contact": true
+                  }
+                ],
+                [
+                  {
+                    "text": "✉️ Ввести email"
                   }
                 ]
               ]
@@ -199,17 +204,17 @@
       "id": "check-contact-user",
       "data": {
         "label": "Проверить по контакту/email",
-        "config": {
-          "action.database_query": {
-            "query": "check_user_by_contact",
-            "parameters": {
-              "phone": "{{telegram.contact.phoneNumber}}",
-              "email": "{{telegram.message.text}}",
-              "projectId": "{{projectId}}"
-            },
-            "assignTo": "contactUser"
-          }
+      "config": {
+        "action.database_query": {
+          "query": "check_user_by_contact",
+          "parameters": {
+            "phone": "{{contactReceived.phoneNumber}}",
+            "email": "{{telegram.message.text}}",
+            "projectId": "{{projectId}}"
+          },
+          "assignTo": "contactUser"
         }
+      }
       },
       "type": "action.database_query",
       "dragging": false,
@@ -333,7 +338,7 @@
             "parameters": {
               "userId": "{{contactUser.id}}",
               "amount": 100,
-              "type": "welcome",
+              "type": "WELCOME",
               "description": "Приветственные бонусы за активацию аккаунта"
             }
           }
@@ -467,7 +472,7 @@
       "targetHandle": "input"
     },
     {
-      "id": "welcome-to-contact-check",
+      "id": "welcome-to-check-contact",
       "type": "default",
       "source": "welcome-message",
       "target": "check-contact-user",
@@ -491,7 +496,7 @@
       "targetHandle": "input"
     },
     {
-      "id": "request-to-contact-check",
+      "id": "request-to-check-contact",
       "type": "default",
       "source": "request-contact-confirmation",
       "target": "check-contact-user",
@@ -638,13 +643,6 @@
       "target": "request-contact-confirmation",
       "animated": true,
       "sourceHandle": "false"
-    },
-    {
-      "id": "edge-request-contact-confirmation-check-contact-user-1760624947121",
-      "type": "default",
-      "source": "request-contact-confirmation",
-      "target": "check-contact-user",
-      "animated": true
     },
     {
       "id": "edge-check-contact-user-check-contact-found-1760624947122",

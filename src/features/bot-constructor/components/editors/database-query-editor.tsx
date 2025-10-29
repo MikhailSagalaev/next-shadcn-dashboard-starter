@@ -212,7 +212,7 @@ export function DatabaseQueryEditor({ config, onChange }: DatabaseQueryEditorPro
                 />
                 {param !== 'projectId' && (
                   <p className='text-xs text-muted-foreground mt-1'>
-                    Используйте переменные: {`{{telegram.userId}}`, `{{user.id}}`, `{{telegram.contact.phone}}`}
+                    {'Используйте переменные: {{telegram.userId}}, {{user.id}}, {{telegram.contact.phone}}'}
                   </p>
                 )}
               </div>

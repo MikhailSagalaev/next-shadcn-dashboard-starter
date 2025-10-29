@@ -200,6 +200,39 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     }
   };
 
+  const handleDeleteUser = async (user: DisplayUser) => {
+    if (!confirm(`Удалить пользователя ${user.email || 'без email'}?`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/projects/${projectId}/users/${user.id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Успех',
+          description: 'Пользователь удален'
+        });
+        loadUsers(currentPage); // Перезагружаем данные
+      } else {
+        const error = await response.json();
+        toast({
+          title: 'Ошибка',
+          description: error.error || 'Не удалось удалить пользователя',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Произошла ошибка при удалении пользователя',
+        variant: 'destructive'
+      });
+    }
+  };
+
   // Select all users
   const selectAllUsers = () => {
     setSelectedUsers(users.map((user) => user.id));
@@ -658,6 +691,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 if (user) handleOpenBonusDialog(user);
               }}
               onProfileClick={handleUserProfile}
+              onDeleteUser={handleDeleteUser}
               onExport={handleExportAll}
               loading={usersLoading}
               totalCount={totalUsers}

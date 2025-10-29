@@ -53,7 +53,9 @@ import {
   Settings,
   Megaphone,
   UserCheck,
-  Star
+  Star,
+  Trash2,
+  MoreVertical
 } from 'lucide-react';
 
 import type {
@@ -69,7 +71,9 @@ interface TemplatesLibraryProps {
 interface TemplateCardProps {
   template: BotTemplate;
   onInstall: (template: BotTemplate) => void;
+  onDelete?: (template: BotTemplate) => void;
   isInstalling: boolean;
+  showAdminActions?: boolean;
 }
 
 const categoryIcons = {
@@ -113,7 +117,9 @@ const difficultyColors = {
 const TemplateCard: React.FC<TemplateCardProps> = ({
   template,
   onInstall,
-  isInstalling
+  onDelete,
+  isInstalling,
+  showAdminActions = false
 }) => {
   const Icon = categoryIcons[template.category] || Settings;
 
@@ -131,9 +137,26 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
             {template.icon}
           </div>
           <div className='flex-1'>
-            <CardTitle className='text-lg'>
-              {template.name}
-            </CardTitle>
+            <div className='flex items-start justify-between'>
+              <CardTitle className='text-lg'>
+                {template.name}
+              </CardTitle>
+              {showAdminActions && onDelete && (
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  className='h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(`Удалить шаблон "${template.name}"?`)) {
+                      onDelete(template);
+                    }
+                  }}
+                >
+                  <Trash2 className='h-4 w-4 text-destructive' />
+                </Button>
+              )}
+            </div>
             <div className='mt-1 flex items-center gap-2'>
               <Badge variant='secondary' className='text-xs'>
                 <Icon className='mr-1 h-3 w-3' />
@@ -394,6 +417,44 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
     }
   };
 
+  const handleDeleteTemplate = async (template: BotTemplate) => {
+    try {
+      const response = await fetch(`/api/templates/${template.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete template');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: 'Успех',
+          description: `Шаблон "${template.name}" удален`,
+          variant: 'default'
+        });
+        
+        // Перезагружаем шаблоны
+        loadTemplates();
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: result.error || 'Не удалось удалить шаблон',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Произошла ошибка при удалении шаблона',
+        variant: 'destructive'
+      });
+    }
+  };
+
 
   if (loading) {
     return (
@@ -603,7 +664,9 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                 key={template.id}
                 template={template}
                 onInstall={openInstallDialog}
+                onDelete={handleDeleteTemplate}
                 isInstalling={installingTemplate === template.id}
+                showAdminActions={true}
               />
             ))}
           </div>

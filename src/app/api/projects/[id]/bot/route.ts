@@ -392,7 +392,7 @@ export async function PUT(
     // Проверяем, изменился ли токен
     const existingBot = botManager.getBot(id);
     const tokenChanged = existingBot && existingBot.bot.token !== body.botToken;
-    
+
     logger.info('🔍 ПРОВЕРКА ИЗМЕНЕНИЯ ТОКЕНА', {
       projectId: id,
       existingBot: existingBot ? {
@@ -405,27 +405,16 @@ export async function PUT(
       allBotsInManager: botManager.getAllBotsStatus(),
       component: 'bot-api'
     });
-    
-    if (tokenChanged) {
-      // Если токен изменился, экстренно останавливаем ВСЕ боты с новым токеном
-      try {
-        logger.info('🔄 ТОКЕН ИЗМЕНИЛСЯ, ЭКСТРЕННАЯ ОСТАНОВКА', {
-          projectId: id,
-          oldToken: existingBot.bot.token ? '***' + existingBot.bot.token.slice(-4) : 'none',
-          newToken: '***' + body.botToken.slice(-4),
-          component: 'bot-api'
-        });
 
-        // Экстренно останавливаем все боты с новым токеном
-        await botManager.emergencyStopBotsWithToken(body.botToken);
-        
-        // Останавливаем текущий бот
-        await botManager.stopBot(id);
-        
-        // Ждем для полной очистки Telegram API
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Создаем новый бот с новым токеном
+    // Проверяем, есть ли бот в менеджере
+    if (!existingBot) {
+      logger.info('Бот не найден в менеджере, создаем новый', {
+        projectId: id,
+        component: 'bot-api'
+      });
+
+      try {
+        // Простое создание бота без сложной логики
         await botManager.createBot(id, {
           id: body.id,
           projectId: id,
@@ -436,74 +425,83 @@ export async function PUT(
           createdAt: new Date(),
           updatedAt: new Date()
         });
-        
-        logger.info('Бот успешно пересоздан с новым токеном', {
+        logger.info('Бот успешно создан в менеджере', {
           projectId: id,
           component: 'bot-api'
         });
       } catch (botError) {
         const errorMessage = botError instanceof Error ? botError.message : 'Unknown error';
-        
-        // Специальная обработка 409 конфликтов
-        if (errorMessage.includes('409') || errorMessage.includes('terminated by other getUpdates')) {
-          logger.warn(
-            '409 конфликт при обновлении бота - возможно запущен другой экземпляр',
-            {
-              projectId: id,
-              error: errorMessage,
-              component: 'bot-api'
-            }
-          );
-          
-          // Возвращаем успех, так как настройки сохранены
-          return NextResponse.json(
-            {
-              ...botSettings,
-              message: 'Настройки бота обновлены. Возможен конфликт с другим экземпляром бота.',
-              warning: '409 Conflict: возможно запущен другой экземпляр бота с тем же токеном'
-            },
-            { headers: createCorsHeaders(request) }
-          );
-        }
-        
-        logger.warn(
-          'Не удалось пересоздать бота, но настройки обновлены',
-          {
-            projectId: id,
-            error: errorMessage
-          },
-          'bot-api'
-        );
-      }
-    } else {
-      // Если токен не изменился, просто обновляем настройки
-      try {
-        await botManager.updateBot(id, {
-          id: body.id,
+        logger.warn('Не удалось создать бота в менеджере, продолжаем', {
           projectId: id,
-          botToken: body.botToken,
-          botUsername: body.botUsername,
-          functionalSettings: body.functionalSettings || {},
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-        logger.info('Настройки бота обновлены', {
-          projectId: id,
+          error: errorMessage,
           component: 'bot-api'
         });
-      } catch (botError) {
-        logger.warn(
-          'Не удалось обновить настройки бота',
-          {
+        // Не прерываем выполнение, если не удается создать бота
+        // Настройки в БД уже обновлены
+      }
+    } else {
+      logger.info('Бот найден в менеджере, обновляем', {
+        projectId: id,
+        tokenChanged,
+        component: 'bot-api'
+      });
+
+      if (tokenChanged) {
+        // Если токен изменился, пересоздаем бота
+        try {
+          // Сначала останавливаем старый бот
+          await botManager.stopBot(id);
+          
+          // Ждем немного
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Создаем новый бот
+          await botManager.createBot(id, {
+            id: body.id,
             projectId: id,
-            error: botError instanceof Error ? botError.message : 'Unknown error'
-          },
-          'bot-api'
-        );
+            botToken: body.botToken,
+            botUsername: body.botUsername,
+            functionalSettings: body.functionalSettings || {},
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          logger.info('Бот успешно пересоздан с новым токеном', {
+            projectId: id,
+            component: 'bot-api'
+          });
+        } catch (botError) {
+          const errorMessage = botError instanceof Error ? botError.message : 'Unknown error';
+          logger.warn('Не удалось пересоздать бота с новым токеном', {
+            projectId: id,
+            error: errorMessage,
+            component: 'bot-api'
+          });
+        }
+      } else {
+        // Если токен не изменился, просто обновляем настройки в памяти
+        try {
+          const bot = botManager.getBot(id);
+          if (bot) {
+            bot.bot.token = body.botToken;
+            bot.bot.username = body.botUsername;
+            bot.isActive = true;
+            bot.lastUpdated = new Date();
+            logger.info('Настройки бота обновлены в менеджере', {
+              projectId: id,
+              component: 'bot-api'
+            });
+          }
+        } catch (botError) {
+          const errorMessage = botError instanceof Error ? botError.message : 'Unknown error';
+          logger.warn('Не удалось обновить настройки бота в менеджере', {
+            projectId: id,
+            error: errorMessage,
+            component: 'bot-api'
+          });
+        }
       }
     }
-
     logger.info('Настройки бота обновлены', { projectId: id }, 'bot-api');
 
     return NextResponse.json(

@@ -27,7 +27,7 @@ export const DelayNode = memo(({ data }: NodeProps) => {
         </CardTitle>
         <span className='text-xs text-muted-foreground'>Задержка</span>
       </CardHeader>
-      <CardContent>
+      <CardContent className='space-y-2'>
         <p className='text-sm text-muted-foreground'>{delayText}</p>
       </CardContent>
       <Handle type='target' position={Position.Top} className='!bg-yellow-500' />

@@ -42,6 +42,7 @@ import { Button } from '@/components/ui/button';
 import { WorkflowToolbar } from './workflow-toolbar';
 import { WorkflowProperties } from './workflow-properties';
 import { WorkflowHeader } from './workflow-header';
+import { WorkflowValidationPanel } from './workflow-validation-panel';
 
 // Node types
 import { workflowNodeTypes } from './nodes/workflow-node-types';
@@ -60,6 +61,7 @@ import type {
   WorkflowNodeConfig,
   Position
 } from '@/types/workflow';
+import { validateWorkflow, type WorkflowValidationResult } from '@/lib/services/workflow/workflow-validator';
 
 interface WorkflowConstructorProps {
   projectId: string;
@@ -81,6 +83,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const [validationResult, setValidationResult] = useState<WorkflowValidationResult | null>(null);
 
   // Custom hooks
   const {
@@ -151,6 +154,21 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
     []
   );
 
+  const edgesToWorkflowConnections = useCallback(
+    (edgeList: Edge[]): WorkflowConnection[] =>
+      edgeList.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle,
+        type: (edge.type as WorkflowConnectionType) || 'default',
+        animated: edge.animated,
+        style: (edge.style as Record<string, any>) || undefined
+      })),
+    []
+  );
+
   // Sync currentWorkflow with React Flow state
   useEffect(() => {
     if (currentWorkflow) {
@@ -161,6 +179,16 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       setEdges([]);
     }
   }, [currentWorkflow, setNodes, setEdges, workflowConnectionsToEdges]);
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      setValidationResult(null);
+      return;
+    }
+
+    const connections = edgesToWorkflowConnections(edges);
+    setValidationResult(validateWorkflow(nodes, connections));
+  }, [nodes, edges, edgesToWorkflowConnections]);
 
   // Handle adding new nodes
   const handleAddNode = useCallback(
@@ -178,6 +206,20 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       setNodes((nds) => [...nds, newNode]);
     },
     [setNodes]
+  );
+
+  const handleFocusNode = useCallback(
+    (nodeId: string) => {
+      if (!reactFlowInstance) return;
+      const node = reactFlowInstance.getNode(nodeId);
+      if (!node) return;
+
+      reactFlowInstance.fitView({ nodes: [{ id: nodeId }], padding: 0.3, duration: 400 });
+
+      const found = nodes.find((n) => n.id === nodeId) ?? null;
+      setSelectedNode(found);
+    },
+    [reactFlowInstance, nodes]
   );
 
   // Helper to get default label for a new node
@@ -498,7 +540,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
             <WorkflowToolbar onAddNode={handleAddNode} />
           </div>
           {/* Auto layout button */}
-          <div className='absolute right-4 top-4 z-10'>
+          <div className='absolute right-4 top-4 z-[5]'>
             <Button 
               variant="outline" 
               size="sm" 
@@ -507,7 +549,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               title="Автоматическое выравнивание нод"
             >
               <AlignVerticalJustifyCenter className="h-4 w-4 mr-2" />
-              Выравнять
+              Выровнять
             </Button>
           </div>
           <ReactFlow
@@ -526,6 +568,13 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
             attributionPosition='bottom-left'
             className='h-full w-full'
           >
+            <Panel position='bottom-left' className='ml-2 mb-2'>
+              <WorkflowValidationPanel
+                result={validationResult}
+                onFocusNode={handleFocusNode}
+                className='w-64'
+              />
+            </Panel>
             <Background variant={BackgroundVariant.Dots} />
             <Controls />
             <MiniMap />

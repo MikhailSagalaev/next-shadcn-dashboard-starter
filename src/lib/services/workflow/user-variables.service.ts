@@ -109,6 +109,44 @@ export class UserVariablesService {
         }).join('\n');
       };
 
+      // ✨ НОВОЕ: Генератор прогресс-бара для уровня
+      const generateProgressBar = (currentLevel: string) => {
+        const levels = ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'];
+        const currentIndex = levels.indexOf(currentLevel);
+        
+        if (currentIndex === -1) {
+          return '▱▱▱▱ (0%)';
+        }
+        
+        const progress = ((currentIndex + 1) / levels.length) * 100;
+        const filled = Math.floor(progress / 25);
+        const empty = 4 - filled;
+        
+        const bar = '▰'.repeat(filled) + '▱'.repeat(empty);
+        return `${bar} (${Math.round(progress)}%)`;
+      };
+
+      // ✨ НОВОЕ: Форматтер для истории транзакций с красивым отображением
+      const formatTransactionsDetailed = (transactions: any[]) => {
+        if (!transactions || transactions.length === 0) {
+          return '📭 История операций пуста';
+        }
+        
+        return transactions.slice(0, 10).map((t, index) => {
+          const amount = Number(t.amount);
+          const icon = t.type === 'EARN' ? '💚' : '💸';
+          const sign = t.type === 'EARN' ? '+' : '-';
+          const date = new Intl.DateTimeFormat('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }).format(new Date(t.createdAt));
+          
+          return `${index + 1}. ${icon} ${sign}${Math.abs(amount)} ₽ • ${t.description || 'Операция'}\n   📅 ${date}`;
+        }).join('\n\n');
+      };
+
       return {
         // Основная информация
         'user.id': profile.userId,
@@ -129,9 +167,11 @@ export class UserVariablesService {
         'user.totalSpentFormatted': `${profile.totalSpent} бонусов`,
         'user.totalPurchases': profile.totalPurchases,
         'user.totalPurchasesFormatted': `${profile.totalPurchases} руб.`,
+        'user.expiringBonuses': profile.expiringBonuses || 0, // ✨ НОВОЕ
         
         // Уровень и рефералы
         'user.currentLevel': profile.currentLevel,
+        'user.progressBar': generateProgressBar(profile.currentLevel), // ✨ НОВОЕ
         'user.referralCode': profile.referralCode || 'Не сгенерирован',
         'user.referredBy': profile.referredBy || 'Нет',
         'user.referrerName': profile.referrerName || 'Нет',
@@ -145,6 +185,7 @@ export class UserVariablesService {
         'user.bonusCount': profile.bonusCount,
         'user.transactionHistory': formatTransactionHistory(profile.transactionHistory),
         'user.activeBonuses': formatActiveBonuses(profile.activeBonuses),
+        'transactions.formatted': formatTransactionsDetailed(profile.transactionHistory), // ✨ НОВОЕ
         
         // Реферальная ссылка
         'user.referralLink': referralData?.referralLink || 'Недоступно',

@@ -148,7 +148,28 @@ export class SimpleWorkflowProcessor {
         throw executionError;
       }
 
-      // Завершаем выполнение
+      // ✅ Проверяем, не перешел ли workflow в состояние waiting
+      try {
+        const execution = await db.workflowExecution.findUnique({
+          where: { id: context.executionId },
+          select: { status: true, waitType: true, currentNodeId: true }
+        });
+
+        if (execution?.status === 'waiting') {
+          logger.info('⏸️ Workflow execution paused (waiting state detected)', {
+            executionId: context.executionId,
+            waitType: execution.waitType,
+            currentNodeId: execution.currentNodeId,
+            steps: context.step
+          });
+          // Не завершаем выполнение — оно будет продолжено позже
+          return true;
+        }
+      } catch (checkError) {
+        console.warn('Failed to check execution status after loop', checkError);
+      }
+
+      // Завершаем выполнение как completed, если не waiting
       try {
         await ExecutionContextManager.completeExecution(context, 'completed', undefined, context.step);
         console.log('Execution completed successfully');
@@ -204,10 +225,21 @@ export class SimpleWorkflowProcessor {
   }
 
   /**
+   * Продолжает выполнение workflow начиная с указанной ноды
+   * Используется для возобновления workflow после waiting состояния
+   */
+  async resumeWorkflow(context: ExecutionContext, startNodeId: string): Promise<void> {
+    return this.executeWorkflow(context, startNodeId);
+  }
+
+  /**
    * Выполняет workflow начиная с указанной ноды
    * ✅ Защита от бесконечных циклов через visitedNodes и maxIterations
    */
   private async executeWorkflow(context: ExecutionContext, startNodeId: string): Promise<void> {
+    console.log('🚀 EXECUTING WORKFLOW FROM NODE:', startNodeId);
+    console.log('📋 Available nodes:', Array.from(this.nodesMap.keys()));
+    
     this.currentContext = context;
     let currentNodeId: string | null = startNodeId;
     let step = 0;
@@ -218,6 +250,8 @@ export class SimpleWorkflowProcessor {
 
     while (currentNodeId && step < context.maxSteps) {
       step++;
+      
+      console.log(`🔄 STEP ${step}: Executing node ${currentNodeId}`);
 
       // ✅ Проверяем количество посещений текущей ноды
       const visitCount = visitedNodes.get(currentNodeId) || 0;
@@ -249,15 +283,28 @@ export class SimpleWorkflowProcessor {
       }
 
       // Выполняем ноду через handler
+      console.log(`⚡ Executing ${node.type} handler for node ${currentNodeId}`);
       const nextNodeId = await handler.execute(node, updatedContext);
+      console.log(`✅ Node ${currentNodeId} executed, nextNodeId: ${nextNodeId}`);
       context.step = step;
+
+      // ✅ Проверяем на специальный результат ожидания ввода пользователя
+      if (nextNodeId === '__WAITING_FOR_USER_INPUT__' || nextNodeId === '__WAITING_FOR_CONTACT__') {
+        logger.info('⏸️ Workflow paused waiting for user input', {
+          executionId: context.executionId,
+          nodeId: currentNodeId,
+          step
+        });
+        // Прерываем выполнение - workflow в состоянии waiting
+        return;
+      }
 
       // Определяем следующий нод: сначала используем результат handler'а,
       // если null - ищем по connections
       if (nextNodeId !== null) {
         currentNodeId = nextNodeId;
       } else {
-        currentNodeId = this.getNextNodeId(currentNodeId);
+        currentNodeId = await this.getNextNodeId(currentNodeId);
       }
 
       // Если следующий нод не найден, завершаем выполнение
@@ -279,7 +326,7 @@ export class SimpleWorkflowProcessor {
   /**
    * Получает следующий нод по connections
    */
-  private getNextNodeId(currentNodeId: string): string | null {
+  private async getNextNodeId(currentNodeId: string): Promise<string | null> {
     // Ищем connection где source - текущий нод
     const relevantConnections = Array.from(this.connectionsMap.values())
       .filter(connection => connection.source === currentNodeId);
@@ -305,7 +352,7 @@ export class SimpleWorkflowProcessor {
       })));
 
       // Получаем результат условия из контекста (должен быть установлен в condition handler)
-      const conditionResult = this.getConditionResultFromContext();
+      const conditionResult = await this.getConditionResultFromContext();
 
       // Ищем connection с соответствующим sourceHandle
       const expectedHandle = conditionResult ? 'true' : 'false';
@@ -340,21 +387,15 @@ export class SimpleWorkflowProcessor {
   /**
    * Получает результат условия из текущего контекста выполнения
    */
-  private getConditionResultFromContext(): boolean {
+  private async getConditionResultFromContext(): Promise<boolean> {
     if (!this.currentContext) {
       console.log('⚠️ getConditionResultFromContext: no currentContext, returning false');
       return false; // fallback - если нет контекста, считаем условие false
     }
 
     try {
-      const result = this.currentContext.variables.get('condition_result', 'session');
+      const result = await this.currentContext.variables.get('condition_result', 'session');
       console.log(`🔍 getConditionResultFromContext: condition_result = ${result} (${typeof result})`);
-      
-      // Если result - это Promise, ждем его выполнения
-      if (result && typeof result.then === 'function') {
-        console.log('⚠️ getConditionResultFromContext: result is Promise, returning false');
-        return false; // Если это Promise, считаем условие false
-      }
       
       return Boolean(result);
     } catch (error) {
@@ -457,7 +498,7 @@ export class SimpleWorkflowProcessor {
   private findCommandTrigger(command: string): WorkflowNode | undefined {
     console.log(`🔍 findCommandTrigger: ищем команду "${command}"`);
     
-    for (const [nodeId, node] of this.nodesMap.entries()) {
+    for (const [nodeId, node] of Array.from(this.nodesMap.entries())) {
       console.log(`  Проверяем ноду ${nodeId} (${node.id}) типа ${node.type}`);
       
       if (node.type === 'trigger.command') {

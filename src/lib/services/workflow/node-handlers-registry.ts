@@ -32,20 +32,43 @@ export class NodeHandlersRegistry {
     // Проверяем все возможные типы нод
     const allNodeTypes: WorkflowNodeType[] = [
       // Триггеры
-      'trigger.command', 'trigger.message', 'trigger.callback', 'trigger.webhook',
+      'trigger.command',
+      'trigger.message',
+      'trigger.callback',
+      'trigger.webhook',
       'trigger.email',
       // Сообщения
       'message',
+      'message.keyboard.inline',
+      'message.keyboard.reply',
+      'message.photo',
+      'message.video',
+      'message.document',
+      'message.edit',
+      'message.delete',
       // Действия
-      'action.api_request', 'action.database_query', 'action.set_variable', 'action.get_variable',
-      'action.send_notification', 'action.check_user_linked', 'action.find_user_by_contact',
-      'action.link_telegram_account', 'action.get_user_balance',
+      'action.api_request',
+      'action.database_query',
+      'action.set_variable',
+      'action.get_variable',
+      'action.request_contact',
+      'action.send_notification',
+      'action.check_user_linked',
+      'action.find_user_by_contact',
+      'action.link_telegram_account',
+      'action.get_user_balance',
       // Условия
       'condition',
       // Поток управления
-      'flow.delay', 'flow.loop', 'flow.sub_workflow', 'flow.jump', 'flow.end',
+      'flow.delay',
+      'flow.loop',
+      'flow.sub_workflow',
+      'flow.jump',
+      'flow.switch',
+      'flow.end',
       // Интеграции
-      'integration.webhook', 'integration.analytics'
+      'integration.webhook',
+      'integration.analytics'
     ];
 
     for (const nodeType of allNodeTypes) {

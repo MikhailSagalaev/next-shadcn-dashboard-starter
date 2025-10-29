@@ -1,0 +1,1103 @@
+{
+  "id": "cmgqm22x90001v8c8yz6gj4q7",
+  "projectId": "cmgntgsdv0000v8mwfwwh30az",
+  "name": "Система лояльности (исправленная)",
+  "description": "Умная система лояльности с проверкой статуса пользователей, начислением приветственных бонусов и флоу регистрации на сайте. ИСПРАВЛЕНА проблема повторного начисления бонусов.",
+  "isActive": true,
+  "nodes": [
+    {
+      "id": "start-trigger",
+      "data": {
+        "label": "Команда /start",
+        "config": {
+          "trigger.command": {
+            "command": "/start"
+          }
+        }
+      },
+      "type": "trigger.command",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 100
+      },
+      "selected": false
+    },
+    {
+      "id": "welcome-message",
+      "data": {
+        "label": "Приветствие",
+        "config": {
+          "message": {
+            "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📱 Для начала работы поделитесь номером телефона кнопкой ниже ИЛИ отправьте свой email текстом в чат.",
+            "keyboard": {
+              "type": "reply",
+              "buttons": [
+                [
+                  {
+                    "text": "📱 Поделиться контактом",
+                    "request_contact": true
+                  }
+                ],
+                [
+                  {
+                    "text": "✉️ Ввести email"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 400,
+        "y": 100
+      },
+      "selected": false
+    },
+    {
+      "id": "check-telegram-user",
+      "data": {
+        "label": "Проверить по Telegram ID",
+        "config": {
+          "action.database_query": {
+            "query": "check_user_by_telegram",
+            "parameters": {
+              "telegramId": "{{telegram.userId}}",
+              "projectId": "{{projectId}}"
+            },
+            "assignTo": "telegramUser"
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 700,
+        "y": 100
+      },
+      "selected": false
+    },
+    {
+      "id": "check-user-status",
+      "data": {
+        "label": "Пользователь найден?",
+        "config": {
+          "condition": {
+            "variable": "telegramUser",
+            "operator": "is_not_empty"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1000,
+        "y": 100
+      },
+      "selected": false
+    },
+    {
+      "id": "check-user-active",
+      "data": {
+        "label": "Пользователь активен?",
+        "config": {
+          "condition": {
+            "variable": "telegramUser.isActive",
+            "operator": "equals",
+            "value": true
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1300,
+        "y": 100
+      },
+      "selected": false
+    },
+    {
+      "id": "active-user-profile",
+      "data": {
+        "label": "Профиль активного пользователя",
+        "config": {
+          "message": {
+            "text": "👋 Добро пожаловать назад, {user.firstName}!\n\n💰 Бонусная программа: Маока\n\n💵 Ваш баланс бонусов: {user.balanceFormatted}\n📊 Всего заработано: {user.totalEarnedFormatted}₽\n🛒 Потрачено: {user.totalSpentFormatted}₽\n🏆 Истекает в ближайшие 30 дней: {user.expiringBonuses}₽\n\nВыберите действие:",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {"text": "💰 Баланс", "callback_data": "menu_balance"},
+                  {"text": "📜 История", "callback_data": "menu_history"}
+                ],
+                [
+                  {"text": "🏆 Уровень", "callback_data": "menu_level"},
+                  {"text": "👥 Рефералы", "callback_data": "menu_referrals"}
+                ],
+                [
+                  {"text": "🔗 Пригласить", "callback_data": "menu_invite"},
+                  {"text": "❓ Помощь", "callback_data": "menu_help"}
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 200
+      },
+      "position": {
+        "x": 1600,
+        "y": 50
+      },
+      "selected": false
+    },
+    {
+      "id": "request-contact-confirmation",
+      "data": {
+        "label": "Запросить подтверждение контакта",
+        "config": {
+          "message": {
+            "text": "🔍 Мы нашли ваш аккаунт, но он неактивен.\n\n📱 Для активации поделитесь контактом или введите email:\n\n• Нажмите кнопку для отправки контакта\n• Или введите ваш email вручную",
+            "keyboard": {
+              "type": "reply",
+              "buttons": [
+                [
+                  {
+                    "text": "Поделиться контактом",
+                    "request_contact": true
+                  }
+                ],
+                [
+                  {
+                    "text": "Ввести email",
+                    "callback_data": "enter_email"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 1600,
+        "y": 200
+      },
+      "selected": false
+    },
+    {
+      "id": "check-contact-user",
+      "data": {
+        "label": "Проверить по контакту/email",
+      "config": {
+        "action.database_query": {
+          "query": "check_user_by_contact",
+          "parameters": {
+            "phone": "{{contactReceived.phoneNumber}}",
+            "email": "{{telegram.message.text}}",
+            "projectId": "{{projectId}}"
+          },
+          "assignTo": "contactUser"
+        }
+      }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1000,
+        "y": 300
+      },
+      "selected": false
+    },
+    {
+      "id": "check-contact-found",
+      "data": {
+        "label": "Контакт найден?",
+        "config": {
+          "condition": {
+            "variable": "contactUser",
+            "operator": "is_not_empty"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1300,
+        "y": 300
+      },
+      "selected": false
+    },
+    {
+      "id": "check-telegram-already-linked",
+      "data": {
+        "label": "Telegram уже привязан?",
+        "config": {
+          "condition": {
+            "variable": "contactUser.telegramId",
+            "operator": "is_not_empty"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1600,
+        "y": 350
+      },
+      "selected": false
+    },
+    {
+      "id": "already-active-message",
+      "data": {
+        "label": "Уже активирован",
+        "config": {
+          "message": {
+            "text": "✅ Ваш аккаунт уже активирован!\n\n💰 Текущий баланс: {user.balanceFormatted}\n📊 Уровень: {user.currentLevel}\n🎁 Реферальный код: {user.referralCode}\n\n🛍️ Продолжайте делать покупки и копить бонусы!"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 1900,
+        "y": 450
+      },
+      "selected": false
+    },
+    {
+      "id": "activate-user",
+      "data": {
+        "label": "Активировать пользователя",
+        "config": {
+          "action.database_query": {
+            "query": "activate_user",
+            "parameters": {
+              "userId": "{{contactUser.id}}",
+              "telegramId": "{{telegram.userId}}",
+              "telegramUsername": "{{telegram.username}}"
+            }
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1900,
+        "y": 250
+      },
+      "selected": false
+    },
+    {
+      "id": "check-welcome-bonus",
+      "data": {
+        "label": "Проверить приветственные бонусы",
+        "config": {
+          "action.database_query": {
+            "query": "check_welcome_bonus",
+            "parameters": {
+              "userId": "{{contactUser.id}}"
+            },
+            "assignTo": "hasWelcomeBonus"
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 2200,
+        "y": 250
+      },
+      "selected": false
+    },
+    {
+      "id": "check-bonus-exists",
+      "data": {
+        "label": "Есть приветственные бонусы?",
+        "config": {
+          "condition": {
+            "variable": "hasWelcomeBonus",
+            "operator": "equals",
+            "value": false
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 2500,
+        "y": 250
+      },
+      "selected": false
+    },
+    {
+      "id": "add-welcome-bonus",
+      "data": {
+        "label": "Начислить приветственные бонусы",
+        "config": {
+          "action.database_query": {
+            "query": "add_bonus",
+            "parameters": {
+              "userId": "{{contactUser.id}}",
+              "amount": 100,
+              "type": "WELCOME",
+              "description": "Приветственные бонусы за активацию аккаунта"
+            }
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 2800,
+        "y": 250
+      },
+      "selected": false
+    },
+    {
+      "id": "success-activated-user",
+      "data": {
+        "label": "Успешная активация",
+        "config": {
+          "message": {
+            "text": "🎉 Аккаунт успешно активирован!\n\n💰 Вам начислено 100 приветственных бонусов!\n\n📊 Ваш профиль:\n• Баланс: {user.balanceFormatted}\n• Уровень: {user.currentLevel}\n• Реферальный код: {user.referralCode}\n\n✨ Добро пожаловать в программу лояльности!"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 3100,
+        "y": 250
+      },
+      "selected": false
+    },
+    {
+      "id": "website-registration-required",
+      "data": {
+        "label": "Требуется регистрация на сайте",
+        "config": {
+          "message": {
+            "text": "🌐 Для участия в программе лояльности необходимо зарегистрироваться на нашем сайте.\n\n📝 Пожалуйста, перейдите по ссылке и создайте аккаунт:\n\n🔗 https://your-website.com/register\n\n✨ После регистрации вернитесь к боту и поделитесь контактом для активации бонусов!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "🌐 Зарегистрироваться на сайте",
+                    "url": "https://your-website.com/register"
+                  }
+                ],
+                [
+                  {
+                    "text": "🔄 Проверить снова",
+                    "callback_data": "check_again"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 200
+      },
+      "position": {
+        "x": 1600,
+        "y": 500
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-balance-trigger",
+      "data": {
+        "label": "Триггер: Баланс",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_balance"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 700
+      },
+      "selected": false
+    },
+    {
+      "id": "show-balance-details",
+      "data": {
+        "label": "Подробный баланс",
+        "config": {
+          "message": {
+            "text": "💰 Ваш баланс бонусов\n\n💵 Текущий баланс: {user.balanceFormatted}₽\n📈 Всего заработано: {user.totalEarnedFormatted}₽\n📉 Всего потрачено: {user.totalSpentFormatted}₽\n🛍️ Покупок на сумму: {user.totalPurchasesFormatted}₽\n\n✨ Продолжайте совершать покупки для накопления бонусов!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [{"text": "📜 История операций", "callback_data": "menu_history"}],
+                [{"text": "🔙 Назад в меню", "callback_data": "menu_main"}]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 400,
+        "y": 700
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-history-trigger",
+      "data": {
+        "label": "Триггер: История",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_history"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 950
+      },
+      "selected": false
+    },
+    {
+      "id": "get-transactions-list",
+      "data": {
+        "label": "Получить историю операций",
+        "config": {
+          "action.database_query": {
+            "query": "get_transactions",
+            "parameters": {
+              "userId": "{{telegramUser.id}}",
+              "limit": 10
+            },
+            "assignTo": "transactions"
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 400,
+        "y": 950
+      },
+      "selected": false
+    },
+    {
+      "id": "show-history-list",
+      "data": {
+        "label": "История операций",
+        "config": {
+          "message": {
+            "text": "📜 История операций\n\nПоследние 10 операций:\n\n{transactions.formatted}\n\nПоказаны последние 10 операций.\n\n💡 Для полной истории посетите личный кабинет на сайте.",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [{"text": "🔙 Назад", "callback_data": "menu_balance"}]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 700,
+        "y": 950
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-level-trigger",
+      "data": {
+        "label": "Триггер: Уровень",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_level"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 1200
+      },
+      "selected": false
+    },
+    {
+      "id": "show-level-info",
+      "data": {
+        "label": "Информация об уровне",
+        "config": {
+          "message": {
+            "text": "🏆 Ваш текущий уровень\n\n📊 Уровень: {user.currentLevel}\n💎 Бонусов начислено: {user.levelBonusPercent}%\n💳 Оплата бонусами: до {user.levelPaymentPercent}%\n\n📈 Прогресс до следующего уровня:\n{user.progressBar}\n\n💰 Сделайте покупок на {user.nextLevelAmount}₽ для повышения уровня!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [{"text": "🔙 Назад в меню", "callback_data": "menu_main"}]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 400,
+        "y": 1200
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-referrals-trigger",
+      "data": {
+        "label": "Триггер: Рефералы",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_referrals"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 1450
+      },
+      "selected": false
+    },
+    {
+      "id": "show-referrals-stats",
+      "data": {
+        "label": "Статистика рефералов",
+        "config": {
+          "message": {
+            "text": "👥 Реферальная программа\n\n🎁 Условия:\n• Вы получаете: 10% с покупок друзей\n• Ваш друг получает: 10% бонусов при регистрации\n\n📊 Ваша статистика:\n• Всего рефералов: {user.referralCount}\n• Всего выплачено бонусов: {user.referralBonusTotal}₽\n\n💡 Приглашайте друзей и получайте больше бонусов!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [{"text": "🔗 Получить ссылку", "callback_data": "menu_invite"}],
+                [{"text": "🔙 Назад в меню", "callback_data": "menu_main"}]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 400,
+        "y": 1450
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-invite-trigger",
+      "data": {
+        "label": "Триггер: Пригласить",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_invite"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 1700
+      },
+      "selected": false
+    },
+    {
+      "id": "show-invite-link",
+      "data": {
+        "label": "Реферальная ссылка",
+        "config": {
+          "message": {
+            "text": "🔗 Ваша реферальная ссылка\n\n{user.referralLink}\n\n📝 Или используйте код: {user.referralCode}\n\n💡 Поделитесь ей с друзьями:\n✅ За каждого друга вы получите 10% с его покупок\n✅ Ваш друг получит 10% бонусов при регистрации",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [{"text": "👥 Статистика", "callback_data": "menu_referrals"}],
+                [{"text": "🔙 Назад в меню", "callback_data": "menu_main"}]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 400,
+        "y": 1700
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-help-trigger",
+      "data": {
+        "label": "Триггер: Помощь",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_help"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 1950
+      },
+      "selected": false
+    },
+    {
+      "id": "show-help-info",
+      "data": {
+        "label": "Справка",
+        "config": {
+          "message": {
+            "text": "❓ Справка по бонусной системе\n\n📌 Основные возможности:\n• Зарабатывайте бонусы за покупки\n• Оплачивайте бонусами до 20% заказа\n• Приглашайте друзей и получайте 10% от их покупок\n• Повышайте уровень для больших бонусов\n\n📞 Поддержка:\n• Email: support@example.com\n• Telegram: @support_bot\n• Часы работы: Пн-Пт 9:00-18:00",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [{"text": "🔙 Главное меню", "callback_data": "menu_main"}]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 180
+      },
+      "position": {
+        "x": 400,
+        "y": 1950
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-main-trigger",
+      "data": {
+        "label": "Триггер: Главное меню",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_main"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 100,
+        "y": 2200
+      },
+      "selected": false
+    },
+    {
+      "id": "end-node",
+      "data": {
+        "label": "Завершение",
+        "config": {
+          "flow.end": {}
+        }
+      },
+      "type": "flow.end",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 3400,
+        "y": 200
+      },
+      "selected": false
+    }
+  ],
+  "connections": [
+    {
+      "id": "edge-start-trigger-check-telegram-user-1760624947114",
+      "type": "default",
+      "source": "start-trigger",
+      "target": "check-telegram-user",
+      "animated": true
+    },
+    {
+      "id": "edge-check-telegram-user-check-user-status-1760624947115",
+      "type": "default",
+      "source": "check-telegram-user",
+      "target": "check-user-status",
+      "animated": true
+    },
+    {
+      "id": "edge-check-user-status-check-user-active-1760624947116",
+      "type": "default",
+      "source": "check-user-status",
+      "target": "check-user-active",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-check-user-status-welcome-message-1760624947117",
+      "type": "default",
+      "source": "check-user-status",
+      "target": "welcome-message",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-welcome-message-check-contact-user-1760624947118",
+      "type": "default",
+      "source": "welcome-message",
+      "target": "check-contact-user",
+      "animated": true
+    },
+    {
+      "id": "edge-check-user-active-active-user-profile-1760624947119",
+      "type": "default",
+      "source": "check-user-active",
+      "target": "active-user-profile",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-check-user-active-request-contact-confirmation-1760624947120",
+      "type": "default",
+      "source": "check-user-active",
+      "target": "request-contact-confirmation",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-request-contact-confirmation-check-contact-user-1760624947121",
+      "type": "default",
+      "source": "request-contact-confirmation",
+      "target": "check-contact-user",
+      "animated": true
+    },
+    {
+      "id": "edge-check-contact-user-check-contact-found-1760624947122",
+      "type": "default",
+      "source": "check-contact-user",
+      "target": "check-contact-found",
+      "animated": true
+    },
+    {
+      "id": "edge-check-contact-found-check-telegram-already-linked-1760624947123",
+      "type": "default",
+      "source": "check-contact-found",
+      "target": "check-telegram-already-linked",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-check-contact-found-website-registration-required-1760624947124",
+      "type": "default",
+      "source": "check-contact-found",
+      "target": "website-registration-required",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-check-telegram-already-linked-already-active-message-1760624947125",
+      "type": "default",
+      "source": "check-telegram-already-linked",
+      "target": "already-active-message",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-check-telegram-already-linked-activate-user-1760624947126",
+      "type": "default",
+      "source": "check-telegram-already-linked",
+      "target": "activate-user",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-activate-user-check-welcome-bonus-1760624947127",
+      "type": "default",
+      "source": "activate-user",
+      "target": "check-welcome-bonus",
+      "animated": true
+    },
+    {
+      "id": "edge-check-welcome-bonus-check-bonus-exists-1760624947128",
+      "type": "default",
+      "source": "check-welcome-bonus",
+      "target": "check-bonus-exists",
+      "animated": true
+    },
+    {
+      "id": "edge-check-bonus-exists-add-welcome-bonus-1760624947129",
+      "type": "default",
+      "source": "check-bonus-exists",
+      "target": "add-welcome-bonus",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-check-bonus-exists-success-activated-user-1760624947130",
+      "type": "default",
+      "source": "check-bonus-exists",
+      "target": "success-activated-user",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-add-welcome-bonus-success-activated-user-1760624947131",
+      "type": "default",
+      "source": "add-welcome-bonus",
+      "target": "success-activated-user",
+      "animated": true
+    },
+    {
+      "id": "edge-already-active-message-end-node-1760624947133",
+      "type": "default",
+      "source": "already-active-message",
+      "target": "end-node",
+      "animated": true
+    },
+    {
+      "id": "edge-success-activated-user-end-node-1760624947134",
+      "type": "default",
+      "source": "success-activated-user",
+      "target": "end-node",
+      "animated": true
+    },
+    {
+      "id": "edge-website-registration-required-end-node-1760624947135",
+      "type": "default",
+      "source": "website-registration-required",
+      "target": "end-node",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-balance-trigger-show-balance-details",
+      "type": "default",
+      "source": "menu-balance-trigger",
+      "target": "show-balance-details",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-history-trigger-get-transactions-list",
+      "type": "default",
+      "source": "menu-history-trigger",
+      "target": "get-transactions-list",
+      "animated": true
+    },
+    {
+      "id": "edge-get-transactions-list-show-history-list",
+      "type": "default",
+      "source": "get-transactions-list",
+      "target": "show-history-list",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-level-trigger-show-level-info",
+      "type": "default",
+      "source": "menu-level-trigger",
+      "target": "show-level-info",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-referrals-trigger-show-referrals-stats",
+      "type": "default",
+      "source": "menu-referrals-trigger",
+      "target": "show-referrals-stats",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-invite-trigger-show-invite-link",
+      "type": "default",
+      "source": "menu-invite-trigger",
+      "target": "show-invite-link",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-help-trigger-show-help-info",
+      "type": "default",
+      "source": "menu-help-trigger",
+      "target": "show-help-info",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-main-trigger-active-user-profile",
+      "type": "default",
+      "source": "menu-main-trigger",
+      "target": "active-user-profile",
+      "animated": true
+    }
+  ],
+  "entry_node_id": "start-trigger",
+  "variables": [
+    {
+      "id": "telegramUser",
+      "name": "telegramUser",
+      "type": "object",
+      "description": "Данные пользователя по Telegram ID",
+      "defaultValue": null
+    },
+    {
+      "id": "contactUser",
+      "name": "contactUser",
+      "type": "object",
+      "description": "Данные пользователя по контакту/email",
+      "defaultValue": null
+    },
+    {
+      "id": "hasWelcomeBonus",
+      "name": "hasWelcomeBonus",
+      "type": "boolean",
+      "description": "Есть ли приветственные бонусы",
+      "defaultValue": false
+    }
+  ],
+  "settings": {
+    "retryAttempts": 3,
+    "maxExecutionTime": 60000,
+    "autoSave": true,
+    "gridSnap": true
+  },
+  "createdAt": "2025-10-16T17:24:00.000Z",
+  "updatedAt": "2025-10-28T18:30:00.000Z"
+}
+

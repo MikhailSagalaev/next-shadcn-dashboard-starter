@@ -131,6 +131,16 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
                       },
                     }));
                   }}
+                  keyboard={nodeConfig.message?.keyboard || null}
+                  onKeyboardChange={(keyboard) => {
+                    setNodeConfig((prevConfig) => ({
+                      ...prevConfig,
+                      message: {
+                        ...prevConfig.message,
+                        keyboard: keyboard || undefined
+                      },
+                    }));
+                  }}
                   placeholder="Введите текст сообщения..."
                   showPreview={true}
                   showVariableHelper={true}
@@ -281,7 +291,7 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
   }, [node.type, nodeConfig, handleConfigChange]);
 
   return (
-    <div className='absolute right-4 top-4 z-10'>
+    <div className='absolute right-4 top-4 z-20'>
       <div className='relative w-[600px] max-w-[calc(100vw-100px)] h-[calc(82vh)] flex flex-col rounded-md border bg-background shadow-lg'>
         <Button
           variant='ghost'

@@ -13,12 +13,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { VariableSelector, useVariableAutocomplete } from './variable-selector';
+import { KeyboardEditor, type KeyboardConfig } from './keyboard-editor';
 import { MessageSquare, Eye, Code, Variable } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MessageEditorProps {
   value: string;
   onChange: (value: string) => void;
+  keyboard?: KeyboardConfig | null;
+  onKeyboardChange?: (keyboard: KeyboardConfig | null) => void;
   placeholder?: string;
   className?: string;
   showPreview?: boolean;
@@ -28,6 +31,8 @@ interface MessageEditorProps {
 export function MessageEditor({
   value,
   onChange,
+  keyboard,
+  onKeyboardChange,
   placeholder = "Введите текст сообщения...",
   className,
   showPreview = true,
@@ -143,10 +148,17 @@ export function MessageEditor({
   return (
     <div className={cn("space-y-4", className)}>
       {/* Панель инструментов */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg p-3">
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-medium">Редактор сообщения</span>
+          <div className="w-6 h-6 bg-blue-100 rounded-md flex items-center justify-center">
+            <MessageSquare className="h-3 w-3 text-blue-600" />
+          </div>
+          <span className="text-sm font-medium text-gray-900">Редактор сообщения</span>
+          {value && (
+            <Badge variant="secondary" className="text-xs">
+              {value.length} символов
+            </Badge>
+          )}
         </div>
         
         <div className="flex items-center gap-2">
@@ -157,9 +169,9 @@ export function MessageEditor({
                 <Button 
                   variant="outline" 
                   size="sm"
-                  className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 hover:from-blue-100 hover:to-indigo-100 hover:border-blue-300 hover:shadow-md transition-all duration-200"
+                  className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 hover:from-blue-100 hover:to-indigo-100 hover:border-blue-300 hover:shadow-md transition-all duration-200 h-8 px-3 text-xs"
                 >
-                  <Variable className="h-4 w-4 mr-2 text-blue-600" />
+                  <Variable className="h-3 w-3 mr-1.5 text-blue-600" />
                   <span className="font-medium text-blue-700">Переменные</span>
                 </Button>
               }
@@ -171,15 +183,16 @@ export function MessageEditor({
               variant="outline"
               size="sm"
               onClick={() => setIsPreviewMode(!isPreviewMode)}
+              className="h-8 px-3 text-xs"
             >
               {isPreviewMode ? (
                 <>
-                  <Code className="h-4 w-4 mr-2" />
+                  <Code className="h-3 w-3 mr-1.5" />
                   Код
                 </>
               ) : (
                 <>
-                  <Eye className="h-4 w-4 mr-2" />
+                  <Eye className="h-3 w-3 mr-1.5" />
                   Превью
                 </>
               )}
@@ -191,34 +204,47 @@ export function MessageEditor({
       {/* Редактор */}
       <div className="relative">
         {isPreviewMode ? (
-          <div className="min-h-[120px] p-3 border rounded-md bg-gray-50 whitespace-pre-wrap">
-            {highlightVariables(renderPreview(value))}
+          <div className="min-h-[120px] p-4 border border-gray-200 rounded-lg bg-gradient-to-br from-gray-50 to-blue-50 whitespace-pre-wrap shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <Eye className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-gray-700">Предварительный просмотр</span>
+            </div>
+            <div className="text-sm text-gray-800 leading-relaxed">
+              {highlightVariables(renderPreview(value))}
+            </div>
           </div>
         ) : (
           <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
+              <Code className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-medium text-gray-700">Редактирование</span>
+            </div>
             <Textarea
               ref={textareaRef}
               value={value}
               onChange={(e) => handleTextChangeInternal(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-              className="min-h-[120px] font-mono text-sm"
+              className="min-h-[120px] font-mono text-sm border-gray-200 focus:border-blue-500 focus:ring-blue-500"
             />
             
             {/* Подсказки автодополнения */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="p-2 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-600">Доступные переменные:</span>
+                </div>
                 {suggestions.map((suggestion, index) => (
                   <button
                     key={suggestion.key}
                     onClick={() => handleSuggestionSelect(suggestion)}
-                    className="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center justify-between"
+                    className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center justify-between border-b border-gray-50 last:border-b-0"
                   >
                     <div>
-                      <div className="font-medium">{suggestion.label}</div>
-                      <div className="text-sm text-gray-500">{suggestion.key}</div>
+                      <div className="font-medium text-sm">{suggestion.label}</div>
+                      <div className="text-xs text-gray-500">{suggestion.key}</div>
                     </div>
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
                       {suggestion.key}
                     </Badge>
                   </button>
@@ -231,29 +257,81 @@ export function MessageEditor({
 
       {/* Статистика переменных */}
       {value && (
-        <div className="text-xs text-gray-500 flex items-center gap-4">
-          <span>Символов: {value.length}</span>
-          <span>
-            Переменных: {(value.match(/\{[^}]+\}/g) || []).length}
-          </span>
-          {value.includes('{') && !value.includes('}') && (
-            <span className="text-orange-500">⚠️ Незакрытые переменные</span>
-          )}
+        <div className="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg p-3">
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span className="text-gray-600">Символов: <strong>{value.length}</strong></span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-gray-600">Переменных: <strong>{(value.match(/\{[^}]+\}/g) || []).length}</strong></span>
+            </div>
+            {value.includes('{') && !value.includes('}') && (
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                <span className="text-orange-600 font-medium">⚠️ Незакрытые переменные</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Редактор клавиатуры */}
+      {onKeyboardChange && (
+        <div className="pt-4 border-t border-gray-200">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-3 mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-5 h-5 bg-purple-100 rounded-md flex items-center justify-center">
+                <span className="text-xs font-bold text-purple-600">⌨️</span>
+              </div>
+              <h4 className="font-medium text-gray-900 text-sm">Клавиатура</h4>
+            </div>
+            <p className="text-xs text-gray-600">
+              Добавьте кнопки для взаимодействия с пользователем. Кнопки могут запрашивать контакт, геолокацию или выполнять callback действия.
+            </p>
+          </div>
+          <KeyboardEditor
+            value={keyboard || null}
+            onChange={onKeyboardChange}
+          />
         </div>
       )}
 
       {/* Справка по переменным */}
       {showVariableHelper && (
-        <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg">
-          <p><strong>💡 Подсказка:</strong></p>
-          <ul className="list-disc list-inside mt-1 space-y-1">
-            <li>Начните вводить <code>{'{'}</code> для автодополнения переменных</li>
-            <li>Используйте кнопку "Переменные" для выбора из списка</li>
-            <li>Переменные автоматически заменяются реальными данными пользователя</li>
-            <li>Переключитесь в режим "Превью" чтобы увидеть результат</li>
-          </ul>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex items-start gap-2">
+            <div className="w-5 h-5 bg-blue-100 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-xs font-bold text-blue-600">💡</span>
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900 text-sm mb-2">Как использовать переменные</h4>
+              <ul className="text-xs text-gray-700 space-y-1">
+                <li className="flex items-center gap-2">
+                  <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+                  Начните вводить <code className="bg-blue-100 px-1 rounded text-blue-800">{'{'}</code> для автодополнения переменных
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+                  Используйте кнопку "Переменные" для выбора из списка
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+                  Переменные автоматически заменяются реальными данными пользователя
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+                  Переключитесь в режим "Превью" чтобы увидеть результат
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
+
+// Экспортируем типы для использования в других компонентах
+export type { KeyboardConfig, KeyboardButton } from './keyboard-editor';

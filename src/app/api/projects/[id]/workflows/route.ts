@@ -131,7 +131,7 @@ export async function POST(
     // Workflow уже создан с версией, не нужно обновлять
 
     // Инвалидируем кэш workflow для проекта
-    WorkflowRuntimeService.invalidateCache(projectId);
+    await WorkflowRuntimeService.invalidateCache(projectId);
 
     return NextResponse.json({ workflow });
   } catch (error) {

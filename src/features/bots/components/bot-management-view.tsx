@@ -197,7 +197,8 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
         },
         body: JSON.stringify({
           botToken: tokenForm.botToken,
-          botUsername: tokenForm.botUsername
+          botUsername: tokenForm.botUsername,
+          functionalSettings: {}
         })
       });
 

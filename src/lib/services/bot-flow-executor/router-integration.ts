@@ -54,6 +54,11 @@ export class RouterIntegration {
       if (update.message) {
         const message = update.message;
 
+        // Контакт
+        if (message.contact) {
+          return 'contact';
+        }
+
         // Команды
         if (message.text?.startsWith('/')) {
           return 'command';
@@ -82,6 +87,7 @@ export class RouterIntegration {
     // Обработчики для разных типов обновлений
     this.composer.use(route.route((ctx) => {
       const update = ctx.update;
+      if (update.message?.contact) return 'contact';
       if (update.message?.text?.startsWith('/')) return 'command';
       if (update.message?.text) return 'text';
       if (update.callback_query) return 'callback';
@@ -89,6 +95,9 @@ export class RouterIntegration {
       if (update.inline_query) return 'inline';
       return 'unknown';
     }));
+
+    // Обработка контактов
+    this.composer.route((ctx) => 'contact', this.handleContact.bind(this));
 
     // Обработка команд
     this.composer.route((ctx) => 'command', this.handleCommand.bind(this));
@@ -174,6 +183,15 @@ export class RouterIntegration {
       projectId: this.projectId
     });
 
+    // ✨ НОВОЕ: Проверяем, ждёт ли workflow ввод пользователя
+    const telegramUserId = ctx.from?.id?.toString();
+    if (telegramUserId) {
+      const resumed = await this.checkAndResumeWaitingWorkflow(ctx, 'input', text);
+      if (resumed) {
+        return; // Workflow возобновлён, дальше не обрабатываем
+      }
+    }
+
     // Проверяем, находится ли пользователь в активном потоке
     if (ctx.session?.currentFlowId) {
       // Передаем сообщение в поток для обработки
@@ -191,14 +209,37 @@ export class RouterIntegration {
   private async handleCallback(ctx: BotConstructorContext): Promise<void> {
     const callbackData = ctx.callbackQuery?.data || '';
 
-    logger.info('Callback received', {
+    logger.info('🔵 CALLBACK RECEIVED', {
       callbackData,
       userId: ctx.from?.id,
-      projectId: this.projectId
+      chatId: ctx.chat?.id,
+      projectId: this.projectId,
+      timestamp: new Date().toISOString()
     });
 
     // Отвечаем на callback
     await ctx.answerCallbackQuery();
+
+    // ✨ НОВОЕ: Проверяем, ждёт ли workflow callback
+    const telegramUserId = ctx.from?.id?.toString();
+    if (telegramUserId) {
+      logger.info('🔍 CHECKING FOR WAITING WORKFLOW', {
+        telegramUserId,
+        callbackData,
+        chatId: ctx.chat?.id
+      });
+      
+      const resumed = await this.checkAndResumeWaitingWorkflow(ctx, 'callback', callbackData);
+      
+      logger.info(resumed ? '✅ WORKFLOW RESUMED' : '❌ NO WAITING WORKFLOW FOUND', {
+        callbackData,
+        resumed
+      });
+      
+      if (resumed) {
+        return; // Workflow возобновлён
+      }
+    }
 
     // Проверяем, находится ли пользователь в активном потоке
     if (ctx.session?.currentFlowId) {
@@ -485,6 +526,418 @@ export class RouterIntegration {
     if (message.contact) return 'contact';
 
     return 'other';
+  }
+
+  /**
+   * Обработка контактов
+   * Возобновляет workflow execution, который ожидает контакт
+   */
+  private async handleContact(ctx: BotConstructorContext): Promise<void> {
+    const contact = ctx.message?.contact;
+    const telegramUserId = ctx.from?.id?.toString();
+
+    if (!contact || !telegramUserId) {
+      logger.warn('Contact or user ID missing', { 
+        hasContact: !!contact, 
+        hasTelegramUserId: !!telegramUserId 
+      });
+      return;
+    }
+
+    logger.info('Contact received', {
+      phoneNumber: contact.phone_number,
+      firstName: contact.first_name,
+      userId: contact.user_id,
+      telegramUserId,
+      projectId: this.projectId
+    });
+
+    // ✨ НОВОЕ: Используем универсальный метод возобновления
+    await this.checkAndResumeWaitingWorkflow(ctx, 'contact', contact);
+  }
+
+  /**
+   * ✨ НОВОЕ: Универсальный метод для проверки и возобновления waiting workflow
+   * Обрабатывает все типы ожидания: contact, callback, input
+   */
+  private async checkAndResumeWaitingWorkflow(
+    ctx: BotConstructorContext,
+    waitType: 'contact' | 'callback' | 'input',
+    data: any
+  ): Promise<boolean> {
+    const telegramUserId = ctx.from?.id?.toString();
+    
+    if (!telegramUserId) {
+      return false;
+    }
+
+    try {
+      // Импортируем здесь чтобы избежать circular dependencies
+      const { db } = await import('@/lib/db');
+      const { SimpleWorkflowProcessor } = await import('../simple-workflow-processor');
+
+      // Ищем workflow execution в состоянии waiting
+      logger.info('🔎 SEARCHING FOR WAITING EXECUTION', {
+        projectId: this.projectId,
+        status: 'waiting',
+        telegramChatId: ctx.chat?.id?.toString(),
+        waitType,
+        timestamp: new Date().toISOString()
+      });
+      
+            const waitingExecution = await db.workflowExecution.findFirst({
+              where: {
+                projectId: this.projectId,
+                status: 'waiting',
+                telegramChatId: ctx.chat?.id?.toString(),
+                waitType: waitType === 'input' ? ({ in: ['input', 'contact'] } as any) : waitType
+              },
+              include: {
+                workflow: true
+              }
+            });
+
+      if (!waitingExecution) {
+        logger.warn('⚠️ NO WAITING EXECUTION FOUND', {
+          projectId: this.projectId,
+          telegramChatId: ctx.chat?.id?.toString(),
+          waitType
+        });
+        return false; // Нет waiting workflow
+      }
+
+      logger.info('✅ FOUND WAITING WORKFLOW EXECUTION', {
+        executionId: waitingExecution.id,
+        workflowId: waitingExecution.workflowId,
+        currentNodeId: waitingExecution.currentNodeId,
+        status: waitingExecution.status,
+        waitType: waitingExecution.waitType,
+        timestamp: new Date().toISOString()
+      });
+
+      // Обрабатываем данные в зависимости от типа ожидания
+      let userId: string | undefined;
+      let userData: any = {};
+
+      if (waitType === 'contact') {
+        const contact = data;
+        const raw = contact.phone_number;
+        const digits = raw.replace(/[^0-9]/g, ''); // Удаляем ВСЕ нецифровые символы (пробелы, дефисы и т.д.)
+        const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+        
+          // Формируем только нормализованные варианты (БЕЗ raw с пробелами!)
+          const plus = `+${digits}`;
+          const candidates = new Set<string>([plus, digits, last10]);
+          
+          // ✨ ДОПОЛНИТЕЛЬНО: Добавляем варианты с пробелами для поиска в базе
+          const withSpaces = `+${digits.slice(0, 1)} ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+          candidates.add(withSpaces);
+          
+          // Дополнительные варианты для РФ номеров
+          if (digits.length === 11 && digits.startsWith('8')) {
+            candidates.add(`+7${digits.slice(1)}`);
+            candidates.add(`7${digits.slice(1)}`);
+            const withSpaces7 = `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+            candidates.add(withSpaces7);
+          } else if (digits.length === 11 && digits.startsWith('7')) {
+            candidates.add(`+7${digits.slice(1)}`);
+            candidates.add(`8${digits.slice(1)}`);
+            const withSpaces7 = `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+            candidates.add(withSpaces7);
+          }
+
+        logger.info('📞 Contact received, normalized candidates', {
+          raw,
+          digitsOnly: digits,
+          last10,
+          candidates: Array.from(candidates),
+          projectId: this.projectId
+        });
+
+        const existing = await db.user.findFirst({
+          where: {
+            projectId: this.projectId,
+            OR: [
+              { telegramId: BigInt(telegramUserId) },
+              ...Array.from(candidates).map((ph) => ({ phone: ph }))
+            ]
+          }
+        });
+
+        logger.info('🔍 User search result in router-integration', {
+          found: !!existing,
+          userIdInDB: existing?.id,
+          phoneInDB: existing?.phone,
+          telegramIdInDB: existing?.telegramId?.toString(),
+          searchedCandidates: Array.from(candidates)
+        });
+
+        if (existing) {
+          await db.user.update({
+            where: { id: existing.id },
+            data: {
+              telegramId: BigInt(telegramUserId),
+              telegramUsername: ctx.from?.username,
+              isActive: true
+            }
+          });
+          logger.info('✅ Matched and updated existing user', { 
+            userId: existing.id, 
+            phoneInDB: existing.phone,
+            newTelegramId: telegramUserId
+          });
+          userId = existing.id;
+        }
+        userData = {
+          contactReceived: {
+            phoneNumber: contact.phone_number,
+            firstName: contact.first_name,
+            lastName: contact.last_name,
+            userId: userId,
+            receivedAt: new Date().toISOString()
+          }
+        };
+      } else if (waitType === 'callback') {
+        userData = { callbackReceived: { data, receivedAt: new Date().toISOString() } };
+      } else if (waitType === 'input') {
+        userData = { inputReceived: { text: data, receivedAt: new Date().toISOString() } };
+      }
+
+      // Обновляем execution: устанавливаем status = 'running'
+            await db.workflowExecution.update({
+              where: { id: waitingExecution.id },
+              data: {
+                status: 'running',
+                waitType: null,
+                userId: userId || waitingExecution.userId || undefined
+              }
+            });
+
+      // ✨ ИСПРАВЛЕНО: Определяем nextNodeId в зависимости от типа ожидания
+      let nextNodeId: string;
+      
+      if (waitType === 'contact') {
+        // Для контактов всегда переходим к check-contact-user
+        nextNodeId = 'check-contact-user';
+      } else if (waitType === 'callback') {
+        // ✨ ДЛЯ CALLBACK: Ищем trigger.callback ноду с соответствующим callbackData
+        const callbackData = data;
+        
+        // Получаем все ноды workflow
+        const workflowNodes = waitingExecution.workflow.nodes as any[];
+        
+        // Ищем trigger.callback ноду с matching callbackData
+        const callbackTriggerNode = workflowNodes.find((node: any) => 
+          node.type === 'trigger.callback' && 
+          node.data?.config?.callbackData === callbackData
+        );
+        
+        if (callbackTriggerNode) {
+          nextNodeId = callbackTriggerNode.id;
+          logger.info('✅ Found matching callback trigger node', {
+            callbackData,
+            triggerNodeId: nextNodeId,
+            triggerLabel: callbackTriggerNode.data?.label
+          });
+        } else {
+          logger.warn('⚠️ No matching callback trigger found, using current node', {
+            callbackData,
+            availableTriggers: workflowNodes
+              .filter((n: any) => n.type === 'trigger.callback')
+              .map((n: any) => ({ id: n.id, callbackData: n.data?.config?.callbackData }))
+          });
+          // Fallback к текущей ноде
+          nextNodeId = waitingExecution.currentNodeId || 'start-trigger';
+        }
+      } else {
+        // Для input используем текущую ноду
+        nextNodeId = waitingExecution.currentNodeId || 'start-trigger';
+      }
+      
+      logger.info('🚀 RESUMING WORKFLOW', { 
+        nextNodeId,
+        currentNodeId: waitingExecution.currentNodeId,
+        waitType,
+        executionId: waitingExecution.id,
+        workflowId: waitingExecution.workflowId,
+        callbackData: waitType === 'callback' ? data : undefined
+      });
+
+      // Получаем нужную версию workflow для возобновления
+      const { ExecutionContextManager } = await import('../workflow/execution-context-manager');
+      const workflowVersion = await db.workflowVersion.findFirst({
+        where: { workflowId: waitingExecution.workflowId, version: waitingExecution.version }
+      });
+
+      if (!workflowVersion) {
+        logger.error('Workflow version not found for execution', {
+          workflowId: waitingExecution.workflowId,
+          version: waitingExecution.version
+        });
+        await ctx.reply('❌ Ошибка сценария: версия workflow не найдена.');
+        return false;
+      }
+      
+      const context = await ExecutionContextManager.resumeContext(
+        waitingExecution.id,
+        ctx.chat?.id?.toString(),
+        telegramUserId,
+        ctx.from?.username,
+        waitType === 'input' ? data : undefined,
+        waitType === 'callback' ? data : undefined
+      );
+
+      // Пробрасываем контакт в контекст для {{telegram.contact.phoneNumber}}
+      if (waitType === 'contact' && data) {
+        (context as any).telegram.contact = {
+          phoneNumber: data.phone_number,
+          firstName: data.first_name,
+          lastName: data.last_name,
+          userId: data.user_id
+        };
+
+      // ✅ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Проверяем параметры
+      logger.info('🔍 checkAndResumeWaitingWorkflow parameters', {
+        waitType,
+        hasData: !!data,
+        dataType: typeof data,
+        dataKeys: data ? Object.keys(data) : 'no data',
+        executionId: waitingExecution.id
+      });
+
+      // ✨ ВАЖНО: Сохраняем contactReceived как workflow-переменную для использования в {{contactReceived.phoneNumber}}
+      (context as any).contactReceived = {
+        phoneNumber: data.phone_number,
+        firstName: data.first_name,
+        lastName: data.last_name,
+        userId: userId,
+        receivedAt: new Date().toISOString()
+      };
+
+        // ✨ КРИТИЧНО: Сохраняем contactReceived в workflow_variables для доступа в нодах
+        const contactReceivedData = {
+          phoneNumber: data.phone_number,
+          firstName: data.first_name,
+          lastName: data.last_name,
+          userId: userId,
+          receivedAt: new Date().toISOString()
+        };
+        
+        logger.info('💾 Saving contactReceived to workflow variables', {
+          executionId: waitingExecution.id,
+          contactReceivedData,
+          userId
+        });
+        
+        await context.variables.set('contactReceived', contactReceivedData);
+        
+        // ✅ КРИТИЧНО: Сохраняем projectId в workflow_variables
+        await context.variables.set('projectId', this.projectId);
+        
+        // ✅ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Проверяем, что переменные действительно сохранились
+        const savedContactReceived = await context.variables.get('contactReceived', 'session');
+        const savedProjectId = await context.variables.get('projectId', 'session');
+        
+        logger.info('✅ contactReceived and projectId saved to workflow variables', {
+          executionId: waitingExecution.id,
+          projectId: this.projectId,
+          savedContactReceived: savedContactReceived ? 'SAVED' : 'NOT SAVED',
+          savedProjectId: savedProjectId ? 'SAVED' : 'NOT SAVED',
+          contactReceivedData,
+          projectIdValue: this.projectId
+        });
+      } else if (waitType === 'callback' && data) {
+        (context as any).callbackReceived = {
+          data,
+          receivedAt: new Date().toISOString()
+        };
+        
+        // ✨ КРИТИЧНО: Сохраняем callbackReceived в workflow_variables
+        await context.variables.set('callbackReceived', {
+          data,
+          receivedAt: new Date().toISOString()
+        });
+      } else if (waitType === 'input' && data) {
+        (context as any).inputReceived = {
+          text: data,
+          receivedAt: new Date().toISOString()
+        };
+        
+        // ✨ КРИТИЧНО: Сохраняем inputReceived в workflow_variables
+        await context.variables.set('inputReceived', {
+          text: data,
+          receivedAt: new Date().toISOString()
+        });
+      }
+
+      // Продолжаем выполнение workflow с существующим executionId
+      const processor = new SimpleWorkflowProcessor(
+        workflowVersion as any,
+        this.projectId
+      );
+
+      // Используем resumeWorkflow для продолжения существующего execution
+      await processor.resumeWorkflow(context, nextNodeId);
+
+      logger.info('Workflow resumed successfully', {
+        executionId: waitingExecution.id,
+        waitType,
+        nextNodeId
+      });
+
+      return true; // Workflow возобновлён
+
+    } catch (error) {
+      logger.error('Failed to resume waiting workflow', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        telegramUserId,
+        projectId: this.projectId,
+        waitType
+      });
+
+      await ctx.reply(
+        '❌ Произошла ошибка при обработке вашего ответа.\n' +
+        'Пожалуйста, попробуйте позже или обратитесь к администратору.'
+      );
+
+      return false;
+    }
+  }
+
+  /**
+   * Определяет следующую ноду после waiting state
+   */
+  private getNextNodeAfterWaiting(
+    workflow: any,
+    currentNodeId: string | undefined | null
+  ): string | null {
+    if (!currentNodeId || !workflow.connections) {
+      logger.warn('getNextNodeAfterWaiting: missing currentNodeId or connections', {
+        currentNodeId,
+        hasConnections: !!workflow.connections
+      });
+      return null;
+    }
+
+    const connections = workflow.connections as any[];
+    logger.info('getNextNodeAfterWaiting: searching for connections', {
+      currentNodeId,
+      totalConnections: connections.length,
+      allConnections: connections.map(c => ({ source: c.source, target: c.target }))
+    });
+
+    const nextConnection = connections.find(
+      (conn: any) => conn.source === currentNodeId
+    );
+
+    logger.info('getNextNodeAfterWaiting: found connection', {
+      currentNodeId,
+      nextConnection: nextConnection ? { source: nextConnection.source, target: nextConnection.target } : null,
+      nextNodeId: nextConnection?.target || null
+    });
+
+    return nextConnection?.target || null;
   }
 
   /**

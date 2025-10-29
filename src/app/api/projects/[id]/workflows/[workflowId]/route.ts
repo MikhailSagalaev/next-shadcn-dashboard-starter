@@ -182,7 +182,7 @@ export async function PUT(
     });
 
     // Инвалидируем кэш workflow для проекта
-    WorkflowRuntimeService.invalidateCache(projectId);
+    await WorkflowRuntimeService.invalidateCache(projectId);
 
     return NextResponse.json({ workflow });
   } catch (error) {
@@ -224,7 +224,7 @@ export async function DELETE(
     });
 
     // Инвалидируем кэш workflow для проекта
-    WorkflowRuntimeService.invalidateCache(projectId);
+    await WorkflowRuntimeService.invalidateCache(projectId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

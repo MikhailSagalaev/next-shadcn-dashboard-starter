@@ -47,7 +47,7 @@ export const TriggerNode = memo(({ data }: NodeProps) => {
         </CardTitle>
         <span className='text-xs text-muted-foreground'>Триггер</span>
       </CardHeader>
-      <CardContent>
+      <CardContent className='space-y-2'>
         <p className='text-sm text-muted-foreground line-clamp-2'>
           {getTriggerDisplayText()}
         </p>

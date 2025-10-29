@@ -253,6 +253,7 @@ enum BonusType {
   MANUAL
   REFERRAL
   PROMO
+  WELCOME
 }
 
 enum TransactionType {

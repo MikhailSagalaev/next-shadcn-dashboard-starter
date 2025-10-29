@@ -213,25 +213,60 @@ export class VariableManager implements IVariableManager {
   }
 
   /**
-   * Сериализует значение, преобразуя BigInt в строки
+   * Сериализует значение, преобразуя BigInt в строки и фильтруя несериализуемые объекты
    */
   private serializeValue(value: any): any {
     if (value === null || value === undefined) {
       return value;
     }
 
+    // Пропускаем функции
+    if (typeof value === 'function') {
+      return undefined;
+    }
+
     if (typeof value === 'bigint') {
       return value.toString();
     }
 
+    // Обрабатываем Date объекты
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
     if (Array.isArray(value)) {
-      return value.map(item => this.serializeValue(item));
+      return value.map(item => this.serializeValue(item)).filter(item => item !== undefined);
     }
 
     if (typeof value === 'object') {
+      // Проверяем, является ли это Prisma объектом с внутренними полями
+      if (value.constructor && value.constructor.name && value.constructor.name.includes('Prisma')) {
+        // Создаем чистый объект только с данными
+        const serialized: any = {};
+        for (const [key, val] of Object.entries(value)) {
+          // Пропускаем служебные поля Prisma
+          if (key.startsWith('_') || key === 'constructor' || typeof val === 'function') {
+            continue;
+          }
+          const serializedVal = this.serializeValue(val);
+          if (serializedVal !== undefined) {
+            serialized[key] = serializedVal;
+          }
+        }
+        return serialized;
+      }
+
+      // Обычные объекты
       const serialized: any = {};
       for (const [key, val] of Object.entries(value)) {
-        serialized[key] = this.serializeValue(val);
+        // Пропускаем служебные поля
+        if (key === 'constructor' || typeof val === 'function') {
+          continue;
+        }
+        const serializedVal = this.serializeValue(val);
+        if (serializedVal !== undefined) {
+          serialized[key] = serializedVal;
+        }
       }
       return serialized;
     }

@@ -99,7 +99,7 @@ export abstract class BaseNodeHandler implements NodeHandler {
    * Синхронное получение значения переменной из Telegram контекста
    * Используется только для telegram.* переменных
    */
-  private getVariableValueSync(varPath: string, context: ExecutionContext): any {
+  protected getVariableValueSync(varPath: string, context: ExecutionContext): any {
     const parts = varPath.split('.');
 
     // Telegram переменные

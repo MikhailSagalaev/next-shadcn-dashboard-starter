@@ -15,13 +15,20 @@ export type WorkflowNodeType =
   | 'trigger.command' | 'trigger.message' | 'trigger.callback' | 'trigger.webhook' | 'trigger.email'
   // Сообщения
   | 'message'
+  | 'message.keyboard.inline'
+  | 'message.keyboard.reply'
+  | 'message.photo'
+  | 'message.video'
+  | 'message.document'
+  | 'message.edit'
+  | 'message.delete'
   // Действия
-  | 'action.api_request' | 'action.database_query' | 'action.set_variable' | 'action.get_variable'
+  | 'action.api_request' | 'action.database_query' | 'action.set_variable' | 'action.get_variable' | 'action.request_contact'
   | 'action.send_notification' | 'action.check_user_linked' | 'action.find_user_by_contact' | 'action.link_telegram_account' | 'action.get_user_balance'
   // Условия
   | 'condition'
   // Поток управления
-  | 'flow.delay' | 'flow.loop' | 'flow.sub_workflow' | 'flow.jump' | 'flow.end'
+  | 'flow.delay' | 'flow.loop' | 'flow.sub_workflow' | 'flow.jump' | 'flow.switch' | 'flow.end'
   // Интеграции
   | 'integration.webhook' | 'integration.analytics';
 
@@ -66,12 +73,20 @@ export interface WorkflowNodeConfig {
 
   // Сообщения
   message?: MessageConfig;
+  'message.keyboard.inline'?: InlineKeyboardConfig;
+  'message.keyboard.reply'?: ReplyKeyboardConfig;
+  'message.photo'?: PhotoMessageConfig;
+  'message.video'?: VideoMessageConfig;
+  'message.document'?: DocumentMessageConfig;
+  'message.edit'?: EditMessageConfig;
+  'message.delete'?: DeleteMessageConfig;
 
   // Действия
   'action.api_request'?: ApiRequestActionConfig;
   'action.database_query'?: DatabaseQueryActionConfig;
   'action.set_variable'?: SetVariableActionConfig;
   'action.get_variable'?: GetVariableActionConfig;
+  'action.request_contact'?: RequestContactActionConfig;
   'action.send_notification'?: SendNotificationActionConfig;
   'action.check_user_linked'?: CheckUserLinkedActionConfig;
   'action.find_user_by_contact'?: FindUserByContactActionConfig;
@@ -86,6 +101,7 @@ export interface WorkflowNodeConfig {
   'flow.loop'?: LoopFlowConfig;
   'flow.sub_workflow'?: SubWorkflowFlowConfig;
   'flow.jump'?: JumpFlowConfig;
+  'flow.switch'?: SwitchFlowConfig;
   'flow.end'?: EndFlowConfig;
 
   // Интеграции
@@ -139,6 +155,103 @@ export interface ButtonConfig {
   url?: string;
 }
 
+export interface InlineKeyboardButtonConfig {
+  text: string;
+  callback_data?: string;
+  url?: string;
+  web_app?: { url: string };
+  login_url?: { url: string };
+  switch_inline_query?: string;
+  switch_inline_query_current_chat?: string;
+  pay?: boolean;
+  goto_node?: string;
+}
+
+export interface InlineKeyboardConfig {
+  text: string;
+  buttons: InlineKeyboardButtonConfig[][];
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  disable_web_page_preview?: boolean;
+}
+
+export interface ReplyKeyboardButtonActionConfig {
+  id?: string;
+  type: 'database_query' | 'send_message' | 'condition' | 'set_variable' | 'get_variable' | 'delay';
+  query?: string;
+  parameters?: Record<string, any>;
+  assignTo?: string;
+  text?: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  variable?: string;
+  operator?: 'is_empty' | 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains';
+  value?: any;
+  true_actions?: ReplyKeyboardButtonActionConfig[];
+  false_actions?: ReplyKeyboardButtonActionConfig[];
+  key?: string;
+  seconds?: number;
+}
+
+export interface ReplyKeyboardButtonConfig {
+  text: string;
+  request_contact?: boolean;
+  request_location?: boolean;
+  request_poll?: {
+    type?: 'quiz' | 'regular';
+  };
+  web_app?: { url: string };
+  actions?: ReplyKeyboardButtonActionConfig[];
+}
+
+export interface ReplyKeyboardConfig {
+  text: string;
+  buttons: ReplyKeyboardButtonConfig[][];
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+  input_field_placeholder?: string;
+  selective?: boolean;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+}
+
+export interface PhotoMessageConfig {
+  photo: string;
+  caption?: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  has_spoiler?: boolean;
+  disable_notification?: boolean;
+}
+
+export interface VideoMessageConfig {
+  video: string;
+  caption?: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  duration?: number;
+  width?: number;
+  height?: number;
+  thumbnail?: string;
+  has_spoiler?: boolean;
+  supports_streaming?: boolean;
+  disable_notification?: boolean;
+}
+
+export interface DocumentMessageConfig {
+  document: string;
+  caption?: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+  thumbnail?: string;
+  disable_content_type_detection?: boolean;
+  disable_notification?: boolean;
+}
+
+export interface EditMessageConfig {
+  message_id: string | number;
+  text: string;
+  parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
+}
+
+export interface DeleteMessageConfig {
+  message_id: string | number;
+}
+
 export interface Attachment {
   type: 'photo' | 'video' | 'document' | 'audio' | 'voice' | 'animation';
   fileId?: string;
@@ -185,6 +298,10 @@ export interface GetVariableActionConfig {
   variableName: string;
   defaultValue?: any;
   assignTo?: string; // Имя переменной для присвоения
+}
+
+export interface RequestContactActionConfig {
+  // Конфигурация для запроса контакта (пока пустая, может быть расширена)
 }
 
 export interface SendNotificationActionConfig {
@@ -246,6 +363,17 @@ export interface SubWorkflowFlowConfig {
 export interface JumpFlowConfig {
   targetNodeId: string;
   condition?: string; // Условие для прыжка
+}
+
+export interface SwitchCaseConfig {
+  value: any;
+  label?: string;
+}
+
+export interface SwitchFlowConfig {
+  variable: string;
+  cases: SwitchCaseConfig[];
+  hasDefault?: boolean;
 }
 
 

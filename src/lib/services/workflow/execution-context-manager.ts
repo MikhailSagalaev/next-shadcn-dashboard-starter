@@ -46,20 +46,28 @@ export class ExecutionContextManager {
 
     // Создаем запись о выполнении
     let execution: any;
+    const executionPayload = {
+      projectId,
+      workflowId,
+      version,
+      sessionId,
+      userId: userId || null,
+      telegramChatId: telegramChatId || null,
+      status: 'running'
+    } as const;
+
     try {
+      console.log('🧾 Creating workflow execution with payload:', executionPayload);
       execution = await db.workflowExecution.create({
-        data: {
-          projectId,
-          workflowId,
-          version,
-          sessionId,
-          userId: userId || null,
-          telegramChatId: telegramChatId || null,
-          status: 'running'
-        }
+        data: executionPayload
       });
-    } catch (dbError) {
-      console.error('Failed to create workflow execution record:', dbError);
+    } catch (dbError: any) {
+      console.error('❌ Failed to create workflow execution record:', {
+        payload: executionPayload,
+        message: dbError?.message,
+        code: dbError?.code,
+        meta: dbError?.meta
+      });
       throw dbError;
     }
 
@@ -111,6 +119,85 @@ export class ExecutionContextManager {
       },
       now: () => new Date(),
       step: 0,
+      maxSteps: 200
+    };
+
+    return context;
+  }
+
+  /**
+   * Возобновляет существующий контекст выполнения
+   */
+  static async resumeContext(
+    executionId: string,
+    telegramChatId?: string,
+    telegramUserId?: string,
+    telegramUsername?: string,
+    messageText?: string,
+    callbackData?: string
+  ): Promise<ExecutionContext> {
+    
+    // Получаем существующий execution
+    const execution = await db.workflowExecution.findUnique({
+      where: { id: executionId }
+    });
+
+    if (!execution) {
+      throw new Error(`Workflow execution ${executionId} not found`);
+    }
+
+    const botSettings = await db.botSettings.findUnique({
+      where: { projectId: execution.projectId },
+      select: { botToken: true, botUsername: true }
+    });
+
+    if (!botSettings?.botToken) {
+      throw new Error(`Bot token not configured for project ${execution.projectId}`);
+    }
+
+    // Создаем менеджер переменных для существующего execution
+    const variableManager = createVariableManager(
+      execution.projectId,
+      execution.workflowId,
+      execution.userId || undefined,
+      execution.sessionId
+    );
+
+    // Создаем простой logger
+    const simpleLogger = {
+      info: (message: string, data?: any) => console.log(`[INFO] ${execution.id}: ${message}`, data),
+      error: (message: string, data?: any) => console.error(`[ERROR] ${execution.id}: ${message}`, data),
+      warn: (message: string, data?: any) => console.warn(`[WARN] ${execution.id}: ${message}`, data),
+      debug: (message: string, data?: any) => console.debug(`[DEBUG] ${execution.id}: ${message}`, data)
+    };
+
+    // Создаем контекст для возобновления
+    const context: ExecutionContext = {
+      executionId: execution.id,
+      projectId: execution.projectId,
+      workflowId: execution.workflowId,
+      version: execution.version,
+      sessionId: execution.sessionId,
+      userId: execution.userId || undefined,
+      telegram: {
+        chatId: telegramChatId || execution.telegramChatId || execution.sessionId,
+        userId: telegramUserId || '',
+        username: telegramUsername,
+        firstName: telegramUsername,
+        botToken: botSettings.botToken,
+        message: {
+          text: messageText,
+          callbackData
+        }
+      },
+      variables: variableManager,
+      logger: simpleLogger,
+      services: {
+        db,
+        http: this.createHttpClient()
+      },
+      now: () => new Date(),
+      step: 0, // Сбрасываем step для возобновления
       maxSteps: 200
     };
 

@@ -27,7 +27,7 @@ export const MessageNode = memo(({ data }: NodeProps) => {
         </CardTitle>
         <span className='text-xs text-muted-foreground'>Сообщение</span>
       </CardHeader>
-      <CardContent className='space-y-3'>
+      <CardContent className='space-y-2'>
         {/* Превью сообщения */}
         <div className='text-sm text-muted-foreground bg-gray-50 p-2 rounded border'>
           {messageText ? (

@@ -39,7 +39,7 @@ export const ActionNode = memo(({ data }: NodeProps) => {
         </CardTitle>
         <span className='text-xs text-muted-foreground'>{actionType}</span>
       </CardHeader>
-      <CardContent>
+      <CardContent className='space-y-2'>
         <p className='text-sm text-muted-foreground line-clamp-2'>{getActionDisplayText()}</p>
       </CardContent>
       <Handle type='target' position={Position.Top} className='!bg-purple-500' />

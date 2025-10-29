@@ -1256,10 +1256,10 @@ class BotTemplatesService {
                 config: {
                   'action.database_query': {
                     query: 'add_bonus',
-                    parameters: {
+                    parameters:                     {
                       userId: '{{user.id}}',
                       amount: 100,
-                      type: 'welcome',
+                      type: 'WELCOME',
                       description: 'Приветственные бонусы'
                     }
                   }
@@ -1504,6 +1504,36 @@ class BotTemplatesService {
     ];
 
     logger.info('Bot templates initialized', { count: this.templates.length });
+  }
+
+  /**
+   * Удалить шаблон по ID
+   */
+  async deleteTemplate(templateId: string): Promise<boolean> {
+    try {
+      const index = this.templates.findIndex((t) => t.id === templateId);
+      
+      if (index === -1) {
+        logger.warn('Template not found for deletion', { templateId });
+        return false;
+      }
+
+      const template = this.templates[index];
+      this.templates.splice(index, 1);
+
+      logger.info('Template deleted', {
+        templateId,
+        templateName: template.name
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to delete template', {
+        templateId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return false;
+    }
   }
 }
 

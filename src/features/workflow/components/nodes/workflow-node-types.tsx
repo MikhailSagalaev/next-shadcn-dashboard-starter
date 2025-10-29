@@ -17,6 +17,7 @@ import { ConditionNode } from './condition-node';
 import { ActionNode } from './action-node';
 import { DelayNode } from './delay-node';
 import { EndNode } from './end-node';
+import { ContactRequestNode } from './contact-request-node';
 
 // Define workflow node types mapping (новая система типов из плана)
 export const workflowNodeTypes: NodeTypes = {
@@ -29,12 +30,20 @@ export const workflowNodeTypes: NodeTypes = {
 
   // Сообщения
   'message': MessageNode,
+  'message.keyboard.inline': MessageNode,
+  'message.keyboard.reply': MessageNode,
+  'message.photo': MessageNode,
+  'message.video': MessageNode,
+  'message.document': MessageNode,
+  'message.edit': MessageNode,
+  'message.delete': MessageNode,
 
   // Действия - все используют ActionNode
   'action.api_request': ActionNode,
   'action.database_query': ActionNode,
   'action.set_variable': ActionNode,
   'action.get_variable': ActionNode,
+  'action.request_contact': ContactRequestNode,
   'action.send_notification': ActionNode,
   'action.check_user_linked': ActionNode,
   'action.find_user_by_contact': ActionNode,
@@ -49,6 +58,7 @@ export const workflowNodeTypes: NodeTypes = {
   'flow.loop': ActionNode,
   'flow.sub_workflow': ActionNode,
   'flow.jump': ActionNode,
+  'flow.switch': ActionNode,
   'flow.end': EndNode,
 
   // Интеграции

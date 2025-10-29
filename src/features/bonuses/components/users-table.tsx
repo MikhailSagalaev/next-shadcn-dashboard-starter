@@ -29,7 +29,8 @@ import {
   History,
   Eye,
   Coins,
-  Gift
+  Gift,
+  Trash2
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,7 @@ interface UsersTableProps {
   onProfileClick?: (user: User) => void;
   onHistoryClick?: (userId: string) => void;
   onBonusAwardClick?: (user: User) => void;
+  onDeleteUser?: (user: User) => void;
   loading?: boolean;
   totalCount?: number;
   onPageChange?: (page: number) => void;
@@ -80,6 +82,7 @@ export function UsersTable({
   onProfileClick,
   onHistoryClick,
   onBonusAwardClick,
+  onDeleteUser,
   loading = false,
   totalCount = data.length,
   onPageChange,
@@ -292,6 +295,18 @@ export function UsersTable({
                 <Eye className='mr-2 h-4 w-4' />
                 Просмотреть профиль
               </DropdownMenuItem>
+              {onDeleteUser && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onDeleteUser(user)}
+                    className='text-destructive focus:text-destructive'
+                  >
+                    <Trash2 className='mr-2 h-4 w-4' />
+                    Удалить пользователя
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         );

@@ -197,7 +197,7 @@
           "action.database_query": {
             "query": "add_bonus",
             "parameters": {
-              "type": "welcome",
+              "type": "WELCOME",
               "amount": 100,
               "userId": "{{user.id}}",
               "description": "Приветственные бонусы"

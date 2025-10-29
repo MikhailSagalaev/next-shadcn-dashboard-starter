@@ -13,7 +13,8 @@ import { nodeHandlersRegistry } from '../node-handlers-registry';
 import {
   CommandTriggerHandler,
   MessageTriggerHandler,
-  CallbackTriggerHandler
+  CallbackTriggerHandler,
+  WebhookTriggerHandler
 } from './trigger-handlers';
 
 import { MessageHandler } from './message-handler';
@@ -21,8 +22,16 @@ import { MessageHandler } from './message-handler';
 import {
   DatabaseQueryHandler,
   SetVariableHandler,
-  GetVariableHandler
+  GetVariableHandler,
+  RequestContactHandler,
+  ApiRequestHandler,
+  SendNotificationHandler,
+  CheckUserLinkedHandler,
+  FindUserByContactHandler,
+  LinkTelegramAccountHandler,
+  GetUserBalanceHandler
 } from './action-handlers';
+
 
 import { ConditionHandler } from './condition-handler';
 
@@ -48,6 +57,7 @@ import {
 } from './media-handler';
 
 import { SwitchHandler } from './switch-handler';
+import { WebhookIntegrationHandler, AnalyticsIntegrationHandler } from './integration-handlers';
 
 /**
  * Инициализирует и регистрирует все обработчики нод
@@ -57,6 +67,7 @@ export function initializeNodeHandlers(): void {
   nodeHandlersRegistry.register(new CommandTriggerHandler());
   nodeHandlersRegistry.register(new MessageTriggerHandler());
   nodeHandlersRegistry.register(new CallbackTriggerHandler());
+  nodeHandlersRegistry.register(new WebhookTriggerHandler());
 
   // Message handlers
   nodeHandlersRegistry.register(new MessageHandler());
@@ -69,9 +80,16 @@ export function initializeNodeHandlers(): void {
   nodeHandlersRegistry.register(new DeleteMessageHandler());
 
   // Action handlers
+  nodeHandlersRegistry.register(new ApiRequestHandler());
   nodeHandlersRegistry.register(new DatabaseQueryHandler());
   nodeHandlersRegistry.register(new SetVariableHandler());
   nodeHandlersRegistry.register(new GetVariableHandler());
+  nodeHandlersRegistry.register(new RequestContactHandler());
+  nodeHandlersRegistry.register(new SendNotificationHandler());
+  nodeHandlersRegistry.register(new CheckUserLinkedHandler());
+  nodeHandlersRegistry.register(new FindUserByContactHandler());
+  nodeHandlersRegistry.register(new LinkTelegramAccountHandler());
+  nodeHandlersRegistry.register(new GetUserBalanceHandler());
 
   // Condition handlers
   nodeHandlersRegistry.register(new ConditionHandler());
@@ -83,6 +101,8 @@ export function initializeNodeHandlers(): void {
   nodeHandlersRegistry.register(new LoopFlowHandler());
   nodeHandlersRegistry.register(new SubWorkflowFlowHandler());
   nodeHandlersRegistry.register(new JumpFlowHandler());
+  nodeHandlersRegistry.register(new WebhookIntegrationHandler());
+  nodeHandlersRegistry.register(new AnalyticsIntegrationHandler());
 
   console.log('✅ All node handlers initialized and registered');
 }
@@ -92,14 +112,24 @@ export {
   CommandTriggerHandler,
   MessageTriggerHandler,
   CallbackTriggerHandler,
+  WebhookTriggerHandler,
   MessageHandler,
+  ApiRequestHandler,
   DatabaseQueryHandler,
   SetVariableHandler,
   GetVariableHandler,
+  RequestContactHandler,
+  SendNotificationHandler,
+  CheckUserLinkedHandler,
+  FindUserByContactHandler,
+  LinkTelegramAccountHandler,
+  GetUserBalanceHandler,
   ConditionHandler,
   DelayFlowHandler,
   EndFlowHandler,
   LoopFlowHandler,
   SubWorkflowFlowHandler,
-  JumpFlowHandler
+  JumpFlowHandler,
+  WebhookIntegrationHandler,
+  AnalyticsIntegrationHandler
 };

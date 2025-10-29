@@ -126,12 +126,77 @@ export class MessageHandler extends BaseNodeHandler {
         processedText: messageText,
         hasKeyboard: !!keyboardConfig
       });
+
+      // ✨ НОВОЕ: Проверяем, нужно ли ждать ответа пользователя
+      if (keyboardConfig) {
+        const needsWaiting = this.checkIfNeedsWaiting(keyboardConfig);
+        
+        if (needsWaiting.shouldWait) {
+          this.logStep(context, node, `Setting waiting state: ${needsWaiting.waitType}`, 'info');
+          
+          // Импортируем здесь чтобы избежать circular dependencies
+          const { db } = await import('@/lib/db');
+          
+          // Устанавливаем состояние ожидания
+          await db.workflowExecution.update({
+            where: { id: context.executionId },
+            data: {
+              status: 'waiting',
+              waitType: needsWaiting.waitType,
+              currentNodeId: node.id,
+              waitPayload: {
+                nodeId: node.id,
+                keyboard: keyboardConfig,
+                requestedAt: new Date()
+              }
+            }
+          });
+
+          // Возвращаем специальный результат, который означает "остановиться и ждать"
+          return '__WAITING_FOR_USER_INPUT__';
+        }
+      }
+
       return null;
 
     } catch (error) {
       this.logStep(context, node, 'Failed to send message', 'error', { error });
       throw error;
     }
+  }
+
+  /**
+   * Проверяет, нужно ли ждать ответа пользователя после отправки сообщения
+   */
+  private checkIfNeedsWaiting(keyboardConfig: any): { 
+    shouldWait: boolean; 
+    waitType: 'contact' | 'callback' | 'input' | null;
+  } {
+    if (!keyboardConfig || !keyboardConfig.buttons) {
+      return { shouldWait: false, waitType: null };
+    }
+
+    const buttons = keyboardConfig.buttons;
+    
+    // Проверяем все кнопки на наличие request_contact
+    for (const row of buttons) {
+      for (const button of row) {
+        if (button.request_contact) {
+          return { shouldWait: true, waitType: 'contact' };
+        }
+        // Для inline кнопок с callback_data тоже ждём
+        if (button.callback_data && keyboardConfig.type === 'inline') {
+          return { shouldWait: true, waitType: 'callback' };
+        }
+      }
+    }
+
+    // Для reply клавиатур без специальных кнопок - ждём обычный ввод
+    if (keyboardConfig.type === 'reply') {
+      return { shouldWait: true, waitType: 'input' };
+    }
+
+    return { shouldWait: false, waitType: null };
   }
 
   /**
