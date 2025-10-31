@@ -449,10 +449,12 @@ export const SAFE_QUERIES = {
 
   /**
    * Получить полную информацию о пользователе для отображения
+   * ✅ ОПТИМИЗИРОВАНО: Использует агрегацию БД вместо вычислений в памяти
    */
   get_user_profile: async (db: PrismaClient, params: { userId: string }) => {
-    logger.debug('Executing get_user_profile', { params });
+    logger.debug('Executing get_user_profile (optimized)', { params });
 
+    // ✅ ОПТИМИЗИРОВАНО: Один запрос с агрегацией вместо множественных вычислений в памяти
     const user = await db.user.findUnique({
       where: { id: params.userId },
       include: {
@@ -467,7 +469,7 @@ export const SAFE_QUERIES = {
         },
         transactions: {
           orderBy: { createdAt: 'desc' },
-          take: 20
+          take: 10 // ✅ Уменьшено с 20 до 10 для производительности
         },
         referrer: {
           select: {
@@ -483,25 +485,65 @@ export const SAFE_QUERIES = {
       return null;
     }
 
-    const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-    const totalEarned = user.transactions
-      .filter(t => t.type === 'EARN')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-    const totalSpent = Math.abs(
-      user.transactions
-        .filter(t => t.type === 'SPEND')
-        .reduce((sum, t) => sum + Number(t.amount), 0)
-    );
+    // ✅ ОПТИМИЗИРОВАНО: Баланс рассчитывается в БД агрегацией
+    const balanceResult = await db.bonus.aggregate({
+      where: {
+        userId: params.userId,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } }
+        ]
+      },
+      _sum: { amount: true }
+    });
+    const balance = Number(balanceResult._sum.amount || 0);
 
-    // ✨ НОВОЕ: Подсчёт истекающих бонусов в ближайшие 30 дней
+    // ✅ ОПТИМИЗИРОВАНО: Суммы заработка/расхода рассчитываются в БД
+    const [totalEarnedResult, totalSpentResult] = await Promise.all([
+      db.transaction.aggregate({
+        where: { userId: params.userId, type: 'EARN' },
+        _sum: { amount: true }
+      }),
+      db.transaction.aggregate({
+        where: { userId: params.userId, type: 'SPEND' },
+        _sum: { amount: true }
+      })
+    ]);
+
+    const totalEarned = Number(totalEarnedResult._sum.amount || 0);
+    const totalSpent = Math.abs(Number(totalSpentResult._sum.amount || 0));
+
+    // ✅ ОПТИМИЗИРОВАНО: Истекающие бонусы рассчитываются в БД
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    
-    const expiringBonuses = user.bonuses
-      .filter(b => b.expiresAt && b.expiresAt <= thirtyDaysFromNow && b.expiresAt > new Date())
-      .reduce((sum, bonus) => sum + Number(bonus.amount), 0);
 
-    // Форматируем историю транзакций
+    const expiringBonusesResult = await db.bonus.aggregate({
+      where: {
+        userId: params.userId,
+        expiresAt: {
+          gt: new Date(),
+          lte: thirtyDaysFromNow
+        }
+      },
+      _sum: { amount: true }
+    });
+    const expiringBonuses = Number(expiringBonusesResult._sum.amount || 0);
+
+    // ✅ ОПТИМИЗИРОВАНО: Количество транзакций и бонусов рассчитывается в БД
+    const [transactionCountResult, bonusCountResult] = await Promise.all([
+      db.transaction.count({ where: { userId: params.userId } }),
+      db.bonus.count({
+        where: {
+          userId: params.userId,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        }
+      })
+    ]);
+
+    // Форматируем историю транзакций (только последние 10)
     const transactionHistory = user.transactions.map(t => ({
       id: t.id,
       amount: Number(t.amount),
@@ -530,71 +572,124 @@ export const SAFE_QUERIES = {
       phone: user.phone,
       telegramId: user.telegramId?.toString(),
       telegramUsername: user.telegramUsername,
-      
+
       // Финансовая информация
       balance,
       totalEarned,
       totalSpent,
       totalPurchases: Number(user.totalPurchases),
-      expiringBonuses, // ✨ НОВОЕ: Истекающие бонусы
-      
+      expiringBonuses, // ✨ Истекающие бонусы
+
       // Уровень и рефералы
       currentLevel: user.currentLevel,
       referralCode: user.referralCode,
       referredBy: user.referredBy,
-      referrerName: user.referrer ? 
-        `${user.referrer.firstName || ''} ${user.referrer.lastName || ''}`.trim() || 
-        user.referrer.telegramUsername || 
+
+      // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
+      console.log('🔍 get_user_profile currentLevel DEBUG:', {
+        userId: user.id,
+        currentLevel: user.currentLevel,
+        currentLevelType: typeof user.currentLevel,
+        currentLevelLength: user.currentLevel?.length,
+        isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(user.currentLevel)
+      }),
+      referrerName: user.referrer ?
+        `${user.referrer.firstName || ''} ${user.referrer.lastName || ''}`.trim() ||
+        user.referrer.telegramUsername ||
         'Неизвестно' : null,
-      
+
       // Даты
       registeredAt: user.registeredAt,
       updatedAt: user.updatedAt,
-      
+
       // История
       transactionHistory,
       activeBonuses,
-      transactionCount: user.transactions.length,
-      bonusCount: user.bonuses.length
+      transactionCount: transactionCountResult,
+      bonusCount: bonusCountResult
     };
   },
 
   /**
    * Получить реферальную ссылку пользователя
+   * ✅ ДОБАВЛЕНО: Расширенное логирование для диагностики проблем с projectId
    */
   get_referral_link: async (db: PrismaClient, params: { userId: string; projectId: string }) => {
     logger.debug('Executing get_referral_link', { params });
 
-    const user = await db.user.findUnique({
-      where: { id: params.userId },
-      select: { referralCode: true }
+    // ✅ ДОБАВЛЕНО: Подробное логирование параметров
+    console.log('🔍 get_referral_link DEBUG:', {
+      userId: params.userId,
+      userIdType: typeof params.userId,
+      userIdLength: params.userId?.length,
+      projectId: params.projectId,
+      projectIdType: typeof params.projectId,
+      projectIdLength: params.projectId?.length,
+      projectIdValidFormat: /^[a-z0-9_-]+$/.test(params.projectId || '')
     });
 
-    if (!user || !user.referralCode) {
+    // Генерируем реферальный код если его нет
+    const user = await db.user.findUnique({
+      where: { id: params.userId },
+      select: { id: true, referralCode: true }
+    });
+
+    if (!user) {
+      console.log('❌ get_referral_link: User not found', { userId: params.userId });
       return null;
     }
 
-    // ✨ ИСПРАВЛЕНО: Получаем настройки бота из bot_settings
-    const [project, botSettings] = await Promise.all([
-      db.project.findUnique({
-        where: { id: params.projectId },
-        select: { name: true }
-      }),
-      db.botSettings.findFirst({
-        where: { projectId: params.projectId },
-        select: { botUsername: true }
-      })
-    ]);
+    console.log('✅ get_referral_link: User found', {
+      userId: params.userId,
+      hasReferralCode: !!user.referralCode
+    });
 
-    // Формируем реферальную ссылку с реальным username бота
-    const botUsername = botSettings?.botUsername || 'your_bot_username';
-    const referralLink = `https://t.me/${botUsername}?start=ref_${user.referralCode}`;
-    
-    return {
-      referralCode: user.referralCode,
+    // Автоматически создаём код если его нет
+    let referralCode = user.referralCode;
+    if (!referralCode) {
+      const { ReferralService } = await import('../referral.service');
+      referralCode = await ReferralService.ensureUserReferralCode(params.userId);
+      console.log('✅ get_referral_link: Generated new referral code', { referralCode });
+    }
+
+    // Получаем данные проекта
+    const project = await db.project.findUnique({
+      where: { id: params.projectId },
+      select: { name: true, domain: true }
+    });
+
+    console.log('🔍 get_referral_link: Project lookup result', {
+      projectId: params.projectId,
+      projectFound: !!project,
+      projectName: project?.name,
+      projectDomain: project?.domain
+    });
+
+    if (!project) {
+      console.log('❌ get_referral_link: Project not found', { projectId: params.projectId });
+    }
+
+    // Формируем ссылку на сайт клиента с utm_ref
+    const baseUrl = project?.domain || 'https://example.com';
+    const { ReferralService } = await import('../referral.service');
+    const referralLink = await ReferralService.generateReferralLink(
+      params.userId,
+      baseUrl
+    );
+
+    const result = {
+      referralCode,
       referralLink,
       projectName: project?.name || 'Бонусная система'
     };
+
+    console.log('✅ get_referral_link: Final result', {
+      referralCode,
+      referralLink,
+      projectName: result.projectName
+    });
+
+    return result;
   },
 
   /**

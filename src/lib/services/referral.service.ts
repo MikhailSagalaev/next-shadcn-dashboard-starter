@@ -379,7 +379,62 @@ export class ReferralService {
   }
 
   /**
-   * Получить статистику реферальной программы
+   * Получить реферальную статистику конкретного пользователя
+   * ✅ НОВОЕ: Возвращает статистику пользователя, а не всего проекта
+   */
+  static async getUserReferralStats(userId: string, projectId: string): Promise<{
+    referralCount: number;
+    referralBonusTotal: number;
+  }> {
+    try {
+      logger.debug('Getting user referral stats', { userId, projectId });
+
+      // Количество рефералов пользователя
+      const referralCount = await db.user.count({
+        where: {
+          referredBy: userId,
+          projectId: projectId,
+          isActive: true
+        }
+      });
+
+      // Сумма реферальных бонусов, полученных пользователем
+      const referralBonusesResult = await db.transaction.aggregate({
+        where: {
+          userId: userId,
+          isReferralBonus: true,
+          type: 'EARN'
+        },
+        _sum: { amount: true }
+      });
+
+      const referralBonusTotal = Number(referralBonusesResult._sum.amount || 0);
+
+      logger.debug('User referral stats calculated', {
+        userId,
+        referralCount,
+        referralBonusTotal
+      });
+
+      return {
+        referralCount,
+        referralBonusTotal
+      };
+    } catch (error) {
+      logger.error('Error getting user referral stats', {
+        userId,
+        projectId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return {
+        referralCount: 0,
+        referralBonusTotal: 0
+      };
+    }
+  }
+
+  /**
+   * Получить статистику реферальной программы (для всего проекта)
    */
   static async getReferralStats(projectId: string): Promise<ReferralStats> {
     try {
@@ -535,7 +590,11 @@ export class ReferralService {
     additionalParams?: Record<string, string>
   ): Promise<string> {
     try {
-      const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      let base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      // Добавляем протокол если его нет
+      if (!base.startsWith('http://') && !base.startsWith('https://')) {
+        base = `https://${base}`;
+      }
       const url = new URL(base);
       // Новая схема: только utm_ref с userId
       url.searchParams.set('utm_ref', userId);

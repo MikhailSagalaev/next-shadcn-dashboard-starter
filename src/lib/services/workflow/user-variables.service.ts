@@ -203,14 +203,17 @@ export class UserVariablesService {
         }).join('\n\n');
       };
 
-      // Реферальная статистика проекта и форматированные поля
+      // ✅ КРИТИЧНО: Реферальная статистика ПОЛЬЗОВАТЕЛЯ, а не проекта!
       let referralCount = 0;
       let referralBonusTotal = 0;
       try {
-        const stats = await ReferralService.getReferralStats(projectId);
-        referralCount = stats.totalReferrals || 0;
-        referralBonusTotal = stats.totalReferrals || 0;
-      } catch {
+        console.log('🔍 Getting user referral stats for user:', userId, 'project:', projectId);
+        const userStats = await ReferralService.getUserReferralStats(userId, projectId);
+        referralCount = userStats.referralCount || 0;
+        referralBonusTotal = userStats.referralBonusTotal || 0;
+        console.log('✅ User referral stats:', { referralCount, referralBonusTotal });
+      } catch (error) {
+        console.error('❌ Error getting user referral stats:', error);
         // игнорируем, не критично для сообщений
       }
 
@@ -240,6 +243,15 @@ export class UserVariablesService {
         // Уровень и рефералы
         'user.currentLevel': profile.currentLevel,
         'user.progressBar': generateProgressBar(profile.currentLevel), // ✨ НОВОЕ
+
+        // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
+        console.log('🔍 user-variables currentLevel DEBUG:', {
+          userId: profile.userId,
+          currentLevel: profile.currentLevel,
+          currentLevelType: typeof profile.currentLevel,
+          progressBar: generateProgressBar(profile.currentLevel),
+          isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(profile.currentLevel)
+        }),
         'user.referralCode': profile.referralCode || 'Не сгенерирован',
         'user.referredBy': profile.referredBy || 'Нет',
         'user.referrerName': profile.referrerName || 'Нет',
