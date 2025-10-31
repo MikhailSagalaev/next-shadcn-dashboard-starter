@@ -10,6 +10,7 @@
 import { BaseNodeHandler } from './base-handler';
 import { ProjectVariablesService } from '@/lib/services/project-variables.service';
 import { UserVariablesService } from '../user-variables.service';
+import { QueryExecutor } from '../query-executor';
 import type {
   WorkflowNode,
   WorkflowNodeType,
@@ -47,6 +48,40 @@ export class MessageHandler extends BaseNodeHandler {
         session_id: context.sessionId
       };
 
+      // Если userId не задан в контексте — пытаемся определить по Telegram ID
+      if (!context.userId && context.telegram?.userId) {
+        try {
+          const found = await QueryExecutor.execute(
+            context.services.db as any,
+            'check_user_by_telegram',
+            { telegramId: context.telegram.userId, projectId: context.projectId }
+          );
+          if (found?.id) {
+            context.userId = found.id;
+            this.logStep(context, node, 'Resolved userId from telegramId', 'info', { userId: context.userId });
+          }
+        } catch (e) {
+          this.logStep(context, node, 'Failed resolve userId from telegramId', 'warn', { error: e });
+        }
+      }
+
+      // Проверяем, требуется ли userId для этого сообщения
+      if (!context.userId && messageText.includes('{user.')) {
+        this.logStep(context, node, 'User not authenticated, cannot display personalized message', 'warn', {
+          hasUserVariables: messageText.includes('{user.')
+        });
+
+        // Отправляем сообщение об ошибке привязки аккаунта
+        const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
+        await context.services.http.post(telegramApiUrl, {
+          chat_id: context.telegram.chatId,
+          text: '❌ Для использования меню необходимо привязать аккаунт. Введите /start для начала.',
+          parse_mode: 'HTML'
+        });
+
+        return null; // Останавливаем выполнение workflow
+      }
+
       // Получаем переменные пользователя, если userId доступен
       if (context.userId) {
         try {
@@ -67,6 +102,48 @@ export class MessageHandler extends BaseNodeHandler {
           Object.entries(userVariables).forEach(([key, value]) => {
             additionalVariables[key] = String(value);
           });
+
+          // Принудительная гарантия наличия user.expiringBonusesFormatted
+          if (userVariables['user.expiringBonusesFormatted']) {
+            additionalVariables['user.expiringBonusesFormatted'] = userVariables['user.expiringBonusesFormatted'];
+          }
+
+          // Логируем в консоль для отладки
+          console.log('🔥 DEBUG MESSAGE-HANDLER:');
+          console.log('   userVariables keys:', Object.keys(userVariables));
+          console.log('   expiringBonusesFormatted in userVariables:', 'user.expiringBonusesFormatted' in userVariables);
+          console.log('   expiringBonusesFormatted value:', userVariables['user.expiringBonusesFormatted']);
+          console.log('   additionalVariables keys:', Object.keys(additionalVariables));
+          console.log('   expiringBonusesFormatted in additionalVariables:', 'user.expiringBonusesFormatted' in additionalVariables);
+
+          // Финальная проверка перед отправкой
+          console.log('📤 FINAL MESSAGE CHECK:');
+          console.log('   Original messageText:', messageText);
+          console.log('   Has expiringBonusesFormatted placeholder:', messageText.includes('{user.expiringBonusesFormatted}'));
+          console.log('   Final messageText after replacement:', messageText);
+
+          // ТОЧНАЯ проверка после замены переменных
+          const replacedText = await ProjectVariablesService.replaceVariablesInText(
+            context.projectId,
+            messageText,
+            additionalVariables
+          );
+          console.log('🔄 AFTER PROJECT VARIABLES REPLACEMENT:');
+          console.log('   Replaced text:', replacedText);
+          console.log('   Has placeholder after replacement:', replacedText.includes('{user.expiringBonusesFormatted}'));
+
+          // Обновляем messageText
+          messageText = replacedText;
+
+          this.logStep(context, node, 'User variables added to additionalVariables', 'debug', {
+            userVariablesCount: Object.keys(userVariables).length,
+            additionalVariablesCount: Object.keys(additionalVariables).length,
+            sampleUserVariables: Object.keys(userVariables).slice(0, 3),
+            expiringBonusesValue: userVariables['user.expiringBonusesFormatted'],
+            hasExpiringBonuses: 'user.expiringBonusesFormatted' in additionalVariables,
+            allUserVariables: userVariables,
+            allAdditionalVariables: additionalVariables
+          });
         } catch (error) {
           this.logStep(context, node, 'Failed to load user variables', 'warn', { error });
         }
@@ -82,13 +159,23 @@ export class MessageHandler extends BaseNodeHandler {
         additionalVariables['user.referralLink'] = 'Недоступно';
       }
 
+      // 🔍 Отладка перед заменой переменных
+      this.logStep(context, node, 'About to replace variables in text', 'debug', {
+        textLength: messageText.length,
+        hasExpiringBonusesPlaceholder: messageText.includes('{user.expiringBonusesFormatted}'),
+        additionalVariablesKeys: Object.keys(additionalVariables),
+        expiringBonusesInAdditional: 'user.expiringBonusesFormatted' in additionalVariables,
+        expiringBonusesValue: additionalVariables['user.expiringBonusesFormatted'],
+        allAdditionalVariables: additionalVariables
+      });
+
       // Заменяем переменные проекта в тексте
       this.logStep(context, node, 'Replacing variables in text', 'debug', {
         originalText: messageText.substring(0, 100),
         variableCount: Object.keys(additionalVariables).length,
         hasUserVariables: Object.keys(additionalVariables).some(k => k.startsWith('user.'))
       });
-      
+
       messageText = await ProjectVariablesService.replaceVariablesInText(
         context.projectId,
         messageText,
