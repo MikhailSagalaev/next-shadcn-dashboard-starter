@@ -10,6 +10,8 @@
 import { PrismaClient } from '@prisma/client';
 import { QueryExecutor } from './query-executor';
 import { logger } from '@/lib/logger';
+import { ReferralService } from '../referral.service';
+import { BonusLevelService } from '../bonus-level.service';
 
 export interface UserProfileData {
   // Основная информация
@@ -62,20 +64,74 @@ export class UserVariablesService {
     userId: string,
     projectId: string
   ): Promise<Record<string, any>> {
+    console.log('🚀 UserVariablesService.getUserVariables CALLED', { userId, projectId });
+
+    // ✅ КРИТИЧНО: Логируем projectId для отладки на сервере
+    console.log('🔍 SERVER DEBUG: projectId validation', {
+      projectId,
+      projectIdType: typeof projectId,
+      projectIdLength: projectId?.length,
+      isValidFormat: /^[a-z0-9_-]+$/.test(projectId || '')
+    });
+
     try {
+      console.log('🔍 UserVariablesService.getUserVariables started', { userId, projectId });
+
       // Получаем полный профиль пользователя
       const profile = await QueryExecutor.execute(db, 'get_user_profile', { userId });
-      
+      console.log('🔍 QueryExecutor returned profile', {
+        profileExists: !!profile,
+        profileKeys: profile ? Object.keys(profile) : [],
+        balance: profile?.balance,
+        expiringBonuses: profile?.expiringBonuses,
+        referralCount: profile?.referralCount
+      });
+
       if (!profile) {
         logger.warn('User profile not found', { userId });
         return {};
       }
 
-      // Получаем реферальную ссылку
-      const referralData = await QueryExecutor.execute(db, 'get_referral_link', { 
-        userId, 
-        projectId 
+      logger.debug('✅ Profile data received', {
+        firstName: profile.firstName,
+        balance: profile.balance,
+        totalEarned: profile.totalEarned,
+        totalSpent: profile.totalSpent,
+        transactionCount: profile.transactionCount
       });
+
+      // Получаем реферальную ссылку
+      console.log('🔗 Getting referral data...');
+      let referralData;
+      try {
+        referralData = await QueryExecutor.execute(db, 'get_referral_link', {
+          userId,
+          projectId
+        });
+        console.log('✅ Referral data received', { referralData });
+      } catch (error) {
+        console.error('❌ Failed to get referral data', error);
+        referralData = null;
+      }
+
+      // Получаем информацию об уровнях
+      console.log('🏆 Getting progress data...');
+      let progressData;
+      try {
+        progressData = await BonusLevelService.calculateProgressToNextLevel(
+          projectId,
+          profile.totalPurchases
+        );
+        console.log('✅ Progress data received', { progressData });
+      } catch (error) {
+        console.error('❌ Failed to get progress data', error);
+        progressData = {
+          currentLevel: null,
+          nextLevel: null,
+          amountNeeded: 0,
+          progressPercent: 0
+        };
+      }
 
       // Форматируем даты для отображения
       const formatDate = (date: Date) => {
@@ -147,7 +203,18 @@ export class UserVariablesService {
         }).join('\n\n');
       };
 
-      return {
+      // Реферальная статистика проекта и форматированные поля
+      let referralCount = 0;
+      let referralBonusTotal = 0;
+      try {
+        const stats = await ReferralService.getReferralStats(projectId);
+        referralCount = stats.totalReferrals || 0;
+        referralBonusTotal = stats.totalReferrals || 0;
+      } catch {
+        // игнорируем, не критично для сообщений
+      }
+
+      const result = {
         // Основная информация
         'user.id': profile.userId,
         'user.firstName': profile.firstName || 'Не указано',
@@ -157,7 +224,7 @@ export class UserVariablesService {
         'user.phone': profile.phone || 'Не указано',
         'user.telegramId': profile.telegramId || 'Не указано',
         'user.telegramUsername': profile.telegramUsername || 'Не указано',
-        
+
         // Финансовая информация
         'user.balance': profile.balance,
         'user.balanceFormatted': `${profile.balance} бонусов`,
@@ -168,36 +235,50 @@ export class UserVariablesService {
         'user.totalPurchases': profile.totalPurchases,
         'user.totalPurchasesFormatted': `${profile.totalPurchases} руб.`,
         'user.expiringBonuses': profile.expiringBonuses || 0, // ✨ НОВОЕ
-        
+        'user.expiringBonusesFormatted': `${Number(profile.expiringBonuses || 0)}₽`,
+
         // Уровень и рефералы
         'user.currentLevel': profile.currentLevel,
         'user.progressBar': generateProgressBar(profile.currentLevel), // ✨ НОВОЕ
         'user.referralCode': profile.referralCode || 'Не сгенерирован',
         'user.referredBy': profile.referredBy || 'Нет',
         'user.referrerName': profile.referrerName || 'Нет',
-        
+
+        // Информация об уровнях
+        'user.levelBonusPercent': progressData.currentLevel?.bonusPercent || 0,
+        'user.levelPaymentPercent': progressData.currentLevel?.paymentPercent || 0,
+        'user.nextLevelName': progressData.nextLevel?.name || 'Максимальный уровень достигнут',
+        'user.nextLevelAmount': progressData.amountNeeded || 0,
+        'user.nextLevelAmountFormatted': `${progressData.amountNeeded || 0} руб.`,
+        'user.progressPercent': progressData.progressPercent,
+
         // Даты
         'user.registeredAt': formatDate(profile.registeredAt),
         'user.updatedAt': formatDate(profile.updatedAt),
-        
+
         // История и статистика
         'user.transactionCount': profile.transactionCount,
         'user.bonusCount': profile.bonusCount,
         'user.transactionHistory': formatTransactionHistory(profile.transactionHistory),
         'user.activeBonuses': formatActiveBonuses(profile.activeBonuses),
         'transactions.formatted': formatTransactionsDetailed(profile.transactionHistory), // ✨ НОВОЕ
-        
+
         // Реферальная ссылка
         'user.referralLink': referralData?.referralLink || 'Недоступно',
         'user.referralCodeShort': referralData?.referralCode || 'Нет',
         'user.projectName': referralData?.projectName || 'Бонусная система',
-        
+
+        // Реферальная статистика по проекту (для блоков статистики)
+        'user.referralCount': referralCount,
+        'user.referralBonusTotal': referralBonusTotal,
+        'user.referralBonusTotalFormatted': `${referralBonusTotal}₽`,
+
         // Дополнительные переменные для удобства
         'user.hasReferralCode': profile.referralCode ? 'Да' : 'Нет',
         'user.hasTransactions': profile.transactionCount > 0 ? 'Да' : 'Нет',
         'user.hasBonuses': profile.bonusCount > 0 ? 'Да' : 'Нет',
         'user.isNewUser': profile.transactionCount === 0 ? 'Да' : 'Нет',
-        
+
         // Статистика для отображения
         'user.stats': {
           balance: profile.balance,
@@ -208,9 +289,32 @@ export class UserVariablesService {
         }
       };
 
+      console.log('✅ UserVariablesService.getUserVariables SUCCESS', {
+        totalVariables: Object.keys(result).length,
+        sampleVariables: {
+          balanceFormatted: result['user.balanceFormatted'],
+          expiringBonusesFormatted: result['user.expiringBonusesFormatted'],
+          referralCount: result['user.referralCount'],
+          progressPercent: result['user.progressPercent']
+        }
+      });
+
+      return result;
+
     } catch (error) {
-      logger.error('Failed to get user variables', { userId, error });
-      
+      logger.error('❌ Failed to get user variables - RETURNING FALLBACK VALUES', {
+        userId,
+        projectId,
+        error: error.message,
+        stack: error.stack
+      });
+
+      console.log('❌ UserVariablesService.getUserVariables ERROR - returning fallback', {
+        userId,
+        projectId,
+        errorMessage: error.message
+      });
+
       // Возвращаем базовые переменные в случае ошибки
       return {
         'user.firstName': 'Пользователь',
@@ -220,7 +324,8 @@ export class UserVariablesService {
         'user.referralLink': 'Недоступно',
         'user.totalEarnedFormatted': '0 бонусов',
         'user.totalSpentFormatted': '0 бонусов',
-        'user.totalPurchasesFormatted': '0 руб.'
+        'user.totalPurchasesFormatted': '0 руб.',
+        'user.expiringBonusesFormatted': '0₽'
       };
     }
   }

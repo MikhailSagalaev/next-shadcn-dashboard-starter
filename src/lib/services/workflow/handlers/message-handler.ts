@@ -98,14 +98,19 @@ export class MessageHandler extends BaseNodeHandler {
             sampleVariables: Object.keys(userVariables).slice(0, 5)
           });
           
-          // Добавляем переменные пользователя с префиксом user.
+          // ✅ КРИТИЧНО: Добавляем переменные пользователя с префиксом user.
+          // Только если значение не undefined/null
           Object.entries(userVariables).forEach(([key, value]) => {
-            additionalVariables[key] = String(value);
+            if (value !== undefined && value !== null) {
+              additionalVariables[key] = String(value);
+            } else {
+              console.warn(`⚠️ Skipping user variable ${key} because value is ${value}`);
+            }
           });
 
           // Принудительная гарантия наличия user.expiringBonusesFormatted
-          if (userVariables['user.expiringBonusesFormatted']) {
-            additionalVariables['user.expiringBonusesFormatted'] = userVariables['user.expiringBonusesFormatted'];
+          if (userVariables['user.expiringBonusesFormatted'] !== undefined && userVariables['user.expiringBonusesFormatted'] !== null) {
+            additionalVariables['user.expiringBonusesFormatted'] = String(userVariables['user.expiringBonusesFormatted']);
           }
 
           // Логируем в консоль для отладки
@@ -115,6 +120,10 @@ export class MessageHandler extends BaseNodeHandler {
           console.log('   expiringBonusesFormatted value:', userVariables['user.expiringBonusesFormatted']);
           console.log('   additionalVariables keys:', Object.keys(additionalVariables));
           console.log('   expiringBonusesFormatted in additionalVariables:', 'user.expiringBonusesFormatted' in additionalVariables);
+          console.log('   referralCount in additionalVariables:', 'user.referralCount' in additionalVariables);
+          console.log('   referralCount value:', additionalVariables['user.referralCount']);
+          console.log('   progressPercent in additionalVariables:', 'user.progressPercent' in additionalVariables);
+          console.log('   progressPercent value:', additionalVariables['user.progressPercent']);
 
           // Финальная проверка перед отправкой
           console.log('📤 FINAL MESSAGE CHECK:');

@@ -220,15 +220,47 @@ export class ProjectVariablesService {
       ...additionalVariables
     };
 
+    // Принудительная гарантия наличия user.expiringBonusesFormatted
+    if (additionalVariables && 'user.expiringBonusesFormatted' in additionalVariables) {
+      allVariables['user.expiringBonusesFormatted'] = additionalVariables['user.expiringBonusesFormatted'];
+    }
+
     // Заменяем все вхождения {variable_name} и {user.variable}
     let result = text;
+
+    console.log('🔧 STARTING VARIABLE REPLACEMENT:');
+    console.log('   Original text:', text);
+    console.log('   All variables available:', Object.keys(allVariables));
+    console.log('   All variables values:', allVariables);
+
     for (const [key, value] of Object.entries(allVariables)) {
-      // Поддерживаем оба формата: {variable_name} и {user.variable}
-      const regex1 = new RegExp(`\\{${key}\\}`, 'g');
-      const regex2 = new RegExp(`\\{${key.replace(/\./g, '\\.')}\\}`, 'g');
-      result = result.replace(regex1, value);
-      result = result.replace(regex2, value);
+      // Ищем плейсхолдеры в формате {variable_name}
+      const placeholder = `{${key}}`;
+      const beforeReplace = result;
+
+      // ✅ КРИТИЧНО: Приводим значение к строке и обрабатываем undefined/null
+      const stringValue = value === undefined || value === null ? '' : String(value);
+
+      // Заменяем плейсхолдер на значение
+      result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), stringValue);
+
+      // Отладка для всех переменных
+      if (key.startsWith('user.')) {
+        console.log(`🔄 Replacing {${key}}:`, {
+          key,
+          value: stringValue || 'EMPTY!',
+          originalValue: value,
+          originalType: typeof value,
+          placeholder,
+          textContainsPlaceholder: beforeReplace.includes(placeholder),
+          beforeReplace: beforeReplace.includes(placeholder),
+          afterReplace: result.includes(placeholder)
+        });
+      }
     }
+
+    console.log('✅ FINAL RESULT:', result);
+    console.log('   Contains any user.* placeholders:', result.includes('{user.'));
 
     return result;
   }
