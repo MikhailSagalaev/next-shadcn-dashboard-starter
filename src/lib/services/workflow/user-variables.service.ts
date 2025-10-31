@@ -243,15 +243,6 @@ export class UserVariablesService {
         // Уровень и рефералы
         'user.currentLevel': profile.currentLevel,
         'user.progressBar': generateProgressBar(profile.currentLevel), // ✨ НОВОЕ
-
-        // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
-        console.log('🔍 user-variables currentLevel DEBUG:', {
-          userId: profile.userId,
-          currentLevel: profile.currentLevel,
-          currentLevelType: typeof profile.currentLevel,
-          progressBar: generateProgressBar(profile.currentLevel),
-          isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(profile.currentLevel)
-        }),
         'user.referralCode': profile.referralCode || 'Не сгенерирован',
         'user.referredBy': profile.referredBy || 'Нет',
         'user.referrerName': profile.referrerName || 'Нет',
@@ -300,6 +291,15 @@ export class UserVariablesService {
           bonusCount: profile.bonusCount
         }
       };
+
+      // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
+      console.log('🔍 user-variables currentLevel DEBUG:', {
+        userId: profile.userId,
+        currentLevel: profile.currentLevel,
+        currentLevelType: typeof profile.currentLevel,
+        progressBar: generateProgressBar(profile.currentLevel),
+        isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(profile.currentLevel)
+      });
 
       console.log('✅ UserVariablesService.getUserVariables SUCCESS', {
         totalVariables: Object.keys(result).length,

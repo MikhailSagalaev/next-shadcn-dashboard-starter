@@ -584,15 +584,6 @@ export const SAFE_QUERIES = {
       currentLevel: user.currentLevel,
       referralCode: user.referralCode,
       referredBy: user.referredBy,
-
-      // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
-      console.log('🔍 get_user_profile currentLevel DEBUG:', {
-        userId: user.id,
-        currentLevel: user.currentLevel,
-        currentLevelType: typeof user.currentLevel,
-        currentLevelLength: user.currentLevel?.length,
-        isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(user.currentLevel)
-      }),
       referrerName: user.referrer ?
         `${user.referrer.firstName || ''} ${user.referrer.lastName || ''}`.trim() ||
         user.referrer.telegramUsername ||
@@ -608,6 +599,15 @@ export const SAFE_QUERIES = {
       transactionCount: transactionCountResult,
       bonusCount: bonusCountResult
     };
+
+    // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
+    console.log('🔍 get_user_profile currentLevel DEBUG:', {
+      userId: user.id,
+      currentLevel: user.currentLevel,
+      currentLevelType: typeof user.currentLevel,
+      currentLevelLength: user.currentLevel?.length,
+      isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(user.currentLevel)
+    });
   },
 
   /**
