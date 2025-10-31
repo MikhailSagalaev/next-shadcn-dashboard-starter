@@ -29,7 +29,8 @@ import {
   CheckUserLinkedHandler,
   FindUserByContactHandler,
   LinkTelegramAccountHandler,
-  GetUserBalanceHandler
+  GetUserBalanceHandler,
+  MenuCommandHandler
 } from './action-handlers';
 
 
@@ -90,6 +91,9 @@ export function initializeNodeHandlers(): void {
   nodeHandlersRegistry.register(new FindUserByContactHandler());
   nodeHandlersRegistry.register(new LinkTelegramAccountHandler());
   nodeHandlersRegistry.register(new GetUserBalanceHandler());
+  const menuHandler = new MenuCommandHandler();
+  nodeHandlersRegistry.register(menuHandler);
+  console.log(`✅ Registered MenuCommandHandler: ${menuHandler.constructor.name}`);
 
   // Condition handlers
   nodeHandlersRegistry.register(new ConditionHandler());
@@ -124,6 +128,7 @@ export {
   FindUserByContactHandler,
   LinkTelegramAccountHandler,
   GetUserBalanceHandler,
+  MenuCommandHandler,
   ConditionHandler,
   DelayFlowHandler,
   EndFlowHandler,

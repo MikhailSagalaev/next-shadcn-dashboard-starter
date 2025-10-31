@@ -248,6 +248,15 @@ export class MessageHandler extends BaseNodeHandler {
             }
           });
 
+          // ✅ КЕШИРУЕМ WAITING EXECUTION В REDIS
+          const { WorkflowRuntimeService } = await import('../../workflow-runtime.service');
+          await WorkflowRuntimeService.cacheWaitingExecution(
+            context.executionId,
+            context.projectId,
+            context.telegramChatId || '',
+            needsWaiting.waitType
+          );
+
           // Возвращаем специальный результат, который означает "остановиться и ждать"
           return '__WAITING_FOR_USER_INPUT__';
         }

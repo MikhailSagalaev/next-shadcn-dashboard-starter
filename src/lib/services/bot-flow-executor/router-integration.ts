@@ -577,11 +577,16 @@ export class RouterIntegration {
       const { SimpleWorkflowProcessor } = await import('../simple-workflow-processor');
 
       // Ищем workflow execution в состоянии waiting
+      // ✅ КРИТИЧНО: Для callback query chat находится в callbackQuery.message.chat
+      const chatId = (ctx.chat?.id || ctx.callbackQuery?.message?.chat?.id)?.toString();
+      
       logger.info('🔎 SEARCHING FOR WAITING EXECUTION', {
         projectId: this.projectId,
         status: 'waiting',
-        telegramChatId: ctx.chat?.id?.toString(),
+        telegramChatId: chatId,
         waitType,
+        hasChat: !!ctx.chat,
+        hasCallbackChat: !!ctx.callbackQuery?.message?.chat,
         timestamp: new Date().toISOString()
       });
       
@@ -589,7 +594,7 @@ export class RouterIntegration {
               where: {
                 projectId: this.projectId,
                 status: 'waiting',
-                telegramChatId: ctx.chat?.id?.toString(),
+                telegramChatId: chatId,
                 waitType: waitType === 'input' ? ({ in: ['input', 'contact'] } as any) : waitType
               },
               include: {
@@ -600,8 +605,10 @@ export class RouterIntegration {
       if (!waitingExecution) {
         logger.warn('⚠️ NO WAITING EXECUTION FOUND', {
           projectId: this.projectId,
-          telegramChatId: ctx.chat?.id?.toString(),
-          waitType
+          telegramChatId: chatId,
+          waitType,
+          hasChat: !!ctx.chat,
+          hasCallbackChat: !!ctx.callbackQuery?.message?.chat
         });
         return false; // Нет waiting workflow
       }
@@ -713,6 +720,18 @@ export class RouterIntegration {
               }
             });
 
+            // ✅ ИНВАЛИДИРУЕМ КЕШ WAITING EXECUTION
+            try {
+              const { WorkflowRuntimeService } = await import('../workflow/workflow-runtime.service');
+              await WorkflowRuntimeService.invalidateWaitingExecutionCache(
+                projectId,
+                telegramChatId,
+                waitType
+              );
+            } catch (cacheError) {
+              console.warn('Failed to invalidate waiting execution cache:', cacheError);
+            }
+
       // ✨ ИСПРАВЛЕНО: Определяем nextNodeId в зависимости от типа ожидания
       let nextNodeId: string;
       
@@ -780,7 +799,7 @@ export class RouterIntegration {
       
       const context = await ExecutionContextManager.resumeContext(
         waitingExecution.id,
-        ctx.chat?.id?.toString(),
+        chatId,
         telegramUserId,
         ctx.from?.username,
         waitType === 'input' ? data : undefined,

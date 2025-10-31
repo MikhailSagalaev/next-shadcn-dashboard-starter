@@ -113,15 +113,25 @@ export class SimpleWorkflowProcessor {
         ctx.callbackQuery?.data
       );
 
+      // ✅ КРИТИЧНО: Сохраняем callbackQueryId для answerCallbackQuery
+      if (ctx.callbackQuery?.id) {
+        (context as any).callbackQueryId = ctx.callbackQuery.id;
+      }
+
       // Находим стартовую ноду по триггеру
+      console.log('🔍 Finding trigger node for:', { trigger, hasCallback: !!ctx.callbackQuery, callbackData: ctx.callbackQuery?.data });
       const startNode = this.findTriggerNode(trigger, ctx);
+      console.log('🔍 findTriggerNode result:', { startNodeId: startNode?.id, startNodeType: startNode?.type });
+
       if (!startNode) {
+        console.log('❌ CRITICAL: No start node found - this will cause "workflow not configured" error');
         logger.warn('⚠️ Стартовая нода не найдена', {
           projectId: this.projectId,
           workflowId: this.workflowVersion.workflowId,
           trigger,
           hasContact: !!ctx.message?.contact,
           hasCallback: !!ctx.callbackQuery,
+          callbackData: ctx.callbackQuery?.data,
           availableNodeTypes: Array.from(this.nodesMap.values()).map((n: any) => n.type)
         });
         return false;
@@ -210,18 +220,27 @@ export class SimpleWorkflowProcessor {
 
   /**
    * Генерирует ID сессии
+   * ✅ ИСПРАВЛЕНИЕ: Для callback используем стабильный sessionId без timestamp
+   * чтобы переменные сохранялись между взаимодействиями
    */
   private generateSessionId(ctx: Context): string {
     const chatId = ctx.chat?.id || ctx.from?.id || 'unknown';
     const userId = ctx.from?.id || 'unknown';
 
+    // ✅ Для callback НЕ добавляем timestamp, чтобы использовать ту же сессию
+    const isCallback = !!(ctx.callbackQuery);
+    const sessionId = isCallback 
+      ? `${chatId}_${userId}` // Стабильный ID для callback
+      : `${chatId}_${userId}_${Date.now()}`; // Уникальный ID для новых команд/сообщений
+
     console.log('Generating session ID:', {
       chatId: ctx.chat?.id,
       fromId: ctx.from?.id,
-      generatedSessionId: `${chatId}_${userId}_${Date.now()}`
+      isCallback,
+      generatedSessionId: sessionId
     });
 
-    return `${chatId}_${userId}_${Date.now()}`;
+    return sessionId;
   }
 
   /**
@@ -425,13 +444,22 @@ export class SimpleWorkflowProcessor {
     // 2️⃣ ПРИОРИТЕТ 2: Проверяем callback query (trigger.callback)
     if (ctx?.callbackQuery) {
       const callbackData = ctx.callbackQuery.data;
+      console.log('🔍 Looking for callback trigger:', { callbackData, availableNodes: Array.from(this.nodesMap.keys()) });
       const callbackTrigger = this.findCallbackTrigger(callbackData);
       if (callbackTrigger) {
-        logger.info('✅ Найден trigger.callback', { 
-          nodeId: callbackTrigger.id, 
-          callbackData 
+        logger.info('✅ Найден trigger.callback', {
+          nodeId: callbackTrigger.id,
+          callbackData
         });
         return callbackTrigger;
+      } else {
+        console.log('❌ Callback trigger not found for:', callbackData);
+        // Возвращаем fallback для неизвестных callback
+        const fallbackTrigger = this.findCommandTrigger('/start');
+        if (fallbackTrigger) {
+          logger.warn('⚠️ Using /start trigger as fallback for unknown callback', { callbackData });
+          return fallbackTrigger;
+        }
       }
     }
 
@@ -521,14 +549,29 @@ export class SimpleWorkflowProcessor {
    * Поиск trigger.callback по callback_data
    */
   private findCallbackTrigger(callbackData: string): WorkflowNode | undefined {
+    console.log('🔍 findCallbackTrigger searching for:', callbackData);
+    console.log('   Available nodes count:', this.nodesMap.size);
+
     for (const node of Array.from(this.nodesMap.values())) {
+      console.log('   Checking node:', {
+        id: node.id,
+        type: node.type,
+        hasConfig: !!node.data?.config,
+        hasTriggerCallback: !!node.data?.config?.['trigger.callback'],
+        callbackData: node.data?.config?.['trigger.callback']?.callbackData
+      });
+
       if (node.type === 'trigger.callback') {
         const config = node.data?.config?.['trigger.callback'];
+        console.log('   Node config:', config);
+
         if (config?.callbackData === callbackData) {
+          console.log('✅ Found matching callback trigger:', node.id);
           return node;
         }
       }
     }
+    console.log('❌ No callback trigger found for:', callbackData);
     return undefined;
   }
 }

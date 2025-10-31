@@ -454,6 +454,17 @@ export const SAFE_QUERIES = {
   get_user_profile: async (db: PrismaClient, params: { userId: string }) => {
     logger.debug('Executing get_user_profile (optimized)', { params });
 
+    // ✅ Проверяем кеш user profile
+    const { WorkflowRuntimeService } = await import('../workflow-runtime.service');
+    const cachedProfile = await WorkflowRuntimeService.getCachedUserProfile(params.userId);
+    if (cachedProfile) {
+      logger.debug('✅ Returning cached user profile', {
+        userId: params.userId,
+        cacheHit: true
+      });
+      return cachedProfile;
+    }
+
     // ✅ ОПТИМИЗИРОВАНО: Один запрос с агрегацией вместо множественных вычислений в памяти
     const user = await db.user.findUnique({
       where: { id: params.userId },
@@ -600,6 +611,9 @@ export const SAFE_QUERIES = {
       bonusCount: bonusCountResult
     };
 
+    // ✅ Кешируем результат user profile
+    await WorkflowRuntimeService.cacheUserProfile(params.userId, result);
+
     // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
     console.log('🔍 get_user_profile currentLevel DEBUG:', {
       userId: user.id,
@@ -608,6 +622,8 @@ export const SAFE_QUERIES = {
       currentLevelLength: user.currentLevel?.length,
       isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(user.currentLevel)
     });
+
+    return result;
   },
 
   /**

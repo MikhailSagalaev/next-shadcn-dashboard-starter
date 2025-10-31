@@ -24,7 +24,7 @@ export type WorkflowNodeType =
   | 'message.delete'
   // Действия
   | 'action.api_request' | 'action.database_query' | 'action.set_variable' | 'action.get_variable' | 'action.request_contact'
-  | 'action.send_notification' | 'action.check_user_linked' | 'action.find_user_by_contact' | 'action.link_telegram_account' | 'action.get_user_balance'
+  | 'action.send_notification' | 'action.check_user_linked' | 'action.find_user_by_contact' | 'action.link_telegram_account' | 'action.get_user_balance' | 'action.menu_command'
   // Условия
   | 'condition'
   // Поток управления

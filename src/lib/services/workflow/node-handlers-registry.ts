@@ -57,6 +57,7 @@ export class NodeHandlersRegistry {
       'action.find_user_by_contact',
       'action.link_telegram_account',
       'action.get_user_balance',
+      'action.menu_command',
       // Условия
       'condition',
       // Поток управления

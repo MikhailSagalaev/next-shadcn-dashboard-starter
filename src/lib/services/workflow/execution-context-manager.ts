@@ -246,6 +246,31 @@ export class ExecutionContextManager {
         }
       });
 
+      // ✅ ИНВАЛИДИРУЕМ КЕШ WAITING EXECUTION
+      try {
+        // Получаем информацию о завершенном execution для инвалидации кеша
+        const finishedExecution = await db.workflowExecution.findUnique({
+          where: { id: context.executionId },
+          select: {
+            projectId: true,
+            telegramChatId: true,
+            waitType: true
+          }
+        });
+
+        if (finishedExecution?.telegramChatId && finishedExecution?.waitType) {
+          const { WorkflowRuntimeService } = await import('./workflow-runtime.service');
+          await WorkflowRuntimeService.invalidateWaitingExecutionCache(
+            finishedExecution.projectId,
+            finishedExecution.telegramChatId,
+            finishedExecution.waitType
+          );
+        }
+      } catch (cacheError) {
+        console.warn('Failed to invalidate waiting execution cache:', cacheError);
+        // Не бросаем ошибку - инвалидация кеша не критична
+      }
+
       console.log('Workflow execution record updated successfully');
 
       // Очищаем переменные сессии если выполнение завершено

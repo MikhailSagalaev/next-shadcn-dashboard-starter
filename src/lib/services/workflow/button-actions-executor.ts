@@ -10,6 +10,7 @@
 import { logger } from '@/lib/logger';
 import { QueryExecutor } from './query-executor';
 import { ProjectVariablesService } from '@/lib/services/project-variables.service';
+import { UserVariablesService } from './user-variables.service';
 import type { ExecutionContext } from '@/types/workflow';
 
 /**
@@ -183,8 +184,71 @@ export class ButtonActionsExecutor {
       username: context.telegram.username || '',
       first_name: context.telegram.firstName || '',
       user_id: context.telegram.userId || '',
-      chat_id: context.telegram.chatId || ''
+      chat_id: context.telegram.chatId || '',
+      workflow_id: context.workflowId,
+      execution_id: context.executionId,
+      session_id: context.sessionId
     };
+
+    // Если userId не задан в контексте — пытаемся определить по Telegram ID
+    let userId = context.userId;
+    if (!userId && context.telegram?.userId) {
+      try {
+        const found = await QueryExecutor.execute(
+          context.services.db,
+          'check_user_by_telegram',
+          { telegramId: context.telegram.userId, projectId: context.projectId }
+        );
+        if (found?.id) {
+          userId = found.id;
+          logger.debug('Resolved userId from telegramId', { userId });
+        }
+      } catch (e) {
+        logger.warn('Failed resolve userId from telegramId', { error: e });
+      }
+    }
+
+    // Получаем переменные пользователя, если userId доступен
+    if (userId) {
+      try {
+        logger.debug('Loading user variables for message', { userId });
+
+        const userVariables = await UserVariablesService.getUserVariables(
+          context.services.db,
+          userId,
+          context.projectId
+        );
+
+        logger.debug('User variables loaded', {
+          variableCount: Object.keys(userVariables).length
+        });
+
+        // Добавляем переменные пользователя с префиксом user.
+        Object.entries(userVariables).forEach(([key, value]) => {
+          additionalVariables[key] = String(value);
+        });
+      } catch (error) {
+        logger.warn('Failed to load user variables', { error, userId });
+
+        // Добавляем базовые переменные даже без userId
+        additionalVariables['user.firstName'] = context.telegram.firstName || 'Пользователь';
+        additionalVariables['user.telegramUsername'] = context.telegram.username || '';
+        additionalVariables['user.balanceFormatted'] = '0 бонусов';
+        additionalVariables['user.currentLevel'] = 'Базовый';
+        additionalVariables['user.referralCode'] = 'Недоступно';
+        additionalVariables['user.referralLink'] = 'Недоступно';
+      }
+    } else {
+      logger.debug('No userId available, using basic variables');
+
+      // Добавляем базовые переменные даже без userId
+      additionalVariables['user.firstName'] = context.telegram.firstName || 'Пользователь';
+      additionalVariables['user.telegramUsername'] = context.telegram.username || '';
+      additionalVariables['user.balanceFormatted'] = '0 бонусов';
+      additionalVariables['user.currentLevel'] = 'Базовый';
+      additionalVariables['user.referralCode'] = 'Недоступно';
+      additionalVariables['user.referralLink'] = 'Недоступно';
+    }
 
     let messageText = await ProjectVariablesService.replaceVariablesInText(
       context.projectId,

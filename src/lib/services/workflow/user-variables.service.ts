@@ -77,6 +77,18 @@ export class UserVariablesService {
     try {
       console.log('🔍 UserVariablesService.getUserVariables started', { userId, projectId });
 
+      // ✅ Проверяем кеш user variables
+      const { WorkflowRuntimeService } = await import('./workflow-runtime.service');
+      const cachedVariables = await WorkflowRuntimeService.getCachedUserVariables(projectId, userId);
+      if (cachedVariables) {
+        console.log('✅ Returning cached user variables', {
+          userId,
+          projectId,
+          variablesCount: Object.keys(cachedVariables).length
+        });
+        return cachedVariables;
+      }
+
       // Получаем полный профиль пользователя
       const profile = await QueryExecutor.execute(db, 'get_user_profile', { userId });
       console.log('🔍 QueryExecutor returned profile', {
@@ -301,6 +313,9 @@ export class UserVariablesService {
         isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(profile.currentLevel)
       });
 
+      // ✅ Кешируем результат user variables
+      await WorkflowRuntimeService.cacheUserVariables(projectId, userId, result);
+
       console.log('✅ UserVariablesService.getUserVariables SUCCESS', {
         totalVariables: Object.keys(result).length,
         sampleVariables: {
@@ -308,7 +323,8 @@ export class UserVariablesService {
           expiringBonusesFormatted: result['user.expiringBonusesFormatted'],
           referralCount: result['user.referralCount'],
           progressPercent: result['user.progressPercent']
-        }
+        },
+        cached: true
       });
 
       return result;

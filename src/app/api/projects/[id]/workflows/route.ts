@@ -128,7 +128,16 @@ export async function POST(
 
     console.log('Workflow version created:', version.id);
 
-    // Workflow уже создан с версией, не нужно обновлять
+    // Деактивируем все предыдущие версии этого workflow
+    await db.workflowVersion.updateMany({
+      where: {
+        workflowId: workflow.id,
+        id: { not: version.id } // Кроме только что созданной
+      },
+      data: { isActive: false }
+    });
+
+    console.log('Deactivated old workflow versions');
 
     // Инвалидируем кэш workflow для проекта
     await WorkflowRuntimeService.invalidateCache(projectId);

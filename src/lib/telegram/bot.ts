@@ -63,13 +63,29 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
     await next();
   });
 
+  // ✨ Deduplication для callback queries - предотвращает повторную обработку
+  const processedCallbacks = new Set<string>();
+  
+  // Очистка старых callback IDs каждые 5 минут
+  setInterval(() => {
+    processedCallbacks.clear();
+    logger.debug('🧹 Cleared processed callbacks cache');
+  }, 5 * 60 * 1000);
+
   // Middleware для обработки через Workflow
   bot.use(async (ctx, next) => {
     try {
       // Получаем projectId из сессии
       const projectId = ctx.session?.projectId;
       if (!projectId) {
-        logger.debug('Нет projectId в сессии, пропускаем workflow обработку', { session: ctx.session });
+        logger.warn('⚠️ НЕТ projectId В СЕССИИ ПРИ CALLBACK!', { 
+          hasSession: !!ctx.session,
+          sessionKeys: ctx.session ? Object.keys(ctx.session) : [],
+          hasCallbackQuery: !!ctx.callbackQuery,
+          callbackData: ctx.callbackQuery?.data,
+          chatId: ctx.chat?.id,
+          userId: ctx.from?.id
+        });
         await next();
         return;
       }
@@ -80,6 +96,31 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
         trigger = 'start';
       } else if (ctx.callbackQuery) {
         trigger = 'callback';
+        
+        // ✅ КРИТИЧНО: Deduplication для callback queries
+        const callbackId = ctx.callbackQuery.id;
+        if (processedCallbacks.has(callbackId)) {
+          logger.warn('⚠️ Duplicate callback query detected, skipping', {
+            callbackId,
+            callbackData: ctx.callbackQuery.data,
+            projectId
+          });
+          // Отвечаем на callback чтобы убрать "часики"
+          await ctx.answerCallbackQuery().catch(() => {});
+          return; // Прерываем обработку дубликата
+        }
+        
+        // Помечаем как обработанный
+        processedCallbacks.add(callbackId);
+        
+        // ✅ КРИТИЧНО: Немедленно отвечаем на callback query
+        // Это предотвращает повторную отправку от Telegram
+        ctx.answerCallbackQuery().catch((err) => {
+          logger.error('Failed to answer callback query', { 
+            error: err.message,
+            callbackId 
+          });
+        });
       }
 
       logger.info('🔍 Проверка наличия активного workflow', { trigger, projectId, userId: ctx.from?.id });
@@ -101,15 +142,33 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       logger.info('🚀 Выполнение workflow', { trigger, projectId, userId: ctx.from?.id });
       const processed = await WorkflowRuntimeService.executeWorkflow(projectId, trigger, ctx);
 
-      logger.info('📊 Результат выполнения workflow', { 
-        processed, 
-        projectId, 
+      logger.info('📊 Результат выполнения workflow', {
+        processed,
+        processedType: typeof processed,
+        processedBoolean: Boolean(processed),
+        projectId,
         trigger,
-        userId: ctx.from?.id 
+        userId: ctx.from?.id
       });
 
-      // ✅ КРИТИЧНО: Всегда останавливаем middleware после попытки workflow
-      // Даже если workflow вернул false (ошибка), НЕ вызываем fallback
+      // 🔄 ДЛЯ CALLBACK QUERIES: Если workflow не обработал callback, позволяем fallback handler'у
+      if (trigger === 'callback' && !processed) {
+        logger.warn('⚠️ Workflow вернул false для callback, но продолжаем обработку', {
+          projectId,
+          callbackData: ctx.callbackQuery?.data,
+          trigger
+        });
+        // НЕ передаем в fallback handler, чтобы не показывать ошибку пользователю
+        // Просто отвечаем на callback query и завершаем
+        if (ctx.callbackQuery) {
+          await ctx.answerCallbackQuery({
+            text: 'Обработка...'
+          });
+        }
+        return;
+      }
+
+      // ✅ КРИТИЧНО: Для сообщений и успешно обработанных workflow - всегда останавливаем middleware
       // Это предотвращает дублирование сообщений
       return;
       
@@ -167,6 +226,15 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
 
   // Fallback для callback queries
   bot.on('callback_query', async (ctx) => {
+    // 🔥 ДИАГНОСТИКА: Этот handler НЕ должен срабатывать, если есть активный workflow!
+    logger.warn('⚠️ CALLBACK QUERY INTERCEPTED BY FALLBACK HANDLER!', {
+      projectId,
+      callbackData: ctx.callbackQuery.data,
+      sessionProjectId: ctx.session?.projectId,
+      userId: ctx.from?.id,
+      chatId: ctx.chat?.id
+    });
+    
     logger.info('Обработка callback (fallback)', {
       projectId,
       data: ctx.callbackQuery.data
@@ -188,3 +256,4 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
 
   return bot;
 }
+

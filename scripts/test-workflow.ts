@@ -21,7 +21,7 @@ async function testWorkflow() {
     const workflowVersion = await db.workflowVersion.findFirst({
       where: {
         workflow: {
-          projectId: 'cmgntgsdv0000v8mwfwwh30az',
+          projectId: 'cmh2d0uv30000v8h8ujr7u233',
           isActive: true
         },
         isActive: true
@@ -41,7 +41,7 @@ async function testWorkflow() {
     console.log(`  Количество нод: ${Object.keys(workflowVersion.nodes).length}`);
 
     // Создаем процессор
-    const processor = new SimpleWorkflowProcessor(workflowVersion, 'cmgntgsdv0000v8mwfwwh30az');
+    const processor = new SimpleWorkflowProcessor(workflowVersion, 'cmh2d0uv30000v8h8ujr7u233');
 
     // Тестируем сценарий для существующего пользователя
     console.log('\n🧪 Тестируем сценарий для существующего пользователя...');

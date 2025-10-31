@@ -98,6 +98,9 @@ export class CallbackTriggerHandler extends BaseNodeHandler {
       callbackData: node.data.config?.['trigger.callback']?.callbackData
     });
 
+    // ✅ Ответ на callback query теперь обрабатывается в middleware (bot.ts)
+    // для предотвращения race conditions и дублирования
+
     // Следующий нод определяется по connections
     return null;
   }

@@ -430,6 +430,15 @@ export class RequestContactHandler extends BaseNodeHandler {
         }
       });
 
+      // ✅ КЕШИРУЕМ WAITING EXECUTION В REDIS
+      const { WorkflowRuntimeService } = await import('../../workflow-runtime.service');
+      await WorkflowRuntimeService.cacheWaitingExecution(
+        context.executionId,
+        context.projectId,
+        context.telegramChatId || '',
+        'contact'
+      );
+
       this.logStep(context, node, 'Waiting state set for contact', 'info', {
         executionId: context.executionId,
         nodeId: node.id
@@ -999,6 +1008,232 @@ export class GetUserBalanceHandler extends BaseNodeHandler {
     if (!config?.assignTo) {
       errors.push('assignTo is required');
     }
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+}
+
+/**
+ * ✨ НОВОЕ: Обработчик для встроенных команд меню (menu_balance, menu_history и т.д.)
+ */
+export class MenuCommandHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'action.menu_command';
+  }
+
+  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+    try {
+      const config = node.data.config?.['action.menu_command'];
+
+      if (!config) {
+        throw new Error('Menu command configuration is missing');
+      }
+
+      const command = config.command;
+      if (!command) {
+        throw new Error('Menu command is required');
+      }
+
+      this.logStep(context, node, 'Executing menu command', 'info', { command });
+
+      // Определяем userId - пытаемся найти по Telegram ID
+      let userId = context.userId;
+      if (!userId && context.telegram?.userId) {
+        try {
+          const found = await QueryExecutor.execute(
+            context.services.db,
+            'check_user_by_telegram',
+            { telegramId: context.telegram.userId, projectId: context.projectId }
+          );
+          if (found?.id) {
+            userId = found.id;
+            this.logStep(context, node, 'Resolved userId from telegramId', 'debug', { userId });
+          }
+        } catch (e) {
+          this.logStep(context, node, 'Failed resolve userId from telegramId', 'warn', { error: e });
+        }
+      }
+
+      if (!userId) {
+        this.logStep(context, node, 'No userId available, cannot execute menu command', 'warn', { command });
+        // Отправляем сообщение об ошибке
+        const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
+        await context.services.http.post(telegramApiUrl, {
+          chat_id: context.telegram.chatId,
+          text: '❌ Для использования меню необходимо привязать аккаунт. Введите /start для начала.',
+          parse_mode: 'HTML'
+        });
+        return null;
+      }
+
+      // Получаем переменные пользователя
+      const { UserVariablesService } = await import('../user-variables.service');
+      console.log('🔍 MENU COMMAND: Getting user variables for', { userId, projectId: context.projectId });
+      const userVariables = await UserVariablesService.getUserVariables(
+        context.services.db,
+        userId,
+        context.projectId
+      );
+      console.log('✅ MENU COMMAND: User variables received', {
+        userVariablesKeys: Object.keys(userVariables),
+        balance: userVariables['user.balanceFormatted'],
+        expiringBonuses: userVariables['user.expiringBonusesFormatted'],
+        referralCount: userVariables['user.referralCount']
+      });
+
+      // Определяем текст сообщения в зависимости от команды
+      let messageText = '';
+      let keyboard: any = null;
+
+      switch (command) {
+        case 'menu_balance':
+          messageText = `<b>💰 Ваш баланс бонусов</b>
+
+💵 <b>Текущий баланс:</b> ${userVariables['user.balanceFormatted']}
+📈 <b>Всего заработано:</b> ${userVariables['user.totalEarnedFormatted']}
+📉 <b>Всего потрачено:</b> ${userVariables['user.totalSpentFormatted']}
+🛍️ <b>Покупок на сумму:</b> ${userVariables['user.totalPurchasesFormatted']}
+
+✨ Продолжайте совершать покупки для накопления бонусов!`;
+          break;
+
+        case 'menu_history':
+          messageText = `<b>📜 История операций</b>
+
+<b>Последние 10 операций:</b>
+
+${userVariables['transactions.formatted']}
+
+Показаны последние 10 операций.
+
+💡 Для полной истории посетите личный кабинет на сайте.`;
+          break;
+
+        case 'menu_level':
+          messageText = `<b>🏆 Ваш уровень:</b> ${userVariables['user.currentLevel']}
+
+<b>📊 Прогресс к следующему уровню:</b>
+${userVariables['user.progressBar']} (${userVariables['user.progressPercent']}%)
+
+<b>💰 Бонусный процент:</b> ${userVariables['user.levelBonusPercent']}%
+<b>💵 Процент оплаты бонусами:</b> ${userVariables['user.levelPaymentPercent']}%
+
+<b>Следующий уровень:</b> ${userVariables['user.nextLevelName']}
+<b>Нужно покупок на сумму:</b> ${userVariables['user.nextLevelAmountFormatted']}
+
+🎯 Продолжайте совершать покупки для повышения уровня!`;
+          break;
+
+        case 'menu_referrals':
+          messageText = `<b>👥 Реферальная программа</b>
+
+<b>📊 Статистика по проекту:</b>
+👤 <b>Приглашено пользователей:</b> ${userVariables['user.referralCount']}
+💰 <b>Бонусов от рефералов:</b> ${userVariables['user.referralBonusTotalFormatted']}
+
+<b>🔗 Ваша реферальная ссылка:</b>
+${userVariables['user.referralLink']}
+
+📱 Поделитесь ссылкой с друзьями и получайте бонусы за их покупки!
+
+💡 Приглашайте друзей и зарабатывайте вместе!`;
+          break;
+
+        case 'menu_invite':
+          messageText = `<b>🔗 Пригласить друга</b>
+
+🎁 Приглашайте друзей и получайте бонусы за их покупки!
+
+<b>💰 Ваш реферальный код:</b> <code>${userVariables['user.referralCode']}</code>
+
+<b>🔗 Реферальная ссылка:</b>
+${userVariables['user.referralLink']}
+
+📱 Отправьте эту ссылку друзьям или поделитесь в соцсетях!
+
+🎯 За каждую покупку приглашенного друга вы получаете бонусы!`;
+          break;
+
+        case 'menu_help':
+          messageText = `<b>❓ Помощь</b>
+
+<b>🎯 Как работает бонусная система:</b>
+
+💰 <b>Бонусы</b> - накапливайте бонусы за покупки
+🛒 <b>Списание</b> - оплачивайте часть покупки бонусами
+🏆 <b>Уровни</b> - повышайте уровень для лучших условий
+👥 <b>Рефералы</b> - приглашайте друзей и получайте бонусы
+
+<b>📱 Команды:</b>
+• /start - начать работу с ботом
+• 💰 Баланс - посмотреть текущий баланс
+• 📜 История - история операций
+• 🏆 Уровень - ваш текущий уровень
+• 👥 Рефералы - реферальная программа
+• 🔗 Пригласить - пригласить друга
+
+💬 Если возникли вопросы, напишите в поддержку!`;
+          break;
+
+        default:
+          messageText = `❌ Неизвестная команда меню: ${command}`;
+      }
+
+      // Добавляем кнопку "Назад в меню" для всех команд кроме help
+      if (command !== 'menu_help') {
+        keyboard = {
+          inline_keyboard: [[
+            { text: '⬅️ Назад в меню', callback_data: 'back_to_menu' }
+          ]]
+        };
+      }
+
+      // Отправляем сообщение
+      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
+      const payload: any = {
+        chat_id: context.telegram.chatId,
+        text: messageText,
+        parse_mode: 'HTML'
+      };
+
+      if (keyboard) {
+        payload.reply_markup = keyboard;
+      }
+
+      await context.services.http.post(telegramApiUrl, payload);
+
+      this.logStep(context, node, 'Menu command executed successfully', 'info', {
+        command,
+        userId,
+        hasKeyboard: !!keyboard
+      });
+
+      return null;
+
+    } catch (error) {
+      this.logStep(context, node, 'Failed to execute menu command', 'error', { error });
+      throw error;
+    }
+  }
+
+  async validate(config: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    if (!config) {
+      errors.push('Menu command configuration is required');
+      return { isValid: false, errors };
+    }
+
+    if (!config.command || typeof config.command !== 'string') {
+      errors.push('Menu command is required and must be a string');
+    }
+
+    if (config.command && !config.command.startsWith('menu_')) {
+      errors.push('Menu command must start with "menu_"');
+    }
+
     return {
       isValid: errors.length === 0,
       errors
