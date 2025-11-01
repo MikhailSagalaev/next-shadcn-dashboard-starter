@@ -20,9 +20,37 @@ const createRedisClient = () => {
   if (useRealRedis) {
     let client: Redis;
 
-    // Если задан полный URL - используем его
-    if (process.env.REDIS_URL) {
+    // Приоритет: REDIS_HOST/PASSWORD имеет приоритет над REDIS_URL (более надежная конфигурация)
+    if (hasRedisHost && process.env.REDIS_PASSWORD) {
+      // Используем отдельные параметры (более надежно)
+      const host = process.env.REDIS_HOST || 'localhost';
+      const port = parseInt(process.env.REDIS_PORT || '6379');
+      const password = process.env.REDIS_PASSWORD;
+      
+      logger.info('Redis: Using REDIS_HOST/PASSWORD configuration', { host, port, hasPassword: !!password });
+      
+      client = new Redis({
+        host,
+        port,
+        password,
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        reconnectOnError: (err) => {
+          const targetError = 'READONLY';
+          if (err.message.includes(targetError)) {
+            return true;
+          }
+          return false;
+        }
+      });
+    } else if (process.env.REDIS_URL) {
+      // Используем REDIS_URL как fallback
       const redisUrl = process.env.REDIS_URL as string;
+      logger.info('Redis: Using REDIS_URL configuration', { hasUrl: true, urlLength: redisUrl.length });
+      
       client = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,
         retryStrategy: (times) => {
@@ -39,11 +67,15 @@ const createRedisClient = () => {
         }
       });
     } else {
-      // Иначе используем отдельные параметры
+      // Fallback на REDIS_HOST без пароля
+      const host = process.env.REDIS_HOST || 'localhost';
+      const port = parseInt(process.env.REDIS_PORT || '6379');
+      
+      logger.info('Redis: Using REDIS_HOST without password', { host, port });
+      
       client = new Redis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD || undefined,
+        host,
+        port,
         maxRetriesPerRequest: 3,
         retryStrategy: (times) => {
           const delay = Math.min(times * 50, 2000);
@@ -64,7 +96,16 @@ const createRedisClient = () => {
     });
 
     client.on('connect', () => {
-      logger.info('Redis connected successfully');
+      logger.info('✅ Redis connected successfully');
+    });
+
+    client.on('ready', () => {
+      logger.info('✅ Redis ready to accept commands');
+    });
+
+    // Пробуем подключиться сразу для проверки
+    client.ping().catch((err) => {
+      logger.error('Redis initial ping failed:', { error: err.message });
     });
 
     return client as unknown as Redis;
