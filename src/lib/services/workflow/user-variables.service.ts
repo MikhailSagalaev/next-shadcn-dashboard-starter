@@ -78,7 +78,7 @@ export class UserVariablesService {
       console.log('🔍 UserVariablesService.getUserVariables started', { userId, projectId });
 
       // ✅ Проверяем кеш user variables
-      const { WorkflowRuntimeService } = await import('./workflow-runtime.service');
+      const { WorkflowRuntimeService } = await import('@/lib/services/workflow-runtime.service');
       const cachedVariables = await WorkflowRuntimeService.getCachedUserVariables(projectId, userId);
       if (cachedVariables) {
         console.log('✅ Returning cached user variables', {
@@ -313,8 +313,14 @@ export class UserVariablesService {
         isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(profile.currentLevel)
       });
 
-      // ✅ Кешируем результат user variables
-      await WorkflowRuntimeService.cacheUserVariables(projectId, userId, result);
+      // ✅ Кешируем результат user variables (импорт уже выполнен выше)
+      try {
+        const { WorkflowRuntimeService: WRS } = await import('@/lib/services/workflow-runtime.service');
+        await WRS.cacheUserVariables(projectId, userId, result);
+      } catch (cacheError) {
+        console.warn('Failed to cache user variables:', cacheError);
+        // Не критично, продолжаем выполнение
+      }
 
       console.log('✅ UserVariablesService.getUserVariables SUCCESS', {
         totalVariables: Object.keys(result).length,
@@ -344,6 +350,7 @@ export class UserVariablesService {
       });
 
       // Возвращаем базовые переменные в случае ошибки
+      // ⚠️ ВАЖНО: Все переменные должны быть заполнены, даже если с дефолтными значениями
       return {
         'user.firstName': 'Пользователь',
         'user.balanceFormatted': '0 бонусов',
@@ -353,7 +360,17 @@ export class UserVariablesService {
         'user.totalEarnedFormatted': '0 бонусов',
         'user.totalSpentFormatted': '0 бонусов',
         'user.totalPurchasesFormatted': '0 руб.',
-        'user.expiringBonusesFormatted': '0₽'
+        'user.expiringBonusesFormatted': '0₽',
+        'user.referralCount': 0,
+        'user.referralBonusTotal': 0,
+        'user.referralBonusTotalFormatted': '0₽',
+        'user.progressPercent': 0,
+        'user.progressBar': '▓▓▓▓▓▓▓▓▓▓ 0%',
+        'user.levelBonusPercent': 0,
+        'user.levelPaymentPercent': 0,
+        'user.nextLevelName': 'Максимальный уровень достигнут',
+        'user.nextLevelAmountFormatted': '0 руб.',
+        'transactions.formatted': '📭 История операций пуста'
       };
     }
   }

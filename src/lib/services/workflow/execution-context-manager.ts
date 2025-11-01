@@ -259,7 +259,7 @@ export class ExecutionContextManager {
         });
 
         if (finishedExecution?.telegramChatId && finishedExecution?.waitType) {
-          const { WorkflowRuntimeService } = await import('./workflow-runtime.service');
+          const { WorkflowRuntimeService } = await import('@/lib/services/workflow-runtime.service');
           await WorkflowRuntimeService.invalidateWaitingExecutionCache(
             finishedExecution.projectId,
             finishedExecution.telegramChatId,

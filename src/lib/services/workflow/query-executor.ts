@@ -455,7 +455,7 @@ export const SAFE_QUERIES = {
     logger.debug('Executing get_user_profile (optimized)', { params });
 
     // ✅ Проверяем кеш user profile
-    const { WorkflowRuntimeService } = await import('../workflow-runtime.service');
+    const { WorkflowRuntimeService } = await import('@/lib/services/workflow-runtime.service');
     const cachedProfile = await WorkflowRuntimeService.getCachedUserProfile(params.userId);
     if (cachedProfile) {
       logger.debug('✅ Returning cached user profile', {
@@ -574,7 +574,7 @@ export const SAFE_QUERIES = {
       createdAt: b.createdAt
     }));
 
-    return {
+    const result = {
       // Основная информация
       userId: user.id,
       firstName: user.firstName,
@@ -612,7 +612,12 @@ export const SAFE_QUERIES = {
     };
 
     // ✅ Кешируем результат user profile
-    await WorkflowRuntimeService.cacheUserProfile(params.userId, result);
+    try {
+      await WorkflowRuntimeService.cacheUserProfile(params.userId, result);
+    } catch (cacheError) {
+      logger.warn('Failed to cache user profile', { userId: params.userId, error: cacheError });
+      // Не критично, продолжаем выполнение
+    }
 
     // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
     console.log('🔍 get_user_profile currentLevel DEBUG:', {

@@ -725,13 +725,13 @@ export class WorkflowRuntimeService {
 
       logger.debug('✅ Found cached waiting execution', {
         cacheKey,
-        executionId: cachedData.executionId,
+        executionId: (cachedData as { executionId: string; projectId: string; chatId: string; waitType: string }).executionId,
         projectId,
         chatId,
         waitType
       });
 
-      return cachedData;
+      return cachedData as { executionId: string; projectId: string; chatId: string; waitType: string };
     } catch (error) {
       logger.error('❌ Failed to get cached waiting execution', {
         projectId,
@@ -832,11 +832,11 @@ export class WorkflowRuntimeService {
         userId,
         projectId,
         cacheKey,
-        variablesCount: Object.keys(cachedData.variables).length,
+        variablesCount: Object.keys((cachedData as { variables: Record<string, any> }).variables).length,
         cacheHit: true
       });
 
-      return cachedData.variables;
+      return (cachedData as { variables: Record<string, any> }).variables;
     } catch (error) {
       logger.error('❌ Failed to get cached user variables', {
         userId,
@@ -892,7 +892,7 @@ export class WorkflowRuntimeService {
         cacheHit: true
       });
 
-      return cachedData.profile;
+      return (cachedData as { profile: any }).profile;
     } catch (error) {
       logger.error('❌ Failed to get cached user profile', {
         userId,

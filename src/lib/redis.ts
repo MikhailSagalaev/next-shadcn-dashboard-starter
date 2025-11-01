@@ -12,26 +12,52 @@ import { logger } from '@/lib/logger';
 
 // Создаем Redis клиент с retry стратегией. В dev (без REDIS_URL) используем in-memory fallback
 const createRedisClient = () => {
-  const useRealRedis =
-    !!process.env.REDIS_URL && process.env.NODE_ENV === 'production';
+  // Используем Redis если задан REDIS_URL ИЛИ есть REDIS_HOST (поддержка обоих форматов)
+  const hasRedisUrl = !!process.env.REDIS_URL;
+  const hasRedisHost = !!process.env.REDIS_HOST;
+  const useRealRedis = hasRedisUrl || hasRedisHost;
 
   if (useRealRedis) {
-    const redisUrl = process.env.REDIS_URL as string;
-    const client = new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-      reconnectOnError: (err) => {
-        const targetError = 'READONLY';
-        if (err.message.includes(targetError)) {
-          // Переподключаемся при readonly ошибках
-          return true;
+    let client: Redis;
+
+    // Если задан полный URL - используем его
+    if (process.env.REDIS_URL) {
+      const redisUrl = process.env.REDIS_URL as string;
+      client = new Redis(redisUrl, {
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        reconnectOnError: (err) => {
+          const targetError = 'READONLY';
+          if (err.message.includes(targetError)) {
+            // Переподключаемся при readonly ошибках
+            return true;
+          }
+          return false;
         }
-        return false;
-      }
-    });
+      });
+    } else {
+      // Иначе используем отдельные параметры
+      client = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD || undefined,
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        reconnectOnError: (err) => {
+          const targetError = 'READONLY';
+          if (err.message.includes(targetError)) {
+            return true;
+          }
+          return false;
+        }
+      });
+    }
 
     client.on('error', (error) => {
       logger.error('Redis connection error:', { error: error.message });
