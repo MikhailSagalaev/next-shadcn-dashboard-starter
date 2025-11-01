@@ -592,7 +592,27 @@ export const SAFE_QUERIES = {
       expiringBonuses, // ✨ Истекающие бонусы
 
       // Уровень и рефералы
-      currentLevel: user.currentLevel,
+      // Маппинг для преобразования цифр в названия уровней
+      currentLevel: (() => {
+        const level = user.currentLevel;
+        if (!level) return 'Базовый';
+        // Если это число, преобразуем в название
+        const levelMap: Record<string | number, string> = {
+          '3': 'Базовый',
+          '4': 'Серебряный',
+          '5': 'Золотой',
+          '6': 'Платиновый',
+          3: 'Базовый',
+          4: 'Серебряный',
+          5: 'Золотой',
+          6: 'Платиновый'
+        };
+        if (levelMap[level]) {
+          return levelMap[level];
+        }
+        // Если это уже строка, возвращаем как есть
+        return String(level);
+      })(),
       referralCode: user.referralCode,
       referredBy: user.referredBy,
       referrerName: user.referrer ?

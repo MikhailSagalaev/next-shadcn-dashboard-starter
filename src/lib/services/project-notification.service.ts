@@ -257,20 +257,67 @@ export class ProjectNotificationService {
         }
       });
 
-      // Здесь должна быть логика отправки через соответствующий канал
-      // Пока просто помечаем как отправленное
+      // Отправка через соответствующий канал
+      let sendSuccess = false;
+      let sendError: string | undefined;
+
+      if (request.channel === 'telegram') {
+        try {
+          // Используем sendRichBroadcastMessage для отправки через Telegram бота
+          const { sendRichBroadcastMessage } = await import(
+            '@/lib/telegram/notifications'
+          );
+
+          const result = await sendRichBroadcastMessage(
+            request.projectId,
+            {
+              message: request.message,
+              imageUrl: request.metadata?.imageUrl,
+              buttons: request.metadata?.buttons,
+              parseMode: request.metadata?.parseMode || 'Markdown'
+            },
+            [request.userId] // Передаем массив с одним userId
+          );
+
+          sendSuccess = result.sent > 0;
+          if (result.failed > 0) {
+            sendError = 'Ошибка отправки через Telegram';
+          }
+        } catch (error) {
+          sendError =
+            error instanceof Error ? error.message : 'Unknown telegram error';
+          logger.error('Failed to send telegram notification', {
+            notificationId: notification.id,
+            userId: request.userId,
+            error: sendError
+          });
+        }
+      } else {
+        // Для других каналов (email, sms, push) пока просто помечаем как отправленное
+        // TODO: Реализовать отправку через соответствующие провайдеры
+        sendSuccess = true;
+      }
+
+      // Обновляем запись в БД с результатом отправки
       await db.notification.update({
         where: { id: notification.id },
-        data: { sentAt: new Date() }
+        data: {
+          sentAt: sendSuccess ? new Date() : null
+        }
       });
 
-      logger.info('Notification sent successfully', {
-        notificationId: notification.id,
-        userId: request.userId,
-        channel: request.channel
-      });
+      if (sendSuccess) {
+        logger.info('Notification sent successfully', {
+          notificationId: notification.id,
+          userId: request.userId,
+          channel: request.channel
+        });
+      }
 
-      return { success: true };
+      return {
+        success: sendSuccess,
+        error: sendError
+      };
     } catch (error) {
       logger.error('Failed to send notification', {
         userId: request.userId,

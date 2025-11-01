@@ -175,7 +175,8 @@ export function useProjectUsers({
             birthDate: user.birthDate,
             registeredAt: user.registeredAt,
             currentLevel: user.currentLevel,
-            telegramUsername: user.telegramUsername
+            telegramUsername: user.telegramUsername,
+            isActive: user.isActive !== undefined ? Boolean(user.isActive) : false
           })
         );
 

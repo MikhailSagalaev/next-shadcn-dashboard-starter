@@ -26,35 +26,37 @@ export function WorkflowValidationPanel({ result, onFocusNode, className }: Work
   const headline = getHeadline(result);
 
   return (
-    <Card className={className}>
-      <CardHeader className='pb-1 pt-2'>
-        <CardTitle className='flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground'>
+    <Card className={`${className} max-w-md`}>
+      <CardContent className='flex items-center gap-2 p-2'>
+        <div className='flex items-center gap-1.5 flex-shrink-0'>
           {hasErrors ? (
             <AlertTriangle className='h-3 w-3 text-amber-500' />
           ) : (
             <CheckCircle2 className='h-3 w-3 text-emerald-500' />
           )}
-          Валидация
-        </CardTitle>
-      </CardHeader>
-      <Separator />
-      <CardContent className='space-y-2 pt-2 pb-2'>
-        <p className='flex items-center gap-1 text-xs text-muted-foreground'>
-          <Info className='h-3 w-3 flex-shrink-0' />
-          <span className='line-clamp-2'>{headline}</span>
-        </p>
-
-        <ScrollArea className='max-h-32 rounded-md border bg-muted/20 p-2'>
-          <div className='space-y-1 text-xs'>
-            {(result?.errors ?? []).length === 0 ? (
-              <p className='text-muted-foreground text-xs'>Ошибок нет</p>
-            ) : (
-              result!.errors.map((error, index) => (
-                <ValidationItem key={`${error.nodeId ?? 'generic'}-${index}`} error={error} onFocusNode={onFocusNode} />
-              ))
-            )}
+          <span className='text-[10px] font-semibold uppercase text-muted-foreground whitespace-nowrap'>Валидация</span>
+        </div>
+        <div className='flex-1 min-w-0'>
+          <p className='text-[10px] text-muted-foreground truncate' title={headline}>
+            {headline}
+          </p>
+        </div>
+        {(result?.errors ?? []).length > 0 && (
+          <div className='flex items-center gap-1 flex-shrink-0'>
+            <ScrollArea className='max-w-[200px]'>
+              <div className='flex items-center gap-1.5'>
+                {result!.errors.slice(0, 3).map((error, index) => (
+                  <ValidationItem key={`${error.nodeId ?? 'generic'}-${index}`} error={error} onFocusNode={onFocusNode} />
+                ))}
+                {(result!.errors.length > 3) && (
+                  <Badge variant='outline' className='text-[10px] h-4 px-1'>
+                    +{result!.errors.length - 3}
+                  </Badge>
+                )}
+              </div>
+            </ScrollArea>
           </div>
-        </ScrollArea>
+        )}
       </CardContent>
     </Card>
   );
@@ -64,28 +66,24 @@ function ValidationItem({ error, onFocusNode }: { error: WorkflowValidationError
   const isWarning = error.type === 'warning';
 
   return (
-    <div className='flex items-start justify-between gap-2 rounded-md border border-dashed bg-background px-2 py-1.5'>
-      <div className='flex flex-col gap-0.5 min-w-0 flex-1'>
-        <div className='flex items-center gap-1'>
-          <Badge variant={isWarning ? 'outline' : 'destructive'} className='uppercase text-[10px] h-4 px-1'>
-            {isWarning ? 'Warn' : 'Error'}
-          </Badge>
-          {error.nodeId && (
-            <span className='text-[10px] text-muted-foreground truncate'>{error.nodeId}</span>
-          )}
-        </div>
-        <p className='text-xs leading-tight line-clamp-2'>{error.message}</p>
-      </div>
-
-      {error.nodeId && onFocusNode && (
+    <div className='flex items-center gap-1 rounded-md border border-dashed bg-background px-1.5 py-0.5'>
+      <Badge variant={isWarning ? 'outline' : 'destructive'} className='uppercase text-[10px] h-3 px-1'>
+        {isWarning ? 'W' : 'E'}
+      </Badge>
+      {error.nodeId && onFocusNode ? (
         <Button
           size='sm'
           variant='ghost'
           onClick={() => onFocusNode(error.nodeId!)}
-          className='flex items-center gap-1 h-6 px-2 flex-shrink-0'
+          className='h-3 w-3 p-0 flex-shrink-0'
+          title={error.message}
         >
-          <Target className='h-3 w-3' />
+          <Target className='h-2 w-2' />
         </Button>
+      ) : (
+        <span className='text-[10px] text-muted-foreground truncate max-w-[60px]' title={error.message}>
+          {error.nodeId || 'Error'}
+        </span>
       )}
     </div>
   );

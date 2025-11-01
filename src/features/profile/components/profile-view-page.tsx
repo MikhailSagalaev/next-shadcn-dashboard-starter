@@ -16,7 +16,6 @@ import {
   IconCalendar,
   IconSettings,
   IconShield,
-  IconBell,
   IconCreditCard
 } from '@tabler/icons-react';
 import { useState, useEffect, useCallback } from 'react';
@@ -90,12 +89,6 @@ export default function ProfileViewPage() {
   useEffect(() => {
     loadStats();
   }, [loadStats]);
-
-  const handleNotifications = () => {
-    // eslint-disable-next-line no-console
-    console.log('Notifications clicked');
-    router.push('/dashboard/notifications');
-  };
 
   const handleSettings = () => {
     // eslint-disable-next-line no-console
@@ -237,16 +230,7 @@ export default function ProfileViewPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className='grid gap-4 md:grid-cols-3'>
-            <Button
-              type='button'
-              variant='outline'
-              className='flex h-auto flex-col items-center gap-2 p-4'
-              onClick={handleNotifications}
-            >
-              <IconBell className='h-5 w-5' />
-              <span>Уведомления</span>
-            </Button>
+          <div className='grid gap-4 md:grid-cols-2'>
             <Button
               type='button'
               variant='outline'

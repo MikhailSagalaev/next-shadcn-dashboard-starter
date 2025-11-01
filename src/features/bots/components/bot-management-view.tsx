@@ -26,7 +26,9 @@ import {
   Settings,
   CheckCircle2,
   XCircle,
-  ArrowRight
+  ArrowRight,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -90,6 +92,7 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [editingToken, setEditingToken] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');
 
   const STATUS_POLL_INTERVAL = 30000; // 30 секунд
@@ -418,7 +421,7 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
             <div className="flex gap-2">
               <Input
                 id="botToken"
-                type={editingToken ? 'text' : 'password'}
+                type={editingToken || showToken ? 'text' : 'password'}
                 value={tokenForm.botToken}
                 onChange={(e) =>
                   setTokenForm({ ...tokenForm, botToken: e.target.value })
@@ -427,20 +430,49 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                 disabled={!editingToken}
               />
               {!editingToken ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setEditingToken(true)}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button onClick={handleSaveToken} disabled={saving}>
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
+                <>
+                  {tokenForm.botToken && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowToken(!showToken)}
+                      title={showToken ? 'Скрыть токен' : 'Показать токен'}
+                    >
+                      {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setEditingToken(true)}
+                    title="Редактировать токен"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingToken(false);
+                      setTokenForm({
+                        botToken: project?.botToken || '',
+                        botUsername: project?.botUsername || ''
+                      });
+                    }}
+                  >
+                    Отмена
+                  </Button>
+                  <Button onClick={handleSaveToken} disabled={saving}>
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                  </Button>
+                </>
               )}
             </div>
             {botStatus?.bot && (

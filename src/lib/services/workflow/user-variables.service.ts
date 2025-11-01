@@ -177,21 +177,15 @@ export class UserVariablesService {
         }).join('\n');
       };
 
-      // ✨ НОВОЕ: Генератор прогресс-бара для уровня
-      const generateProgressBar = (currentLevel: string) => {
-        const levels = ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'];
-        const currentIndex = levels.indexOf(currentLevel);
-        
-        if (currentIndex === -1) {
-          return '▱▱▱▱ (0%)';
-        }
-        
-        const progress = ((currentIndex + 1) / levels.length) * 100;
-        const filled = Math.floor(progress / 25);
+      // ✨ НОВОЕ: Генератор прогресс-бара для уровня (использует реальные данные прогресса)
+      const generateProgressBar = (progressPercent: number) => {
+        // progressPercent уже рассчитан в progressData
+        const percent = Math.max(0, Math.min(100, progressPercent));
+        const filled = Math.floor(percent / 25); // 4 блока по 25%
         const empty = 4 - filled;
         
         const bar = '▰'.repeat(filled) + '▱'.repeat(empty);
-        return `${bar} (${Math.round(progress)}%)`;
+        return `${bar} (${Math.round(percent)}%)`;
       };
 
       // ✨ НОВОЕ: Форматтер для истории транзакций с красивым отображением
@@ -253,8 +247,29 @@ export class UserVariablesService {
         'user.expiringBonusesFormatted': `${Number(profile.expiringBonuses || 0)}₽`,
 
         // Уровень и рефералы
-        'user.currentLevel': profile.currentLevel,
-        'user.progressBar': generateProgressBar(profile.currentLevel), // ✨ НОВОЕ
+        // Маппинг для преобразования цифр в названия уровней
+        'user.currentLevel': (() => {
+          // Используем название из progressData.currentLevel, если доступно, иначе из profile
+          const level = progressData.currentLevel?.name || profile.currentLevel;
+          if (!level) return 'Базовый';
+          // Если это число, преобразуем в название
+          const levelMap: Record<string | number, string> = {
+            '3': 'Базовый',
+            '4': 'Серебряный',
+            '5': 'Золотой',
+            '6': 'Платиновый',
+            3: 'Базовый',
+            4: 'Серебряный',
+            5: 'Золотой',
+            6: 'Платиновый'
+          };
+          if (levelMap[level]) {
+            return levelMap[level];
+          }
+          // Если это уже строка, возвращаем как есть
+          return String(level);
+        })(),
+        'user.progressBar': generateProgressBar(progressData.progressPercent || 0), // Используем реальный процент прогресса
         'user.referralCode': profile.referralCode || 'Не сгенерирован',
         'user.referredBy': profile.referredBy || 'Нет',
         'user.referrerName': profile.referrerName || 'Нет',
@@ -262,10 +277,10 @@ export class UserVariablesService {
         // Информация об уровнях
         'user.levelBonusPercent': progressData.currentLevel?.bonusPercent || 0,
         'user.levelPaymentPercent': progressData.currentLevel?.paymentPercent || 0,
-        'user.nextLevelName': progressData.nextLevel?.name || 'Максимальный уровень достигнут',
+        'user.nextLevelName': progressData.nextLevel?.name || (progressData.currentLevel ? 'Максимальный уровень достигнут' : 'Уровень не определен'),
         'user.nextLevelAmount': progressData.amountNeeded || 0,
-        'user.nextLevelAmountFormatted': `${progressData.amountNeeded || 0} руб.`,
-        'user.progressPercent': progressData.progressPercent,
+        'user.nextLevelAmountFormatted': progressData.nextLevel ? `${progressData.amountNeeded || 0} руб.` : '0 руб.',
+        'user.progressPercent': progressData.nextLevel ? progressData.progressPercent : (progressData.currentLevel ? 100 : 0),
 
         // Даты
         'user.registeredAt': formatDate(profile.registeredAt),
@@ -307,10 +322,14 @@ export class UserVariablesService {
       // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
       console.log('🔍 user-variables currentLevel DEBUG:', {
         userId: profile.userId,
-        currentLevel: profile.currentLevel,
-        currentLevelType: typeof profile.currentLevel,
-        progressBar: generateProgressBar(profile.currentLevel),
-        isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(profile.currentLevel)
+        currentLevel: result['user.currentLevel'],
+        currentLevelFromProfile: profile.currentLevel,
+        currentLevelFromProgress: progressData.currentLevel?.name,
+        nextLevel: progressData.nextLevel?.name || 'Максимальный уровень достигнут',
+        nextLevelAmount: progressData.amountNeeded,
+        progressPercent: progressData.progressPercent,
+        progressBar: result['user.progressBar'],
+        hasNextLevel: !!progressData.nextLevel
       });
 
       // ✅ Кешируем результат user variables (импорт уже выполнен выше)

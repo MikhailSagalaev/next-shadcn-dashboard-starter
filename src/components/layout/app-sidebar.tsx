@@ -180,13 +180,11 @@ export default function AppSidebar() {
                     <IconUserCircle />
                     Профиль
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => router.push('/dashboard/settings')}
+                  >
                     <IconCreditCard />
-                    Биллинг
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <IconBell />
-                    Уведомления
+                    Настройки
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />

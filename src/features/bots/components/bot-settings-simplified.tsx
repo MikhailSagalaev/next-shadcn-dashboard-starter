@@ -240,39 +240,44 @@ export function BotSettingsSimplified({ projectId }: BotSettingsSimplifiedProps)
             <div className="flex items-center gap-2">
               <Input
                 id="bot-token"
-                type={showToken ? 'text' : 'password'}
-                value={isEditing ? tokenValue : (botSettings?.botToken ? maskToken(botSettings.botToken) : '')}
+                type={showToken || isEditing ? 'text' : 'password'}
+                value={isEditing ? tokenValue : (botSettings?.botToken ? (showToken ? botSettings.botToken : maskToken(botSettings.botToken)) : '')}
                 onChange={(e) => setTokenValue(e.target.value)}
                 disabled={!isEditing}
                 placeholder="Введите токен бота..."
                 className="font-mono"
               />
-              {!isEditing && botSettings?.botToken && (
+              {!isEditing ? (
                 <>
+                  {botSettings?.botToken && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowToken(!showToken)}
+                        title={showToken ? 'Скрыть токен' : 'Показать токен'}
+                      >
+                        {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleCopyToken}
+                        title="Копировать токен"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => setShowToken(!showToken)}
+                    onClick={() => setIsEditing(true)}
+                    title="Редактировать токен"
                   >
-                    {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleCopyToken}
-                  >
-                    <Copy className="h-4 w-4" />
+                    <Settings className="h-4 w-4" />
                   </Button>
                 </>
-              )}
-              {!isEditing ? (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setIsEditing(true)}
-                >
-                  <Settings className="h-4 w-4" />
-                </Button>
               ) : (
                 <div className="flex gap-2">
                   <Button

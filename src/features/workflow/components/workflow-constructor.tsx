@@ -540,7 +540,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
             <WorkflowToolbar onAddNode={handleAddNode} />
           </div>
           {/* Auto layout button */}
-          <div className='absolute right-4 top-4 z-[5]'>
+          <div className='absolute right-4 top-4 z-[1]'>
             <Button 
               variant="outline" 
               size="sm" 
@@ -549,7 +549,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               title="Автоматическое выравнивание нод"
             >
               <AlignVerticalJustifyCenter className="h-4 w-4 mr-2" />
-              Выровнять
+              Выравнять
             </Button>
           </div>
           <ReactFlow

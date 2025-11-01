@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import {
   Plus,
@@ -119,22 +120,24 @@ export function WorkflowHeader({
               <ChevronDown className='h-4 w-4' />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent className="max-h-[300px]">
             <DropdownMenuLabel>Мои workflow</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {workflows.length > 0 ? (
-              workflows.map((workflow) => (
-                <DropdownMenuItem
-                  key={workflow.id}
-                  onSelect={() => onWorkflowLoad(workflow.id)}
-                  className={currentWorkflow?.id === workflow.id ? 'bg-accent' : ''}
-                >
-                  {workflow.name}
-                </DropdownMenuItem>
-              ))
-            ) : (
-              <DropdownMenuItem disabled>Нет workflow</DropdownMenuItem>
-            )}
+            <ScrollArea className="max-h-[200px]">
+              {workflows.length > 0 ? (
+                workflows.map((workflow) => (
+                  <DropdownMenuItem
+                    key={workflow.id}
+                    onSelect={() => onWorkflowLoad(workflow.id)}
+                    className={currentWorkflow?.id === workflow.id ? 'bg-accent' : ''}
+                  >
+                    {workflow.name}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>Нет workflow</DropdownMenuItem>
+              )}
+            </ScrollArea>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setIsCreateDialogOpen(true)}>
               <Plus className='mr-2 h-4 w-4' /> Создать новый

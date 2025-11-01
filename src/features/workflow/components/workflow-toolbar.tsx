@@ -204,7 +204,7 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
                           <TooltipTrigger asChild>
                             <Button
                               variant='outline'
-                              className='h-auto justify-start gap-3 border-dashed px-3 py-2 text-left'
+                              className='w-full h-auto justify-start gap-3 border-dashed px-3 py-2 text-left'
                               draggable
                               onDragStart={(event) => handleDragStart(event, template.type)}
                               onClick={() => handleAddNodeClick(template.type)}

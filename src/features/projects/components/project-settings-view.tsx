@@ -21,7 +21,6 @@ import {
   Coins,
   Share2,
   Code,
-  Bell as IconBell,
   Zap,
   BookOpen,
   Wrench,
@@ -427,12 +426,6 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 <Button variant='outline' className='mt-2 w-full justify-start'>
                   <Workflow className='mr-2 h-4 w-4' />
                   Конструктор Workflow
-                </Button>
-              </Link>
-              <Link href={`/dashboard/projects/${projectId}/notifications`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
-                  <IconBell className='mr-2 h-4 w-4' />
-                  Уведомления
                 </Button>
               </Link>
               <Link href={`/dashboard/projects/${projectId}/integration`}>

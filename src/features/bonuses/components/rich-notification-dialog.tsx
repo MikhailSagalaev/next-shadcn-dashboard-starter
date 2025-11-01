@@ -146,6 +146,7 @@ export function RichNotificationDialog({
         message: values.message,
         channel: 'telegram',
         priority: 'normal',
+        userIds: selectedUserIds.length > 0 ? selectedUserIds : undefined,
         metadata: {
           imageUrl: values.imageUrl || undefined,
           buttons: validButtons.length > 0 ? validButtons : undefined,
@@ -163,20 +164,21 @@ export function RichNotificationDialog({
 
       if (response.ok && result.success) {
         // Обновим прогресс по факту результата
-        const total = Number(result.total || selectedUserIds.length || 1);
-        const sent = Number(result.sentCount || 0);
-        const failed = Number(result.failedCount || 0);
+        const data = result.data || result;
+        const total = Number(data.total || selectedUserIds.length || 1);
+        const sent = Number(data.sent || 0);
+        const failed = Number(data.failed || 0);
         const pct = Math.min(100, Math.round(((sent + failed) / total) * 100));
         setProgress(pct);
         toast.success(
           `✅ Уведомления отправлены!\n\n` +
-            `📤 Отправлено: ${result.sentCount}\n` +
-            `❌ Ошибок: ${result.failedCount}\n\n` +
-            `${result.message}`
+            `📤 Отправлено: ${sent}\n` +
+            `❌ Ошибок: ${failed}\n` +
+            `📊 Всего: ${total}`
         );
 
-        if (result.errors && result.errors.length > 0) {
-          console.warn('Ошибки отправки:', result.errors);
+        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+          console.warn('Ошибки отправки:', data.results);
         }
 
         form.reset();

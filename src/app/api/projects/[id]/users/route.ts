@@ -61,12 +61,23 @@ async function getHandler(
       const currentBalance =
         Number(user.totalEarned || 0) - Number(user.totalSpent || 0);
       const roundedBalance = Number(currentBalance.toFixed(2));
-      const botIsActive =
-        (user as any).project?.botStatus === 'ACTIVE' ||
-        (user as any).project?.botStatus === 'active';
       const isLinkedToBot = Boolean(user.telegramId);
+      // Пользователь активен, если isActive === true ИЛИ активирован через Telegram
       const computedActive =
-        Boolean(user.isActive) && botIsActive && isLinkedToBot;
+        Boolean(user.isActive) || Boolean(user.telegramId);
+      
+      // Логируем для отладки статуса пользователя
+      if (index === 0) {
+        console.log('🔍 User status DEBUG (first user):', {
+          userId: user.id,
+          userIsActive: user.isActive,
+          hasTelegramId: !!user.telegramId,
+          telegramId: user.telegramId?.toString(),
+          computedActive,
+          email: user.email
+        });
+      }
+      
       return {
         id: user.id,
         name:
