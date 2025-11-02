@@ -2204,10 +2204,47 @@
 
     // Определяет и обновляет состояние виджета на основе данных пользователя
     updateWidgetState: function () {
-      // Сначала проверяем tilda_members_profile, если еще не проверяли или данные изменились
+      // Сначала проверяем tilda_members_profile из window или localStorage
+      let profile = null;
       if (typeof window !== 'undefined' && window.tilda_members_profile) {
+        profile = window.tilda_members_profile;
+      } else if (this.config && this.config.projectId) {
+        // Проверяем localStorage по projectId
         try {
-          const profile = window.tilda_members_profile;
+          const localStorageKey = `tilda_members_profile${this.config.projectId}`;
+          const profileFromStorage = localStorage.getItem(localStorageKey);
+          if (profileFromStorage) {
+            try {
+              profile = JSON.parse(profileFromStorage);
+              this.log('📦 Профиль загружен из localStorage в updateWidgetState:', localStorageKey);
+            } catch (parseError) {
+              this.log('⚠️ Ошибка парсинга профиля:', parseError);
+            }
+          } else {
+            // Пробуем найти любой ключ с tilda_members_profile
+            const legacyKeys = Object.keys(localStorage).filter(key => 
+              key.startsWith('tilda_members_profile') && !key.includes('_timestamp')
+            );
+            if (legacyKeys.length > 0) {
+              const legacyKey = legacyKeys[0];
+              const legacyProfile = localStorage.getItem(legacyKey);
+              if (legacyProfile) {
+                try {
+                  profile = JSON.parse(legacyProfile);
+                  this.log('📦 Профиль загружен из localStorage (legacy) в updateWidgetState:', legacyKey);
+                } catch (parseError) {
+                  this.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          this.log('⚠️ Ошибка чтения профиля из localStorage:', error);
+        }
+      }
+      
+      if (profile) {
+        try {
           const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
           const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
           
@@ -2444,9 +2481,52 @@
       
       // Проверяем наличие tilda_members_profile при загрузке
       const checkTildaProfile = () => {
+        let profile = null;
+        
+        // 1. Проверяем window.tilda_members_profile
         if (typeof window !== 'undefined' && window.tilda_members_profile) {
+          profile = window.tilda_members_profile;
+          self.log('✅ Найден window.tilda_members_profile');
+        }
+        
+        // 2. Если window недоступен, проверяем localStorage по projectId
+        if (!profile && self.config && self.config.projectId) {
           try {
-            const profile = window.tilda_members_profile;
+            const localStorageKey = `tilda_members_profile${self.config.projectId}`;
+            const profileFromStorage = localStorage.getItem(localStorageKey);
+            if (profileFromStorage) {
+              try {
+                profile = JSON.parse(profileFromStorage);
+                self.log('✅ Найден профиль в localStorage:', localStorageKey);
+              } catch (parseError) {
+                self.log('⚠️ Ошибка парсинга профиля из localStorage:', parseError);
+              }
+            } else {
+              // Пробуем найти любой ключ с tilda_members_profile
+              const legacyKeys = Object.keys(localStorage).filter(key => 
+                key.startsWith('tilda_members_profile') && !key.includes('_timestamp')
+              );
+              if (legacyKeys.length > 0) {
+                const legacyKey = legacyKeys[0];
+                const legacyProfile = localStorage.getItem(legacyKey);
+                if (legacyProfile) {
+                  try {
+                    profile = JSON.parse(legacyProfile);
+                    self.log('✅ Найден профиль в localStorage (legacy):', legacyKey);
+                  } catch (parseError) {
+                    self.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            self.log('⚠️ Ошибка чтения профиля из localStorage:', error);
+          }
+        }
+        
+        // 3. Обрабатываем найденный профиль
+        if (profile) {
+          try {
             // Очищаем email и phone от пустых строк
             const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
             const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
@@ -2506,7 +2586,10 @@
             self.log('⚠️ Ошибка при проверке tilda_members_profile:', error);
           }
         } else {
-          self.log('⚠️ window.tilda_members_profile не доступен');
+          self.log('⚠️ tilda_members_profile не доступен ни в window, ни в localStorage');
+          if (self.config && self.config.projectId) {
+            self.log('🔍 Искали в localStorage с ключом:', `tilda_members_profile${self.config.projectId}`);
+          }
         }
       };
 
@@ -2732,9 +2815,52 @@
         this.log('🔍 Ищем контактные данные пользователя...');
 
         // 1. Проверяем window.tilda_members_profile (приоритетно)
+        let profile = null;
         if (typeof window !== 'undefined' && window.tilda_members_profile) {
+          profile = window.tilda_members_profile;
+          this.log('✅ Найден window.tilda_members_profile');
+        }
+        
+        // 2. Если window.tilda_members_profile недоступен, проверяем localStorage
+        // Tilda сохраняет профиль с ключом tilda_members_profile{projectId}
+        if (!profile && this.config && this.config.projectId) {
           try {
-            const profile = window.tilda_members_profile;
+            const localStorageKey = `tilda_members_profile${this.config.projectId}`;
+            const profileFromStorage = localStorage.getItem(localStorageKey);
+            if (profileFromStorage) {
+              try {
+                profile = JSON.parse(profileFromStorage);
+                this.log('✅ Найден профиль в localStorage:', localStorageKey);
+              } catch (parseError) {
+                this.log('⚠️ Ошибка парсинга профиля из localStorage:', parseError);
+              }
+            } else {
+              // Также проверяем без projectId (старый формат)
+              const legacyKeys = Object.keys(localStorage).filter(key => 
+                key.startsWith('tilda_members_profile')
+              );
+              if (legacyKeys.length > 0) {
+                // Пробуем первый найденный ключ
+                const legacyKey = legacyKeys[0];
+                const legacyProfile = localStorage.getItem(legacyKey);
+                if (legacyProfile) {
+                  try {
+                    profile = JSON.parse(legacyProfile);
+                    this.log('✅ Найден профиль в localStorage (legacy):', legacyKey);
+                  } catch (parseError) {
+                    this.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            this.log('⚠️ Ошибка чтения профиля из localStorage:', error);
+          }
+        }
+        
+        // 3. Обрабатываем найденный профиль
+        if (profile) {
+          try {
             // Очищаем email и phone от пустых строк
             const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
             const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
