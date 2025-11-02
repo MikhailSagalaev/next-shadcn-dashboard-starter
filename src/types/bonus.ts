@@ -222,6 +222,7 @@ export interface CreateBonusInput {
   type: BonusType;
   description?: string;
   expiresAt?: Date;
+  metadata?: Record<string, any>;
 }
 
 export interface CreateTransactionInput {

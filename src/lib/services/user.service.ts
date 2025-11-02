@@ -546,13 +546,14 @@ export class BonusService {
       }
     });
 
-    // Создаем транзакцию начисления
+    // Создаем транзакцию начисления с метаданными из data.metadata
     await this.createTransaction({
       userId: data.userId,
       bonusId: bonus.id,
       amount: data.amount,
       type: 'EARN',
-      description: data.description || `Начисление бонусов: ${data.type}`
+      description: data.description || `Начисление бонусов: ${data.type}`,
+      metadata: data.metadata || undefined
     });
 
     // Отправляем уведомление в Telegram (неблокирующе)
@@ -610,6 +611,11 @@ export class BonusService {
 
     if (normalizedOrderId && !baseMetadata.spendOrderId) {
       baseMetadata.spendOrderId = normalizedOrderId;
+    }
+
+    // ✅ КРИТИЧНО: Сохраняем orderId в метаданные для проверки идемпотентности
+    if (normalizedOrderId && !baseMetadata.orderId) {
+      baseMetadata.orderId = normalizedOrderId;
     }
 
     const transactions = await db.$transaction(async (tx) => {
@@ -777,13 +783,20 @@ export class BonusService {
     const bonusAmount = (purchaseAmount * bonusPercent) / 100;
 
     // Начисляем основной бонус
+    // ✅ КРИТИЧНО: Передаем orderId в метаданных для проверки идемпотентности
     const bonus = await this.awardBonus({
       userId,
       amount: bonusAmount,
       type: bonusType,
       description:
         description ||
-        `Бонус за покупку на сумму ${purchaseAmount}₽ (заказ ${orderId})`
+        `Бонус за покупку на сумму ${purchaseAmount}₽ (заказ ${orderId})`,
+      metadata: {
+        ...metadata,
+        orderId,
+        source: metadata?.source || 'tilda_order',
+        purchaseAmount
+      }
     });
 
     // Дополнительная EARN-транзакция не создаётся, чтобы избежать дублирования.
