@@ -4007,6 +4007,103 @@
       }
     },
 
+    // Перехват отправки формы для гарантированного добавления appliedBonuses
+    interceptFormSubmission: function () {
+      const self = this;
+      
+      // Перехватываем отправку всех форм на странице
+      document.addEventListener('submit', function(e) {
+        if (self.state.appliedBonuses > 0) {
+          self.log('📤 Перехвачена отправка формы, добавляем appliedBonuses:', self.state.appliedBonuses);
+          self.addHiddenBonusField(self.state.appliedBonuses);
+          
+          // Также добавляем поле напрямую в форму, которая отправляется
+          const form = e.target;
+          if (form && form.tagName === 'FORM') {
+            // Удаляем старое поле если есть
+            const existingField = form.querySelector('[name="appliedBonuses"]');
+            if (existingField) {
+              existingField.remove();
+            }
+            
+            // Создаем и добавляем новое поле
+            const bonusField = document.createElement('input');
+            bonusField.type = 'hidden';
+            bonusField.name = 'appliedBonuses';
+            bonusField.value = String(self.state.appliedBonuses);
+            form.appendChild(bonusField);
+            
+            self.log('✅ Поле appliedBonuses добавлено в отправляемую форму:', {
+              value: bonusField.value,
+              formId: form.id || form.className
+            });
+          }
+        }
+      }, true); // Используем capture phase для раннего перехвата
+      
+      // Перехватываем события Tilda для отправки заказа
+      if (typeof window !== 'undefined') {
+        // Перехватываем tcart__sendOrder если существует
+        const originalSendOrder = window.tcart__sendOrder;
+        if (typeof originalSendOrder === 'function') {
+          window.tcart__sendOrder = function(...args) {
+            if (self.state.appliedBonuses > 0) {
+              self.log('📤 Перехвачен tcart__sendOrder, добавляем appliedBonuses:', self.state.appliedBonuses);
+              self.addHiddenBonusField(self.state.appliedBonuses);
+              
+              // Обновляем данные корзины если есть
+              if (window.tcart && typeof window.tcart === 'object') {
+                window.tcart.appliedBonuses = self.state.appliedBonuses;
+              }
+            }
+            return originalSendOrder.apply(this, args);
+          };
+        }
+        
+        // Перехватываем отправку через AJAX/FormData если используется
+        const originalFetch = window.fetch;
+        if (originalFetch) {
+          window.fetch = function(...args) {
+            // Проверяем, это ли запрос формы корзины
+            const url = args[0];
+            const options = args[1] || {};
+            
+            if (typeof url === 'string' && (url.includes('cart') || url.includes('order') || url.includes('checkout'))) {
+              if (self.state.appliedBonuses > 0) {
+                self.log('📤 Перехвачен fetch запрос формы, добавляем appliedBonuses:', self.state.appliedBonuses);
+                
+                // Если это FormData, добавляем appliedBonuses
+                if (options.body instanceof FormData) {
+                  options.body.append('appliedBonuses', String(self.state.appliedBonuses));
+                  self.log('✅ appliedBonuses добавлен в FormData');
+                } else if (typeof options.body === 'string') {
+                  // Если это строка (JSON или URL-encoded), добавляем параметр
+                  try {
+                    const body = JSON.parse(options.body);
+                    body.appliedBonuses = String(self.state.appliedBonuses);
+                    options.body = JSON.stringify(body);
+                    self.log('✅ appliedBonuses добавлен в JSON body');
+                  } catch {
+                    // Если не JSON, добавляем как URL-encoded параметр
+                    if (options.body.includes('=')) {
+                      options.body += `&appliedBonuses=${encodeURIComponent(self.state.appliedBonuses)}`;
+                    } else {
+                      options.body = `appliedBonuses=${encodeURIComponent(self.state.appliedBonuses)}&${options.body}`;
+                    }
+                    self.log('✅ appliedBonuses добавлен в URL-encoded body');
+                  }
+                }
+              }
+            }
+            
+            return originalFetch.apply(this, args);
+          };
+        }
+      }
+      
+      this.log('✅ Обработчики перехвата отправки формы установлены');
+    },
+
     // Обновление визуального отображения суммы
     updateCartVisualTotal: function (newTotal) {
       const totalElement = document.querySelector(
