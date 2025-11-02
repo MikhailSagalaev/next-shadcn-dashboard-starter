@@ -576,6 +576,28 @@ function normalizeTildaOrder(raw: any): any {
   if (out.Email && !out.email) out.email = String(out.Email).trim();
   if (out.Phone && !out.phone) out.phone = String(out.Phone).trim();
   if (out.Name && !out.name) out.name = String(out.Name).trim();
+  
+  // Сохраняем appliedBonuses из разных возможных источников
+  // Tilda может передать это поле в разных форматах
+  if (!out.appliedBonuses) {
+    // Пробуем разные варианты названия поля
+    out.appliedBonuses = 
+      out.applied_bonuses || 
+      out.AppliedBonuses || 
+      out.appliedBonuses || 
+      out['appliedBonuses'] ||
+      null;
+  }
+  
+  // Если appliedBonuses есть, нормализуем его (может быть строка или число)
+  if (out.appliedBonuses !== null && out.appliedBonuses !== undefined) {
+    out.appliedBonuses = typeof out.appliedBonuses === 'string' 
+      ? parseFloat(out.appliedBonuses) || 0 
+      : Number(out.appliedBonuses) || 0;
+  } else {
+    out.appliedBonuses = 0;
+  }
+  
   if (out.payment) {
     out.payment = { ...out.payment };
     if (typeof out.payment.amount !== 'undefined') {

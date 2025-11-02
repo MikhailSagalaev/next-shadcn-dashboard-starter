@@ -4068,14 +4068,35 @@
             const url = args[0];
             const options = args[1] || {};
             
-            if (typeof url === 'string' && (url.includes('cart') || url.includes('order') || url.includes('checkout'))) {
+            if (typeof url === 'string' && (url.includes('cart') || url.includes('order') || url.includes('checkout') || url.includes('webhook'))) {
               if (self.state.appliedBonuses > 0) {
                 self.log('📤 Перехвачен fetch запрос формы, добавляем appliedBonuses:', self.state.appliedBonuses);
                 
+                // Обновляем window.tcart если существует
+                if (window.tcart && typeof window.tcart === 'object') {
+                  (window.tcart as any).appliedBonuses = String(self.state.appliedBonuses);
+                  self.log('✅ appliedBonuses обновлен в window.tcart');
+                }
+                
                 // Если это FormData, добавляем appliedBonuses
                 if (options.body instanceof FormData) {
-                  options.body.append('appliedBonuses', String(self.state.appliedBonuses));
-                  self.log('✅ appliedBonuses добавлен в FormData');
+                  // Проверяем, есть ли поле 'data' или 'json' с JSON данными
+                  const jsonField = options.body.get('data') || options.body.get('json') || options.body.get('order');
+                  if (jsonField && typeof jsonField === 'string') {
+                    try {
+                      const jsonData = JSON.parse(jsonField);
+                      jsonData.appliedBonuses = String(self.state.appliedBonuses);
+                      options.body.set('data', JSON.stringify(jsonData));
+                      self.log('✅ appliedBonuses добавлен в JSON внутри FormData');
+                    } catch {
+                      // Если не удалось распарсить, добавляем как отдельное поле
+                      options.body.append('appliedBonuses', String(self.state.appliedBonuses));
+                      self.log('✅ appliedBonuses добавлен как отдельное поле в FormData');
+                    }
+                  } else {
+                    options.body.append('appliedBonuses', String(self.state.appliedBonuses));
+                    self.log('✅ appliedBonuses добавлен в FormData');
+                  }
                 } else if (typeof options.body === 'string') {
                   // Если это строка (JSON или URL-encoded), добавляем параметр
                   try {
