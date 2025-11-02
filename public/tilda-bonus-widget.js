@@ -3784,6 +3784,19 @@
         this.state.appliedBonuses = amount;
         localStorage.setItem('tilda_applied_bonuses', amount);
 
+        // Добавляем appliedBonuses в объект tcart, если он существует
+        // Tilda использует данные из window.tcart для формирования JSON при отправке заказа
+        if (typeof window !== 'undefined' && window.tcart && typeof window.tcart === 'object') {
+          (window.tcart as any).appliedBonuses = String(amount);
+          this.log('✅ appliedBonuses добавлен в window.tcart:', amount);
+          
+          // Также сохраняем в data если существует
+          if ((window.tcart as any).data && typeof (window.tcart as any).data === 'object') {
+            (window.tcart as any).data.appliedBonuses = String(amount);
+            this.log('✅ appliedBonuses добавлен в window.tcart.data');
+          }
+        }
+
         // Добавляем скрытое поле с бонусами для отправки в webhook
         this.addHiddenBonusField(amount);
 
