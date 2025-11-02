@@ -110,6 +110,9 @@
       // Запускаем периодическую очистку кэша
       this.scheduleCacheCleanup();
 
+      // Перехватываем отправку формы для гарантированного добавления appliedBonuses
+      this.interceptFormSubmission();
+
       // Если apiUrl не указан, определяем по src текущего скрипта
       try {
         if (!this.config.apiUrl) {
