@@ -525,18 +525,37 @@ export const SAFE_QUERIES = {
       return null;
     }
 
-    // ✅ ОПТИМИЗИРОВАНО: Баланс рассчитывается в БД агрегацией
-    const balanceResult = await db.bonus.aggregate({
-      where: {
+    // ✅ КРИТИЧНО: Используем UserService.getUserBalance для унификации расчета баланса
+    // Баланс считается из транзакций (totalEarned - totalSpent), а не из активных бонусов
+    let balance = 0;
+    try {
+      const { UserService } = await import('@/lib/services/user.service');
+      const balanceData = await UserService.getUserBalance(params.userId);
+      balance = balanceData.currentBalance;
+      logger.debug('User balance retrieved via UserService in get_user_profile', {
         userId: params.userId,
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } }
-        ]
-      },
-      _sum: { amount: true }
-    });
-    const balance = Number(balanceResult._sum.amount || 0);
+        balance: balance,
+        totalEarned: balanceData.totalEarned,
+        totalSpent: balanceData.totalSpent
+      });
+    } catch (error) {
+      logger.warn('Failed to get user balance via UserService, falling back to bonus calculation', {
+        userId: params.userId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Fallback на старый способ расчета (для обратной совместимости)
+      const balanceResult = await db.bonus.aggregate({
+        where: {
+          userId: params.userId,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        },
+        _sum: { amount: true }
+      });
+      balance = Number(balanceResult._sum.amount || 0);
+    }
 
     // ✅ ОПТИМИЗИРОВАНО: Суммы заработка/расхода рассчитываются в БД
     const [totalEarnedResult, totalSpentResult] = await Promise.all([
