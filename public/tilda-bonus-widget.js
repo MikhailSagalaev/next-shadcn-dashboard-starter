@@ -112,6 +112,7 @@
 
       // Перехватываем отправку формы для гарантированного добавления appliedBonuses
       this.interceptFormSubmission();
+      this.setupTildaDataProxy();
 
       // Если apiUrl не указан, определяем по src текущего скрипта
       try {
@@ -3784,20 +3785,44 @@
         this.state.appliedBonuses = amount;
         localStorage.setItem('tilda_applied_bonuses', amount);
 
-        // Добавляем appliedBonuses в объект tcart, если он существует
+        // КРИТИЧНО: Добавляем appliedBonuses во ВСЕ возможные места в объекте данных Tilda
         // Tilda использует данные из window.tcart для формирования JSON при отправке заказа
+        // Нужно обновить данные ДО того, как Tilda начнет формировать JSON
         if (typeof window !== 'undefined' && window.tcart && typeof window.tcart === 'object') {
+          // Основной объект tcart
           window.tcart.appliedBonuses = String(amount);
           this.log('✅ appliedBonuses добавлен в window.tcart:', amount);
           
-          // Также сохраняем в data если существует
+          // Объект data внутри tcart (если существует)
           if (window.tcart.data && typeof window.tcart.data === 'object') {
             window.tcart.data.appliedBonuses = String(amount);
             this.log('✅ appliedBonuses добавлен в window.tcart.data');
           }
+          
+          // Также пробуем добавить в корневой уровень window.tcart как числовое значение
+          window.tcart.appliedBonusesNumber = Number(amount);
+          
+          // Пробуем найти и обновить объект формы, который Tilda использует для сериализации
+          // Tilda может хранить данные формы в разных местах
+          if (window.tcart.formData && typeof window.tcart.formData === 'object') {
+            window.tcart.formData.appliedBonuses = String(amount);
+            this.log('✅ appliedBonuses добавлен в window.tcart.formData');
+          }
+          
+          // Проверяем, есть ли объект order или orderData
+          if (window.tcart.order && typeof window.tcart.order === 'object') {
+            window.tcart.order.appliedBonuses = String(amount);
+            this.log('✅ appliedBonuses добавлен в window.tcart.order');
+          }
+          
+          if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
+            window.tcart.orderData.appliedBonuses = String(amount);
+            this.log('✅ appliedBonuses добавлен в window.tcart.orderData');
+          }
         }
 
         // Добавляем скрытое поле с бонусами для отправки в webhook
+        // Это должно обновить также объект данных формы Tilda
         this.addHiddenBonusField(amount);
 
         // Применяем скидку через нативный механизм Тильды как промокод с фиксированным дискаунтом
@@ -3951,6 +3976,31 @@
     addHiddenBonusField: function (amount) {
       this.log('📝 Добавляем скрытое поле с бонусами:', amount);
       
+      // КРИТИЧНО: Обновляем объект данных формы Tilda ДО добавления поля в DOM
+      // Tilda может использовать объект данных формы для формирования JSON
+      if (typeof window !== 'undefined' && window.tcart && typeof window.tcart === 'object') {
+        // Обновляем все возможные места в window.tcart
+        window.tcart.appliedBonuses = String(amount);
+        
+        if (window.tcart.data && typeof window.tcart.data === 'object') {
+          window.tcart.data.appliedBonuses = String(amount);
+        }
+        
+        if (window.tcart.formData && typeof window.tcart.formData === 'object') {
+          window.tcart.formData.appliedBonuses = String(amount);
+        }
+        
+        if (window.tcart.order && typeof window.tcart.order === 'object') {
+          window.tcart.order.appliedBonuses = String(amount);
+        }
+        
+        if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
+          window.tcart.orderData.appliedBonuses = String(amount);
+        }
+        
+        this.log('✅ appliedBonuses обновлен во всех объектах window.tcart');
+      }
+      
       // Удаляем все старые поля с бонусами
       const oldFields = document.querySelectorAll('[name="appliedBonuses"], #applied_bonuses_field');
       oldFields.forEach(field => {
@@ -3999,6 +4049,12 @@
         backupField.id = 'applied_bonuses_field_backup';
         document.body.appendChild(backupField);
         
+        // Пробуем найти объект данных формы и обновить его напрямую
+        // Tilda может хранить данные формы в разных местах
+        if (form.dataset && typeof form.dataset === 'object') {
+          form.dataset.appliedBonuses = String(amount);
+        }
+        
         // Проверяем наличие поля через секунду
         setTimeout(() => {
           const checkField = document.querySelector('[name="appliedBonuses"]');
@@ -4023,6 +4079,52 @@
     // Перехват отправки формы для гарантированного добавления appliedBonuses
     interceptFormSubmission: function () {
       const self = this;
+      
+      // КРИТИЧНО: Перехватываем JSON.stringify для добавления appliedBonuses в JSON ДО сериализации
+      // Tilda использует JSON.stringify для формирования JSON из объекта данных
+      if (typeof window !== 'undefined' && window.JSON) {
+        const originalStringify = window.JSON.stringify;
+        window.JSON.stringify = function(value, replacer, space) {
+          // Если сериализуется объект, который может быть заказом Tilda
+          if (value && typeof value === 'object') {
+            // Проверяем, это ли заказ Tilda (содержит payment или formname: "Cart")
+            const isTildaOrder = 
+              (value.payment && typeof value.payment === 'object') ||
+              (value.formname === 'Cart') ||
+              (Array.isArray(value) && value.length > 0 && value[0] && value[0].payment);
+            
+            if (isTildaOrder && self.state.appliedBonuses > 0) {
+              self.log('🔍 Перехвачен JSON.stringify для объекта заказа Tilda, добавляем appliedBonuses:', self.state.appliedBonuses);
+              
+              // Создаем копию объекта для модификации
+              let modifiedValue = value;
+              
+              if (Array.isArray(value)) {
+                // Если это массив, модифицируем первый элемент
+                modifiedValue = [...value];
+                if (modifiedValue[0] && typeof modifiedValue[0] === 'object') {
+                  modifiedValue[0] = { ...modifiedValue[0], appliedBonuses: String(self.state.appliedBonuses) };
+                }
+              } else {
+                // Если это объект, добавляем appliedBonuses
+                modifiedValue = { ...value, appliedBonuses: String(self.state.appliedBonuses) };
+              }
+              
+              self.log('✅ appliedBonuses добавлен в объект перед JSON.stringify:', {
+                appliedBonuses: modifiedValue.appliedBonuses || (Array.isArray(modifiedValue) && modifiedValue[0]?.appliedBonuses),
+                hasPayment: !!(modifiedValue.payment || (Array.isArray(modifiedValue) && modifiedValue[0]?.payment))
+              });
+              
+              return originalStringify.call(this, modifiedValue, replacer, space);
+            }
+          }
+          
+          // Для всех остальных случаев вызываем оригинальный JSON.stringify
+          return originalStringify.call(this, value, replacer, space);
+        };
+        
+        self.log('✅ JSON.stringify перехвачен для добавления appliedBonuses');
+      }
       
       // Перехватываем отправку всех форм на странице
       document.addEventListener('submit', function(e) {
@@ -4062,12 +4164,32 @@
           window.tcart__sendOrder = function(...args) {
             if (self.state.appliedBonuses > 0) {
               self.log('📤 Перехвачен tcart__sendOrder, добавляем appliedBonuses:', self.state.appliedBonuses);
-              self.addHiddenBonusField(self.state.appliedBonuses);
               
-              // Обновляем данные корзины если есть
+              // КРИТИЧНО: Обновляем window.tcart.data ДО вызова оригинальной функции
+              // Tilda может формировать JSON из этого объекта
               if (window.tcart && typeof window.tcart === 'object') {
-                window.tcart.appliedBonuses = self.state.appliedBonuses;
+                window.tcart.appliedBonuses = String(self.state.appliedBonuses);
+                
+                if (window.tcart.data && typeof window.tcart.data === 'object') {
+                  window.tcart.data.appliedBonuses = String(self.state.appliedBonuses);
+                }
+                
+                if (window.tcart.formData && typeof window.tcart.formData === 'object') {
+                  window.tcart.formData.appliedBonuses = String(self.state.appliedBonuses);
+                }
+                
+                if (window.tcart.order && typeof window.tcart.order === 'object') {
+                  window.tcart.order.appliedBonuses = String(self.state.appliedBonuses);
+                }
+                
+                if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
+                  window.tcart.orderData.appliedBonuses = String(self.state.appliedBonuses);
+                }
+                
+                self.log('✅ window.tcart обновлен перед tcart__sendOrder');
               }
+              
+              self.addHiddenBonusField(self.state.appliedBonuses);
             }
             return originalSendOrder.apply(this, args);
           };
@@ -4085,10 +4207,28 @@
               if (self.state.appliedBonuses > 0) {
                 self.log('📤 Перехвачен fetch запрос формы, добавляем appliedBonuses:', self.state.appliedBonuses);
                 
-                // Обновляем window.tcart если существует
+                // КРИТИЧНО: Обновляем window.tcart ДО обработки body
+                // Tilda может формировать JSON из window.tcart в момент fetch
                 if (window.tcart && typeof window.tcart === 'object') {
                   window.tcart.appliedBonuses = String(self.state.appliedBonuses);
-                  self.log('✅ appliedBonuses обновлен в window.tcart');
+                  
+                  if (window.tcart.data && typeof window.tcart.data === 'object') {
+                    window.tcart.data.appliedBonuses = String(self.state.appliedBonuses);
+                  }
+                  
+                  if (window.tcart.formData && typeof window.tcart.formData === 'object') {
+                    window.tcart.formData.appliedBonuses = String(self.state.appliedBonuses);
+                  }
+                  
+                  if (window.tcart.order && typeof window.tcart.order === 'object') {
+                    window.tcart.order.appliedBonuses = String(self.state.appliedBonuses);
+                  }
+                  
+                  if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
+                    window.tcart.orderData.appliedBonuses = String(self.state.appliedBonuses);
+                  }
+                  
+                  self.log('✅ window.tcart обновлен перед fetch');
                 }
                 
                 // Если это FormData, добавляем appliedBonuses
@@ -4136,6 +4276,78 @@
       }
       
       this.log('✅ Обработчики перехвата отправки формы установлены');
+    },
+
+    // Установка Proxy для перехвата формирования объекта данных формы Tilda
+    setupTildaDataProxy: function () {
+      const self = this;
+      
+      if (typeof window === 'undefined') return;
+      
+      // Пробуем установить Proxy для window.tcart.data (если он существует)
+      // Это позволит автоматически добавлять appliedBonuses при обращении к объекту
+      const setupProxyForTcartData = () => {
+        if (window.tcart && window.tcart.data && typeof window.tcart.data === 'object') {
+          try {
+            // Создаем Proxy для автоматического добавления appliedBonuses
+            const originalData = window.tcart.data;
+            window.tcart.data = new Proxy(originalData, {
+              get: function(target, prop) {
+                // При получении объекта для сериализации добавляем appliedBonuses
+                if (prop === 'toJSON' || prop === Symbol.toPrimitive) {
+                  return function() {
+                    const result = {};
+                    for (const key in target) {
+                      result[key] = target[key];
+                    }
+                    if (self.state.appliedBonuses > 0) {
+                      result.appliedBonuses = String(self.state.appliedBonuses);
+                      self.log('✅ Proxy: appliedBonuses добавлен в объект данных через toJSON');
+                    }
+                    return result;
+                  };
+                }
+                return target[prop];
+              },
+              set: function(target, prop, value) {
+                target[prop] = value;
+                return true;
+              }
+            });
+            
+            self.log('✅ Proxy установлен для window.tcart.data');
+          } catch (error) {
+            self.log('⚠️ Не удалось установить Proxy для window.tcart.data:', error);
+          }
+        }
+      };
+      
+      // Пробуем установить Proxy сразу, если window.tcart уже существует
+      if (window.tcart) {
+        setupProxyForTcartData();
+      }
+      
+      // Также пробуем установить Proxy после загрузки Tilda (через некоторое время)
+      setTimeout(setupProxyForTcartData, 1000);
+      setTimeout(setupProxyForTcartData, 3000);
+      setTimeout(setupProxyForTcartData, 5000);
+      
+      // Следим за изменениями window.tcart через MutationObserver (для DOM) или периодическую проверку
+      // Вместо Object.defineProperty используем периодическую проверку
+      let lastTcartData = null;
+      const checkTcartData = setInterval(() => {
+        if (window.tcart && window.tcart.data && window.tcart.data !== lastTcartData) {
+          lastTcartData = window.tcart.data;
+          setupProxyForTcartData();
+        }
+        // Останавливаем проверку после 30 секунд (достаточно для загрузки Tilda)
+        if (Date.now() - (checkTcartData.startTime || Date.now()) > 30000) {
+          clearInterval(checkTcartData);
+        }
+      }, 500);
+      checkTcartData.startTime = Date.now();
+      
+      this.log('✅ Механизм Proxy для перехвата данных формы Tilda настроен');
     },
 
     // Обновление визуального отображения суммы
