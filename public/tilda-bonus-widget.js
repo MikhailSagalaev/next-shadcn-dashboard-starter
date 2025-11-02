@@ -3933,21 +3933,74 @@
 
     // Добавление скрытого поля с бонусами
     addHiddenBonusField: function (amount) {
-      // Удаляем старое поле если есть
-      const oldField = document.getElementById('applied_bonuses_field');
-      if (oldField) oldField.remove();
+      this.log('📝 Добавляем скрытое поле с бонусами:', amount);
+      
+      // Удаляем все старые поля с бонусами
+      const oldFields = document.querySelectorAll('[name="appliedBonuses"], #applied_bonuses_field');
+      oldFields.forEach(field => {
+        this.log('🗑️ Удаляем старое поле:', field.id || field.name);
+        field.remove();
+      });
 
       // Создаем новое скрытое поле
       const hiddenField = document.createElement('input');
       hiddenField.type = 'hidden';
       hiddenField.id = 'applied_bonuses_field';
       hiddenField.name = 'appliedBonuses';
-      hiddenField.value = amount;
+      hiddenField.value = String(amount);
 
-      // Добавляем в форму
-      const form = document.querySelector('.t-form, form');
+      this.log('✅ Создано поле:', {
+        id: hiddenField.id,
+        name: hiddenField.name,
+        value: hiddenField.value
+      });
+
+      // Ищем форму корзины Tilda
+      let form = document.querySelector('.t706__cartwin form');
+      if (!form) {
+        // Пробуем найти форму в модальном окне корзины
+        form = document.querySelector('.t706__cartwin .t-form');
+      }
+      if (!form) {
+        // Пробуем найти форму на странице
+        form = document.querySelector('form[action*="cart"], form.t-form');
+      }
+      if (!form) {
+        // Последний вариант - любая форма
+        form = document.querySelector('.t-form, form');
+      }
+
       if (form) {
         form.appendChild(hiddenField);
+        this.log('✅ Поле добавлено в форму:', {
+          formId: form.id,
+          formClass: form.className,
+          fieldValue: hiddenField.value
+        });
+        
+        // Также добавляем в тело документа для гарантии (Tilda может копировать поля при отправке)
+        const backupField = hiddenField.cloneNode(true);
+        backupField.id = 'applied_bonuses_field_backup';
+        document.body.appendChild(backupField);
+        
+        // Проверяем наличие поля через секунду
+        setTimeout(() => {
+          const checkField = document.querySelector('[name="appliedBonuses"]');
+          if (checkField) {
+            this.log('✅ Поле примененных бонусов найдено в DOM:', {
+              id: checkField.id,
+              value: checkField.value,
+              inForm: !!checkField.closest('form')
+            });
+          } else {
+            this.log('⚠️ Поле примененных бонусов не найдено в DOM после добавления!');
+          }
+        }, 1000);
+      } else {
+        this.log('❌ Форма не найдена для добавления поля appliedBonuses!');
+        // Добавляем в body как последний вариант
+        document.body.appendChild(hiddenField);
+        this.log('⚠️ Поле добавлено в body (не в форму)');
       }
     },
 
