@@ -43,7 +43,8 @@
     "test-api": "tsx scripts/test-api.ts",
     "update-levels": "tsx scripts/update-user-levels.ts",
     "validate-migration": "tsx scripts/validate-migration.ts",
-    "rollback-migration": "tsx scripts/rollback-migration.ts"
+    "rollback-migration": "tsx scripts/rollback-migration.ts",
+    "fix-bonus-behavior": "tsx scripts/fix-bonus-behavior-direct.ts"
   },
   "lint-staged": {
     "**/*.{js,jsx,tsx,ts,css,less,scss,sass}": [
