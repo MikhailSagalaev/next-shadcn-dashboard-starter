@@ -201,14 +201,22 @@ async function importMiniCosmeticsUsers() {
       }
 
       // Проверяем, существует ли уже пользователь с такими же контактными данными
+      const orConditions = [
+        ...(userData.email ? [{ email: userData.email }] : []),
+        ...(userData.phone ? [{ phone: userData.phone }] : []),
+        ...(userData.telegramId ? [{ telegramId: userData.telegramId }] : []),
+      ];
+
+      if (orConditions.length === 0) {
+        console.log(`⚠️ Пропускаем пользователя ${csvUser.ID}: нет контактных данных (email: ${userData.email}, phone: ${userData.phone}, telegramId: ${userData.telegramId})`);
+        skippedCount++;
+        continue;
+      }
+
       const existingUsers = await db.user.findMany({
         where: {
           projectId,
-          OR: [
-            ...(userData.email ? [{ email: userData.email }] : []),
-            ...(userData.phone ? [{ phone: userData.phone }] : []),
-            ...(userData.telegramId ? [{ telegramId: userData.telegramId }] : []),
-          ]
+          OR: orConditions
         }
       });
 
@@ -232,9 +240,14 @@ async function importMiniCosmeticsUsers() {
         const newUser = await UserService.createUser(userData);
         importedCount++;
         console.log(`✅ Импортирован пользователь: ${newUser.firstName || ''} ${newUser.lastName || ''} (${newUser.email || newUser.phone || newUser.telegramUsername || 'ID: ' + newUser.id})`);
-      } catch (createError) {
-        console.error(`❌ Ошибка создания пользователя ${csvUser.ID}:`, createError);
-        errorCount++;
+      } catch (createError: any) {
+        if (createError.code === 'P2002') {
+          console.log(`⚠️ Пользователь ${csvUser.ID} уже существует (уникальность нарушена): ${userData.email || userData.phone || userData.telegramId}`);
+          skippedCount++;
+        } else {
+          console.error(`❌ Ошибка создания пользователя ${csvUser.ID}:`, createError);
+          errorCount++;
+        }
         continue;
       }
 
