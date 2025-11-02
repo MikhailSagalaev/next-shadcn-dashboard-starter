@@ -209,6 +209,11 @@ export async function POST(
       component: 'webhook-replay'
     });
 
+    // ✅ КРИТИЧНО: Добавляем специальный заголовок для обхода проверки idempotency
+    // Это позволяет replay запросам обрабатываться повторно, даже если orderId уже обработан
+    sanitizedHeaders['X-Webhook-Replay'] = 'true';
+    sanitizedHeaders['X-Replay-Log-Id'] = logId;
+
     try {
       response = await fetch(targetUrl, {
         method: methodUpper,

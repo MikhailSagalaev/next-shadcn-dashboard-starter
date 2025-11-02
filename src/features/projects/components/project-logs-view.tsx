@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Card,
@@ -65,6 +65,7 @@ export function ProjectLogsView({
   const [successFilter, setSuccessFilter] = useState<string>('all');
   const [selectedLog, setSelectedLog] = useState<WebhookLogEntry | null>(null);
   const [replayingLog, setReplayingLog] = useState<string | null>(null);
+  const replayingRef = useRef<string | null>(null); // Защита от двойного клика
   const resolvedParams = useParams();
   const projectId = resolvedParams?.id as string;
 
@@ -101,7 +102,14 @@ export function ProjectLogsView({
   }
 
   async function replayLog(log: WebhookLogEntry) {
+    // ✅ ЗАЩИТА ОТ ДВОЙНОГО КЛИКА: проверяем, не выполняется ли уже replay для этого лога
+    if (replayingRef.current === log.id) {
+      console.log('⏸️ Replay уже выполняется для этого лога, пропускаем');
+      return;
+    }
+
     try {
+      replayingRef.current = log.id;
       setReplayingLog(log.id);
 
       // Сервер выполняет запрос и возвращает результат
@@ -127,7 +135,10 @@ export function ProjectLogsView({
       if (response.ok && result.success) {
         toast.success('Запрос успешно повторен');
         // Обновляем логи после повторного выполнения
-        loadLogs();
+        // Небольшая задержка, чтобы избежать конфликтов
+        setTimeout(() => {
+          loadLogs();
+        }, 500);
       } else {
         const errorMsg =
           result.error?.message || result.message || 'Неизвестная ошибка';
@@ -139,6 +150,10 @@ export function ProjectLogsView({
       console.error('Replay network error:', error);
     } finally {
       setReplayingLog(null);
+      // Сбрасываем ref после небольшой задержки
+      setTimeout(() => {
+        replayingRef.current = null;
+      }, 1000);
     }
   }
 

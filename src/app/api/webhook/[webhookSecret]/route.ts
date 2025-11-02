@@ -814,9 +814,12 @@ async function handlePOST(
       const normalized = normalizeTildaOrder(tildaPayload[0]);
       const validatedOrder = validateTildaOrder(normalized);
       
-      // КРИТИЧНО: Проверка на дубликаты по orderId для идемпотентности
+      // ✅ КРИТИЧНО: Проверка на дубликаты по orderId для идемпотентности
+      // НО: Пропускаем проверку для replay запросов (заголовок X-Webhook-Replay)
+      const isReplay = request.headers.get('x-webhook-replay') === 'true';
       const orderId = validatedOrder.payment?.orderid || validatedOrder.payment?.systranid;
-      if (orderId) {
+      
+      if (orderId && !isReplay) {
         // Проверяем, обрабатывался ли уже заказ с таким orderId за последние 24 часа
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         
