@@ -95,18 +95,27 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
 
   // Получаем настройки проекта для определения поведения бонусов
   const project = await db.project.findUnique({
-    where: { id: projectId },
-    // select: { bonusBehavior: true }
+    where: { id: projectId }
   });
 
   if (!project) {
     throw new Error('Проект не найден');
   }
 
-  const bonusBehavior = 'SPEND_AND_EARN' as
+  // КРИТИЧНО: Получаем bonusBehavior из настроек проекта
+  // По умолчанию используем SPEND_AND_EARN если не задано
+  const bonusBehavior = (project.bonusBehavior || 'SPEND_AND_EARN') as
     | 'SPEND_AND_EARN'
     | 'SPEND_ONLY'
     | 'EARN_ONLY';
+  
+  logger.info('📋 НАСТРОЙКИ ПРОЕКТА ДЛЯ БОНУСОВ', {
+    projectId,
+    orderId,
+    bonusBehavior,
+    hasBonusBehavior: !!project.bonusBehavior,
+    component: 'tilda-webhook-project-settings'
+  });
 
   // ЛОГИРОВАНИЕ НАСТРОЕК ПРОЕКТА
   logger.info('⚙️ НАСТРОЙКИ ПРОЕКТА ЗАГРУЖЕНЫ', {
@@ -123,19 +132,33 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       : payment.amount || 0;
 
   // КРИТИЧНО: Парсинг appliedBonuses с детальным логированием
+  // appliedBonuses уже нормализован в normalizeTildaOrder, но проверяем дополнительно
   const appliedBonusesRaw = (orderData as any).appliedBonuses;
-  logger.info('💰 ПАРСИНГ APPLIED BONUSES', {
+  
+  logger.info('💰 ПАРСИНГ APPLIED BONUSES - ИСХОДНЫЕ ДАННЫЕ', {
     projectId,
     orderId,
     appliedBonusesRaw,
     appliedBonusesType: typeof appliedBonusesRaw,
-    component: 'tilda-webhook-bonus-parsing'
+    orderDataKeys: Object.keys(orderData || {}),
+    paymentKeys: Object.keys((orderData as any).payment || {}),
+    component: 'tilda-webhook-bonus-parsing-raw'
   });
 
-  const appliedRequested =
-    typeof appliedBonusesRaw === 'string'
-      ? parseFloat(appliedBonusesRaw) || 0
-      : appliedBonusesRaw || 0;
+  // Нормализуем appliedBonuses - может быть уже числом после normalizeTildaOrder
+  let appliedRequested = 0;
+  if (appliedBonusesRaw !== null && appliedBonusesRaw !== undefined && appliedBonusesRaw !== '') {
+    if (typeof appliedBonusesRaw === 'string') {
+      // Удаляем все нечисловые символы кроме точки и минуса
+      const cleaned = appliedBonusesRaw.trim().replace(/[^0-9.\-]/g, '');
+      appliedRequested = parseFloat(cleaned) || 0;
+    } else if (typeof appliedBonusesRaw === 'number') {
+      appliedRequested = Number.isFinite(appliedBonusesRaw) ? appliedBonusesRaw : 0;
+    } else {
+      // Попытка конвертации в число
+      appliedRequested = Number(appliedBonusesRaw) || 0;
+    }
+  }
 
   logger.info('💰 РЕЗУЛЬТАТ ПАРСИНГА APPLIED BONUSES', {
     projectId,
@@ -143,6 +166,8 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     appliedRequested,
     isFinite: Number.isFinite(appliedRequested),
     gtZero: appliedRequested > 0,
+    rawValue: appliedBonusesRaw,
+    normalizedValue: appliedRequested,
     component: 'tilda-webhook-bonus-parsed'
   });
 
@@ -552,6 +577,28 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       balanceAfter: Number(userBalance.currentBalance),
       component: 'tilda-webhook'
     });
+
+    // ПРИМЕЧАНИЕ: Уведомления о заказах отправляются через notificationQueue для начисленных бонусов
+    // Для отправки уведомлений о самих заказах нужно настроить workflow через Bot Settings
+    // Workflow может обрабатывать события заказов и отправлять уведомления пользователям
+    // Текущая реализация отправляет уведомления только о начислении бонусов через notificationQueue
+    if (user.telegramId) {
+      logger.info('ℹ️ Пользователь связан с Telegram - уведомление может быть отправлено через workflow', {
+        projectId,
+        orderId,
+        userId: user.id,
+        telegramId: user.telegramId.toString(),
+        hasWorkflow: !!project.workflowId,
+        component: 'tilda-webhook-notification-info'
+      });
+    } else {
+      logger.info('ℹ️ Пользователь не связан с Telegram - уведомления не могут быть отправлены', {
+        projectId,
+        orderId,
+        userId: user.id,
+        component: 'tilda-webhook-notification-info'
+      });
+    }
   } catch (error) {
     logger.error('Ошибка обработки заказа Tilda', {
       projectId,
@@ -766,9 +813,78 @@ async function handlePOST(
       // Нормализуем числа из строк, затем валидируем
       const normalized = normalizeTildaOrder(tildaPayload[0]);
       const validatedOrder = validateTildaOrder(normalized);
-      response = await handleTildaOrder(project.id, validatedOrder);
-      status = 200;
-      success = true;
+      
+      // КРИТИЧНО: Проверка на дубликаты по orderId для идемпотентности
+      const orderId = validatedOrder.payment?.orderid || validatedOrder.payment?.systranid;
+      if (orderId) {
+        // Проверяем, обрабатывался ли уже заказ с таким orderId за последние 24 часа
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        
+        // Ищем транзакции этого проекта за последние 24 часа
+        // Используем простой поиск по строкам в JSON (Prisma JSON фильтры ограничены)
+        const recentTransactions = await db.transaction.findMany({
+          where: {
+            user: {
+              projectId: project.id
+            },
+            createdAt: {
+              gte: twentyFourHoursAgo
+            },
+            metadata: {
+              not: null
+            }
+          },
+          select: {
+            id: true,
+            metadata: true,
+            createdAt: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 100 // Ограничиваем поиск последними 100 транзакциями
+        });
+        
+        // Проверяем вручную, есть ли orderId в метаданных
+        const existingTransaction = recentTransactions.find(t => {
+          if (!t.metadata || typeof t.metadata !== 'object') return false;
+          const metadata = t.metadata as any;
+          return metadata.orderId === orderId || 
+                 metadata.spendOrderId === orderId ||
+                 (metadata.spendBatchId && String(metadata.spendOrderId) === String(orderId));
+        });
+        
+        if (existingTransaction) {
+          logger.info('🔄 ДУБЛИКАТ WEBHOOK ЗАПРОСА - заказ уже обработан', {
+            projectId: project.id,
+            orderId,
+            existingTransactionId: existingTransaction.id,
+            existingTransactionCreatedAt: existingTransaction.createdAt,
+            component: 'webhook-idempotency'
+          });
+          
+          // Возвращаем успешный ответ без повторной обработки
+          response = {
+            success: true,
+            message: 'Заказ уже обработан ранее',
+            duplicate: true,
+            orderId,
+            processedAt: existingTransaction.createdAt.toISOString()
+          };
+          status = 200;
+          success = true;
+        } else {
+          // Заказ новый, обрабатываем
+          response = await handleTildaOrder(project.id, validatedOrder);
+          status = 200;
+          success = true;
+        }
+      } else {
+        // Если orderId нет, обрабатываем как обычно (может быть тестовый запрос)
+        response = await handleTildaOrder(project.id, validatedOrder);
+        status = 200;
+        success = true;
+      }
     } else {
       // Это наш стандартный webhook. Нормализуем action и форму payload перед валидацией
       // Доп. обработка: тестовые пинги/формы Tilda без payment

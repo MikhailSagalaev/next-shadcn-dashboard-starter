@@ -350,20 +350,49 @@ export const SAFE_QUERIES = {
   get_user_balance: async (db: PrismaClient, params: GetUserBalanceParams) => {
     logger.debug('Executing get_user_balance', { params });
 
-    const bonuses = await db.bonus.findMany({
-      where: {
+    // КРИТИЧНО: Используем UserService.getUserBalance для унификации расчета баланса
+    // Это обеспечит единый расчет баланса между системой и ботом
+    // Баланс считается как totalEarned - totalSpent из транзакций
+    try {
+      const { UserService } = await import('@/lib/services/user.service');
+      const balance = await UserService.getUserBalance(params.userId);
+      
+      logger.debug('User balance retrieved via UserService', {
         userId: params.userId,
-        amount: { gt: 0 },
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } }
-        ]
-      }
-    });
+        balance: balance.currentBalance,
+        totalEarned: balance.totalEarned,
+        totalSpent: balance.totalSpent
+      });
 
-    const balance = bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
+      return {
+        userId: params.userId,
+        balance: balance.currentBalance,
+        totalEarned: balance.totalEarned,
+        totalSpent: balance.totalSpent,
+        expiringSoon: balance.expiringSoon
+      };
+    } catch (error) {
+      logger.error('Error getting user balance via UserService, falling back to bonus calculation', {
+        userId: params.userId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      // Fallback на старый способ расчета (для обратной совместимости)
+      const bonuses = await db.bonus.findMany({
+        where: {
+          userId: params.userId,
+          amount: { gt: 0 },
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        }
+      });
 
-    return { userId: params.userId, balance };
+      const balance = bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
+
+      return { userId: params.userId, balance };
+    }
   },
 
   /**

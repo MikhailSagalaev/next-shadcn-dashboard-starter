@@ -59,24 +59,81 @@ export async function GET(
       });
     }
 
-    // Проверяем статус бота в BotManager
+    // Проверяем статус бота в BotManager - это реальный источник правды
     const botInstance = botManager.getBot(projectId);
     const isBotRunning = botInstance && botInstance.isActive && botInstance.isPolling;
     
+    // КРИТИЧНО: Сначала проверяем реальное состояние BotManager, а не Telegram API
+    // Если бот запущен через long polling (isPolling), он работает независимо от webhook
+    if (isBotRunning) {
+      // Бот реально работает через polling
+      const botInfo = botInstance.botInfo;
+      const statusInfo = {
+        configured: true,
+        status: 'ACTIVE' as const,
+        message: 'Бот активен и работает через long polling',
+        bot: {
+          id: botInfo.id,
+          username: botInfo.username || botUsername || '',
+          firstName: botInfo.first_name
+        },
+        connection: {
+          hasWebhook: false, // При polling webhook не используется
+          lastUpdate: null,
+          canReceiveUpdates: true // Long polling работает
+        }
+      };
+
+      // Обновляем статус в базе данных если он изменился
+      if (project.botStatus !== 'ACTIVE') {
+        await db.project.update({
+          where: { id: projectId },
+          data: {
+            botStatus: 'ACTIVE',
+            botUsername: botInfo.username || botUsername
+          }
+        });
+
+        logger.info('Bot status updated to ACTIVE (from BotManager)', {
+          projectId,
+          oldStatus: project.botStatus,
+          newStatus: 'ACTIVE',
+          botUsername: botInfo.username,
+          botManagerStatus: 'RUNNING_POLLING'
+        });
+      }
+
+      logger.info('Bot status checked successfully (from BotManager)', {
+        projectId,
+        status: 'ACTIVE',
+        isPolling: true,
+        isActive: botInstance.isActive
+      });
+
+      return NextResponse.json(statusInfo);
+    }
+
+    // Если бот не запущен в BotManager, проверяем через Telegram API
     // Используем улучшенный метод проверки статуса
     const statusInfo =
       await TelegramBotValidationService.getBotStatus(botToken);
 
     // Корректируем статус на основе реального состояния BotManager
     let finalStatus = statusInfo.status;
-    if (isBotRunning && statusInfo.status === 'INACTIVE') {
-      finalStatus = 'ACTIVE';
-      statusInfo.status = 'ACTIVE';
-      statusInfo.message = 'Бот активен и работает';
-    } else if (!isBotRunning && statusInfo.status === 'ACTIVE') {
-      finalStatus = 'INACTIVE';
-      statusInfo.status = 'INACTIVE';
-      statusInfo.message = 'Бот неактивен';
+    
+    // Если бот не запущен в BotManager, но Telegram API говорит что он активен,
+    // это значит бот работает через webhook или не запущен вообще
+    if (!isBotRunning && statusInfo.status === 'ACTIVE') {
+      // Проверяем, есть ли webhook - если есть, бот может работать через webhook
+      // Если нет webhook и нет polling - бот неактивен
+      if (!statusInfo.connection?.hasWebhook) {
+        finalStatus = 'INACTIVE';
+        statusInfo.status = 'INACTIVE';
+        statusInfo.message = 'Бот не запущен (нет ни polling, ни webhook)';
+      } else {
+        // Webhook настроен - бот может работать через webhook
+        statusInfo.message = 'Бот настроен на webhook (не через polling)';
+      }
     }
 
     // Обновляем статус в базе данных если он изменился
