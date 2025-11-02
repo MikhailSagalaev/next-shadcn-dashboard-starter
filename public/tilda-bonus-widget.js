@@ -1309,6 +1309,9 @@
 
       // Получаем root element для установки CSS переменных
       const root = document.documentElement;
+      
+      // Также получаем контейнер виджета для прямого применения стилей
+      const widgetContainer = document.querySelector('.bonus-widget-container');
 
       // Применяем цвета
       if (widgetSettings.widgetBackgroundColor) {
@@ -1467,6 +1470,35 @@
           widgetSettings.widgetBoxShadow
         );
       }
+      
+      // Также применяем стили напрямую к контейнеру виджета
+      // для гарантированного применения даже если CSS переменные не работают
+      if (widgetContainer) {
+        if (widgetSettings.widgetBackgroundColor) {
+          widgetContainer.style.setProperty('background', widgetSettings.widgetBackgroundColor);
+        }
+        if (widgetSettings.widgetBorderColor) {
+          widgetContainer.style.setProperty('border-color', widgetSettings.widgetBorderColor);
+        }
+        if (widgetSettings.widgetTextColor) {
+          widgetContainer.style.setProperty('color', widgetSettings.widgetTextColor);
+        }
+        if (widgetSettings.widgetBorderRadius) {
+          widgetContainer.style.setProperty('border-radius', widgetSettings.widgetBorderRadius);
+        }
+        if (widgetSettings.widgetPadding) {
+          widgetContainer.style.setProperty('padding', widgetSettings.widgetPadding);
+        }
+        if (widgetSettings.widgetBoxShadow) {
+          widgetContainer.style.setProperty('box-shadow', widgetSettings.widgetBoxShadow);
+        }
+        if (widgetSettings.widgetFontFamily) {
+          widgetContainer.style.setProperty('font-family', widgetSettings.widgetFontFamily);
+        }
+        if (widgetSettings.widgetFontSize) {
+          widgetContainer.style.setProperty('font-size', widgetSettings.widgetFontSize);
+        }
+      }
 
       this.log('✅ Кастомные стили виджета применены');
     },
@@ -1551,7 +1583,8 @@
         const settings = await this.loadProjectSettingsSimple();
 
         // Сохраняем в кэш с timestamp последней загрузки
-        this.cacheProjectSettings(settings, 30 * 60 * 1000); // 30 минут
+        // Уменьшили TTL до 5 минут для быстрого обновления стилей после изменений в админке
+        this.cacheProjectSettings(settings, 5 * 60 * 1000); // 5 минут
 
         this.log('✅ Настройки загружены и сохранены в кэш:', settings);
         return settings;
@@ -1579,8 +1612,9 @@
         const now = Date.now();
         const timeSinceLastLoad = now - (cacheData.lastLoad || 0);
 
-        // Форсируем обновление если прошло больше 30 секунд с момента последней загрузки из API
-        return timeSinceLastLoad > 30 * 1000;
+        // Форсируем обновление если прошло больше 10 секунд с момента последней загрузки из API
+        // Это позволяет быстро увидеть изменения стилей после их обновления в админке
+        return timeSinceLastLoad > 10 * 1000;
       } catch (error) {
         this.log('Ошибка проверки необходимости обновления настроек:', error);
         return true; // В случае ошибки - обновляем
@@ -1688,6 +1722,11 @@
         // Сохраняем настройки в state для использования в других частях виджета
         this.state.widgetSettings = settings.widgetSettings || {};
         this.state.botUsername = botUsername;
+
+        // Применяем стили виджета сразу после загрузки настроек
+        if (settings.widgetSettings) {
+          this.applyWidgetStyles(settings.widgetSettings);
+        }
 
         // Используем настройки шаблона или значения по умолчанию
         const widgetSettings = settings.widgetSettings || {};
@@ -2187,6 +2226,25 @@
         });
         this.hideRegistrationPrompt();
         this.ensureWidgetMounted();
+        
+        // Применяем стили виджета для авторизованного пользователя
+        // Загружаем настройки проекта если они еще не загружены
+        if (!this.state.widgetSettings || Object.keys(this.state.widgetSettings).length === 0) {
+          this.loadProjectSettingsForPrompt()
+            .then((settings) => {
+              this.state.widgetSettings = settings.widgetSettings || {};
+              if (settings.widgetSettings) {
+                this.applyWidgetStyles(settings.widgetSettings);
+              }
+            })
+            .catch((error) => {
+              this.log('Не удалось загрузить настройки виджета:', error);
+            });
+        } else {
+          // Если настройки уже загружены, применяем их
+          this.applyWidgetStyles(this.state.widgetSettings);
+        }
+        
         this.loadUserBalance(
           userContact || {
             email: this.state.userEmail,
