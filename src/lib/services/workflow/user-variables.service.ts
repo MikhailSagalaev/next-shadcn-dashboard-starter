@@ -236,11 +236,11 @@ export class UserVariablesService {
 
         // Финансовая информация
         'user.balance': profile.balance,
-        'user.balanceFormatted': `${profile.balance} бонусов`,
+        'user.balanceFormatted': `${Number(profile.balance).toFixed(2)} бонусов`,
         'user.totalEarned': profile.totalEarned,
-        'user.totalEarnedFormatted': `${profile.totalEarned} бонусов`,
+        'user.totalEarnedFormatted': `${Number(profile.totalEarned).toFixed(2)} бонусов`,
         'user.totalSpent': profile.totalSpent,
-        'user.totalSpentFormatted': `${profile.totalSpent} бонусов`,
+        'user.totalSpentFormatted': `${Number(profile.totalSpent).toFixed(2)} бонусов`,
         'user.totalPurchases': profile.totalPurchases,
         'user.totalPurchasesFormatted': `${profile.totalPurchases} руб.`,
         'user.expiringBonuses': profile.expiringBonuses || 0, // ✨ НОВОЕ
@@ -407,7 +407,7 @@ export class UserVariablesService {
       return {
         'user.firstName': profile.firstName || 'Пользователь',
         'user.balance': profile.balance,
-        'user.balanceFormatted': `${profile.balance} бонусов`,
+        'user.balanceFormatted': `${Number(profile.balance).toFixed(2)} бонусов`,
         'user.currentLevel': profile.currentLevel,
         'user.referralCode': profile.referralCode || 'Нет'
       };

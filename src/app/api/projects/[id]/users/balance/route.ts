@@ -36,11 +36,12 @@ export async function GET(
       if (!allowedHost) return true; // fallback: no domain configured → allow
       if (!originToCheck) return false;
       try {
-        const h = new URL(originToCheck).hostname
+        const hostname = new URL(originToCheck).hostname;
+        const normalizedHost = hostname
           .replace(/^www\./i, '')
           .toLowerCase();
         // allow exact host or any subdomain of the allowed host
-        return h === allowedHost || h.endsWith('.' + allowedHost);
+        return normalizedHost === allowedHost || normalizedHost.endsWith('.' + allowedHost);
       } catch {
         return false;
       }
@@ -146,11 +147,19 @@ export async function GET(
       { headers: corsHeaders }
     );
   } catch (error) {
-    const { id: projectId } = await context.params;
-    logger.error('Error retrieving user balance', {
-      projectId,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
-    });
+    try {
+      const { id: projectId } = await context.params;
+      logger.error('Error retrieving user balance', {
+        projectId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    } catch (paramsError) {
+      logger.error('Error retrieving user balance (failed to get projectId)', {
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        paramsError: paramsError instanceof Error ? paramsError.message : String(paramsError)
+      });
+    }
 
     return NextResponse.json(
       {
