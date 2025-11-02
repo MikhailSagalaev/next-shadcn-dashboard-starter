@@ -3889,6 +3889,20 @@
         // Принудительно обновляем отображение суммы в корзине
         this.forceUpdateCartDisplay();
 
+        // КРИТИЧНО: После применения бонусов и перерисовки корзины обновляем поле appliedBonuses
+        // Tilda может перерисовать форму и сбросить значение, поэтому обновляем несколько раз
+        setTimeout(() => {
+          this.addHiddenBonusField(amount);
+        }, 100);
+        
+        setTimeout(() => {
+          this.addHiddenBonusField(amount);
+        }, 500);
+        
+        setTimeout(() => {
+          this.addHiddenBonusField(amount);
+        }, 1000);
+
         this.showSuccess(`Применено ${amount.toFixed(2)} бонусов.`);
       } catch (error) {
         this.showError('Ошибка применения бонусов');
@@ -4150,10 +4164,64 @@
         self.log('✅ JSON.stringify перехвачен для добавления appliedBonuses');
       }
       
+      // КРИТИЧНО: Устанавливаем механизм постоянного обновления поля appliedBonuses
+      // Tilda может перерисовывать форму и сбрасывать значение, поэтому нужно постоянно проверять и обновлять
+      const updateAppliedBonusesField = () => {
+        if (self.state && self.state.appliedBonuses > 0) {
+          // Находим все поля appliedBonuses и обновляем их значение
+          const fields = document.querySelectorAll('[name="appliedBonuses"]');
+          fields.forEach(field => {
+            if (field.value !== String(self.state.appliedBonuses)) {
+              field.value = String(self.state.appliedBonuses);
+              self.log('🔄 Обновлено значение поля appliedBonuses:', {
+                id: field.id,
+                oldValue: field.value,
+                newValue: String(self.state.appliedBonuses)
+              });
+            }
+          });
+          
+          // Если поле не найдено, добавляем его
+          if (fields.length === 0) {
+            self.addHiddenBonusField(self.state.appliedBonuses);
+          }
+        }
+      };
+      
+      // Обновляем поле при каждом изменении состояния
+      let fieldWatcherInterval = null;
+      const startFieldWatcher = () => {
+        // Останавливаем предыдущий интервал, если он существует
+        if (fieldWatcherInterval) {
+          clearInterval(fieldWatcherInterval);
+        }
+        
+        // Проверяем каждые 500ms
+        fieldWatcherInterval = setInterval(updateAppliedBonusesField, 500);
+        
+        // Также обновляем при событиях Tilda
+        ['tcart:updated', 'tcart:reDraw', 'tcart:calcAmount'].forEach(eventName => {
+          document.addEventListener(eventName, updateAppliedBonusesField);
+        });
+        
+        // Сохраняем интервал для возможной остановки
+        if (typeof self.fieldWatcherInterval === 'undefined') {
+          self.fieldWatcherInterval = fieldWatcherInterval;
+        }
+      };
+      
+      startFieldWatcher();
+      self.log('✅ Запущен механизм постоянного обновления поля appliedBonuses');
+      
       // Перехватываем отправку всех форм на странице
       document.addEventListener('submit', function(e) {
-        if (self.state.appliedBonuses > 0) {
+        if (self.state && self.state.appliedBonuses > 0) {
           self.log('📤 Перехвачена отправка формы, добавляем appliedBonuses:', self.state.appliedBonuses);
+          
+          // СНАЧАЛА обновляем все существующие поля
+          updateAppliedBonusesField();
+          
+          // Затем добавляем/обновляем поле в форме
           self.addHiddenBonusField(self.state.appliedBonuses);
           
           // Также добавляем поле напрямую в форму, которая отправляется
