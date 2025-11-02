@@ -200,38 +200,29 @@ async function importMiniCosmeticsUsers() {
         continue;
       }
 
-      // Перед созданием дополнительно проверяем на конфликты
-      const conflictChecks = [];
-
-      if (userData.email) {
-        const emailConflict = await db.user.findFirst({
-          where: { projectId, email: userData.email }
-        });
-        if (emailConflict) {
-          conflictChecks.push(`email уже занят: ${userData.email}`);
+      // Проверяем, существует ли уже пользователь с такими же контактными данными
+      const existingUsers = await db.user.findMany({
+        where: {
+          projectId,
+          OR: [
+            ...(userData.email ? [{ email: userData.email }] : []),
+            ...(userData.phone ? [{ phone: userData.phone }] : []),
+            ...(userData.telegramId ? [{ telegramId: userData.telegramId }] : []),
+          ]
         }
-      }
+      });
 
-      if (userData.phone) {
-        const phoneConflict = await db.user.findFirst({
-          where: { projectId, phone: userData.phone }
-        });
-        if (phoneConflict) {
-          conflictChecks.push(`phone уже занят: ${userData.phone}`);
-        }
-      }
+      // Если найден хотя бы один пользователь с такими же данными, пропускаем
+      if (existingUsers.length > 0) {
+        const conflicts = existingUsers.map(u => {
+          const reasons = [];
+          if (u.email === userData.email) reasons.push(`email: ${userData.email}`);
+          if (u.phone === userData.phone) reasons.push(`phone: ${userData.phone}`);
+          if (u.telegramId === userData.telegramId) reasons.push(`telegramId: ${userData.telegramId}`);
+          return reasons.join(', ');
+        }).filter(Boolean);
 
-      if (userData.telegramId) {
-        const telegramConflict = await db.user.findFirst({
-          where: { projectId, telegramId: userData.telegramId }
-        });
-        if (telegramConflict) {
-          conflictChecks.push(`telegramId уже занят: ${userData.telegramId}`);
-        }
-      }
-
-      if (conflictChecks.length > 0) {
-        console.log(`⚠️ Конфликт данных для пользователя ${csvUser.ID}: ${conflictChecks.join(', ')}`);
+        console.log(`⚠️ Пользователь ${csvUser.ID} уже существует: ${conflicts.join(' | ')}`);
         skippedCount++;
         continue;
       }
