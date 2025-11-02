@@ -158,15 +158,6 @@ export function ProjectsView() {
                 Создать проект
               </Button>
             )}
-            {!searchQuery && (
-              <div className='mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md text-left'>
-                <p className='text-sm text-yellow-800'>
-                  <strong>Примечание:</strong> Если у вас были проекты, созданные до обновления, 
-                  их нужно привязать к вашему аккаунту через миграцию. 
-                  Запустите: <code className='bg-yellow-100 px-2 py-1 rounded'>npm run migrate-owners migrate &lt;ваш_email&gt;</code>
-                </p>
-              </div>
-            )}
           </div>
         </div>
       ) : (
