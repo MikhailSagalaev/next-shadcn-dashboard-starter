@@ -64,13 +64,6 @@ export function ProjectsView() {
 
       const data = await response.json();
       const projectsList = data.projects || [];
-      
-      // Если проектов нет, возможно они не привязаны к аккаунту
-      if (projectsList.length === 0 && data.total === 0) {
-        // Проекты могут быть без owner_id - нужно запустить миграцию
-        console.warn('Проекты не найдены. Возможно, нужно привязать существующие проекты через миграцию.');
-      }
-      
       setProjects(projectsList);
     } catch (error) {
       console.error('Ошибка загрузки проектов:', error);
