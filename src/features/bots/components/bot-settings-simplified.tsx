@@ -66,7 +66,7 @@ export function BotSettingsSimplified({ projectId }: BotSettingsSimplifiedProps)
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
-  const [showToken, setShowToken] = useState(false);
+  const [showToken, setShowToken] = useState(false); // По умолчанию скрыт
   
   // Формы
   const [tokenValue, setTokenValue] = useState('');
@@ -78,8 +78,33 @@ export function BotSettingsSimplified({ projectId }: BotSettingsSimplifiedProps)
       const response = await fetch(`/api/projects/${projectId}/bot`);
       if (response.ok) {
         const data = await response.json();
-        setBotSettings(data);
-        setTokenValue(data.botToken || '');
+        // Извлекаем botToken из разных возможных источников
+        // API может вернуть botToken напрямую или из botSettings
+        const botToken = data.botToken || (data as any)?.botToken || '';
+        
+        console.log('🔍 Bot settings loaded:', {
+          hasBotToken: !!botToken,
+          botTokenLength: botToken?.length || 0,
+          botTokenPreview: botToken ? botToken.slice(0, 10) + '...' + botToken.slice(-4) : 'empty',
+          dataKeys: Object.keys(data),
+          directBotToken: !!data.botToken,
+          dataBotTokenType: typeof data.botToken,
+          fullData: data
+        });
+        
+        setBotSettings({
+          ...data,
+          botToken: botToken
+        });
+        setTokenValue(botToken);
+        
+        // Дополнительная проверка после установки состояния
+        setTimeout(() => {
+          console.log('🔍 State after update:', {
+            botSettingsToken: botToken,
+            botSettingsState: botToken
+          });
+        }, 100);
       }
     } catch (error) {
       console.error('Ошибка загрузки настроек бота:', error);
@@ -231,7 +256,16 @@ export function BotSettingsSimplified({ projectId }: BotSettingsSimplifiedProps)
             Подключение бота
           </CardTitle>
           <CardDescription>
-            Получите токен у @BotFather в Telegram
+            Получите токен у{' '}
+            <a 
+              href="https://t.me/botfather" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary underline hover:text-primary/80"
+            >
+              @BotFather
+            </a>{' '}
+            в Telegram
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -241,10 +275,22 @@ export function BotSettingsSimplified({ projectId }: BotSettingsSimplifiedProps)
               <Input
                 id="bot-token"
                 type={showToken || isEditing ? 'text' : 'password'}
-                value={isEditing ? tokenValue : (botSettings?.botToken ? (showToken ? botSettings.botToken : maskToken(botSettings.botToken)) : '')}
+                value={
+                  isEditing
+                    ? tokenValue
+                    : botSettings?.botToken && botSettings.botToken.length > 0
+                      ? showToken
+                        ? botSettings.botToken
+                        : maskToken(botSettings.botToken)
+                      : ''
+                }
                 onChange={(e) => setTokenValue(e.target.value)}
                 disabled={!isEditing}
-                placeholder="Введите токен бота..."
+                placeholder={
+                  botSettings?.botToken && botSettings.botToken.length > 0
+                    ? undefined
+                    : 'Вставьте токен от @BotFather (https://t.me/botfather)'
+                }
                 className="font-mono"
               />
               {!isEditing ? (

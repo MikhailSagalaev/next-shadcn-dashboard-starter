@@ -187,7 +187,15 @@ export function BotfatherHelper({
           <Alert>
             <Info className='h-4 w-4' />
             <AlertDescription>
-              Для работы команд в Telegram настройте их через @BotFather.
+              Для работы команд в Telegram настройте их через{' '}
+              <a 
+                href="https://t.me/botfather" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary underline hover:text-primary/80"
+              >
+                @BotFather
+              </a>.
               Скопируйте текст ниже и отправьте его боту.
             </AlertDescription>
           </Alert>

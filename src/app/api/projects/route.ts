@@ -15,6 +15,7 @@ import {
   createProjectSchema,
   type CreateProjectInput
 } from '@/lib/validation/schemas';
+import { getCurrentAdmin } from '@/lib/auth';
 import { z } from 'zod';
 // import { db } from '@/lib/db'; // удалено как неиспользуемое
 // import type { CreateProjectInput } from '@/types/bonus';
@@ -22,11 +23,17 @@ import { z } from 'zod';
 // GET /api/projects - Получение списка проектов
 export async function GET(request: NextRequest) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    const result = await ProjectService.getProjects(page, limit);
+    // Фильтруем проекты по владельцу
+    const result = await ProjectService.getProjects(page, limit, admin.sub);
 
     return NextResponse.json(result);
   } catch (error) {
@@ -45,11 +52,16 @@ export async function GET(request: NextRequest) {
 // POST /api/projects - Создание нового проекта
 export async function POST(request: NextRequest) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Валидация входных данных с Zod
     const validatedData = await validateRequest(request, createProjectSchema);
 
     // Zod гарантирует валидность данных, поэтому можем safely cast
-    const project = await ProjectService.createProject(validatedData as any);
+    const project = await ProjectService.createProject(validatedData as any, admin.sub);
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {

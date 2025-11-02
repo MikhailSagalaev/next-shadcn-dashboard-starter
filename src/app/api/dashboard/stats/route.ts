@@ -65,14 +65,35 @@ export async function GET() {
         })
       ]);
 
-    // Подсчитываем активных ботов
-    let activeBots = 0;
+    // Подсчитываем активных ботов из менеджера
+    let activeBotsFromManager = 0;
     const allBots = botManager.getAllBots();
     for (const [projectId, botInstance] of allBots) {
       if (botInstance.isActive) {
-        activeBots++;
+        activeBotsFromManager++;
       }
     }
+
+    // Подсчитываем активных ботов из БД
+    // Боты считаются активными если:
+    // 1. botStatus === 'ACTIVE' ИЛИ
+    // 2. есть botToken И botSettings.isActive === true
+    const activeBotsFromDb = await db.project.count({
+      where: {
+        OR: [
+          { botStatus: 'ACTIVE' },
+          {
+            AND: [
+              { botToken: { not: null } },
+              { botSettings: { isActive: true } }
+            ]
+          }
+        ]
+      }
+    });
+
+    // Используем максимальное значение (либо из менеджера, либо из БД)
+    const activeBots = Math.max(activeBotsFromManager, activeBotsFromDb);
 
     // Форматируем данные для ответа
     const stats = {

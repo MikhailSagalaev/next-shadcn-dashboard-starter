@@ -193,6 +193,11 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   // Handle adding new nodes
   const handleAddNode = useCallback(
     (nodeType: WorkflowNodeType, position: Position) => {
+      // Блокируем добавление нод, если нет выбранного workflow
+      if (!currentWorkflow) {
+        return;
+      }
+
       const newNode: WorkflowNode = {
         id: `${nodeType}-${Date.now()}`,
         type: nodeType,
@@ -205,7 +210,42 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
 
       setNodes((nds) => [...nds, newNode]);
     },
-    [setNodes]
+    [setNodes, currentWorkflow]
+  );
+
+  // Handle drag and drop from toolbar
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      // Блокируем drop, если нет выбранного workflow
+      if (!currentWorkflow) {
+        return;
+      }
+
+      const nodeType = event.dataTransfer.getData('application/reactflow') as WorkflowNodeType;
+
+      if (!nodeType || !reactFlowInstance) {
+        return;
+      }
+
+      // Получаем позицию курсора относительно канваса
+      const reactFlowBounds = (event.target as HTMLElement).closest('.react-flow')?.getBoundingClientRect();
+      if (!reactFlowBounds) return;
+
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+
+      handleAddNode(nodeType, position);
+    },
+    [reactFlowInstance, handleAddNode, currentWorkflow]
   );
 
   const handleFocusNode = useCallback(
@@ -357,6 +397,11 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   // Handle connections
   const onConnect = useCallback(
     (params: Connection) => {
+      // Блокируем создание связей, если нет выбранного workflow
+      if (!currentWorkflow) {
+        return;
+      }
+      
       const newEdge: Edge = {
         id: `edge-${params.source}-${params.target}-${Date.now()}`,
         source: params.source!,
@@ -368,7 +413,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       };
       setEdges((eds) => addEdge(newEdge, eds));
     },
-    [setEdges]
+    [setEdges, currentWorkflow]
   );
 
   // Handle node click
@@ -388,12 +433,17 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   // Handle node updates from properties panel
   const onNodeUpdate = useCallback(
     (updatedNode: WorkflowNode) => {
+      // Блокируем обновление нод, если нет выбранного workflow
+      if (!currentWorkflow) {
+        return;
+      }
+      
       setNodes((nds) =>
         nds.map((node) => (node.id === updatedNode.id ? updatedNode : node))
       );
       setSelectedNode(updatedNode);
     },
-    [setNodes]
+    [setNodes, currentWorkflow]
   );
 
   // Save current workflow
@@ -510,6 +560,9 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
     [nodes, edges]
   );
 
+  // Проверка наличия workflow
+  const hasNoWorkflow = !isLoading && !currentWorkflow && workflows.length === 0;
+
   return (
     <div className='flex h-[calc(100vh-80px)] flex-col overflow-hidden'>
       {/* Header */}
@@ -535,6 +588,18 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       <div className='flex flex-1 overflow-hidden'>
         {/* Canvas */}
         <div className='relative flex-1 overflow-hidden'>
+          {/* Блокирующий overlay, если нет workflow */}
+          {hasNoWorkflow && (
+            <div className='absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm'>
+              <div className='text-center space-y-4 p-8 bg-background border rounded-lg shadow-lg max-w-md'>
+                <h3 className='text-xl font-semibold'>Нет workflow</h3>
+                <p className='text-muted-foreground'>
+                  Для работы с конструктором необходимо создать или выбрать workflow.
+                  Используйте кнопку "Выберите workflow" в заголовке для создания или загрузки workflow.
+                </p>
+              </div>
+            </div>
+          )}
           {/* Toolbar */}
           <div className='absolute left-4 top-4 z-10'>
             <WorkflowToolbar onAddNode={handleAddNode} />
@@ -552,22 +617,26 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               Выравнять
             </Button>
           </div>
-          <ReactFlow
-            nodes={flowData.nodes}
-            edges={flowData.edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick}
-            onNodeContextMenu={onNodeContextMenu}
-            onEdgeContextMenu={onEdgeContextMenu}
-            onInit={setReactFlowInstance}
-            nodeTypes={workflowNodeTypes}
-            fitView
-            attributionPosition='bottom-left'
-            className='h-full w-full'
-          >
+          <div onDrop={onDrop} onDragOver={onDragOver} className='h-full w-full'>
+            <ReactFlow
+              nodes={flowData.nodes}
+              edges={flowData.edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={currentWorkflow ? onConnect : undefined}
+              onNodeClick={onNodeClick}
+              onPaneClick={onPaneClick}
+              onNodeContextMenu={currentWorkflow ? onNodeContextMenu : undefined}
+              onEdgeContextMenu={currentWorkflow ? onEdgeContextMenu : undefined}
+              onInit={setReactFlowInstance}
+              nodeTypes={workflowNodeTypes}
+              fitView
+              attributionPosition='bottom-left'
+              className='h-full w-full'
+              nodesDraggable={!!currentWorkflow}
+              nodesConnectable={!!currentWorkflow}
+              elementsSelectable={!!currentWorkflow}
+            >
             <Panel position='bottom-left' className='ml-2 mb-2'>
               <WorkflowValidationPanel
                 result={validationResult}
@@ -589,6 +658,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               />
             )}
           </ReactFlow>
+          </div>
         </div>
       </div>
 

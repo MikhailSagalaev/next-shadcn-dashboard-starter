@@ -52,22 +52,10 @@ export async function sendBonusNotification(
       `💰 Сумма: *+${bonus.amount}₽*\n` +
       `📝 Тип: ${typeText}\n` +
       `📄 Описание: ${bonus.description || 'Без описания'}\n\n` +
-      `⏰ Срок действия: ${bonus.expiresAt ? bonus.expiresAt.toLocaleDateString('ru-RU') : 'Бессрочно'}\n\n` +
-      `Выберите действие ниже:`;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '💰 Баланс', callback_data: 'check_balance' },
-          { text: '📝 История', callback_data: 'view_history' }
-        ],
-        [{ text: '🔙 Меню', callback_data: 'back_to_main' }]
-      ]
-    } as const;
+      `⏰ Срок действия: ${bonus.expiresAt ? bonus.expiresAt.toLocaleDateString('ru-RU') : 'Бессрочно'}`;
 
     await botInstance.bot.api.sendMessage(Number(user.telegramId), message, {
-      parse_mode: 'Markdown',
-      reply_markup: keyboard as any
+      parse_mode: 'Markdown'
     });
 
     logger.info(`Уведомление отправлено пользователю ${user.id} в Telegram`, {
@@ -109,19 +97,8 @@ export async function sendBonusSpentNotification(
       `📄 За: ${description}\n\n` +
       `Спасибо за покупку!`;
 
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '💰 Баланс', callback_data: 'check_balance' },
-          { text: '📝 История', callback_data: 'view_history' }
-        ],
-        [{ text: '🔙 Меню', callback_data: 'back_to_main' }]
-      ]
-    } as const;
-
     await botInstance.bot.api.sendMessage(Number(user.telegramId), message, {
-      parse_mode: 'Markdown',
-      reply_markup: keyboard as any
+      parse_mode: 'Markdown'
     });
 
     // console.log(`✅ Уведомление о списании отправлено пользователю ${user.id}`);

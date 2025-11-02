@@ -70,15 +70,25 @@ export function useBreadcrumbs() {
       const response = await fetch(`/api/projects/${projectId}`);
       if (response.ok) {
         const project = await response.json();
-        const name = project.name || `Проект ${projectId}`;
+        const name = project.name || 'Проект';
+        setProjectNames(prev => ({ ...prev, [projectId]: name }));
+        return name;
+      } else if (response.status === 403) {
+        // При ошибке доступа показываем просто "Проект" без ID
+        const name = 'Проект';
         setProjectNames(prev => ({ ...prev, [projectId]: name }));
         return name;
       }
     } catch (error) {
-      console.error('Ошибка получения названия проекта:', error);
+      // Не логируем ошибки для breadcrumbs - это не критично
+      // При сетевой ошибке показываем просто "Проект"
+      const name = 'Проект';
+      setProjectNames(prev => ({ ...prev, [projectId]: name }));
+      return name;
     }
 
-    return `Проект ${projectId}`;
+    // Fallback: показываем просто "Проект" без ID
+    return 'Проект';
   };
 
   const breadcrumbs = useMemo(() => {
@@ -104,7 +114,7 @@ export function useBreadcrumbs() {
       // Если это ID проекта (UUID или cuid), получаем название
       if (index > 0 && segments[index - 1] === 'projects' && segment.length > 10) {
         return {
-          title: projectNames[segment] || `Проект ${segment}`,
+          title: projectNames[segment] || 'Проект',
           link: path
         };
       }

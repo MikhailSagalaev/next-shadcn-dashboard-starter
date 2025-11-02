@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { BonusLevelService } from '@/lib/services/bonus-level.service';
 import type {
   CreateProjectInput,
   UpdateProjectInput,
@@ -9,6 +10,28 @@ import type {
 } from '@/types/bonus';
 
 export class ProjectService {
+  /**
+   * Проверка доступа к проекту
+   * @throws Error если доступ запрещен
+   */
+  static async verifyProjectAccess(
+    projectId: string,
+    adminId: string
+  ): Promise<void> {
+    const project = await db.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true }
+    });
+
+    if (!project) {
+      throw new Error('FORBIDDEN');
+    }
+
+    if (project.ownerId !== adminId) {
+      throw new Error('FORBIDDEN');
+    }
+  }
+
   /**
    * Нормализация домена - принимает любой формат и приводит к стандартному виду
    */
@@ -53,7 +76,10 @@ export class ProjectService {
   }
 
   // Создание нового проекта
-  static async createProject(data: CreateProjectInput): Promise<Project> {
+  static async createProject(
+    data: CreateProjectInput,
+    ownerId: string
+  ): Promise<Project> {
     const normalizedDomain = this.normalizeDomain(data.domain);
     
     const project = await db.project.create({
@@ -61,7 +87,8 @@ export class ProjectService {
         name: data.name,
         domain: normalizedDomain,
         bonusPercentage: data.bonusPercentage || 1.0,
-        bonusExpiryDays: data.bonusExpiryDays || 365
+        bonusExpiryDays: data.bonusExpiryDays || 365,
+        ownerId
       },
       include: {
         botSettings: true,
@@ -72,6 +99,22 @@ export class ProjectService {
         }
       }
     });
+
+    // Автоматически создаем уровни бонусов по умолчанию
+    try {
+      await BonusLevelService.createDefaultLevels(project.id);
+      logger.info('Созданы уровни бонусов по умолчанию для проекта', {
+        projectId: project.id,
+        component: 'project-service'
+      });
+    } catch (error) {
+      // Логируем ошибку, но не прерываем создание проекта
+      logger.error('Не удалось создать уровни бонусов по умолчанию', {
+        projectId: project.id,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'project-service'
+      });
+    }
 
     return project as any;
   }
@@ -203,15 +246,19 @@ export class ProjectService {
     return project as any;
   }
 
-  // Получение всех проектов с пагинацией
+  // Получение всех проектов с пагинацией (фильтр по владельцу)
   static async getProjects(
     page = 1,
-    limit = 10
+    limit = 10,
+    ownerId?: string
   ): Promise<{ projects: Project[]; total: number }> {
     const skip = (page - 1) * limit;
 
+    const whereClause = ownerId ? { ownerId } : {};
+
     const [projects, total] = await Promise.all([
       db.project.findMany({
+        where: whereClause,
         skip,
         take: limit,
         select: {
@@ -240,17 +287,21 @@ export class ProjectService {
           createdAt: 'desc'
         }
       }),
-      db.project.count()
+      db.project.count({ where: whereClause })
     ]);
 
     return { projects: projects as any, total };
   }
 
-  // Обновление проекта
+  // Обновление проекта (с проверкой владельца)
   static async updateProject(
     id: string,
-    data: UpdateProjectInput
+    data: UpdateProjectInput,
+    adminId: string
   ): Promise<Project> {
+    // Проверяем доступ
+    await this.verifyProjectAccess(id, adminId);
+
     const project = await db.project.update({
       where: { id },
       data,
@@ -268,8 +319,11 @@ export class ProjectService {
     return project as any;
   }
 
-  // Деактивация проекта
-  static async deactivateProject(id: string): Promise<Project> {
+  // Деактивация проекта (с проверкой владельца)
+  static async deactivateProject(id: string, adminId: string): Promise<Project> {
+    // Проверяем доступ
+    await this.verifyProjectAccess(id, adminId);
+
     const project = await db.project.update({
       where: { id },
       data: { isActive: false },

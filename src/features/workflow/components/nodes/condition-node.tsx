@@ -32,13 +32,18 @@ export const ConditionNode = memo(({ data }: NodeProps) => {
       <CardContent className='space-y-2'>
         <p className='text-sm text-muted-foreground line-clamp-2'>{conditionText}</p>
       </CardContent>
-      <Handle type='target' position={Position.Top} className='!bg-orange-500' />
+      <Handle 
+        type='target' 
+        position={Position.Top} 
+        className='!bg-orange-500 !w-4 !h-4 !border-2' 
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      />
       <Handle
         type='source'
         position={Position.Bottom}
         id='true'
-        className='!bg-green-500 !bottom-1 !left-1/4'
-        style={{ left: '25%' }}
+        className='!bg-green-500 !bottom-1 !left-1/4 !w-4 !h-4 !border-2'
+        style={{ left: '25%', width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
       >
         <div className='absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs text-green-700'>
           True
@@ -48,8 +53,8 @@ export const ConditionNode = memo(({ data }: NodeProps) => {
         type='source'
         position={Position.Bottom}
         id='false'
-        className='!bg-red-500 !bottom-1 !right-1/4'
-        style={{ right: '25%' }}
+        className='!bg-red-500 !bottom-1 !right-1/4 !w-4 !h-4 !border-2'
+        style={{ right: '25%', width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
       >
         <div className='absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs text-red-700'>
           False

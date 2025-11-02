@@ -54,11 +54,24 @@ export function ProjectsView() {
       const response = await fetch('/api/projects');
 
       if (!response.ok) {
-        throw new Error('Ошибка загрузки проектов');
+        if (response.status === 401) {
+          // Не авторизован - перенаправить на страницу входа
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error(`Ошибка загрузки проектов: ${response.status}`);
       }
 
       const data = await response.json();
-      setProjects(data.projects || []);
+      const projectsList = data.projects || [];
+      
+      // Если проектов нет, возможно они не привязаны к аккаунту
+      if (projectsList.length === 0 && data.total === 0) {
+        // Проекты могут быть без owner_id - нужно запустить миграцию
+        console.warn('Проекты не найдены. Возможно, нужно привязать существующие проекты через миграцию.');
+      }
+      
+      setProjects(projectsList);
     } catch (error) {
       console.error('Ошибка загрузки проектов:', error);
     } finally {
@@ -144,6 +157,15 @@ export function ProjectsView() {
                 <Plus className='mr-2 h-4 w-4' />
                 Создать проект
               </Button>
+            )}
+            {!searchQuery && (
+              <div className='mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md text-left'>
+                <p className='text-sm text-yellow-800'>
+                  <strong>Примечание:</strong> Если у вас были проекты, созданные до обновления, 
+                  их нужно привязать к вашему аккаунту через миграцию. 
+                  Запустите: <code className='bg-yellow-100 px-2 py-1 rounded'>npm run migrate-owners migrate &lt;ваш_email&gt;</code>
+                </p>
+              </div>
             )}
           </div>
         </div>

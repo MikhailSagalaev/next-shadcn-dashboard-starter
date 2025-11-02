@@ -47,14 +47,16 @@ export function ContactRequestNode({ data, selected }: ContactRequestNodeProps) 
       <Handle
         type="target"
         position={Position.Left}
-        className="w-2 h-2 !bg-muted-foreground"
+        className="!w-4 !h-4 !border-2 !bg-muted-foreground"
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
       />
 
       {/* Output Handle */}
       <Handle
         type="source"
         position={Position.Right}
-        className="w-2 h-2 !bg-muted-foreground"
+        className="!w-4 !h-4 !border-2 !bg-muted-foreground"
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
       />
     </Card>
   );

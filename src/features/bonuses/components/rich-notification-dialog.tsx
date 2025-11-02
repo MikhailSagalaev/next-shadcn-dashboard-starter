@@ -10,7 +10,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -410,11 +409,9 @@ export function RichNotificationDialog({
                   )}
                   {imageUrl && (
                     <div className='overflow-hidden rounded border bg-white'>
-                      <Image
+                      <img
                         src={imageUrl}
                         alt='Preview'
-                        width={400}
-                        height={128}
                         className='h-32 w-full object-cover'
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';

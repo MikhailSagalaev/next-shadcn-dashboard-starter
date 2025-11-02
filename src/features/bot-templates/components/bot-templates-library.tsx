@@ -10,6 +10,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -252,6 +253,10 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId || null);
   const [showInstallDialog, setShowInstallDialog] = useState(false);
   const [templateToInstall, setTemplateToInstall] = useState<BotTemplate | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [installedWorkflowId, setInstalledWorkflowId] = useState<string | null>(null);
+  const [installedTemplateName, setInstalledTemplateName] = useState<string | null>(null);
+  const router = useRouter();
   const { toast } = useToast();
 
   const loadProjects = async () => {
@@ -354,6 +359,7 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
   const openInstallDialog = (template: BotTemplate) => {
     setTemplateToInstall(template);
     setShowInstallDialog(true);
+    // Если проект не выбран, оставляем selectedProjectId как есть (может быть null)
   };
 
   const handleInstallTemplate = async () => {
@@ -388,14 +394,11 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
       const result = await response.json();
 
       if (result.success && result.workflowId) {
-        toast({
-          title: 'Успех',
-          description: `Шаблон "${templateToInstall.name}" установлен в проект`,
-          variant: 'default'
-        });
-        
+        setInstalledWorkflowId(result.workflowId);
+        setInstalledTemplateName(templateToInstall?.name || null);
         setShowInstallDialog(false);
         setTemplateToInstall(null);
+        setShowSuccessDialog(true);
       } else {
         console.error('Failed to install template:', result.error);
         
@@ -483,38 +486,10 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
         </div>
       </div>
 
-      {/* Выбор проекта */}
-      {projects.length > 0 && (
-        <Card>
-          <CardContent className='p-4'>
-            <div className='flex items-center gap-4'>
-              <label className='text-sm font-medium whitespace-nowrap'>
-                Установить в проект:
-              </label>
-              <Select
-                value={selectedProjectId || ''}
-                onValueChange={setSelectedProjectId}
-              >
-                <SelectTrigger className='w-full md:w-80'>
-                  <SelectValue placeholder='Выберите проект' />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Фильтры и поиск */}
-      <div className='flex gap-4'>
+      <div className='grid grid-cols-[256px_1fr] gap-4'>
         {/* Левая панель фильтров */}
-        <div className='w-64 flex-shrink-0'>
+        <div className='w-64'>
           <Card>
             <CardHeader>
               <CardTitle className='text-base'>Фильтры</CardTitle>
@@ -656,24 +631,24 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
         </div>
 
         {/* Основной контент */}
-        <div className='flex-1'>
+        <div className='min-w-0'>
           {/* Сетка шаблонов */}
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
-            {filteredTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                onInstall={openInstallDialog}
-                onDelete={handleDeleteTemplate}
-                isInstalling={installingTemplate === template.id}
-                showAdminActions={true}
-              />
-            ))}
-          </div>
-
-          {/* Пустое состояние */}
-          {filteredTemplates.length === 0 && (
-            <Card>
+          {filteredTemplates.length > 0 ? (
+            <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'>
+              {filteredTemplates.map((template) => (
+                <TemplateCard
+                  key={template.id}
+                  template={template}
+                  onInstall={openInstallDialog}
+                  onDelete={handleDeleteTemplate}
+                  isInstalling={installingTemplate === template.id}
+                  showAdminActions={true}
+                />
+              ))}
+            </div>
+          ) : (
+            /* Пустое состояние */
+            <Card className='w-full'>
               <CardContent className='flex flex-col items-center justify-center py-12'>
                 <Search className='mb-4 h-12 w-12 text-muted-foreground' />
                 <h3 className='mb-2 text-lg font-semibold'>Шаблоны не найдены</h3>
@@ -862,6 +837,49 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                 )}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Модальное окно успешной установки */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className='sm:max-w-[425px]'>
+          <DialogHeader>
+            <div className='mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20'>
+              <CheckCircle className='h-6 w-6 text-green-600 dark:text-green-400' />
+            </div>
+            <DialogTitle className='text-center text-xl'>
+              Шаблон успешно установлен
+            </DialogTitle>
+          </DialogHeader>
+          <div className='space-y-4 py-4'>
+            <p className='text-center text-sm text-muted-foreground'>
+              Шаблон <span className='font-semibold text-foreground'>"{installedTemplateName || 'шаблон'}"</span> успешно установлен в проект. 
+              Теперь вы можете настроить workflow в конструкторе.
+            </p>
+          </div>
+          <div className='flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'>
+            <Button
+              variant='outline'
+              onClick={() => setShowSuccessDialog(false)}
+              className='sm:w-auto'
+            >
+              Закрыть
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedProjectId && installedWorkflowId) {
+                  router.push(`/dashboard/projects/${selectedProjectId}/workflow?workflowId=${installedWorkflowId}`);
+                } else if (selectedProjectId) {
+                  router.push(`/dashboard/projects/${selectedProjectId}/workflow`);
+                }
+                setShowSuccessDialog(false);
+                setInstalledTemplateName(null);
+              }}
+              className='sm:w-auto'
+            >
+              Перейти в конструктор
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -12,7 +12,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -143,7 +142,18 @@ export function UserCreateDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className='space-y-4'>
+        <form 
+          onSubmit={handleSubmit} 
+          onKeyDown={(e) => {
+            // Enter отправляет форму только если форма валидна
+            if (e.key === 'Enter' && !e.shiftKey && (formData.email || formData.phone)) {
+              e.preventDefault();
+              handleSubmit(e as any);
+            }
+            // ESC закрывает диалог (обрабатывается Radix UI автоматически)
+          }}
+          className='space-y-4'
+        >
           <div className='grid grid-cols-2 gap-4'>
             <div className='space-y-2'>
               <Label htmlFor='firstName'>Имя</Label>
@@ -206,11 +216,54 @@ export function UserCreateDialog({
               <Calendar className='h-4 w-4' />
               Дата рождения (необязательно)
             </Label>
-            <DatePicker
-              value={formData.birthDate || ''}
-              onChange={(val) =>
-                setFormData({ ...formData, birthDate: val || '' })
-              }
+            <Input
+              id='birthDate'
+              type='text'
+              placeholder='DD.MM.YYYY'
+              value={formData.birthDate?.includes('-') 
+                ? formData.birthDate.split('T')[0].split('-').reverse().join('.')
+                : formData.birthDate || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Удаляем все кроме цифр
+                const digits = value.replace(/\D/g, '');
+                
+                // Форматируем как DD.MM.YYYY
+                let formatted = '';
+                if (digits.length <= 2) {
+                  formatted = digits;
+                } else if (digits.length <= 4) {
+                  formatted = `${digits.slice(0, 2)}.${digits.slice(2)}`;
+                } else {
+                  formatted = `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 8)}`;
+                }
+                
+                // Валидация дня (01-31)
+                const day = formatted.slice(0, 2);
+                if (day && day.length === 2 && (parseInt(day) > 31 || parseInt(day) < 1)) {
+                  return;
+                }
+                
+                // Валидация месяца (01-12)
+                const month = formatted.slice(3, 5);
+                if (month && month.length === 2 && (parseInt(month) > 12 || parseInt(month) < 1)) {
+                  return;
+                }
+                
+                // Если дата полная, конвертируем в ISO формат
+                if (formatted.length === 10) {
+                  const [d, m, y] = formatted.split('.');
+                  const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                  if (!isNaN(date.getTime())) {
+                    const isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+                    setFormData({ ...formData, birthDate: isoDate });
+                    return;
+                  }
+                }
+                
+                setFormData({ ...formData, birthDate: formatted.length > 0 ? formatted : '' });
+              }}
+              maxLength={10}
             />
           </div>
         </form>

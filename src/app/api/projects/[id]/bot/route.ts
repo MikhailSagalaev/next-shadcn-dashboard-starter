@@ -123,13 +123,35 @@ export async function GET(
       }
     }
 
-    // Формируем ответ
+    // Получаем botToken из проекта (если он там есть)
+    const projectBotToken = (project as any)?.botToken || null;
+    const botSettingsToken = botSettings?.botToken || null;
+    // Используем токен из botSettings или проекта
+    const finalBotToken = botSettingsToken || projectBotToken || null;
+    
+    logger.info('Bot token resolution', {
+      projectId: id,
+      hasBotSettings: !!botSettings,
+      botSettingsToken: botSettingsToken ? '***' + botSettingsToken.slice(-4) : 'null',
+      projectBotToken: projectBotToken ? '***' + projectBotToken.slice(-4) : 'null',
+      finalBotToken: finalBotToken ? '***' + finalBotToken.slice(-4) : 'null'
+    });
+    
+    // Формируем ответ - botToken должен быть явно указан после spread, чтобы перезаписать null
     const response = {
-      ...botSettings,
+      ...(botSettings || {}),
+      botToken: finalBotToken, // Явно устанавливаем botToken после spread
       welcomeBonusAmount,
-      botUsername,
+      botUsername: botUsername || (project as any)?.botUsername || null,
       widgetSettings
     };
+
+    logger.info('API response structure', {
+      projectId: id,
+      hasBotToken: !!response.botToken,
+      botTokenLength: response.botToken?.length || 0,
+      responseKeys: Object.keys(response)
+    });
 
     return NextResponse.json(response, { headers: createCorsHeaders(request) });
   } catch (error) {

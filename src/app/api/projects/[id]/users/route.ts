@@ -15,6 +15,8 @@ import { withApiRateLimit, withValidation } from '@/lib';
 import { createUserSchema, validateWithSchema } from '@/lib/validation/schemas';
 import { z } from 'zod';
 import { normalizePhone, isValidNormalizedPhone } from '@/lib/phone';
+import { getCurrentAdmin } from '@/lib/auth';
+import { ProjectService } from '@/lib/services/project.service';
 
 const getQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1).optional(),
@@ -27,7 +29,15 @@ async function getHandler(
   context: { params: Promise<{ id: string }>; validatedQuery?: any }
 ) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
+    
+    // Проверяем доступ к проекту
+    await ProjectService.verifyProjectAccess(id, admin.sub);
 
     // Парсим параметры напрямую из URL
     const url = new URL(request.url);
@@ -154,7 +164,16 @@ async function getHandler(
     });
   } catch (error) {
     const { id } = await context.params;
-    logger.error('Ошибка получения пользователей', { projectId: id, error });
+    
+    // Обработка ошибок доступа
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
+    logger.error('Ошибка получения пользователей', { 
+      projectId: id, 
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+    });
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
       { status: 500 }
@@ -167,7 +186,16 @@ async function postHandler(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
+    
+    // Проверяем доступ к проекту
+    await ProjectService.verifyProjectAccess(id, admin.sub);
+
     const body = await request.json();
 
     // Проверяем существование проекта
@@ -229,7 +257,8 @@ async function postHandler(
       }
     }
 
-    // Создаем пользователя
+    // Создаем пользователя неактивным по умолчанию
+    // Пользователь станет активным только после взаимодействия с ботом
     const newUser = await db.user.create({
       data: {
         projectId: id,
@@ -237,7 +266,8 @@ async function postHandler(
         lastName: validated.lastName || null,
         email: validated.email || null,
         phone: validated.phone || null,
-        birthDate: validated.birthDate ? new Date(validated.birthDate) : null
+        birthDate: validated.birthDate ? new Date(validated.birthDate) : null,
+        isActive: false
       }
     });
 

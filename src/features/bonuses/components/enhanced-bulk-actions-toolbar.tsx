@@ -21,9 +21,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import {
   ChevronDown,
-  Plus,
-  Minus,
-  Settings,
   Mail,
   MessageSquare,
   X,
@@ -36,7 +33,6 @@ interface EnhancedBulkActionsToolbarProps {
   onClearSelection: () => void;
   onShowRichNotifications: () => void;
   onShowBasicNotifications?: () => void;
-  onBulkBonusAction?: (action: 'ADD' | 'DEDUCT' | 'SET') => void;
   onDeleteSelected?: () => void;
 }
 
@@ -46,7 +42,6 @@ export function EnhancedBulkActionsToolbar({
   onClearSelection,
   onShowRichNotifications,
   onShowBasicNotifications,
-  onBulkBonusAction,
   onDeleteSelected
 }: EnhancedBulkActionsToolbarProps) {
   if (selectedCount === 0) {
@@ -65,37 +60,6 @@ export function EnhancedBulkActionsToolbar({
               {selectedCount}
             </Badge>
           </div>
-
-          {/* Действия с бонусами */}
-          {onBulkBonusAction && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant='outline' size='sm'>
-                  Бонусы
-                  <ChevronDown className='ml-1 h-4 w-4' />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align='end'
-                side='top'
-                sideOffset={8}
-                className='z-[80]'
-              >
-                <DropdownMenuItem onClick={() => onBulkBonusAction('ADD')}>
-                  <Plus className='mr-2 h-4 w-4 text-green-500' />
-                  Начислить бонусы
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onBulkBonusAction('DEDUCT')}>
-                  <Minus className='mr-2 h-4 w-4 text-red-500' />
-                  Списать бонусы
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onBulkBonusAction('SET')}>
-                  <Settings className='mr-2 h-4 w-4 text-blue-500' />
-                  Установить баланс
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
 
           {/* Уведомления */}
           <DropdownMenu>

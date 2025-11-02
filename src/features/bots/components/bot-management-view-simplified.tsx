@@ -251,7 +251,16 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
             <div>
               <CardTitle>Подключение бота</CardTitle>
               <CardDescription>
-                Получите токен у @BotFather в Telegram
+                Получите токен у{' '}
+                <a 
+                  href="https://t.me/botfather" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary underline hover:text-primary/80"
+                >
+                  @BotFather
+                </a>{' '}
+                в Telegram
               </CardDescription>
             </div>
             <div className='flex items-center gap-2'>
@@ -279,21 +288,79 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
             <div className='flex space-x-2'>
               <Input
                 id='botToken'
-                value={editingToken ? tokenForm.botToken : '••••••••••••••••'}
+                value={
+                  editingToken
+                    ? tokenForm.botToken
+                    : project?.botToken
+                      ? project.botToken.replace(/./g, '•')
+                      : ''
+                }
                 onChange={(e) =>
                   setTokenForm({ ...tokenForm, botToken: e.target.value })
                 }
                 disabled={!editingToken}
                 type={editingToken ? 'text' : 'password'}
-                placeholder='1234567890:ABCdefGHIjklmnoPQRstuvwxyz'
+                placeholder={
+                  project?.botToken
+                    ? undefined
+                    : '1234567890:ABCdefGHIjklmnoPQRstuvwxyz'
+                }
               />
-              <Button
-                variant='outline'
-                onClick={() => setEditingToken(!editingToken)}
-                disabled={saving}
-              >
-                <Edit className='h-4 w-4' />
-              </Button>
+              {!editingToken && project?.botToken && (
+                <Button
+                  variant='outline'
+                  size='icon'
+                  onClick={() => {
+                    // Подтягиваем токен из проекта при входе в режим редактирования
+                    if (project?.botToken && !tokenForm.botToken) {
+                      setTokenForm({
+                        botToken: project.botToken,
+                        botUsername: project.botUsername || ''
+                      });
+                    }
+                    setEditingToken(true);
+                  }}
+                  title="Редактировать токен"
+                >
+                  <Edit className='h-4 w-4' />
+                </Button>
+              )}
+              {!editingToken && !project?.botToken && (
+                <Button
+                  variant='outline'
+                  onClick={() => setEditingToken(true)}
+                  disabled={saving}
+                >
+                  <Edit className='h-4 w-4 mr-2' />
+                  Добавить токен
+                </Button>
+              )}
+              {editingToken && (
+                <>
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    onClick={() => {
+                      setEditingToken(false);
+                      setTokenForm({
+                        botToken: project?.botToken || '',
+                        botUsername: project?.botUsername || ''
+                      });
+                    }}
+                    disabled={saving}
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    variant='default'
+                    size='sm'
+                    onClick={handleSaveToken}
+                    disabled={saving}
+                  >
+                    {saving ? 'Сохранение...' : 'Сохранить'}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 

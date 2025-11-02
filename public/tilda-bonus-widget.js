@@ -74,7 +74,11 @@
       // Архитектурные улучшения
       errorRecoveryAttempts: 0, // Количество попыток восстановления после ошибок
       lastErrorTime: 0, // Время последней ошибки
-      healthCheckTimer: null // Таймер проверки здоровья
+      healthCheckTimer: null, // Таймер проверки здоровья
+      // Хранение оригинальных стилей поля промокода
+      originalPromoStyles: null, // Сохраненные оригинальные стили .t-inputpromocode__wrapper
+      intervals: [], // Массив интервалов для очистки
+      eventListeners: [] // Массив обработчиков событий для очистки
     },
 
     // Инициализация виджета
@@ -137,6 +141,9 @@
 
       // Отслеживаем ввод email/телефона
       this.observeUserInput();
+
+      // Отслеживаем авторизацию Tilda
+      this.observeTildaAuth();
 
       // Загружаем сохраненные данные пользователя из localStorage
       this.loadUserDataFromStorage();
@@ -2213,6 +2220,34 @@
         return;
       }
 
+      // Сохраняем оригинальные стили поля промокода при первом обращении
+      if (tildaPromoWrapper && !this.state.originalPromoStyles) {
+        try {
+          // Сохраняем все инлайн-стили из атрибута style
+          const inlineStyle = tildaPromoWrapper.getAttribute('style') || '';
+          
+          // Сохраняем вычисленные стили для критически важных свойств
+          const computedStyle = window.getComputedStyle(tildaPromoWrapper);
+          this.state.originalPromoStyles = {
+            inline: inlineStyle,
+            display: computedStyle.display,
+            width: computedStyle.width,
+            position: computedStyle.position,
+            margin: computedStyle.margin,
+            padding: computedStyle.padding,
+            border: computedStyle.border,
+            borderRadius: computedStyle.borderRadius,
+            backgroundColor: computedStyle.backgroundColor,
+            color: computedStyle.color,
+            boxSizing: computedStyle.boxSizing
+          };
+
+          this.log('✅ Сохранены оригинальные стили поля промокода Tilda');
+        } catch (error) {
+          this.log('⚠️ Ошибка сохранения стилей поля промокода:', error);
+        }
+      }
+
       // Очищаем промокод из window.tcart при переключении
       if (typeof window.tcart !== 'undefined' && window.tcart.promocode) {
         delete window.tcart.promocode;
@@ -2238,10 +2273,27 @@
           console.log('✅ switchMode: скрыт bonus-content-area');
         }
 
-        // Показываем оригинальное поле промокода Tilda (без изменения стилей)
-        if (tildaPromoWrapper) {
+        // Восстанавливаем оригинальные стили поля промокода Tilda
+        if (tildaPromoWrapper && this.state.originalPromoStyles) {
+          try {
+            // Восстанавливаем инлайн-стили из атрибута style
+            if (this.state.originalPromoStyles.inline) {
+              tildaPromoWrapper.setAttribute('style', this.state.originalPromoStyles.inline);
+            } else {
+              // Если инлайн-стилей не было, устанавливаем минимально необходимые
+              tildaPromoWrapper.style.display = this.state.originalPromoStyles.display || 'block';
+              tildaPromoWrapper.style.width = this.state.originalPromoStyles.width || '100%';
+            }
+            
+            console.log('✅ switchMode: восстановлены оригинальные стили поля промокода Tilda');
+          } catch (error) {
+            // Если не удалось восстановить, устанавливаем базовые стили
+            tildaPromoWrapper.style.display = 'block';
+            this.log('⚠️ Ошибка восстановления стилей, установлены базовые:', error);
+          }
+        } else if (tildaPromoWrapper) {
+          // Если стили не были сохранены, просто показываем элемент
           tildaPromoWrapper.style.display = 'block';
-          console.log('✅ switchMode: показано поле промокода Tilda');
         }
       } else {
         // Переключаемся на режим бонусов
@@ -2255,15 +2307,185 @@
           console.log('✅ switchMode: показан bonus-content-area');
         }
 
-        // Скрываем поле промокода Tilda
+        // Скрываем поле промокода Tilda, сохраняя остальные стили
         if (tildaPromoWrapper) {
-          tildaPromoWrapper.style.display = 'none';
-          console.log('✅ switchMode: скрыто поле промокода Tilda');
+          // Сохраняем текущие стили перед скрытием
+          if (!this.state.originalPromoStyles) {
+            const inlineStyle = tildaPromoWrapper.getAttribute('style') || '';
+            const computedStyle = window.getComputedStyle(tildaPromoWrapper);
+            this.state.originalPromoStyles = {
+              inline: inlineStyle,
+              display: computedStyle.display,
+              width: computedStyle.width,
+              position: computedStyle.position,
+              margin: computedStyle.margin,
+              padding: computedStyle.padding,
+              border: computedStyle.border,
+              borderRadius: computedStyle.borderRadius,
+              backgroundColor: computedStyle.backgroundColor,
+              color: computedStyle.color,
+              boxSizing: computedStyle.boxSizing
+            };
+          }
+
+          // Скрываем только через display, сохраняя остальные стили
+          const currentStyle = tildaPromoWrapper.getAttribute('style') || '';
+          // Если в стиле уже есть display, заменяем его, иначе добавляем
+          if (currentStyle.includes('display')) {
+            tildaPromoWrapper.setAttribute(
+              'style',
+              currentStyle.replace(/display\s*:\s*[^;]+/gi, 'display: none')
+            );
+          } else {
+            tildaPromoWrapper.setAttribute(
+              'style',
+              (currentStyle ? currentStyle + '; ' : '') + 'display: none'
+            );
+          }
+
+          console.log('✅ switchMode: скрыто поле промокода Tilda с сохранением стилей');
         }
       }
 
       // Сбрасываем применённые бонусы
       this.resetAppliedBonuses();
+    },
+
+    // Отслеживание авторизации Tilda
+    observeTildaAuth: function () {
+      const self = this;
+      
+      // Проверяем наличие tilda_members_profile при загрузке
+      const checkTildaProfile = () => {
+        if (typeof window !== 'undefined' && window.tilda_members_profile) {
+          const profile = window.tilda_members_profile;
+          const email = profile.login || null;
+          const phone = profile.phone || null;
+
+          if (email || phone) {
+            const currentEmail = self.state.userEmail || localStorage.getItem('tilda_user_email');
+            const currentPhone = self.state.userPhone || localStorage.getItem('tilda_user_phone');
+
+            // Если данные изменились, обновляем состояние
+            if (email !== currentEmail || phone !== currentPhone) {
+              self.log('🔄 Обнаружена авторизация Tilda через tilda_members_profile');
+              
+              // Обновляем состояние
+              if (email) {
+                self.state.userEmail = email;
+                self.safeSetStorage('tilda_user_email', email);
+              }
+              if (phone) {
+                self.state.userPhone = phone;
+                self.safeSetStorage('tilda_user_phone', phone);
+              }
+
+              // Обновляем виджет
+              self.updateWidgetState();
+              
+              // Загружаем баланс
+              self.loadUserBalanceDebounced({
+                email: email || self.state.userEmail,
+                phone: phone || self.state.userPhone
+              });
+            }
+          }
+        }
+      };
+
+      // Проверяем сразу при инициализации
+      checkTildaProfile();
+
+      // Отслеживаем изменения window.tilda_members_profile через MutationObserver
+      if (typeof window !== 'undefined') {
+        let lastProfile = null;
+        
+        const observeProfile = () => {
+          try {
+            const currentProfile = window.tilda_members_profile;
+            
+            // Сравниваем только login и phone
+            if (currentProfile && (
+              currentProfile.login !== lastProfile?.login ||
+              currentProfile.phone !== lastProfile?.phone
+            )) {
+              self.log('🔄 Обнаружено изменение window.tilda_members_profile');
+              checkTildaProfile();
+              lastProfile = {
+                login: currentProfile.login,
+                phone: currentProfile.phone
+              };
+            }
+          } catch (error) {
+            // Игнорируем ошибки
+          }
+        };
+
+        // Проверяем периодически (каждые 2 секунды)
+        const profileCheckInterval = setInterval(() => {
+          if (!self.state.isDestroyed) {
+            observeProfile();
+          } else {
+            clearInterval(profileCheckInterval);
+          }
+        }, 2000);
+
+        // Сохраняем интервал для очистки
+        if (!self.state.intervals) {
+          self.state.intervals = [];
+        }
+        self.state.intervals.push(profileCheckInterval);
+      }
+
+      // Отслеживаем события storage (localStorage/cookies изменения)
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        const storageHandler = (e) => {
+          // Проверяем изменения в localStorage связанные с авторизацией Tilda
+          if (e.key === 'tilda_user_email' || e.key === 'tilda_user_phone' || !e.key) {
+            self.log('🔄 Обнаружено изменение в localStorage');
+            setTimeout(() => {
+              self.updateWidgetState();
+            }, 100);
+          }
+        };
+
+        window.addEventListener('storage', storageHandler);
+
+        // Сохраняем обработчик для удаления
+        if (!self.state.eventListeners) {
+          self.state.eventListeners = [];
+        }
+        self.state.eventListeners.push({
+          element: window,
+          event: 'storage',
+          handler: storageHandler
+        });
+      }
+
+      // Отслеживаем открытие корзины (когда пользователь может авторизоваться)
+      const cartWindow = document.querySelector('.t706__cartwin');
+      if (cartWindow) {
+        const cartObserver = self.createObserver(() => {
+          // При открытии корзины проверяем авторизацию
+          if (cartWindow.style.display !== 'none' && cartWindow.offsetParent !== null) {
+            setTimeout(() => {
+              checkTildaProfile();
+            }, 500);
+          }
+        }, {
+          attributes: true,
+          attributeFilter: ['style', 'class']
+        });
+
+        if (cartObserver) {
+          cartObserver.observe(cartWindow, {
+            attributes: true,
+            attributeFilter: ['style', 'class']
+          });
+        }
+      }
+
+      self.log('✅ Отслеживание авторизации Tilda настроено');
     },
 
     // Наблюдение за вводом пользователя
@@ -2378,7 +2600,39 @@
       try {
         this.log('🔍 Ищем контактные данные пользователя...');
 
-        // Из localStorage
+        // 1. Проверяем window.tilda_members_profile (приоритетно)
+        if (typeof window !== 'undefined' && window.tilda_members_profile) {
+          try {
+            const profile = window.tilda_members_profile;
+            const email = profile.login || null;
+            const phone = profile.phone || null;
+
+            if (email || phone) {
+              this.log('✅ Найдены контакты в window.tilda_members_profile:', {
+                hasEmail: !!email,
+                hasPhone: !!phone,
+                emailValue: email ? email.substring(0, 3) + '***' : 'пусто',
+                phoneValue: phone ? phone.substring(0, 3) + '***' : 'пусто'
+              });
+
+              // Сохраняем в localStorage для последующего использования
+              if (email) {
+                this.state.userEmail = email;
+                this.safeSetStorage('tilda_user_email', email);
+              }
+              if (phone) {
+                this.state.userPhone = phone;
+                this.safeSetStorage('tilda_user_phone', phone);
+              }
+
+              return { email, phone };
+            }
+          } catch (error) {
+            this.log('⚠️ Ошибка чтения tilda_members_profile:', error);
+          }
+        }
+
+        // 2. Из localStorage
         const savedEmail = localStorage.getItem('tilda_user_email');
         const savedPhone = localStorage.getItem('tilda_user_phone');
 
@@ -2390,7 +2644,7 @@
           return { email: savedEmail, phone: savedPhone };
         }
 
-        // Из полей формы
+        // 3. Из полей формы
         const emailField = document.querySelector(
           'input[name="email"], input[type="email"], input[name="Email"]'
         );

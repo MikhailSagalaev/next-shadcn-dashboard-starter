@@ -95,6 +95,11 @@ async function handlePOST(
     }
 
     // Отправляем уведомления массово
+    // Извлекаем данные из metadata, если они там есть, иначе из body напрямую
+    const imageUrl = body.metadata?.imageUrl || body.imageUrl;
+    const buttons = body.metadata?.buttons || body.buttons;
+    const parseMode = body.metadata?.parseMode || body.parseMode || 'Markdown';
+
     const result = await ProjectNotificationService.sendBulk(
       projectId,
       userIds,
@@ -104,8 +109,9 @@ async function handlePOST(
         title: body.title,
         message: body.message,
         metadata: {
-          imageUrl: body.imageUrl,
-          buttons: body.buttons,
+          imageUrl,
+          buttons,
+          parseMode,
           priority: body.priority || 'medium'
         }
       }

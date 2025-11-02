@@ -49,8 +49,18 @@ export const MessageNode = memo(({ data }: NodeProps) => {
           </div>
         )}
       </CardContent>
-      <Handle type='target' position={Position.Top} className='!bg-blue-500' />
-      <Handle type='source' position={Position.Bottom} className='!bg-blue-500' />
+      <Handle 
+        type='target' 
+        position={Position.Top} 
+        className='!bg-blue-500 !w-4 !h-4 !border-2' 
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      />
+      <Handle 
+        type='source' 
+        position={Position.Bottom} 
+        className='!bg-blue-500 !w-4 !h-4 !border-2' 
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      />
     </Card>
   );
 });

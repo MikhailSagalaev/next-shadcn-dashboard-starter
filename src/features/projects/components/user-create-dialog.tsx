@@ -244,22 +244,74 @@ export function UserCreateDialog({
               <FormField
                 control={form.control}
                 name='birthDate'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className='flex items-center space-x-2'>
-                      <Calendar className='h-4 w-4' />
-                      <span>Дата рождения</span>
-                    </FormLabel>
-                    <FormControl>
-                      <DatePicker
-                        value={field.value || ''}
-                        onChange={(val) => field.onChange(val || '')}
-                        disabled={loading}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const formatDate = (value: string) => {
+                    // Удаляем все кроме цифр
+                    const digits = value.replace(/\D/g, '');
+                    
+                    // Форматируем как DD.MM.YYYY
+                    if (digits.length <= 2) {
+                      return digits;
+                    } else if (digits.length <= 4) {
+                      return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+                    } else {
+                      return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 8)}`;
+                    }
+                  };
+
+                  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+                    const formatted = formatDate(e.target.value);
+                    
+                    // Валидация дня (01-31)
+                    const day = formatted.slice(0, 2);
+                    if (day && (parseInt(day) > 31 || parseInt(day) < 1)) {
+                      return;
+                    }
+                    
+                    // Валидация месяца (01-12)
+                    const month = formatted.slice(3, 5);
+                    if (month && (parseInt(month) > 12 || parseInt(month) < 1)) {
+                      return;
+                    }
+                    
+                    // Если дата полная, конвертируем в ISO формат
+                    if (formatted.length === 10) {
+                      const [d, m, y] = formatted.split('.');
+                      const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                      if (!isNaN(date.getTime())) {
+                        const isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+                        field.onChange(isoDate);
+                        return;
+                      }
+                    }
+                    
+                    // Сохраняем промежуточное значение
+                    field.onChange(formatted.length > 0 ? formatted : '');
+                  };
+
+                  return (
+                    <FormItem>
+                      <FormLabel className='flex items-center space-x-2'>
+                        <Calendar className='h-4 w-4' />
+                        <span>Дата рождения</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type='text'
+                          placeholder='DD.MM.YYYY'
+                          value={field.value?.includes('-') 
+                            ? field.value.split('T')[0].split('-').reverse().join('.')
+                            : field.value || ''}
+                          onChange={handleDateChange}
+                          onBlur={field.onBlur}
+                          disabled={loading}
+                          maxLength={10}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 

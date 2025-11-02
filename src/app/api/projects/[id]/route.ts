@@ -10,13 +10,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { ProjectService } from '@/lib/services/project.service';
+import { getCurrentAdmin } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
+
+    // Проверяем доступ к проекту
+    await ProjectService.verifyProjectAccess(id, admin.sub);
 
     // Получаем проект со связанными данными
     const project = await db.project.findUnique({
@@ -46,6 +56,12 @@ export async function GET(
     return NextResponse.json(response);
   } catch (error) {
     const { id } = await context.params;
+    
+    // Обработка ошибок доступа
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     logger.error('Ошибка получения проекта', {
       projectId: id,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -62,7 +78,16 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
+    
+    // Проверяем доступ к проекту
+    await ProjectService.verifyProjectAccess(id, admin.sub);
+
     const body = await request.json();
 
     const updatedProject = await db.project.update({
@@ -116,6 +141,12 @@ export async function PUT(
     return NextResponse.json(updatedProject);
   } catch (error) {
     const { id } = await context.params;
+    
+    // Обработка ошибок доступа
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     logger.error('Ошибка обновления проекта', { projectId: id, error });
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
@@ -129,7 +160,15 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await context.params;
+
+    // Проверяем доступ к проекту
+    await ProjectService.verifyProjectAccess(id, admin.sub);
 
     // Проверяем существование проекта
     const project = await db.project.findUnique({
@@ -153,6 +192,12 @@ export async function DELETE(
     );
   } catch (error) {
     const { id } = await context.params;
+    
+    // Обработка ошибок доступа
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     logger.error('Ошибка удаления проекта', { projectId: id, error });
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },

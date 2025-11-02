@@ -11,6 +11,9 @@ export interface Project {
   createdAt: Date;
   updatedAt: Date;
 
+  // Мультитенантность
+  ownerId?: string | null;
+
   // Настройки бота (самостоятельная настройка владельцем)
   botToken?: string | null;
   botUsername?: string | null;
@@ -22,6 +25,10 @@ export interface Project {
   webhookLogs?: WebhookLog[];
   bonusLevels?: BonusLevel[];
   referralProgram?: ReferralProgram | null;
+  owner?: {
+    id: string;
+    email: string;
+  };
 
   _count?: {
     users: number;

@@ -103,6 +103,26 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             }
           })()
         });
+      } else if (response.status === 403) {
+        // Проект не принадлежит текущему админу
+        toast({
+          title: 'Доступ запрещен',
+          description: 'Этот проект не принадлежит вашему аккаунту. Если проект был создан до обновления, его нужно привязать через миграцию.',
+          variant: 'destructive'
+        });
+      } else if (response.status === 404) {
+        toast({
+          title: 'Проект не найден',
+          description: 'Проект с указанным ID не существует',
+          variant: 'destructive'
+        });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        toast({
+          title: 'Ошибка загрузки',
+          description: errorData.error || 'Не удалось загрузить данные проекта',
+          variant: 'destructive'
+        });
       }
     } catch (error) {
       console.error('Ошибка загрузки проекта:', error);
@@ -202,6 +222,33 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           <div className='h-8 w-1/3 rounded bg-gray-200'></div>
           <div className='h-4 w-1/2 rounded bg-gray-200'></div>
           <div className='h-32 rounded bg-gray-200'></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className='flex flex-1 flex-col items-center justify-center space-y-4 p-8'>
+        <div className='text-center space-y-4 max-w-md'>
+          <h3 className='text-lg font-semibold'>Проект не найден</h3>
+          <p className='text-muted-foreground text-sm'>
+            Не удалось загрузить данные проекта. Возможно, проект не принадлежит вашему аккаунту.
+          </p>
+          <div className='p-4 bg-yellow-50 border border-yellow-200 rounded-md text-left'>
+            <p className='text-sm text-yellow-800'>
+              <strong>Примечание:</strong> Если проект был создан до обновления, 
+              его нужно привязать к вашему аккаунту через миграцию. 
+              Запустите: <code className='bg-yellow-100 px-2 py-1 rounded'>npm run migrate-owners migrate &lt;ваш_email&gt;</code>
+            </p>
+          </div>
+          <Button
+            variant='outline'
+            onClick={() => router.push('/dashboard/projects')}
+          >
+            <ArrowLeft className='mr-2 h-4 w-4' />
+            Вернуться к проектам
+          </Button>
         </div>
       </div>
     );

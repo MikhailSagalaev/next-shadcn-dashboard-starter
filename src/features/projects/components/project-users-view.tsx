@@ -1071,10 +1071,6 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         selectedCount={selectedUsers.length}
         onClearSelection={() => setSelectedUsers([])}
         onShowRichNotifications={() => setShowRichNotificationDialog(true)}
-        onBulkBonusAction={(action) => {
-          setBulkOperation(action === 'ADD' ? 'bonus_award' : 'bonus_deduct');
-          setShowBulkDialog(true);
-        }}
         onDeleteSelected={handleDeleteSelected}
       />
 

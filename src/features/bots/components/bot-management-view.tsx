@@ -139,12 +139,37 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
 
       // Загружаем проект
       const projectResponse = await fetch(`/api/projects/${projectId}`);
+      let projectData = null;
       if (projectResponse.ok) {
-        const projectData = await projectResponse.json();
+        projectData = await projectResponse.json();
         setProject(projectData);
+      }
+
+      // Загружаем настройки бота (токен может быть здесь)
+      const botSettingsResponse = await fetch(`/api/projects/${projectId}/bot`);
+      if (botSettingsResponse.ok) {
+        const botSettingsData = await botSettingsResponse.json();
+        // Обновляем проект с токеном из bot settings, если его нет в проекте
+        const botToken = botSettingsData.botToken || projectData?.botToken || '';
+        const botUsername = botSettingsData.botUsername || projectData?.botUsername || '';
+        
+        if (projectData) {
+          setProject({
+            ...projectData,
+            botToken: botToken || projectData.botToken,
+            botUsername: botUsername || projectData.botUsername
+          });
+        }
+        
         setTokenForm({
-          botToken: projectData.botToken || '',
-          botUsername: projectData.botUsername || ''
+          botToken: botToken,
+          botUsername: botUsername
+        });
+      } else {
+        // Если bot settings не найдены, используем данные из проекта
+        setTokenForm({
+          botToken: projectData?.botToken || '',
+          botUsername: projectData?.botUsername || ''
         });
       }
 
@@ -405,7 +430,16 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                 Подключение бота
               </CardTitle>
               <CardDescription>
-                Получите токен у @BotFather в Telegram
+                Получите токен у{' '}
+                <a 
+                  href="https://t.me/botfather" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary underline hover:text-primary/80"
+                >
+                  @BotFather
+                </a>{' '}
+                в Telegram
               </CardDescription>
             </div>
             {isConfigured && (
@@ -422,16 +456,28 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
               <Input
                 id="botToken"
                 type={editingToken || showToken ? 'text' : 'password'}
-                value={tokenForm.botToken}
+                value={
+                  editingToken
+                    ? tokenForm.botToken
+                    : project?.botToken && project.botToken.length > 0
+                      ? showToken
+                        ? project.botToken
+                        : project.botToken.replace(/./g, '•')
+                      : ''
+                }
                 onChange={(e) =>
                   setTokenForm({ ...tokenForm, botToken: e.target.value })
                 }
-                placeholder="Вставьте токен от @BotFather"
+                placeholder={
+                  project?.botToken && project.botToken.length > 0
+                    ? undefined
+                    : 'Вставьте токен от @BotFather (https://t.me/botfather)'
+                }
                 disabled={!editingToken}
               />
               {!editingToken ? (
                 <>
-                  {tokenForm.botToken && (
+                  {project?.botToken && (
                     <Button
                       variant="outline"
                       size="icon"
@@ -444,7 +490,16 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => setEditingToken(true)}
+                    onClick={() => {
+                      // Подтягиваем токен из проекта при входе в режим редактирования
+                      if (project?.botToken && !tokenForm.botToken) {
+                        setTokenForm({
+                          botToken: project.botToken,
+                          botUsername: project.botUsername || ''
+                        });
+                      }
+                      setEditingToken(true);
+                    }}
                     title="Редактировать токен"
                   >
                     <Edit className="h-4 w-4" />
@@ -457,6 +512,7 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                     size="sm"
                     onClick={() => {
                       setEditingToken(false);
+                      setShowToken(false);
                       setTokenForm({
                         botToken: project?.botToken || '',
                         botUsername: project?.botUsername || ''

@@ -52,7 +52,12 @@ export const TriggerNode = memo(({ data }: NodeProps) => {
           {getTriggerDisplayText()}
         </p>
       </CardContent>
-      <Handle type='source' position={Position.Bottom} className='!bg-green-500' />
+      <Handle 
+        type='source' 
+        position={Position.Bottom} 
+        className='!bg-green-500 !w-4 !h-4 !border-2' 
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      />
     </Card>
   );
 });

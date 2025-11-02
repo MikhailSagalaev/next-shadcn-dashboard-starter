@@ -21,6 +21,7 @@ model Project {
   botStatus       BotStatus        @default(INACTIVE) @map("bot_status")
   botToken        String?          @map("bot_token")
   botUsername     String?          @map("bot_username")
+  ownerId         String?          @map("owner_id")
   bonusLevels     BonusLevel[]
   botSettings     BotSettings?
   referralProgram ReferralProgram?
@@ -31,6 +32,7 @@ model Project {
   users           User[]
   webhookLogs     WebhookLog[]
   notifications   Notification[]
+  owner           AdminAccount?    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@map("projects")
 }
@@ -215,6 +217,7 @@ model AdminAccount {
   metadata     Json? // Для хранения reset токенов и другой мета-информации
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  projects     Project[]
 
   @@map("admin_accounts")
 }

@@ -24,7 +24,12 @@ export const EndNode = memo(({ data }: NodeProps) => {
         </CardTitle>
         <span className='text-xs text-muted-foreground'>Завершение</span>
       </CardHeader>
-      <Handle type='target' position={Position.Top} className='!bg-gray-500' />
+      <Handle 
+        type='target' 
+        position={Position.Top} 
+        className='!bg-gray-500 !w-4 !h-4 !border-2' 
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      />
     </Card>
   );
 });

@@ -42,8 +42,18 @@ export const ActionNode = memo(({ data }: NodeProps) => {
       <CardContent className='space-y-2'>
         <p className='text-sm text-muted-foreground line-clamp-2'>{getActionDisplayText()}</p>
       </CardContent>
-      <Handle type='target' position={Position.Top} className='!bg-purple-500' />
-      <Handle type='source' position={Position.Bottom} className='!bg-purple-500' />
+      <Handle 
+        type='target' 
+        position={Position.Top} 
+        className='!bg-purple-500 !w-4 !h-4 !border-2' 
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      />
+      <Handle 
+        type='source' 
+        position={Position.Bottom} 
+        className='!bg-purple-500 !w-4 !h-4 !border-2' 
+        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      />
     </Card>
   );
 });
