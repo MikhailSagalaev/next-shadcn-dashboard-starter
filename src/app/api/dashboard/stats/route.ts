@@ -11,28 +11,50 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { botManager } from '@/lib/telegram/bot-manager';
 import { logger } from '@/lib/logger';
+import { getCurrentAdmin } from '@/lib/auth';
 
 // GET /api/dashboard/stats - Получение статистики системы
 export async function GET() {
   try {
+    // Получаем текущего администратора
+    const admin = await getCurrentAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Фильтр по владельцу для всех запросов
+    const ownerFilter = { ownerId: admin.sub };
+
     // Получаем общую статистику
     const [totalProjects, totalUsers, totalBonuses, recentProjects] =
       await Promise.all([
-        // Общее количество проектов
-        db.project.count(),
+        // Количество проектов владельца
+        db.project.count({
+          where: ownerFilter
+        }),
 
-        // Общее количество пользователей
-        db.user.count(),
-
-        // Общая сумма начисленных бонусов
-        db.bonus.aggregate({
-          _sum: {
-            amount: true
+        // Количество пользователей в проектах владельца
+        db.user.count({
+          where: {
+            project: ownerFilter
           }
         }),
 
-        // Последние проекты с информацией
+        // Сумма начисленных бонусов для пользователей проектов владельца
+        db.bonus.aggregate({
+          _sum: {
+            amount: true
+          },
+          where: {
+            user: {
+              project: ownerFilter
+            }
+          }
+        }),
+
+        // Последние проекты владельца с информацией
         db.project.findMany({
+          where: ownerFilter,
           take: 5,
           orderBy: {
             createdAt: 'desc'
@@ -65,21 +87,28 @@ export async function GET() {
         })
       ]);
 
-    // Подсчитываем активных ботов из менеджера
+    // Подсчитываем активных ботов из менеджера только для проектов владельца
     let activeBotsFromManager = 0;
     const allBots = botManager.getAllBots();
+    const ownerProjects = await db.project.findMany({
+      where: ownerFilter,
+      select: { id: true }
+    });
+    const ownerProjectIds = new Set(ownerProjects.map(p => p.id));
+    
     for (const [projectId, botInstance] of allBots) {
-      if (botInstance.isActive) {
+      if (ownerProjectIds.has(projectId) && botInstance.isActive) {
         activeBotsFromManager++;
       }
     }
 
-    // Подсчитываем активных ботов из БД
+    // Подсчитываем активных ботов из БД только для проектов владельца
     // Боты считаются активными если:
     // 1. botStatus === 'ACTIVE' ИЛИ
     // 2. есть botToken И botSettings.isActive === true
     const activeBotsFromDb = await db.project.count({
       where: {
+        ...ownerFilter,
         OR: [
           { botStatus: 'ACTIVE' },
           {
@@ -121,6 +150,7 @@ export async function GET() {
     logger.info(
       'Статистика дашборда загружена',
       {
+        adminId: admin.sub,
         totalProjects,
         totalUsers,
         activeBots,
