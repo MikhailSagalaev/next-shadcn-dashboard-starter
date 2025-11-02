@@ -251,6 +251,30 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     // Сначала пытаемся найти пользователя
     let user = await UserService.findUserByContact(projectId, email, phone);
 
+    // ✅ КРИТИЧНО: Если пользователь найден, но email в запросе отличается от email в базе
+    // Обновляем email, чтобы сохранить актуальные данные пользователя
+    if (user && email && email.trim() && user.email !== email.trim()) {
+      logger.info('📧 ОБНОВЛЕНИЕ EMAIL ПОЛЬЗОВАТЕЛЯ', {
+        projectId,
+        orderId,
+        userId: user.id,
+        oldEmail: user.email,
+        newEmail: email.trim(),
+        component: 'tilda-webhook-email-update'
+      });
+
+      // Обновляем email пользователя
+      user = await db.user.update({
+        where: { id: user.id },
+        data: { email: email.trim() },
+        include: {
+          project: true,
+          bonuses: true,
+          transactions: true
+        }
+      }) as any;
+    }
+
     // Если пользователь не найден, создаем его
     if (!user) {
       const nameParts = name ? name.trim().split(' ') : ['', ''];
