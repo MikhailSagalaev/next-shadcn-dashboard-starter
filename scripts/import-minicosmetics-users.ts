@@ -150,77 +150,88 @@ async function importMiniCosmeticsUsers() {
         continue;
       }
 
-      // Проверяем, существует ли уже пользователь
+      // Проверяем, существует ли уже пользователь в этом проекте по ВСЕМ возможным критериям
       let existingUser = null;
       let searchCriteria = '';
 
-      if (userData.email) {
-        existingUser = await UserService.findUserByContact(projectId, userData.email);
-        searchCriteria = `email: ${userData.email}`;
-      }
-      if (!existingUser && userData.phone) {
-        existingUser = await UserService.findUserByContact(projectId, undefined, userData.phone);
-        searchCriteria = `phone: ${userData.phone}`;
-      }
-      if (!existingUser && userData.telegramId) {
+      // Проверяем по telegramId (самый уникальный)
+      if (userData.telegramId) {
         existingUser = await db.user.findFirst({
           where: {
             projectId,
             telegramId: userData.telegramId
           }
         });
-        searchCriteria = `telegramId: ${userData.telegramId}`;
+        if (existingUser) {
+          searchCriteria = `telegramId: ${userData.telegramId}`;
+        }
+      }
+
+      // Если не нашли по telegramId, проверяем по email
+      if (!existingUser && userData.email) {
+        existingUser = await db.user.findFirst({
+          where: {
+            projectId,
+            email: userData.email
+          }
+        });
+        if (existingUser) {
+          searchCriteria = `email: ${userData.email}`;
+        }
+      }
+
+      // Если не нашли по email, проверяем по телефону
+      if (!existingUser && userData.phone) {
+        existingUser = await db.user.findFirst({
+          where: {
+            projectId,
+            phone: userData.phone
+          }
+        });
+        if (existingUser) {
+          searchCriteria = `phone: ${userData.phone}`;
+        }
       }
 
       if (existingUser) {
-        // Пользователь существует - обновляем данные, если они пустые
-        const updateData: any = {};
+        // Пользователь уже существует - пропускаем без обновления
+        console.log(`⚠️ Пользователь уже существует: ${searchCriteria}`);
+        skippedCount++;
+        continue;
+      }
 
-        if (!existingUser.firstName && userData.firstName) {
-          updateData.firstName = userData.firstName;
-        }
-        if (!existingUser.lastName && userData.lastName) {
-          updateData.lastName = userData.lastName;
-        }
-        if (!existingUser.phone && userData.phone) {
-          updateData.phone = userData.phone;
-        }
-        if (!existingUser.email && userData.email) {
-          updateData.email = userData.email;
-        }
-        if (!existingUser.telegramId && userData.telegramId) {
-          updateData.telegramId = userData.telegramId;
-        }
-        if (!existingUser.telegramUsername && userData.telegramUsername) {
-          updateData.telegramUsername = userData.telegramUsername;
-        }
+      // Перед созданием дополнительно проверяем на конфликты
+      const conflictChecks = [];
 
-        // Обновляем UTM метки, если они пустые
-        if (!existingUser.utmSource && userData.utmSource) {
-          updateData.utmSource = userData.utmSource;
+      if (userData.email) {
+        const emailConflict = await db.user.findFirst({
+          where: { projectId, email: userData.email }
+        });
+        if (emailConflict) {
+          conflictChecks.push(`email уже занят: ${userData.email}`);
         }
-        if (!existingUser.utmMedium && userData.utmMedium) {
-          updateData.utmMedium = userData.utmMedium;
-        }
-        if (!existingUser.utmCampaign && userData.utmCampaign) {
-          updateData.utmCampaign = userData.utmCampaign;
-        }
-        if (!existingUser.utmTerm && userData.utmTerm) {
-          updateData.utmTerm = userData.utmTerm;
-        }
-        if (!existingUser.utmContent && userData.utmContent) {
-          updateData.utmContent = userData.utmContent;
-        }
+      }
 
-        if (Object.keys(updateData).length > 0) {
-          await db.user.update({
-            where: { id: existingUser.id },
-            data: updateData
-          });
-          console.log(`🔄 Обновлен пользователь: ${searchCriteria} (${Object.keys(updateData).join(', ')})`);
-        } else {
-          console.log(`⚠️ Пользователь уже существует и обновление не требуется: ${searchCriteria}`);
+      if (userData.phone) {
+        const phoneConflict = await db.user.findFirst({
+          where: { projectId, phone: userData.phone }
+        });
+        if (phoneConflict) {
+          conflictChecks.push(`phone уже занят: ${userData.phone}`);
         }
+      }
+
+      if (userData.telegramId) {
+        const telegramConflict = await db.user.findFirst({
+          where: { projectId, telegramId: userData.telegramId }
+        });
+        if (telegramConflict) {
+          conflictChecks.push(`telegramId уже занят: ${userData.telegramId}`);
+        }
+      }
+
+      if (conflictChecks.length > 0) {
+        console.log(`⚠️ Конфликт данных для пользователя ${csvUser.ID}: ${conflictChecks.join(', ')}`);
         skippedCount++;
         continue;
       }
@@ -231,7 +242,7 @@ async function importMiniCosmeticsUsers() {
         importedCount++;
         console.log(`✅ Импортирован пользователь: ${newUser.firstName || ''} ${newUser.lastName || ''} (${newUser.email || newUser.phone || newUser.telegramUsername || 'ID: ' + newUser.id})`);
       } catch (createError) {
-        console.error(`❌ Ошибка создания пользователя ${csvUser.ID} (${searchCriteria}):`, createError);
+        console.error(`❌ Ошибка создания пользователя ${csvUser.ID}:`, createError);
         errorCount++;
         continue;
       }
