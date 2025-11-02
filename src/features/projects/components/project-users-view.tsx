@@ -171,9 +171,36 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     [loadUsers]
   );
 
-  const handleUserProfile = useCallback((user: DisplayUser) => {
+  const handleUserProfile = useCallback(async (user: DisplayUser) => {
+    // Устанавливаем базовые данные пользователя
     setProfileUser(user as unknown as UserWithBonuses);
-  }, []);
+    
+    // Загружаем свежий баланс из транзакций для унификации с ботом
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/users/${user.id}/balance`,
+        { cache: 'no-store' }
+      );
+      if (response.ok) {
+        const balanceData = await response.json();
+        if (balanceData.success && balanceData.balanceDetails) {
+          // Обновляем баланс в профиле из транзакций
+          setProfileUser((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              bonusBalance: Number(balanceData.balanceDetails.currentBalance),
+              totalEarned: Number(balanceData.balanceDetails.totalEarned),
+              totalSpent: Number(balanceData.balanceDetails.totalSpent)
+            };
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки баланса пользователя:', error);
+      // В случае ошибки оставляем данные из списка пользователей
+    }
+  }, [projectId]);
 
   // Stats data
   const statsData = {
