@@ -2204,6 +2204,35 @@
 
     // Определяет и обновляет состояние виджета на основе данных пользователя
     updateWidgetState: function () {
+      // Сначала проверяем tilda_members_profile, если еще не проверяли или данные изменились
+      if (typeof window !== 'undefined' && window.tilda_members_profile) {
+        try {
+          const profile = window.tilda_members_profile;
+          const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
+          const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
+          
+          // Обновляем state если данные есть и еще не сохранены или изменились
+          if (email && email !== this.state.userEmail) {
+            this.state.userEmail = email;
+            this.safeSetStorage('tilda_user_email', email);
+            this.log('📧 Обновлен email из tilda_members_profile в updateWidgetState');
+          }
+          if (phone && phone !== this.state.userPhone) {
+            this.state.userPhone = phone;
+            this.safeSetStorage('tilda_user_phone', phone);
+            this.log('📱 Обновлен phone из tilda_members_profile в updateWidgetState');
+          }
+          if (!email && this.state.userEmail && !localStorage.getItem('tilda_user_email')) {
+            this.state.userEmail = null;
+          }
+          if (!phone && this.state.userPhone && !localStorage.getItem('tilda_user_phone')) {
+            this.state.userPhone = null;
+          }
+        } catch (error) {
+          this.log('⚠️ Ошибка проверки tilda_members_profile в updateWidgetState:', error);
+        }
+      }
+      
       // Проверяем данные в состоянии виджета (загруженные из localStorage)
       const hasStoredData = this.state.userEmail || this.state.userPhone;
 
