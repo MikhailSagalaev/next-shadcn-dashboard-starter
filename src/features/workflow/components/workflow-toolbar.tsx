@@ -171,7 +171,7 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
 
   return (
     <TooltipProvider>
-      <div className='flex flex-col gap-3 rounded-md border bg-background p-3 shadow-lg max-h-[calc(100vh-120px)]'>
+      <div className='flex flex-col gap-3 rounded-md border bg-background p-3 shadow-lg max-h-[calc(100vh-120px)] h-[calc(100vh-120px)]'>
         <div className='flex flex-col gap-2 flex-shrink-0'>
           <span className='text-xs font-medium uppercase text-muted-foreground'>Добавить ноду</span>
           <Input
@@ -182,7 +182,7 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
           />
         </div>
 
-        <ScrollArea className='flex-1 pr-2'>
+        <ScrollArea className='flex-1 pr-2 min-h-0'>
           {filteredCategories.length === 0 ? (
             <div className='flex flex-col items-center gap-2 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground'>
               <p>Ничего не найдено. Попробуйте изменить запрос.</p>

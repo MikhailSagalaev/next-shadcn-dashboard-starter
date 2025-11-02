@@ -110,7 +110,10 @@ async function getHandler(
         totalBonuses: Number(Number(user.totalEarned || 0).toFixed(2)),
         activeBonuses: roundedBalance,
         lastActivity: user.updatedAt,
-        currentLevel: user.currentLevel || user.level?.name || undefined
+        currentLevel: user.currentLevel || user.level?.name || undefined,
+        // Telegram данные
+        telegramId: user.telegramId,
+        telegramUsername: user.telegramUsername || null
       };
     });
 

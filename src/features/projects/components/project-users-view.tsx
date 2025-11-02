@@ -888,6 +888,26 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     {profileUser.isActive ? 'Активный' : 'Неактивный'}
                   </p>
                 </div>
+                {(profileUser.telegramId || profileUser.telegramUsername) && (
+                  <>
+                    <div>
+                      <Label className='text-sm font-medium'>Telegram Username</Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.telegramUsername ? `@${profileUser.telegramUsername}` : 'Не указан'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className='text-sm font-medium'>Telegram ID</Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.telegramId 
+                          ? (typeof profileUser.telegramId === 'bigint' 
+                              ? profileUser.telegramId.toString() 
+                              : String(profileUser.telegramId))
+                          : 'Не указан'}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
