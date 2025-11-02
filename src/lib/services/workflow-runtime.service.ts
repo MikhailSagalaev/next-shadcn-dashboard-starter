@@ -353,7 +353,11 @@ export class WorkflowRuntimeService {
 
       console.log('🔧 Checking for waiting execution', { chatId, waitType, trigger });
 
-      if (chatId && waitType) {
+      // ✅ КРИТИЧНО: Для /start также проверяем waiting execution, чтобы не создавать новый, если есть ожидающий
+      // Для /start команды waitType будет null, но мы всё равно проверяем наличие waiting execution
+      const shouldCheckWaiting = chatId && (waitType || trigger === 'start');
+
+      if (shouldCheckWaiting) {
         logger.info('🔍 Поиск waiting execution', {
           projectId,
           chatId,
@@ -416,7 +420,11 @@ export class WorkflowRuntimeService {
               projectId,
               status: 'waiting',
               telegramChatId: chatId,
-              waitType: waitType === 'input' ? ({ in: ['input', 'contact'] } as any) : waitType
+              // ✅ КРИТИЧНО: Для /start команды ищем любой waiting execution (contact, input, callback)
+              // Для других триггеров ищем по конкретному waitType
+              waitType: waitType === 'input' 
+                ? ({ in: ['input', 'contact'] } as any)
+                : waitType || (trigger === 'start' ? ({ in: ['contact', 'input', 'callback'] } as any) : null)
             },
             orderBy: {
               startedAt: 'desc' // Берем самый последний waiting execution
@@ -461,6 +469,36 @@ export class WorkflowRuntimeService {
           waitingExecutionType: typeof waitingExecution
         });
 
+        if (waitingExecution) {
+          // ✅ КРИТИЧНО: Если это /start команда, а не ожидание контакта/email, отменяем waiting execution
+          // и создаём новый, так как пользователь хочет начать заново
+          if (trigger === 'start' && waitingExecution.waitType && !context.message?.contact && !context.message?.text?.includes('@')) {
+            console.log('🔄 /start received while waiting for contact/email - canceling waiting execution and starting fresh', {
+              executionId: waitingExecution.id,
+              waitType: waitingExecution.waitType
+            });
+            
+            // Отменяем waiting execution
+            await db.workflowExecution.update({
+              where: { id: waitingExecution.id },
+              data: {
+                status: 'finished',
+                finishedAt: new Date()
+              }
+            });
+            
+            // Инвалидируем кеш
+            await this.invalidateWaitingExecutionCache(
+              projectId,
+              chatId!,
+              waitingExecution.waitType as 'contact' | 'input' | 'callback'
+            );
+            
+            // Продолжаем с созданием нового execution
+            waitingExecution = null;
+          }
+        }
+        
         if (waitingExecution) {
           console.log('✅ ENTERING WAITING EXECUTION BLOCK', { executionId: waitingExecution.id });
           console.log('🔧 About to resume workflow', {
@@ -616,8 +654,22 @@ export class WorkflowRuntimeService {
               if (waitingExecution.waitType === 'contact' || waitingExecution.waitType === 'input') {
                 const currentNodeId = waitingExecution.currentNodeId;
                 if (currentNodeId) {
+                  console.log('🔧 Determining next node for contact/input resume', {
+                    currentNodeId,
+                    waitType: waitingExecution.waitType,
+                    contactReceived: contactPhone || contactEmail
+                  });
+                  
                   // Получаем следующую ноду по connections
                   const nextNodeId = await (processor as any).getNextNodeId(currentNodeId);
+                  
+                  console.log('🔧 Next node determined from connections', {
+                    currentNodeId,
+                    nextNodeId,
+                    nextNodeType: nextNodeId ? versionToUse.nodes[nextNodeId]?.type : null,
+                    nextNodeLabel: nextNodeId ? versionToUse.nodes[nextNodeId]?.data?.label : null
+                  });
+                  
                   if (nextNodeId) {
                     console.log('🔧 Resuming workflow from next node after contact/input', {
                       currentNodeId,
@@ -642,7 +694,8 @@ export class WorkflowRuntimeService {
                   } else {
                     console.error('❌ No next node found for waiting execution', {
                       currentNodeId,
-                      waitType: waitingExecution.waitType
+                      waitType: waitingExecution.waitType,
+                      availableNodes: Object.keys(versionToUse.nodes)
                     });
                     return false;
                   }

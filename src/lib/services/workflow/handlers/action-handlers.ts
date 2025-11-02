@@ -435,7 +435,7 @@ export class RequestContactHandler extends BaseNodeHandler {
       await WorkflowRuntimeService.cacheWaitingExecution(
         context.executionId,
         context.projectId,
-        context.telegramChatId || '',
+        context.telegram.chatId || '',
         'contact'
       );
 

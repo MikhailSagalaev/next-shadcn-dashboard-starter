@@ -1739,8 +1739,8 @@ export function ProjectIntegrationView({
                                 })
                               }
                               placeholder='10px 20px'
-                            />
-                          </div>
+                      />
+                    </div>
                   </div>
 
                         <h4 className='text-sm font-medium'>Шрифты</h4>

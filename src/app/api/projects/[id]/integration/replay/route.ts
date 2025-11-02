@@ -143,9 +143,14 @@ export async function POST(
       baseUrl = process.env.NEXT_PUBLIC_APP_URL;
 
       if (!baseUrl) {
-        const host = request.headers.get('host');
+        const host = request.headers.get('host') || '';
         const protocol = request.headers.get('x-forwarded-proto') || 'http';
-        baseUrl = `${protocol}://${host}`;
+        if (host) {
+          baseUrl = `${protocol}://${host}`;
+        } else {
+          // Fallback: если host не указан, используем env или localhost
+          baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        }
       }
 
       targetUrl = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;

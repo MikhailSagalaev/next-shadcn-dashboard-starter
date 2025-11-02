@@ -102,7 +102,7 @@ export class MessageHandler extends BaseNodeHandler {
           // Только если значение не undefined/null
           Object.entries(userVariables).forEach(([key, value]) => {
             if (value !== undefined && value !== null) {
-              additionalVariables[key] = String(value);
+            additionalVariables[key] = String(value);
             } else {
               console.warn(`⚠️ Skipping user variable ${key} because value is ${value}`);
             }
@@ -253,7 +253,7 @@ export class MessageHandler extends BaseNodeHandler {
           await WorkflowRuntimeService.cacheWaitingExecution(
             context.executionId,
             context.projectId,
-            context.telegramChatId || '',
+            context.telegram.chatId || '',
             needsWaiting.waitType
           );
 

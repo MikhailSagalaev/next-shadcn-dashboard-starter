@@ -15,7 +15,7 @@ async function main() {
     const projects = await prisma.project.findMany({
       where: {
         isActive: true,
-        botStatus: 'running'
+        botStatus: 'ACTIVE'
       },
       select: {
         id: true,
