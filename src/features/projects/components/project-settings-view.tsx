@@ -73,7 +73,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     domain: '',
     bonusPercentage: 1.0,
     bonusExpiryDays: 365,
-    // bonusBehavior: 'SPEND_AND_EARN', // временно отключено
+    bonusBehavior: 'SPEND_AND_EARN' as 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY',
     isActive: true,
     welcomeBonusAmount: 0
   });
@@ -91,7 +91,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           domain: projectData.domain || '',
           bonusPercentage: Number(projectData.bonusPercentage) || 1.0,
           bonusExpiryDays: projectData.bonusExpiryDays || 365,
-          // bonusBehavior: projectData.bonusBehavior || 'SPEND_AND_EARN',
+          bonusBehavior: (projectData.bonusBehavior || 'SPEND_AND_EARN') as 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY',
           isActive: projectData.isActive ?? true,
           welcomeBonusAmount: (() => {
             const metaStr = projectData?.referralProgram?.description || null;
@@ -351,7 +351,33 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                     />
                   </div>
 
-                  {/* Настройка поведения бонусов временно отключена */}
+                  <div className='space-y-2'>
+                    <Label htmlFor='bonusBehavior'>Поведение бонусов</Label>
+                    <Select
+                      value={formData.bonusBehavior}
+                      onValueChange={(value: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY') =>
+                        setFormData({ ...formData, bonusBehavior: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder='Выберите поведение бонусов' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='SPEND_AND_EARN'>
+                          💰 Списание и начисление (SPEND_AND_EARN)
+                        </SelectItem>
+                        <SelectItem value='SPEND_ONLY'>
+                          💸 Только списание (SPEND_ONLY)
+                        </SelectItem>
+                        <SelectItem value='EARN_ONLY'>
+                          🎁 Только начисление (EARN_ONLY)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className='text-muted-foreground text-xs'>
+                      Определяет, можно ли списывать бонусы при покупке и начислять ли новые бонусы
+                    </p>
+                  </div>
                 </div>
 
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
