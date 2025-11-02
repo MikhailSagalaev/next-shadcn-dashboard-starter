@@ -150,14 +150,21 @@ export async function GET(
           }),
           db.user
             .findMany({
-              where: { projectId: id },
+              where: { 
+                projectId: id,
+                // Фильтруем только пользователей с транзакциями за последние 30 дней
+                transactions: {
+                  some: {
+                    createdAt: { gte: thirtyDaysAgo }
+                  }
+                }
+              },
               include: {
                 transactions: {
                   where: { createdAt: { gte: thirtyDaysAgo } },
                   select: { type: true, amount: true }
                 }
-              },
-              take: 10
+              }
             })
             .then(
               (
@@ -171,24 +178,38 @@ export async function GET(
                 }>
               ) =>
                 users
-                  .map((u) => ({
-                    id: u.id,
-                    first_name: u.firstName,
-                    last_name: u.lastName,
-                    email: u.email,
-                    phone: u.phone,
-                    transaction_count: u.transactions.length,
-                    total_earned: u.transactions
+                  .map((u) => {
+                    const totalEarned = u.transactions
                       .filter((t) => t.type === 'EARN')
-                      .reduce((sum, t) => sum + Number(t.amount), 0),
-                    total_spent: u.transactions
+                      .reduce((sum, t) => sum + Number(t.amount), 0);
+                    const totalSpent = u.transactions
                       .filter((t) => t.type === 'SPEND')
-                      .reduce((sum, t) => sum + Number(t.amount), 0)
-                  }))
+                      .reduce((sum, t) => sum + Number(t.amount), 0);
+                    
+                    return {
+                      id: u.id,
+                      first_name: u.firstName,
+                      last_name: u.lastName,
+                      email: u.email,
+                      phone: u.phone,
+                      transaction_count: u.transactions.length,
+                      total_earned: totalEarned,
+                      total_spent: totalSpent,
+                      // Добавляем общую активность для сортировки
+                      activity_score: u.transactions.length * 100 + totalEarned
+                    };
+                  })
                   .sort(
-                    (a: any, b: any) =>
-                      b.transaction_count - a.transaction_count
+                    (a: any, b: any) => {
+                      // Сортируем по общему счету активности (количество транзакций + сумма начисленных)
+                      // Если счет равен, сортируем по количеству транзакций
+                      if (b.activity_score !== a.activity_score) {
+                        return b.activity_score - a.activity_score;
+                      }
+                      return b.transaction_count - a.transaction_count;
+                    }
                   )
+                  .slice(0, 10) // Берем только топ-10 после сортировки
             ),
           db.user
             .groupBy({
