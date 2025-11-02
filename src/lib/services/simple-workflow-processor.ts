@@ -344,8 +344,9 @@ export class SimpleWorkflowProcessor {
 
   /**
    * Получает следующий нод по connections
+   * ✅ Публичный метод для использования из workflow-runtime.service
    */
-  private async getNextNodeId(currentNodeId: string): Promise<string | null> {
+  async getNextNodeId(currentNodeId: string): Promise<string | null> {
     // Ищем connection где source - текущий нод
     const relevantConnections = Array.from(this.connectionsMap.values())
       .filter(connection => connection.source === currentNodeId);

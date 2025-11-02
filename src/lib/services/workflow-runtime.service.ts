@@ -531,15 +531,59 @@ export class WorkflowRuntimeService {
             // Create processor
             const processor = this.getWorkflowProcessor(projectId, versionToUse);
 
+            // ✅ КРИТИЧНО: Извлекаем контакт или email из входящего сообщения
+            let contactPhone: string | undefined;
+            let contactEmail: string | undefined;
+            let messageText: string | undefined;
+            
+            if (trigger === 'message' && context.message) {
+              // Проверяем, есть ли контакт в сообщении
+              if (context.message.contact) {
+                contactPhone = context.message.contact.phone_number;
+                logger.info('📞 Contact received from user', {
+                  phoneNumber: contactPhone,
+                  executionId: waitingExecution.id
+                });
+              } else if (context.message.text) {
+                // Если текст похож на email, используем его как email
+                const text = context.message.text.trim();
+                if (text.includes('@') && text.includes('.')) {
+                  contactEmail = text;
+                  logger.info('📧 Email received from user', {
+                    email: contactEmail,
+                    executionId: waitingExecution.id
+                  });
+                }
+                messageText = text;
+              }
+            }
+            
             // Resume execution context
             const resumedContext = await ExecutionContextManager.resumeContext(
               waitingExecution.id,
               chatId,
               context.from?.id,
               context.from?.username,
-              trigger === 'message' ? context.message?.text : undefined,
+              messageText,
               trigger === 'callback' ? context.callbackQuery?.data : undefined
             );
+            
+            // ✅ КРИТИЧНО: Сохраняем контакт/email в переменные для использования в workflow
+            if (contactPhone) {
+              await resumedContext.variables.set('contactReceived.phoneNumber', contactPhone, 'session');
+              await resumedContext.variables.set('contactReceived.type', 'phone', 'session');
+              logger.info('💾 Contact phone saved to variables', {
+                phoneNumber: contactPhone,
+                executionId: waitingExecution.id
+              });
+            } else if (contactEmail) {
+              await resumedContext.variables.set('contactReceived.email', contactEmail, 'session');
+              await resumedContext.variables.set('contactReceived.type', 'email', 'session');
+              logger.info('💾 Contact email saved to variables', {
+                email: contactEmail,
+                executionId: waitingExecution.id
+              });
+            }
 
             // For callback triggers, find the appropriate callback trigger node
             // instead of resuming from currentNodeId
@@ -566,16 +610,58 @@ export class WorkflowRuntimeService {
                 return false;
               }
             } else {
-              // For other trigger types, resume from current node
-              const nextNodeId = waitingExecution.currentNodeId;
-              if (nextNodeId) {
-                console.log('🔧 Resuming workflow from node', { nextNodeId });
-                await processor.resumeWorkflow(resumedContext, nextNodeId);
-                console.log('🔧 Workflow resumed successfully');
-                return true;
+              // ✅ КРИТИЧНО: Для waiting execution с waitType 'contact' или 'input'
+              // НЕ выполняем currentNodeId снова (это была нода, которая установила waiting)
+              // Вместо этого переходим к следующей ноде по connections
+              if (waitingExecution.waitType === 'contact' || waitingExecution.waitType === 'input') {
+                const currentNodeId = waitingExecution.currentNodeId;
+                if (currentNodeId) {
+                  // Получаем следующую ноду по connections
+                  const nextNodeId = await (processor as any).getNextNodeId(currentNodeId);
+                  if (nextNodeId) {
+                    console.log('🔧 Resuming workflow from next node after contact/input', {
+                      currentNodeId,
+                      nextNodeId,
+                      waitType: waitingExecution.waitType
+                    });
+                    
+                    // Сбрасываем waiting состояние перед возобновлением
+                    await db.workflowExecution.update({
+                      where: { id: waitingExecution.id },
+                      data: {
+                        status: 'running',
+                        waitType: null,
+                        waitPayload: null,
+                        currentNodeId: nextNodeId
+                      }
+                    });
+                    
+                    await processor.resumeWorkflow(resumedContext, nextNodeId);
+                    console.log('🔧 Workflow resumed successfully after contact/input');
+                    return true;
+                  } else {
+                    console.error('❌ No next node found for waiting execution', {
+                      currentNodeId,
+                      waitType: waitingExecution.waitType
+                    });
+                    return false;
+                  }
+                } else {
+                  console.error('❌ No current node ID in waiting execution');
+                  return false;
+                }
               } else {
-                console.error('❌ No current node ID in waiting execution');
-                return false;
+                // For other waiting types, resume from current node
+                const nextNodeId = waitingExecution.currentNodeId;
+                if (nextNodeId) {
+                  console.log('🔧 Resuming workflow from node', { nextNodeId });
+                  await processor.resumeWorkflow(resumedContext, nextNodeId);
+                  console.log('🔧 Workflow resumed successfully');
+                  return true;
+                } else {
+                  console.error('❌ No current node ID in waiting execution');
+                  return false;
+                }
               }
             }
           } catch (resumeError) {
