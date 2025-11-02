@@ -99,8 +99,7 @@ async function importMiniCosmeticsUsers() {
     .pipe(csv({
       separator: ',',
       quote: '"',
-      escape: '"',
-      skip_empty_lines: true
+      escape: '"'
     }));
 
   // Собираем все данные из CSV
@@ -153,11 +152,15 @@ async function importMiniCosmeticsUsers() {
 
       // Проверяем, существует ли уже пользователь
       let existingUser = null;
+      let searchCriteria = '';
+
       if (userData.email) {
         existingUser = await UserService.findUserByContact(projectId, userData.email);
+        searchCriteria = `email: ${userData.email}`;
       }
       if (!existingUser && userData.phone) {
         existingUser = await UserService.findUserByContact(projectId, undefined, userData.phone);
+        searchCriteria = `phone: ${userData.phone}`;
       }
       if (!existingUser && userData.telegramId) {
         existingUser = await db.user.findFirst({
@@ -166,19 +169,72 @@ async function importMiniCosmeticsUsers() {
             telegramId: userData.telegramId
           }
         });
+        searchCriteria = `telegramId: ${userData.telegramId}`;
       }
 
       if (existingUser) {
-        console.log(`⚠️ Пользователь уже существует: ${userData.email || userData.phone || userData.telegramId}`);
+        // Пользователь существует - обновляем данные, если они пустые
+        const updateData: any = {};
+
+        if (!existingUser.firstName && userData.firstName) {
+          updateData.firstName = userData.firstName;
+        }
+        if (!existingUser.lastName && userData.lastName) {
+          updateData.lastName = userData.lastName;
+        }
+        if (!existingUser.phone && userData.phone) {
+          updateData.phone = userData.phone;
+        }
+        if (!existingUser.email && userData.email) {
+          updateData.email = userData.email;
+        }
+        if (!existingUser.telegramId && userData.telegramId) {
+          updateData.telegramId = userData.telegramId;
+        }
+        if (!existingUser.telegramUsername && userData.telegramUsername) {
+          updateData.telegramUsername = userData.telegramUsername;
+        }
+
+        // Обновляем UTM метки, если они пустые
+        if (!existingUser.utmSource && userData.utmSource) {
+          updateData.utmSource = userData.utmSource;
+        }
+        if (!existingUser.utmMedium && userData.utmMedium) {
+          updateData.utmMedium = userData.utmMedium;
+        }
+        if (!existingUser.utmCampaign && userData.utmCampaign) {
+          updateData.utmCampaign = userData.utmCampaign;
+        }
+        if (!existingUser.utmTerm && userData.utmTerm) {
+          updateData.utmTerm = userData.utmTerm;
+        }
+        if (!existingUser.utmContent && userData.utmContent) {
+          updateData.utmContent = userData.utmContent;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await db.user.update({
+            where: { id: existingUser.id },
+            data: updateData
+          });
+          console.log(`🔄 Обновлен пользователь: ${searchCriteria} (${Object.keys(updateData).join(', ')})`);
+        } else {
+          console.log(`⚠️ Пользователь уже существует и обновление не требуется: ${searchCriteria}`);
+        }
         skippedCount++;
         continue;
       }
 
-      // Создаем пользователя
-      const newUser = await UserService.createUser(userData);
-      importedCount++;
-
-      console.log(`✅ Импортирован пользователь: ${newUser.firstName} ${newUser.lastName} (${newUser.email || newUser.phone || newUser.telegramUsername})`);
+      // Создаем нового пользователя
+      try {
+        const newUser = await UserService.createUser(userData);
+        importedCount++;
+        console.log(`✅ Импортирован пользователь: ${newUser.firstName || ''} ${newUser.lastName || ''} (${newUser.email || newUser.phone || newUser.telegramUsername || 'ID: ' + newUser.id})`);
+      } catch (createError) {
+        console.error(`❌ Ошибка создания пользователя ${csvUser.ID} (${searchCriteria}):`, createError);
+        errorCount++;
+        continue;
+      }
 
     } catch (error) {
       errorCount++;
