@@ -2416,38 +2416,68 @@
       // Проверяем наличие tilda_members_profile при загрузке
       const checkTildaProfile = () => {
         if (typeof window !== 'undefined' && window.tilda_members_profile) {
-          const profile = window.tilda_members_profile;
-          const email = profile.login || null;
-          const phone = profile.phone || null;
+          try {
+            const profile = window.tilda_members_profile;
+            // Очищаем email и phone от пустых строк
+            const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
+            const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
 
-          if (email || phone) {
-            const currentEmail = self.state.userEmail || localStorage.getItem('tilda_user_email');
-            const currentPhone = self.state.userPhone || localStorage.getItem('tilda_user_phone');
+            if (email || phone) {
+              const currentEmail = self.state.userEmail || localStorage.getItem('tilda_user_email') || null;
+              const currentPhone = self.state.userPhone || localStorage.getItem('tilda_user_phone') || null;
 
-            // Если данные изменились, обновляем состояние
-            if (email !== currentEmail || phone !== currentPhone) {
-              self.log('🔄 Обнаружена авторизация Tilda через tilda_members_profile');
-              
-              // Обновляем состояние
-              if (email) {
-                self.state.userEmail = email;
-                self.safeSetStorage('tilda_user_email', email);
+              // Проверяем, изменились ли данные (с учетом null и пустых строк)
+              const emailChanged = email !== currentEmail && (email || currentEmail);
+              const phoneChanged = phone !== currentPhone && (phone || currentPhone);
+
+              // Если данные изменились или еще не были сохранены
+              if (emailChanged || phoneChanged || (!currentEmail && !currentPhone && (email || phone))) {
+                self.log('🔄 Обнаружена авторизация Tilda через tilda_members_profile', {
+                  email: email ? email.substring(0, 3) + '***' : 'нет',
+                  phone: phone ? phone.substring(0, 3) + '***' : 'нет',
+                  hadEmail: !!currentEmail,
+                  hadPhone: !!currentPhone
+                });
+                
+                // Обновляем состояние
+                if (email) {
+                  self.state.userEmail = email;
+                  self.safeSetStorage('tilda_user_email', email);
+                } else {
+                  // Если email пустой, очищаем из state и localStorage
+                  self.state.userEmail = null;
+                  localStorage.removeItem('tilda_user_email');
+                }
+                if (phone) {
+                  self.state.userPhone = phone;
+                  self.safeSetStorage('tilda_user_phone', phone);
+                } else {
+                  // Если phone пустой, очищаем из state и localStorage
+                  self.state.userPhone = null;
+                  localStorage.removeItem('tilda_user_phone');
+                }
+
+                // Обновляем виджет
+                self.updateWidgetState();
+                
+                // Загружаем баланс
+                if (email || phone) {
+                  self.loadUserBalanceDebounced({
+                    email: email || null,
+                    phone: phone || null
+                  });
+                }
+              } else {
+                self.log('ℹ️ Данные tilda_members_profile не изменились');
               }
-              if (phone) {
-                self.state.userPhone = phone;
-                self.safeSetStorage('tilda_user_phone', phone);
-              }
-
-              // Обновляем виджет
-              self.updateWidgetState();
-              
-              // Загружаем баланс
-              self.loadUserBalanceDebounced({
-                email: email || self.state.userEmail,
-                phone: phone || self.state.userPhone
-              });
+            } else {
+              self.log('⚠️ tilda_members_profile не содержит email или phone');
             }
+          } catch (error) {
+            self.log('⚠️ Ошибка при проверке tilda_members_profile:', error);
           }
+        } else {
+          self.log('⚠️ window.tilda_members_profile не доступен');
         }
       };
 
@@ -2462,17 +2492,31 @@
           try {
             const currentProfile = window.tilda_members_profile;
             
-            // Сравниваем только login и phone
-            if (currentProfile && (
-              currentProfile.login !== lastProfile?.login ||
-              currentProfile.phone !== lastProfile?.phone
-            )) {
-              self.log('🔄 Обнаружено изменение window.tilda_members_profile');
-              checkTildaProfile();
-              lastProfile = {
-                login: currentProfile.login,
-                phone: currentProfile.phone
-              };
+            if (currentProfile) {
+              // Очищаем значения от пустых строк для сравнения
+              const currentLogin = currentProfile.login && currentProfile.login.trim() ? currentProfile.login.trim() : null;
+              const currentPhone = currentProfile.phone && currentProfile.phone.trim() ? currentProfile.phone.trim() : null;
+              const lastLogin = lastProfile?.login && lastProfile.login.trim() ? lastProfile.login.trim() : null;
+              const lastPhone = lastProfile?.phone && lastProfile.phone.trim() ? lastProfile.phone.trim() : null;
+              
+              // Сравниваем только login и phone (с учетом null)
+              if (currentLogin !== lastLogin || currentPhone !== lastPhone) {
+                self.log('🔄 Обнаружено изменение window.tilda_members_profile');
+                checkTildaProfile();
+                lastProfile = {
+                  login: currentProfile.login || '',
+                  phone: currentProfile.phone || ''
+                };
+              }
+            } else if (lastProfile) {
+              // Профиль был, но теперь его нет - очищаем состояние
+              self.log('🔄 window.tilda_members_profile удален');
+              self.state.userEmail = null;
+              self.state.userPhone = null;
+              localStorage.removeItem('tilda_user_email');
+              localStorage.removeItem('tilda_user_phone');
+              self.updateWidgetState();
+              lastProfile = null;
             }
           } catch (error) {
             // Игнорируем ошибки
