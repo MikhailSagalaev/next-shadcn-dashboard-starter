@@ -2662,8 +2662,9 @@
         if (typeof window !== 'undefined' && window.tilda_members_profile) {
           try {
             const profile = window.tilda_members_profile;
-            const email = profile.login || null;
-            const phone = profile.phone || null;
+            // Очищаем email и phone от пустых строк
+            const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
+            const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
 
             if (email || phone) {
               this.log('✅ Найдены контакты в window.tilda_members_profile:', {
@@ -2677,10 +2678,18 @@
               if (email) {
                 this.state.userEmail = email;
                 this.safeSetStorage('tilda_user_email', email);
+              } else {
+                // Если email пустой, очищаем из state и localStorage
+                this.state.userEmail = null;
+                localStorage.removeItem('tilda_user_email');
               }
               if (phone) {
                 this.state.userPhone = phone;
                 this.safeSetStorage('tilda_user_phone', phone);
+              } else {
+                // Если phone пустой, очищаем из state и localStorage
+                this.state.userPhone = null;
+                localStorage.removeItem('tilda_user_phone');
               }
 
               return { email, phone };
@@ -2773,8 +2782,15 @@
         if (data && data.success && data.user) {
           // Пользователь найден — монтируем виджет при необходимости и обновляем
           if (this.ensureWidgetMounted()) {
-            this.state.bonusBalance = data.balance || 0;
+            // Всегда обновляем баланс из API, даже если он 0
+            this.state.bonusBalance = Number(data.balance) || 0;
             this.state.levelInfo = data.levelInfo || null;
+
+            this.log('📊 Баланс загружен из API:', {
+              balance: this.state.bonusBalance,
+              telegramLinked: data.user.telegramLinked,
+              userId: data.user.id
+            });
 
             // Применяем кастомные стили виджета если есть
             if (this.state.widgetSettings) {
@@ -2802,6 +2818,7 @@
               localStorage.removeItem('tilda_telegram_linked');
               localStorage.removeItem('tilda_telegram_id');
               localStorage.removeItem('tilda_telegram_username');
+              this.log('⚠️ Telegram не привязан к аккаунту');
             }
 
             // Обновляем изначальную сумму корзины, если она ещё не установлена
@@ -2814,16 +2831,34 @@
               );
             }
 
+            // Обновляем отображение баланса
             this.updateBalanceDisplay();
+            
+            // Обновляем состояние виджета только для UI (статус верификации)
+            // НЕ вызываем loadUserBalance снова, т.к. баланс уже загружен
+            this.updateWidgetControls();
+            
             this.log(
-              'Баланс загружен:',
+              '✅ Баланс успешно загружен и применен:',
               this.state.bonusBalance,
               'Уровень:',
               this.state.levelInfo
             );
           }
         } else {
-          // Пользователь не найден/не авторизован — показываем плашку с приглашением зарегистрироваться
+          // Пользователь не найден/не авторизован
+          this.log('❌ Пользователь не найден в системе:', {
+            hasData: !!data,
+            success: data?.success,
+            hasUser: !!data?.user,
+            error: data?.error
+          });
+          
+          // Очищаем старые данные баланса
+          this.state.bonusBalance = 0;
+          this.updateBalanceDisplay();
+          
+          // Показываем плашку с приглашением зарегистрироваться
           this.showRegistrationPrompt();
         }
       } catch (error) {
