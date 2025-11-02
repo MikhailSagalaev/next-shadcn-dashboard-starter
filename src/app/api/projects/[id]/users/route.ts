@@ -98,21 +98,21 @@ async function getHandler(
         phone: user.phone,
         bonusBalance: roundedBalance,
         totalEarned: Number(Number(user.totalEarned || 0).toFixed(2)),
-        createdAt: user.registeredAt,
-        updatedAt: user.updatedAt,
+        createdAt: user.registeredAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
         avatar: `https://api.slingacademy.com/public/sample-users/${(index % 10) + 1}.png`,
         isActive: computedActive,
         // Дополнительные поля для project-users-view
         firstName: user.firstName,
         lastName: user.lastName,
-        birthDate: user.birthDate,
-        registeredAt: user.registeredAt,
+        birthDate: user.birthDate ? user.birthDate.toISOString() : null,
+        registeredAt: user.registeredAt.toISOString(),
         totalBonuses: Number(Number(user.totalEarned || 0).toFixed(2)),
         activeBonuses: roundedBalance,
-        lastActivity: user.updatedAt,
+        lastActivity: user.updatedAt.toISOString(),
         currentLevel: user.currentLevel || user.level?.name || undefined,
         // Telegram данные
-        telegramId: user.telegramId,
+        telegramId: user.telegramId ? user.telegramId.toString() : null,
         telegramUsername: user.telegramUsername || null
       };
     });

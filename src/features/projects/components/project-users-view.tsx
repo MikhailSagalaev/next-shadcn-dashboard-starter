@@ -820,6 +820,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         <DialogContent className='max-w-2xl'>
           <DialogHeader>
             <DialogTitle>Профиль пользователя</DialogTitle>
+            <DialogDescription>
+              Подробная информация о пользователе и его бонусном счёте
+            </DialogDescription>
           </DialogHeader>
           {profileUser && (
             <div className='space-y-6'>
