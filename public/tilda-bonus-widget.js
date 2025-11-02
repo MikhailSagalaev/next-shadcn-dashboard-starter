@@ -1517,6 +1517,62 @@
       // Поле промокода не нужно восстанавливать, т.к. мы его не скрывали
     },
 
+    // Показать сообщение об ошибке
+    showErrorMessage: function (errorMessage) {
+      try {
+        this.log('🚨 Показываем сообщение об ошибке:', errorMessage);
+
+        // Удаляем существующее сообщение если есть
+        const existingError = document.querySelector('.user-error-message');
+        if (existingError) {
+          existingError.remove();
+        }
+
+        // Ищем контейнер поля промокода
+        const promocodeWrapper = document.querySelector('.t-inputpromocode__wrapper');
+        if (!promocodeWrapper) {
+          this.log('Контейнер поля промокода не найден');
+          return;
+        }
+
+        // Создаем сообщение об ошибке
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'user-error-message';
+        errorDiv.style.cssText = `
+          background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+          color: #ffffff;
+          padding: 12px 16px;
+          border-radius: 8px;
+          margin-bottom: 12px;
+          text-align: center;
+          font-size: 14px;
+          font-family: system-ui, -apple-system, sans-serif;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          border: 1px solid rgba(255,255,255,0.2);
+        `;
+
+        errorDiv.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span style="font-size: 16px;">⚠️</span>
+            <span>${errorMessage}</span>
+          </div>
+        `;
+
+        // Вставляем перед полем промокода
+        promocodeWrapper.parentNode.insertBefore(errorDiv, promocodeWrapper);
+
+        // Автоматически скрываем через 5 секунд
+        setTimeout(() => {
+          if (errorDiv && errorDiv.parentNode) {
+            errorDiv.remove();
+          }
+        }, 5000);
+
+      } catch (error) {
+        this.log('Ошибка при показе сообщения об ошибке:', error);
+      }
+    },
+
     // Показать плашку с приглашением зарегистрироваться
     showRegistrationPrompt: function () {
       try {
@@ -3054,15 +3110,21 @@
             hasData: !!data,
             success: data?.success,
             hasUser: !!data?.user,
-            error: data?.error
+            error: data?.error,
+            details: data?.details
           });
-          
+
           // Очищаем старые данные баланса
           this.state.bonusBalance = 0;
           this.updateBalanceDisplay();
-          
-          // Показываем плашку с приглашением зарегистрироваться
-          this.showRegistrationPrompt();
+
+          // Показываем ошибку вместо плашки с приглашением зарегистрироваться
+          if (data?.error && data.error.includes('не найден')) {
+            this.showErrorMessage(data.error);
+          } else {
+            // Если это другая ошибка, показываем плашку с приглашением зарегистрироваться
+            this.showRegistrationPrompt();
+          }
         }
       } catch (error) {
         if (error && error.name === 'AbortError') {
