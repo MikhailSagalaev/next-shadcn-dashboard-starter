@@ -19,32 +19,13 @@ yarn install
 
 ### Шаг 3: Применить миграцию БД для email verification
 
-**⚠️ СНАЧАЛА ПРОВЕРЬТЕ, КАК ЗАПУЩЕН POSTGRESQL:**
+**Через psql напрямую:**
 ```bash
-# Проверить Docker контейнеры
-docker ps | grep postgres
-
-# Проверить, запущен ли контейнер bonus_system_db_prod
+psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
 ```
 
-**Способ 1: Через Docker контейнер (рекомендуется)**
+**Или через TypeScript скрипт:**
 ```bash
-# Если PostgreSQL в Docker контейнере bonus_system_db_prod
-docker exec -i bonus_system_db_prod psql -U bonus_admin -d bonus_system < prisma/migrations/add_email_verification_manual.sql
-```
-
-**Способ 2: Через psql на хосте**
-```bash
-# Если PostgreSQL на хосте напрямую
-psql -h localhost -p 5432 -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
-```
-
-**Способ 3: Через TypeScript скрипт (если app контейнер есть)**
-```bash
-# Если есть контейнер bonus_system_app_prod
-docker exec bonus_system_app_prod yarn tsx scripts/apply-email-verification-migration.ts
-
-# Или если запущено через PM2
 yarn tsx scripts/apply-email-verification-migration.ts
 ```
 
@@ -84,16 +65,9 @@ yarn build
 
 ### Шаг 7: Перезапустить приложение
 
-**Если используете PM2:**
 ```bash
-pm2 restart bonus-app
+pm2 reload all --update-env
 pm2 save
-```
-
-**Если используете Docker Compose:**
-```bash
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml down
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml up -d --build
 ```
 
 ### Шаг 8: Проверить что все работает
@@ -121,7 +95,7 @@ psql -h localhost -U bonus_admin -d bonus_system -c "\d admin_accounts" | grep e
 ```bash
 yarn install
 yarn build
-pm2 restart bonus-app
+pm2 reload all --update-env
 ```
 
 ### Проблема: "Column 'email_verified' does not exist"
@@ -135,7 +109,7 @@ psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_
 npx prisma generate
 
 # Перезапустить
-pm2 restart bonus-app
+pm2 reload all --update-env
 ```
 
 ### Проблема: Email не отправляются
