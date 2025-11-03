@@ -103,9 +103,8 @@ function AuthForm() {
         throw new Error(apiError);
       }
 
-      toast.success('Регистрация выполнена успешно');
-      router.push('/dashboard');
-      router.refresh();
+      toast.success(data.message || 'Регистрация выполнена успешно! Проверьте вашу электронную почту для подтверждения аккаунта.');
+      router.push('/auth/verify-email?email=' + encodeURIComponent(values.email));
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Ошибка регистрации';
       toast.error(message);

@@ -11,6 +11,7 @@ import { BaseNodeHandler } from './base-handler';
 import { ProjectVariablesService } from '@/lib/services/project-variables.service';
 import { UserVariablesService } from '../user-variables.service';
 import { QueryExecutor } from '../query-executor';
+import { logger } from '@/lib/logger';
 import type {
   WorkflowNode,
   WorkflowNodeType,
@@ -113,23 +114,25 @@ export class MessageHandler extends BaseNodeHandler {
             additionalVariables['user.expiringBonusesFormatted'] = String(userVariables['user.expiringBonusesFormatted']);
           }
 
-          // Логируем в консоль для отладки
-          console.log('🔥 DEBUG MESSAGE-HANDLER:');
-          console.log('   userVariables keys:', Object.keys(userVariables));
-          console.log('   expiringBonusesFormatted in userVariables:', 'user.expiringBonusesFormatted' in userVariables);
-          console.log('   expiringBonusesFormatted value:', userVariables['user.expiringBonusesFormatted']);
-          console.log('   additionalVariables keys:', Object.keys(additionalVariables));
-          console.log('   expiringBonusesFormatted in additionalVariables:', 'user.expiringBonusesFormatted' in additionalVariables);
-          console.log('   referralCount in additionalVariables:', 'user.referralCount' in additionalVariables);
-          console.log('   referralCount value:', additionalVariables['user.referralCount']);
-          console.log('   progressPercent in additionalVariables:', 'user.progressPercent' in additionalVariables);
-          console.log('   progressPercent value:', additionalVariables['user.progressPercent']);
+          // Логируем для отладки
+          logger.debug('message-handler debug', {
+            userVariablesKeys: Object.keys(userVariables),
+            expiringBonusesInUserVars: 'user.expiringBonusesFormatted' in userVariables,
+            expiringBonusesValue: userVariables['user.expiringBonusesFormatted'],
+            additionalVariablesKeys: Object.keys(additionalVariables),
+            expiringBonusesInAdditional: 'user.expiringBonusesFormatted' in additionalVariables,
+            referralCountInAdditional: 'user.referralCount' in additionalVariables,
+            referralCountValue: additionalVariables['user.referralCount'],
+            progressPercentInAdditional: 'user.progressPercent' in additionalVariables,
+            progressPercentValue: additionalVariables['user.progressPercent']
+          });
 
           // Финальная проверка перед отправкой
-          console.log('📤 FINAL MESSAGE CHECK:');
-          console.log('   Original messageText:', messageText);
-          console.log('   Has expiringBonusesFormatted placeholder:', messageText.includes('{user.expiringBonusesFormatted}'));
-          console.log('   Final messageText after replacement:', messageText);
+          logger.debug('final message check', {
+            originalMessageText: messageText,
+            hasExpiringBonusesPlaceholder: messageText.includes('{user.expiringBonusesFormatted}'),
+            finalMessageText: messageText
+          });
 
           // ТОЧНАЯ проверка после замены переменных
           const replacedText = await ProjectVariablesService.replaceVariablesInText(

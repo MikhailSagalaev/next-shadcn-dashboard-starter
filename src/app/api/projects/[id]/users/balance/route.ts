@@ -84,9 +84,13 @@ export async function GET(
       return NextResponse.json(
         {
           success: false,
-          error: 'Пользователь не найден',
+          error: `Пользователь с ${email ? `email ${email}` : phone ? `телефоном ${phone}` : 'указанными данными'} не найден в системе бонусов`,
           balance: 0,
-          user: null
+          user: null,
+          details: {
+            searchedBy: email ? 'email' : phone ? 'phone' : 'unknown',
+            searchValue: email || phone || null
+          }
         },
         { status: 404, headers: corsHeaders }
       );

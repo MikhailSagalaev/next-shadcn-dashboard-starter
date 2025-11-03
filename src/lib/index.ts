@@ -33,7 +33,8 @@ export const withApiRateLimit = rateLimitModule.withRateLimit
   : require('./with-rate-limit').withApiRateLimit;
 export const withAuthRateLimit =
   rateLimitModule.withAuthRateLimit ??
-  require('./with-rate-limit').withAuthRateLimit;
+  ((handler: any, options?: any) => 
+    require('./with-rate-limit').withRateLimit(handler, { ...options, type: 'auth' }));
 
 export * from './logger';
 export * from './error-handler';

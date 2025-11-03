@@ -50,27 +50,16 @@ export default function ProfileViewPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      // eslint-disable-next-line no-console
-      console.log('Profile page - loading stats...');
-
       const response = await fetch('/api/profile/stats', {
         headers: {
           'Content-Type': 'application/json'
         }
       });
 
-      // eslint-disable-next-line no-console
-      console.log('Profile page - response status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        // eslint-disable-next-line no-console
-        console.log('Profile page - data received:', data);
         setStats(data.data);
       } else {
-        const errorData = await response.json();
-        // eslint-disable-next-line no-console
-        console.error('Profile page - error:', errorData);
         if (response.status === 401) {
           router.push('/auth/sign-in');
           return;
@@ -78,11 +67,7 @@ export default function ProfileViewPage() {
         toast.error('Ошибка загрузки статистики');
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to load stats:', error);
       toast.error('Ошибка загрузки данных');
-    } finally {
-      // setLoading(false);
     }
   }, [router]);
 
@@ -91,14 +76,10 @@ export default function ProfileViewPage() {
   }, [loadStats]);
 
   const handleSettings = () => {
-    // eslint-disable-next-line no-console
-    console.log('Settings clicked');
     router.push('/dashboard/settings');
   };
 
   const handleBilling = () => {
-    // eslint-disable-next-line no-console
-    console.log('Billing clicked');
     router.push('/dashboard/billing');
   };
 

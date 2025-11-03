@@ -64,10 +64,10 @@ export class UserVariablesService {
     userId: string,
     projectId: string
   ): Promise<Record<string, any>> {
-    console.log('🚀 UserVariablesService.getUserVariables CALLED', { userId, projectId });
+    logger.debug('UserVariablesService.getUserVariables called', { userId, projectId });
 
     // ✅ КРИТИЧНО: Логируем projectId для отладки на сервере
-    console.log('🔍 SERVER DEBUG: projectId validation', {
+    logger.debug('projectId validation', {
       projectId,
       projectIdType: typeof projectId,
       projectIdLength: projectId?.length,
@@ -316,7 +316,7 @@ export class UserVariablesService {
       };
 
       // ✅ ДОБАВЛЕНО: Логирование currentLevel для диагностики
-      console.log('🔍 user-variables currentLevel DEBUG:', {
+      logger.debug('user-variables currentLevel check', {
         userId: profile.userId,
         currentLevel: result['user.currentLevel'],
         currentLevelFromProfile: profile.currentLevel,

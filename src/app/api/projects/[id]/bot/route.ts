@@ -233,6 +233,27 @@ export async function POST(
       );
     }
 
+    // Проверка лимита ботов
+    const { getCurrentAdmin } = await import('@/lib/auth');
+    const admin = await getCurrentAdmin();
+    if (admin) {
+      const { BillingService } = await import('@/lib/services/billing.service');
+      const limitCheck = await BillingService.checkLimit(admin.sub, 'bots');
+      
+      if (!limitCheck.allowed) {
+        return NextResponse.json(
+          { 
+            error: `Лимит ботов исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
+            limitReached: true,
+            currentUsage: limitCheck.used,
+            limit: limitCheck.limit,
+            planId: limitCheck.planId
+          },
+          { status: 402, headers: createCorsHeaders(request) }
+        );
+      }
+    }
+
     // Создаем настройки бота
     const botSettings = await db.botSettings.create({
       data: {

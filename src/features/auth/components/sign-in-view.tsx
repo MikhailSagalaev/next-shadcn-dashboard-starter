@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { Logo } from '@/components/ui/logo';
+import { Mail } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Введите корректный email' }),
@@ -58,6 +60,8 @@ export default function SignInViewPage({ stars }: { stars: number }) {
 
 function AuthForm() {
   const router = useRouter();
+  const [showResendOption, setShowResendOption] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { email: '', password: '' }
@@ -74,28 +78,62 @@ function AuthForm() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const apiError = (data?.error as string) || 'Ошибка входа';
-        // Пробросить ошибки в форму, если есть детали
-        if (data?.details?.fieldErrors) {
-          const fieldErrors = data.details.fieldErrors as Record<
-            string,
-            string[]
-          >;
-          Object.entries(fieldErrors).forEach(([key, messages]) => {
-            form.setError(key as keyof FormValues, {
-              type: 'server',
-              message: messages?.[0] ?? apiError
+        const apiMessage = data?.message as string;
+        
+        // Если ошибка связана с неподтвержденным email, показываем опцию повторной отправки
+        if (apiError === 'Email не подтвержден' || res.status === 403) {
+          setShowResendOption(true);
+          setUserEmail(values.email);
+          toast.error(apiMessage || apiError);
+        } else {
+          setShowResendOption(false);
+          // Пробросить ошибки в форму, если есть детали
+          if (data?.details?.fieldErrors) {
+            const fieldErrors = data.details.fieldErrors as Record<
+              string,
+              string[]
+            >;
+            Object.entries(fieldErrors).forEach(([key, messages]) => {
+              form.setError(key as keyof FormValues, {
+                type: 'server',
+                message: messages?.[0] ?? apiError
+              });
             });
-          });
+          } else {
+            toast.error(apiError);
+          }
         }
-        throw new Error(apiError);
+        return;
       }
 
+      setShowResendOption(false);
       toast.success('Вход выполнен успешно');
       router.push('/dashboard');
       router.refresh();
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Ошибка входа';
       toast.error(message);
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!userEmail) return;
+    
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || 'Ссылка для подтверждения была отправлена на ваш email.');
+      } else {
+        toast.error(data.error || 'Не удалось отправить письмо повторно.');
+      }
+    } catch (error) {
+      toast.error('Произошла ошибка при отправке письма.');
     }
   }
 
@@ -156,6 +194,23 @@ function AuthForm() {
           </Button>
         </form>
       </Form>
+      
+      {showResendOption && (
+        <div className='rounded-lg border border-yellow-200 bg-yellow-50 p-4'>
+          <p className='text-sm text-yellow-800 mb-2'>
+            Email не подтвержден. Нужна новая ссылка для подтверждения?
+          </p>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={handleResendVerification}
+            className='w-full'
+          >
+            <Mail className='mr-2 h-4 w-4' />
+            Отправить письмо повторно
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

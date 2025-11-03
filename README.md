@@ -91,7 +91,13 @@ CRON_SECRET=your-cron-secret
 BULL_REDIS_HOST=localhost
 BULL_REDIS_PORT=6379
 # BULL_REDIS_PASSWORD=your-password
+
+# Email - Resend (optional, for email verification)
+RESEND_API_KEY=re_your_api_key_here
+RESEND_FROM_EMAIL=noreply@yourdomain.com
 ```
+
+**📧 Настройка Email через Resend:** См. [документацию Resend Setup](./docs/RESEND_SETUP.md) для подробной инструкции по получению API ключа и настройке отправки email.
 
 ### 4. Настройка базы данных
 

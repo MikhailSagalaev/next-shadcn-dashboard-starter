@@ -10,10 +10,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeAllBots } from '@/lib/telegram/startup';
 import { logger } from '@/lib/logger';
+import { requireAdmin } from '@/lib/auth';
 
 // POST /api/admin/bots/init - Инициализация всех активных ботов
 export async function POST(request: NextRequest) {
   try {
+    // Проверка авторизации
+    const admin = await requireAdmin(['SUPERADMIN', 'ADMIN']);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     logger.info('🚀 Запрос на инициализацию всех ботов', {
       component: 'admin-bots-init'
     });
@@ -49,6 +55,11 @@ export async function POST(request: NextRequest) {
 // GET /api/admin/bots/init - Получить статус инициализации
 export async function GET(request: NextRequest) {
   try {
+    // Проверка авторизации
+    const admin = await requireAdmin(['SUPERADMIN', 'ADMIN']);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { botManager } = await import('@/lib/telegram/bot-manager');
 
     const allBots = botManager.getAllBots();

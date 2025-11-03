@@ -52,11 +52,27 @@ REDIS_PASSWORD=$(openssl rand -base64 24)
 # Security
 NEXTAUTH_SECRET=$(openssl rand -base64 32)
 CRON_SECRET=$(openssl rand -base64 32)
+JWT_SECRET=$(openssl rand -base64 32)
 
 # Clerk (временно тестовые/пустые)
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_dummy
 CLERK_SECRET_KEY=sk_test_dummy
+
+# Email провайдер - Resend (https://resend.com)
+# Получите API ключ: https://resend.com/dashboard/api-keys
+RESEND_API_KEY=re_your_api_key_here
+RESEND_FROM_EMAIL=noreply@resend.dev
 ```
+
+### 📧 Настройка Resend для отправки email
+
+⚠️ **Важно:** Для работы подтверждения email настройте Resend:
+
+1. Зарегистрируйтесь на [https://resend.com](https://resend.com)
+2. В Dashboard → "API Keys" создайте новый ключ
+3. Скопируйте ключ в `RESEND_API_KEY` в `.env` файле
+4. Для быстрого старта используйте `noreply@resend.dev` без верификации домена
+
 Убедитесь, что в `docker-compose.production.yml` переменные читаются из `.env` (в репозитории уже настроено):
 - `DATABASE_URL: "postgresql://${DB_USER:-bonus_admin}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-bonus_system}"`
 - `REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"`

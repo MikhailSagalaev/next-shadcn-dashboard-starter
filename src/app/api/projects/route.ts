@@ -57,6 +57,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Проверка лимита проектов
+    const { BillingService } = await import('@/lib/services/billing.service');
+    const limitCheck = await BillingService.checkLimit(admin.sub, 'projects');
+    
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: `Лимит проектов исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
+          limitReached: true,
+          currentUsage: limitCheck.used,
+          limit: limitCheck.limit,
+          planId: limitCheck.planId
+        },
+        { status: 402 }
+      );
+    }
+
     // Валидация входных данных с Zod
     const validatedData = await validateRequest(request, createProjectSchema);
 

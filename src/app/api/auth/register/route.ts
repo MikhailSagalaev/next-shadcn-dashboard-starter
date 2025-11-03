@@ -10,9 +10,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { hashPassword, setSessionCookie } from '@/lib/auth';
-import { signJwt } from '@/lib/jwt';
+import { hashPassword } from '@/lib/auth';
 import { withAuthRateLimit } from '@/lib';
+import { logger } from '@/lib/logger';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -36,31 +36,56 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     }
 
     const passwordHash = await hashPassword(data.password);
+    
+    // Генерируем токен верификации email
+    const verificationToken = Buffer.from(
+      `${data.email}:${Date.now()}:${Math.random()}`
+    ).toString('base64url');
+    
+    // Устанавливаем срок действия токена (24 часа)
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
     const created = await db.adminAccount.create({
       data: {
         email: data.email,
         passwordHash,
-        role: data.role ?? 'ADMIN'
+        role: data.role ?? 'ADMIN',
+        emailVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: expiresAt
       }
     });
 
-    const token = await signJwt({
-      sub: created.id,
-      email: created.email,
-      role: created.role
-    });
-    await setSessionCookie(token);
+    // Отправляем email с подтверждением
+    try {
+      const { NotificationService } = await import('@/lib/services/notification.service');
+      await NotificationService.sendVerificationEmail(data.email, verificationToken);
+      
+      logger.info('Email verification sent', {
+        email: data.email.substring(0, 3) + '***',
+        accountId: created.id
+      });
+    } catch (emailError) {
+      logger.error('Failed to send verification email', {
+        error: emailError instanceof Error ? emailError.message : 'Unknown error',
+        email: data.email.substring(0, 3) + '***'
+      });
+      // Продолжаем регистрацию даже если email не отправился
+    }
 
+    // НЕ создаем сессию - пользователь должен подтвердить email
     return NextResponse.json(
       {
-        id: created.id,
-        email: created.email,
-        role: created.role
+        message: 'Регистрация успешна! Пожалуйста, проверьте вашу электронную почту для подтверждения аккаунта.',
+        email: data.email
       },
       { status: 201 }
     );
   } catch (err: unknown) {
-    console.error('❌ Ошибка регистрации:', err);
+    logger.error('Ошибка регистрации', {
+      error: err instanceof Error ? err.message : 'Unknown error'
+    });
 
     if (err instanceof z.ZodError) {
       return NextResponse.json(

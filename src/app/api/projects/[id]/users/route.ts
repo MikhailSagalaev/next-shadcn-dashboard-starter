@@ -78,7 +78,7 @@ async function getHandler(
       
       // Логируем для отладки статуса пользователя
       if (index === 0) {
-        console.log('🔍 User status DEBUG (first user):', {
+        logger.debug('User status check (first user)', {
           userId: user.id,
           userIsActive: user.isActive,
           hasTelegramId: !!user.telegramId,
@@ -208,6 +208,23 @@ async function postHandler(
 
     if (!project) {
       return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
+    }
+
+    // Проверка лимита пользователей
+    const { BillingService } = await import('@/lib/services/billing.service');
+    const limitCheck = await BillingService.checkLimit(admin.sub, 'users');
+    
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { 
+          error: `Лимит пользователей исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
+          limitReached: true,
+          currentUsage: limitCheck.used,
+          limit: limitCheck.limit,
+          planId: limitCheck.planId
+        },
+        { status: 402 }
+      );
     }
 
     // Валидация входных данных (с нормализацией телефона)

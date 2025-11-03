@@ -40,11 +40,11 @@ export class SimpleWorkflowProcessor {
     this.nodesMap = new Map();
     Object.entries(workflowVersion.nodes).forEach(([id, node]) => {
       this.nodesMap.set(id, node);
-      console.log(`📋 Добавлена нода в nodesMap: ${id} (${node.type})`);
+      logger.debug(`📋 Добавлена нода в nodesMap: ${id} (${node.type})`);
     });
     
-    console.log(`📋 Всего нод в nodesMap: ${this.nodesMap.size}`);
-    console.log(`📋 Ключи nodesMap:`, Array.from(this.nodesMap.keys()));
+    logger.debug(`📋 Всего нод в nodesMap: ${this.nodesMap.size}`);
+    logger.debug(`📋 Ключи nodesMap:`, Array.from(this.nodesMap.keys()));
 
     // Индексируем connections для быстрого доступа
     this.connectionsMap = new Map();
@@ -119,12 +119,12 @@ export class SimpleWorkflowProcessor {
       }
 
       // Находим стартовую ноду по триггеру
-      console.log('🔍 Finding trigger node for:', { trigger, hasCallback: !!ctx.callbackQuery, callbackData: ctx.callbackQuery?.data });
+      logger.debug('Finding trigger node', { trigger, hasCallback: !!ctx.callbackQuery, callbackData: ctx.callbackQuery?.data });
       const startNode = this.findTriggerNode(trigger, ctx);
-      console.log('🔍 findTriggerNode result:', { startNodeId: startNode?.id, startNodeType: startNode?.type });
+      logger.debug('findTriggerNode result', { startNodeId: startNode?.id, startNodeType: startNode?.type });
 
       if (!startNode) {
-        console.log('❌ CRITICAL: No start node found - this will cause "workflow not configured" error');
+        logger.debug('CRITICAL: No start node found', {});
         logger.warn('⚠️ Стартовая нода не найдена', {
           projectId: this.projectId,
           workflowId: this.workflowVersion.workflowId,
@@ -144,12 +144,12 @@ export class SimpleWorkflowProcessor {
         startNodeLabel: startNode.data?.label
       });
 
-      console.log('Starting workflow execution with node:', startNode.id);
+      logger.debug('Starting workflow execution with node', { nodeId: startNode.id });
 
       // Выполняем workflow начиная со стартовой ноды
       try {
         await this.executeWorkflow(context, startNode.id);
-        console.log('Workflow execution loop completed successfully');
+        logger.debug('Workflow execution loop completed successfully', {});
       } catch (executionError) {
         console.error('Workflow execution failed:', {
           error: executionError instanceof Error ? executionError.message : 'Unknown execution error',
@@ -182,7 +182,7 @@ export class SimpleWorkflowProcessor {
       // Завершаем выполнение как completed, если не waiting
       try {
         await ExecutionContextManager.completeExecution(context, 'completed', undefined, context.step);
-        console.log('Execution completed successfully');
+        logger.debug('Execution completed successfully', {});
       } catch (completeError) {
         console.error('Failed to complete execution, but workflow was successful:', completeError);
         // Не бросаем ошибку, так как workflow выполнился успешно
@@ -233,7 +233,7 @@ export class SimpleWorkflowProcessor {
       ? `${chatId}_${userId}` // Стабильный ID для callback
       : `${chatId}_${userId}_${Date.now()}`; // Уникальный ID для новых команд/сообщений
 
-    console.log('Generating session ID:', {
+    logger.debug('Generating session ID', {
       chatId: ctx.chat?.id,
       fromId: ctx.from?.id,
       isCallback,
@@ -256,8 +256,8 @@ export class SimpleWorkflowProcessor {
    * ✅ Защита от бесконечных циклов через visitedNodes и maxIterations
    */
   private async executeWorkflow(context: ExecutionContext, startNodeId: string): Promise<void> {
-    console.log('🚀 EXECUTING WORKFLOW FROM NODE:', startNodeId);
-    console.log('📋 Available nodes:', Array.from(this.nodesMap.keys()));
+    logger.debug('EXECUTING WORKFLOW FROM NODE', { nodeId: startNodeId });
+    logger.debug('Available nodes', { nodes: Array.from(this.nodesMap.keys()) });
     
     this.currentContext = context;
     let currentNodeId: string | null = startNodeId;
@@ -270,7 +270,7 @@ export class SimpleWorkflowProcessor {
     while (currentNodeId && step < context.maxSteps) {
       step++;
       
-      console.log(`🔄 STEP ${step}: Executing node ${currentNodeId}`);
+      logger.debug('Executing workflow step', { step, nodeId: currentNodeId });
 
       // ✅ Проверяем количество посещений текущей ноды
       const visitCount = visitedNodes.get(currentNodeId) || 0;
@@ -302,9 +302,9 @@ export class SimpleWorkflowProcessor {
       }
 
       // Выполняем ноду через handler
-      console.log(`⚡ Executing ${node.type} handler for node ${currentNodeId}`);
+      logger.debug('Executing node handler', { nodeType: node.type, nodeId: currentNodeId });
       const nextNodeId = await handler.execute(node, updatedContext);
-      console.log(`✅ Node ${currentNodeId} executed, nextNodeId: ${nextNodeId}`);
+      logger.debug('Node executed', { nodeId: currentNodeId, nextNodeId });
       context.step = step;
 
       // ✅ Проверяем на специальный результат ожидания ввода пользователя
@@ -339,7 +339,7 @@ export class SimpleWorkflowProcessor {
       );
     }
     
-    console.log(`✅ Workflow completed successfully in ${step} steps`);
+    logger.debug('Workflow completed successfully', { steps: step });
   }
 
   /**
@@ -363,41 +363,53 @@ export class SimpleWorkflowProcessor {
     // Для condition нод проверяем sourceHandle и результат условия
     const currentNode = this.nodesMap.get(currentNodeId);
     if (currentNode?.type === 'condition') {
-      console.log(`🔍 getNextNodeId: Processing condition node ${currentNodeId}`);
-      console.log(`🔍 getNextNodeId: Available connections:`, relevantConnections.map(c => ({
+      logger.debug('Processing condition node', { nodeId: currentNodeId });
+      logger.debug('Available connections', { 
+        connections: relevantConnections.map(c => ({
         source: c.source,
         target: c.target,
         sourceHandle: (c as any).sourceHandle,
         type: c.type
-      })));
+        }))
+      });
 
       // Получаем результат условия из контекста (должен быть установлен в condition handler)
       const conditionResult = await this.getConditionResultFromContext();
 
       // Ищем connection с соответствующим sourceHandle
       const expectedHandle = conditionResult ? 'true' : 'false';
-      console.log(`🔍 getNextNodeId: Looking for sourceHandle="${expectedHandle}"`);
+      logger.debug('Looking for sourceHandle', { expectedHandle });
 
       const matchingConnection = relevantConnections.find(conn => {
         const connSourceHandle = (conn as any).sourceHandle;
         const matches = connSourceHandle === expectedHandle;
-        console.log(`🔍 getNextNodeId: Checking connection ${conn.source}→${conn.target}, sourceHandle="${connSourceHandle}", matches=${matches}`);
+        logger.debug('Checking connection', { 
+          source: conn.source, 
+          target: conn.target, 
+          sourceHandle: connSourceHandle, 
+          matches 
+        });
         return matches;
       });
 
       if (matchingConnection) {
-        console.log(`✅ Condition ${currentNodeId}: result=${conditionResult}, following sourceHandle="${expectedHandle}" → ${matchingConnection.target}`);
+        logger.debug('Condition matched', { 
+          nodeId: currentNodeId, 
+          result: conditionResult, 
+          expectedHandle, 
+          target: matchingConnection.target 
+        });
         return matchingConnection.target;
       }
 
       // Если нет подходящей connection, берем default
       const defaultConnection = relevantConnections.find(conn => conn.type === 'default');
       if (defaultConnection) {
-        console.log(`⚠️ No matching sourceHandle found, using default connection → ${defaultConnection.target}`);
+        logger.debug('No matching sourceHandle, using default', { target: defaultConnection.target });
         return defaultConnection.target;
       }
 
-      console.warn(`⚠️ No matching connection found for condition ${currentNodeId}, result=${conditionResult}`);
+      logger.warn('No matching connection found for condition', { nodeId: currentNodeId, result: conditionResult });
     }
 
     // Для остальных случаев возвращаем первый target (для обратной совместимости)
@@ -409,17 +421,17 @@ export class SimpleWorkflowProcessor {
    */
   private async getConditionResultFromContext(): Promise<boolean> {
     if (!this.currentContext) {
-      console.log('⚠️ getConditionResultFromContext: no currentContext, returning false');
+      logger.debug('getConditionResultFromContext: no currentContext', {});
       return false; // fallback - если нет контекста, считаем условие false
     }
 
     try {
       const result = await this.currentContext.variables.get('condition_result', 'session');
-      console.log(`🔍 getConditionResultFromContext: condition_result = ${result} (${typeof result})`);
+      logger.debug('getConditionResultFromContext: condition_result', { result, resultType: typeof result });
       
       return Boolean(result);
     } catch (error) {
-      console.log('⚠️ getConditionResultFromContext: error getting condition_result, returning false', error);
+      logger.debug('getConditionResultFromContext: error getting condition_result', { error: String(error) });
       // Если переменная не найдена, возвращаем false
       return false;
     }
@@ -445,20 +457,20 @@ export class SimpleWorkflowProcessor {
     // 2️⃣ ПРИОРИТЕТ 2: Проверяем callback query (trigger.callback)
     if (ctx?.callbackQuery) {
       const callbackData = ctx.callbackQuery.data;
-      console.log('🔍 Looking for callback trigger:', { callbackData, availableNodes: Array.from(this.nodesMap.keys()) });
+      logger.debug('Looking for callback trigger', { callbackData, availableNodes: Array.from(this.nodesMap.keys()) });
       const callbackTrigger = this.findCallbackTrigger(callbackData);
       if (callbackTrigger) {
-        logger.info('✅ Найден trigger.callback', {
+        logger.info('Найден trigger.callback', {
           nodeId: callbackTrigger.id,
           callbackData
         });
         return callbackTrigger;
       } else {
-        console.log('❌ Callback trigger not found for:', callbackData);
+        logger.debug('Callback trigger not found', { callbackData });
         // Возвращаем fallback для неизвестных callback
         const fallbackTrigger = this.findCommandTrigger('/start');
         if (fallbackTrigger) {
-          logger.warn('⚠️ Using /start trigger as fallback for unknown callback', { callbackData });
+          logger.warn('Using /start trigger as fallback for unknown callback', { callbackData });
           return fallbackTrigger;
         }
       }
@@ -525,24 +537,24 @@ export class SimpleWorkflowProcessor {
    * Поиск trigger.command по команде
    */
   private findCommandTrigger(command: string): WorkflowNode | undefined {
-    console.log(`🔍 findCommandTrigger: ищем команду "${command}"`);
+    logger.debug('findCommandTrigger searching', { command });
     
     for (const [nodeId, node] of Array.from(this.nodesMap.entries())) {
-      console.log(`  Проверяем ноду ${nodeId} (${node.id}) типа ${node.type}`);
+      logger.debug('Checking node', { nodeId, nodeType: node.type });
       
       if (node.type === 'trigger.command') {
         const config = node.data?.config?.['trigger.command'];
-        console.log(`    Config:`, JSON.stringify(config, null, 2));
+        logger.debug('Config check', { config: config ? JSON.stringify(config) : null });
         
         if (config?.command === command) {
-          console.log(`    ✅ Найдена команда "${command}" в ноде ${nodeId} (${node.id})`);
+          logger.debug('Command found', { command, nodeId: node.id });
           // Возвращаем ноду с правильным ID для nodesMap
           return { ...node, id: nodeId };
         }
       }
     }
     
-    console.log(`  ❌ Команда "${command}" не найдена`);
+    logger.debug('Command not found', { command });
     return undefined;
   }
 
@@ -550,11 +562,10 @@ export class SimpleWorkflowProcessor {
    * Поиск trigger.callback по callback_data
    */
   private findCallbackTrigger(callbackData: string): WorkflowNode | undefined {
-    console.log('🔍 findCallbackTrigger searching for:', callbackData);
-    console.log('   Available nodes count:', this.nodesMap.size);
+    logger.debug('findCallbackTrigger searching', { callbackData, nodeCount: this.nodesMap.size });
 
     for (const node of Array.from(this.nodesMap.values())) {
-      console.log('   Checking node:', {
+      logger.debug('Checking node', {
         id: node.id,
         type: node.type,
         hasConfig: !!node.data?.config,
@@ -564,15 +575,15 @@ export class SimpleWorkflowProcessor {
 
       if (node.type === 'trigger.callback') {
         const config = node.data?.config?.['trigger.callback'];
-        console.log('   Node config:', config);
+        logger.debug('Node config', { config });
 
         if (config?.callbackData === callbackData) {
-          console.log('✅ Found matching callback trigger:', node.id);
+          logger.debug('Matching callback trigger found', { nodeId: node.id });
           return node;
         }
       }
     }
-    console.log('❌ No callback trigger found for:', callbackData);
+    logger.debug('No callback trigger found', { callbackData });
     return undefined;
   }
 }

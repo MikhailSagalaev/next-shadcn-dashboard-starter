@@ -13,6 +13,7 @@ import { db } from '@/lib/db';
 import { setSessionCookie, verifyPassword } from '@/lib/auth';
 import { signJwt } from '@/lib/jwt';
 import { withAuthRateLimit } from '@/lib';
+import { logger } from '@/lib/logger';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -31,6 +32,21 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         { error: 'Неверные учетные данные' },
         { status: 401 }
+      );
+    }
+
+    // Проверяем, подтвержден ли email
+    if (!account.emailVerified) {
+      logger.warn('Login attempt with unverified email', {
+        email: data.email.substring(0, 3) + '***',
+        accountId: account.id
+      });
+      return NextResponse.json(
+        { 
+          error: 'Email не подтвержден',
+          message: 'Пожалуйста, подтвердите ваш email перед входом. Проверьте вашу почту для ссылки подтверждения.'
+        },
+        { status: 403 }
       );
     }
 
@@ -55,7 +71,9 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
       role: account.role
     });
   } catch (err: unknown) {
-    console.error('❌ Ошибка логина:', err);
+    logger.error('Login error', {
+      error: err instanceof Error ? err.message : 'Unknown error'
+    });
 
     if (err instanceof z.ZodError) {
       return NextResponse.json(

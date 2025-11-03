@@ -10,10 +10,16 @@
 import { NextResponse } from 'next/server';
 import { botManager } from '@/lib/telegram/bot-manager';
 import { logger } from '@/lib/logger';
+import { requireAdmin } from '@/lib/auth';
 
 // POST /api/admin/bots/stop-all - Экстренная остановка всех ботов
 export async function POST() {
   try {
+    // Проверка авторизации
+    const admin = await requireAdmin(['SUPERADMIN']);
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     logger.info('Запрос на экстренную остановку всех ботов', {}, 'admin-api');
 
     // Получаем все активные боты

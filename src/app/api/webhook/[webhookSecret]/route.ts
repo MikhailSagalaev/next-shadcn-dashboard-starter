@@ -533,7 +533,6 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
           ? 'Заказ обработан, бонусы списаны'
           : 'Заказ обработан, бонусы списаны и начислены'
         : 'Заказ обработан, бонусы начислены',
-      debug_test: 'DEBUG_WORKING',
       order: {
         id: orderId,
         amount: totalAmount,

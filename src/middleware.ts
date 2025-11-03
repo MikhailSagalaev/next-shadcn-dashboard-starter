@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJwt } from '@/lib/jwt';
+import { db } from '@/lib/db';
 
 const PROTECTED_MATCHERS = ['/dashboard', '/api/admin', '/api/projects'];
+const EMAIL_VERIFICATION_REQUIRED = true; // Включить проверку email после настройки Resend
 
 // Публичные API, доступные без авторизации (для внешних интеграций)
 // 1) Баланс пользователя для Tilda:
@@ -45,6 +47,26 @@ export default async function middleware(req: NextRequest) {
     const signInUrl = new URL('/auth/sign-in', req.url);
     signInUrl.searchParams.set('redirect_url', req.url);
     return NextResponse.redirect(signInUrl);
+  }
+
+  // Проверка подтверждения email (опционально, можно отключить через ENV)
+  if (EMAIL_VERIFICATION_REQUIRED && pathname.startsWith('/dashboard')) {
+    try {
+      const admin = await db.adminAccount.findUnique({
+        where: { id: payload.sub },
+        select: { emailVerified: true }
+      });
+
+      if (admin && !admin.emailVerified) {
+        // Редирект неподтвержденных пользователей на страницу верификации
+        const verifyUrl = new URL('/auth/verify-email', req.url);
+        verifyUrl.searchParams.set('email', payload.email);
+        return NextResponse.redirect(verifyUrl);
+      }
+    } catch (error) {
+      // В случае ошибки БД пропускаем проверку
+      console.error('Error checking email verification:', error);
+    }
   }
 
   return NextResponse.next();

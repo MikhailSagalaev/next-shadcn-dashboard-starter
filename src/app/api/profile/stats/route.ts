@@ -16,22 +16,18 @@ export async function GET(request: NextRequest) {
   try {
     // Проверяем аутентификацию через HttpOnly cookie
     const token = request.cookies.get('sb_auth')?.value;
-    // eslint-disable-next-line no-console
-    console.log('Profile stats API - token:', token ? 'present' : 'missing');
 
     if (!token) {
       return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
     }
 
     const payload = await verifyJwt(token);
-    // eslint-disable-next-line no-console
-    console.log('Profile stats API - payload:', payload ? 'valid' : 'invalid');
 
     if (!payload) {
       return NextResponse.json({ error: 'Неверный токен' }, { status: 401 });
     }
 
-    // Получаем статистику из базы данных
+    // Получаем статистику из базы данных (только для проектов этого администратора)
     const [
       projectsCount,
       usersCount,
@@ -40,31 +36,50 @@ export async function GET(request: NextRequest) {
       activeProjects,
       recentActivity
     ] = await Promise.all([
-      // Общее количество проектов
-      db.project.count(),
-
-      // Общее количество пользователей
-      db.user.count(),
-
-      // Количество активных ботов (проекты с настроенными ботами)
+      // Количество проектов текущего администратора
       db.project.count({
         where: {
+          ownerId: payload.sub
+        }
+      }),
+
+      // Общее количество пользователей в проектах этого администратора
+      db.user.count({
+        where: {
+          project: {
+            ownerId: payload.sub
+          }
+        }
+      }),
+
+      // Количество активных ботов у этого администратора
+      db.project.count({
+        where: {
+          ownerId: payload.sub,
           botSettings: {
             isNot: null
           }
         }
       }),
 
-      // Общая сумма бонусов
+      // Общая сумма бонусов в проектах этого администратора
       db.bonus.aggregate({
         _sum: {
           amount: true
+        },
+        where: {
+          user: {
+            project: {
+              ownerId: payload.sub
+            }
+          }
         }
       }),
 
-      // Активные проекты (с активностью за последние 30 дней)
+      // Активные проекты (с активностью за последние 30 дней) этого администратора
       db.project.count({
         where: {
+          ownerId: payload.sub,
           users: {
             some: {
               bonuses: {
@@ -79,8 +94,15 @@ export async function GET(request: NextRequest) {
         }
       }),
 
-      // Последняя активность
+      // Последняя активность в проектах этого администратора
       db.bonus.findFirst({
+        where: {
+          user: {
+            project: {
+              ownerId: payload.sub
+            }
+          }
+        },
         orderBy: {
           createdAt: 'desc'
         },

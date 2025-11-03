@@ -16,14 +16,20 @@ import {
   getRateLimitHeaders,
   getClientIdentifier
 } from './rate-limiter';
+import RateLimiter from './rate-limiter';
 
 type RateLimiterType = 'default' | 'webhook' | 'auth' | 'api';
+
+// Кэш для кастомных лимитеров
+const customLimiters = new Map<string, RateLimiter>();
 
 interface RateLimitOptions {
   type?: RateLimiterType;
   skipSuccessfulRequests?: boolean;
   skipFailedRequests?: boolean;
   keyGenerator?: (request: NextRequest) => string;
+  maxRequests?: number;
+  windowMs?: number;
 }
 
 export function withRateLimit(
@@ -35,11 +41,26 @@ export function withRateLimit(
       type = 'default',
       skipSuccessfulRequests = false,
       skipFailedRequests = false,
-      keyGenerator
+      keyGenerator,
+      maxRequests,
+      windowMs
     } = options;
 
-    // Выбираем лимитер
+    // Выбираем или создаем лимитер
     const limiter = (() => {
+      // Если заданы кастомные параметры, создаем или используем кэшированный лимитер
+      if (maxRequests !== undefined || windowMs !== undefined) {
+        const key = `${windowMs ?? 60000}-${maxRequests ?? 100}`;
+        if (!customLimiters.has(key)) {
+          customLimiters.set(key, new RateLimiter(
+            windowMs ?? 60000,
+            maxRequests ?? 100
+          ));
+        }
+        return customLimiters.get(key)!;
+      }
+      
+      // Иначе используем стандартный лимитер по типу
       switch (type) {
         case 'webhook':
           return webhookLimiter;
@@ -142,11 +163,13 @@ export function withWebhookRateLimit(
 }
 
 export function withAuthRateLimit(
-  handler: (request: NextRequest, context?: any) => Promise<NextResponse>
+  handler: (request: NextRequest, context?: any) => Promise<NextResponse>,
+  options?: { maxRequests?: number; windowMs?: number }
 ) {
   return withRateLimit(handler, {
     type: 'auth',
-    skipFailedRequests: true // Не засчитываем неудачные попытки авторизации
+    skipFailedRequests: true, // Не засчитываем неудачные попытки авторизации
+    ...options
   });
 }
 
