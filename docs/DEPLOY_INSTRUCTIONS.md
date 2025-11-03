@@ -19,12 +19,21 @@ yarn install
 
 ### Шаг 3: Применить миграцию БД для email verification
 
+**Если используете PostgreSQL через Docker:**
 ```bash
-# Способ 1: Через Prisma migrate (рекомендуется)
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec app yarn db:migrate
+# Через контейнер
+docker exec -i your-postgres-container psql -U postgres -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
+```
 
-# Способ 2: Вручную через скрипт
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec app yarn tsx scripts/apply-email-verification-migration.ts
+**Если PostgreSQL на хосте напрямую:**
+```bash
+# Замените креды на свои
+psql -h localhost -p 5432 -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
+```
+
+**Альтернатива: Через TypeScript скрипт**
+```bash
+yarn tsx scripts/apply-email-verification-migration.ts
 ```
 
 **Что делает миграция:**
@@ -32,7 +41,13 @@ docker compose -f docker-compose.production.yml -f docker-compose.override.yml e
 - Добавляет поле `email_verification_token` (TEXT)
 - Добавляет поле `email_verification_expires` (TIMESTAMP)
 
-### Шаг 4: Обновить переменные окружения
+### Шаг 4: Обновить Prisma Client
+
+```bash
+npx prisma generate
+```
+
+### Шаг 5: Обновить переменные окружения
 
 Отредактируйте `.env` на сервере и добавьте:
 
@@ -49,28 +64,40 @@ NEXT_PUBLIC_APP_URL=https://gupil.ru
 
 **Примечание:** Для начала используйте `noreply@resend.dev` (не требует DNS верификации). Позже, когда будет настроен `gupil.ru`, смените на `noreply@gupil.ru`.
 
-### Шаг 5: Пересобрать и перезапустить приложение
+### Шаг 6: Пересобрать приложение
 
 ```bash
-# Остановить текущие контейнеры
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml down
+yarn build
+```
 
-# Пересобрать и запустить
+### Шаг 7: Перезапустить приложение
+
+**Если используете PM2:**
+```bash
+pm2 restart bonus-app
+pm2 save
+```
+
+**Если используете Docker Compose:**
+```bash
+docker compose -f docker-compose.production.yml -f docker-compose.override.yml down
 docker compose -f docker-compose.production.yml -f docker-compose.override.yml up -d --build
+```
+
+### Шаг 8: Проверить что все работает
+
+```bash
+# Проверить статус PM2
+pm2 status
 
 # Проверить логи
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml logs -f app | cat
-```
+pm2 logs bonus-app --lines 50
 
-### Шаг 6: Проверить что все работает
-
-```bash
 # Проверить что миграция применена
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec app yarn prisma studio
-
-# В Prisma Studio проверьте таблицу admin_accounts:
-# Должны быть поля: email_verified, email_verification_token, email_verification_expires
+psql -h localhost -U bonus_admin -d bonus_system -c "\d admin_accounts" | grep email_verified
 ```
+
+Должно показать поля: `email_verified`, `email_verification_token`, `email_verification_expires`
 
 ---
 
@@ -82,6 +109,7 @@ docker compose -f docker-compose.production.yml -f docker-compose.override.yml e
 ```bash
 yarn install
 yarn build
+pm2 restart bonus-app
 ```
 
 ### Проблема: "Column 'email_verified' does not exist"
@@ -89,16 +117,28 @@ yarn build
 **Решение:**
 ```bash
 # Применить миграцию
-docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec app yarn db:migrate
+psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
+
+# Обновить Prisma Client
+npx prisma generate
+
+# Перезапустить
+pm2 restart bonus-app
 ```
 
 ### Проблема: Email не отправляются
 
 **Проверьте:**
-1. `RESEND_API_KEY` установлен в `.env`
+1. `RESEND_API_KEY` установлен в `.env` (загрузка через `pm2 reload all --update-env`)
 2. Ключ корректный (начинается с `re_`)
 3. `RESEND_FROM_EMAIL` установлен
-4. Проверьте логи: `docker compose logs app | grep -i resend`
+4. Проверьте логи: `pm2 logs bonus-app | grep -i resend`
+
+**После изменения .env файла:**
+```bash
+pm2 reload all --update-env
+pm2 save
+```
 
 ---
 
@@ -107,8 +147,10 @@ docker compose -f docker-compose.production.yml -f docker-compose.override.yml e
 - [ ] `git pull origin main` - обновлен код
 - [ ] `yarn install` - установлены зависимости (resend)
 - [ ] Миграция БД применена (email verification поля)
+- [ ] `npx prisma generate` - обновлен Prisma Client
 - [ ] `.env` обновлен (RESEND_API_KEY, RESEND_FROM_EMAIL, NEXT_PUBLIC_APP_URL)
-- [ ] Контейнеры пересобраны и перезапущены
+- [ ] `yarn build` - пересобрано приложение
+- [ ] `pm2 reload all --update-env` - перезапущен сервер с новыми переменными
 - [ ] Логи проверены на ошибки
 - [ ] Регистрация тестируется с email verification
 - [ ] Повторная отправка письма работает
@@ -129,13 +171,26 @@ docker compose -f docker-compose.production.yml -f docker-compose.override.yml e
    - Добавьте DNS записи в REG.RU
    - Дождитесь верификации
    - Смените `RESEND_FROM_EMAIL=noreply@gupil.ru`
+   - Выполните `pm2 reload all --update-env`
 
 3. **Мониторьте логи:**
    ```bash
-   docker compose logs -f app | grep -E "email|verification|resend"
+   pm2 logs bonus-app --lines 100 | grep -E "email|verification|resend"
    ```
 
 ---
 
-**Готово! Проект готов к Alpha Testing! 🎉**
+## 📌 Краткая версия (для быстрого деплоя)
 
+```bash
+cd /opt/next-shadcn-dashboard-starter && \
+git pull origin main && \
+yarn install && \
+psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql && \
+npx prisma generate && \
+yarn build && \
+pm2 reload all --update-env && \
+pm2 save
+```
+
+**Готово! Проект готов к Alpha Testing! 🎉**
