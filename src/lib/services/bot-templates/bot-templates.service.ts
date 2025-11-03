@@ -749,57 +749,6 @@ class BotTemplatesService {
             }
           },
           {
-            id: 'check-welcome-bonus',
-            type: 'action.database_query',
-            position: { x: 3654, y: 307.5 },
-            data: {
-              label: 'Проверить приветственные бонусы',
-              config: {
-                'action.database_query': {
-                  query: 'check_welcome_bonus',
-                  assignTo: 'hasWelcomeBonus',
-                  parameters: {
-                    userId: '{{contactUser.id}}'
-                  }
-                }
-              }
-            }
-          },
-          {
-            id: 'check-bonus-exists',
-            type: 'condition',
-            position: { x: 4060, y: 307.5 },
-            data: {
-              label: 'Есть приветственные бонусы?',
-              config: {
-                condition: {
-                  value: false,
-                  operator: 'equals',
-                  variable: 'hasWelcomeBonus'
-                }
-              }
-            }
-          },
-          {
-            id: 'add-welcome-bonus',
-            type: 'action.database_query',
-            position: { x: 4466, y: 242 },
-            data: {
-              label: 'Начислить приветственные бонусы',
-              config: {
-                'action.database_query': {
-                  query: 'add_bonus',
-                  parameters: {
-                    type: 'WELCOME',
-                    amount: 100,
-                    userId: '{{contactUser.id}}',
-                    description: 'Приветственные бонусы за активацию аккаунта'
-                  }
-                }
-              }
-            }
-          },
-          {
             id: 'success-activated-user',
             type: 'message',
             position: { x: 4060, y: 307.5 },
@@ -1174,39 +1123,9 @@ class BotTemplatesService {
             sourceHandle: 'false'
           },
           {
-            id: 'edge-activate-user-check-welcome-bonus-1760624947127',
+            id: 'edge-activate-user-success-activated-user',
             type: 'default',
             source: 'activate-user',
-            target: 'check-welcome-bonus',
-            animated: true
-          },
-          {
-            id: 'edge-check-welcome-bonus-check-bonus-exists-1760624947128',
-            type: 'default',
-            source: 'check-welcome-bonus',
-            target: 'check-bonus-exists',
-            animated: true
-          },
-          {
-            id: 'edge-check-bonus-exists-add-welcome-bonus-1760624947129',
-            type: 'default',
-            source: 'check-bonus-exists',
-            target: 'add-welcome-bonus',
-            animated: true,
-            sourceHandle: 'true'
-          },
-          {
-            id: 'edge-check-bonus-exists-success-activated-user-1760624947130',
-            type: 'default',
-            source: 'check-bonus-exists',
-            target: 'success-activated-user',
-            animated: true,
-            sourceHandle: 'false'
-          },
-          {
-            id: 'edge-add-welcome-bonus-success-activated-user-1760624947131',
-            type: 'default',
-            source: 'add-welcome-bonus',
             target: 'success-activated-user',
             animated: true
           },
@@ -1295,13 +1214,6 @@ class BotTemplatesService {
             type: 'object',
             description: 'Данные пользователя по контакту/email',
             defaultValue: null
-          },
-          {
-            id: 'hasWelcomeBonus',
-            name: 'hasWelcomeBonus',
-            type: 'boolean',
-            description: 'Есть ли приветственные бонусы',
-            defaultValue: false
           }
         ],
         settings: {
