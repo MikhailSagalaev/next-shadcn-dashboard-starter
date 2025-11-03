@@ -21,6 +21,10 @@ yarn install
 
 **Через psql напрямую:**
 ```bash
+# Если PostgreSQL на порту 5440
+psql -h 127.0.0.1 -p 5440 -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
+
+# Если PostgreSQL на стандартном порту 5432
 psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
 ```
 
@@ -28,6 +32,8 @@ psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_
 ```bash
 yarn tsx scripts/apply-email-verification-migration.ts
 ```
+
+**⚠️ Проверьте ваш DATABASE_URL в .env чтобы определить правильный порт**
 
 **Что делает миграция:**
 - Добавляет поле `email_verified` (BOOLEAN, по умолчанию false)
@@ -79,8 +85,8 @@ pm2 status
 # Проверить логи
 pm2 logs bonus-app --lines 50
 
-# Проверить что миграция применена
-psql -h localhost -U bonus_admin -d bonus_system -c "\d admin_accounts" | grep email_verified
+# Проверить что миграция применена (используйте порт из DATABASE_URL)
+psql -h 127.0.0.1 -p 5440 -U bonus_admin -d bonus_system -c "\d admin_accounts" | grep email_verified
 ```
 
 Должно показать поля: `email_verified`, `email_verification_token`, `email_verification_expires`
@@ -102,8 +108,8 @@ pm2 reload all --update-env
 
 **Решение:**
 ```bash
-# Применить миграцию
-psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
+# Применить миграцию (используйте порт из DATABASE_URL)
+psql -h 127.0.0.1 -p 5440 -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
 
 # Обновить Prisma Client
 npx prisma generate
@@ -172,7 +178,7 @@ pm2 save
 cd /opt/next-shadcn-dashboard-starter && \
 git pull origin main && \
 yarn install && \
-psql -h localhost -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql && \
+psql -h 127.0.0.1 -p 5440 -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql && \
 npx prisma generate && \
 yarn build && \
 pm2 reload all --update-env && \
