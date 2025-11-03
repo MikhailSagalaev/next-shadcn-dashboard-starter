@@ -1175,7 +1175,7 @@ async function handleRegisterUser(
         data: {
           userId: user.id,
           amount: welcome,
-          type: 'MANUAL',
+          type: 'WELCOME',
           description: 'Приветственный бонус при регистрации',
           expiresAt
         }

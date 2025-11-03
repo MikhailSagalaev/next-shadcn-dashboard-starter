@@ -895,6 +895,7 @@ export const SAFE_QUERIES = {
 
   /**
    * Активировать пользователя (привязать Telegram)
+   * Автоматически начисляет приветственные бонусы, если они настроены в проекте
    */
   activate_user: async (db: PrismaClient, params: { userId: string; telegramId: string; telegramUsername?: string }) => {
     logger.debug('Executing activate_user', { params });
@@ -906,8 +907,70 @@ export const SAFE_QUERIES = {
         telegramUsername: params.telegramUsername,
         isActive: true,
         updatedAt: new Date()
+      },
+      include: {
+        project: true
       }
     });
+
+    // ✅ АВТОМАТИЧЕСКОЕ начисление приветственных бонусов
+    try {
+      const program = await db.referralProgram.findUnique({
+        where: { projectId: user.projectId }
+      });
+      
+      const meta = program?.description ? JSON.parse(program.description as any) : {};
+      const welcomeAmount = Number(meta?.welcomeBonus || 0);
+      
+      if (welcomeAmount > 0) {
+        // Проверяем, не начислены ли уже приветственные бонусы
+        const existingWelcomeBonus = await db.bonus.findFirst({
+          where: {
+            userId: params.userId,
+            type: 'WELCOME'
+          }
+        });
+
+        if (!existingWelcomeBonus) {
+          // Получаем срок действия бонусов из настроек проекта
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + Number(user.project.bonusExpiryDays || 365));
+
+          // Начисляем приветственные бонусы
+          const bonus = await db.bonus.create({
+            data: {
+              userId: params.userId,
+              amount: welcomeAmount,
+              type: 'WELCOME',
+              description: 'Приветственные бонусы за активацию аккаунта',
+              expiresAt
+            }
+          });
+
+          // Создаем транзакцию
+          await db.transaction.create({
+            data: {
+              userId: params.userId,
+              bonusId: bonus.id,
+              type: 'EARN',
+              amount: welcomeAmount,
+              description: 'Приветственные бонусы за активацию аккаунта'
+            }
+          });
+
+          logger.info('Welcome bonus automatically awarded on activation', {
+            userId: params.userId,
+            amount: welcomeAmount
+          });
+        }
+      }
+    } catch (e) {
+      logger.warn('Failed to automatically award welcome bonus on activation', {
+        userId: params.userId,
+        error: e instanceof Error ? e.message : String(e)
+      });
+      // Не блокируем основную операцию
+    }
 
     return user;
   },
