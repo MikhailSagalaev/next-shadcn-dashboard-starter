@@ -720,26 +720,6 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       </div>
       */}
 
-      {/* Search Input */}
-      <div className='relative w-full max-w-sm'>
-        <Search className='text-muted-foreground pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2' />
-        <Input
-          type='text'
-          placeholder='Поиск по имени, email или телефону...'
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          className='h-9 pl-9 [&::-webkit-search-cancel-button]:hidden'
-          disabled={usersLoading && !debouncedSearchTerm}
-          autoComplete='off'
-          spellCheck='false'
-        />
-        {usersLoading && debouncedSearchTerm && (
-          <div className='pointer-events-none absolute right-3 top-1/2 -translate-y-1/2'>
-            <Loader2 className='h-4 w-4 animate-spin text-muted-foreground' />
-          </div>
-        )}
-      </div>
-
       {/* Data Table */}
       <Card>
         <CardHeader>
@@ -751,6 +731,24 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               </CardDescription>
             </div>
             <div className='flex items-center space-x-2'>
+              <div className='relative w-64'>
+                <Search className='text-muted-foreground pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2' />
+                <Input
+                  type='text'
+                  placeholder='Поиск...'
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className='h-9 pl-9 pr-9 [&::-webkit-search-cancel-button]:hidden'
+                  disabled={usersLoading && !debouncedSearchTerm}
+                  autoComplete='off'
+                  spellCheck='false'
+                />
+                {usersLoading && debouncedSearchTerm && (
+                  <div className='pointer-events-none absolute right-3 top-1/2 -translate-y-1/2'>
+                    <Loader2 className='h-4 w-4 animate-spin text-muted-foreground' />
+                  </div>
+                )}
+              </div>
               <Button
                 variant='outline'
                 size='sm'

@@ -55,7 +55,8 @@ async function getHandler(
         { firstName: { contains: search, mode: 'insensitive' } },
         { lastName: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search, mode: 'insensitive' } }
+        { phone: { contains: search, mode: 'insensitive' } },
+        { telegramUsername: { contains: search, mode: 'insensitive' } }
       ];
     }
 

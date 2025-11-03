@@ -212,6 +212,18 @@ export function UsersTable({
       )
     },
     {
+      accessorKey: 'telegramUsername',
+      header: 'Telegram',
+      cell: ({ row }) => {
+        const username = row.getValue('telegramUsername') as string | undefined;
+        return (
+          <div className='text-sm'>
+            {username ? `@${username}` : '-'}
+          </div>
+        );
+      }
+    },
+    {
       accessorKey: 'phone',
       header: 'Телефон',
       cell: ({ row }) => (

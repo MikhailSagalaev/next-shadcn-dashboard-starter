@@ -2,7 +2,7 @@
   "id": "cmhepxl0f00019e6ndsq3leiv",
   "projectId": "cmfa8oqx000019e372pk9547l",
   "name": "Система лояльности",
-  "description": "Умная система лояльности с проверкой статуса пользователей и флоу регистрации на сайте. Приветственные бонусы начисляются автоматически при активации.",
+  "description": "Умная система лояльности с проверкой статуса пользователей, начислением приветственных бонусов и флоу регистрации на сайте. ИСПРАВЛЕНА проблема повторного начисления бонусов.",
   "isActive": true,
   "nodes": [
     {
@@ -360,12 +360,90 @@
       "selected": false
     },
     {
+      "id": "check-welcome-bonus",
+      "data": {
+        "label": "Проверить приветственные бонусы",
+        "config": {
+          "action.database_query": {
+            "query": "check_welcome_bonus",
+            "assignTo": "hasWelcomeBonus",
+            "parameters": {
+              "userId": "{{contactUser.id}}"
+            }
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 3654,
+        "y": 307.5
+      },
+      "selected": false
+    },
+    {
+      "id": "check-bonus-exists",
+      "data": {
+        "label": "Есть приветственные бонусы?",
+        "config": {
+          "condition": {
+            "value": false,
+            "operator": "equals",
+            "variable": "hasWelcomeBonus"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 4060,
+        "y": 307.5
+      },
+      "selected": false
+    },
+    {
+      "id": "add-welcome-bonus",
+      "data": {
+        "label": "Начислить приветственные бонусы",
+        "config": {
+          "action.database_query": {
+            "query": "add_bonus",
+            "parameters": {
+              "type": "WELCOME",
+              "amount": 100,
+              "userId": "{{contactUser.id}}",
+              "description": "Приветственные бонусы за активацию аккаунта"
+            }
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 4466,
+        "y": 242
+      },
+      "selected": false
+    },
+    {
       "id": "success-activated-user",
       "data": {
         "label": "Успешная активация",
         "config": {
           "message": {
-            "text": "🎉 Аккаунт успешно активирован!\n\n💰 Вам начислены приветственные бонусы (если настроены)!\n\n📊 Ваш профиль:\n• Баланс: {user.balanceFormatted}\n• Уровень: {user.currentLevel}\n• Реферальный код: {user.referralCode}\n\n✨ Добро пожаловать в программу лояльности!"
+            "text": "🎉 Аккаунт успешно активирован!\n\n💰 Вам начислено 100 приветственных бонусов!\n\n📊 Ваш профиль:\n• Баланс: {user.balanceFormatted}\n• Уровень: {user.currentLevel}\n• Реферальный код: {user.referralCode}\n\n✨ Добро пожаловать в программу лояльности!"
           }
         }
       },
@@ -376,7 +454,7 @@
         "height": 204
       },
       "position": {
-        "x": 4060,
+        "x": 4872,
         "y": 307.5
       },
       "selected": false
@@ -387,13 +465,13 @@
         "label": "Требуется регистрация на сайте",
         "config": {
           "message": {
-            "text": "🌐 Для участия в программе лояльности необходимо зарегистрироваться на нашем сайте.\n\n📝 Пожалуйста, перейдите по ссылке и создайте аккаунт:\n\n🔗 {{project.domain}}/register\n\n✨ После регистрации вернитесь к боту и поделитесь контактом для активации бонусов!",
+            "text": "🌐 Для участия в программе лояльности необходимо зарегистрироваться на нашем сайте.\n\n📝 Пожалуйста, перейдите по ссылке и создайте аккаунт:\n\n🔗 https://your-website.com/register\n\n✨ После регистрации вернитесь к боту и поделитесь контактом для активации бонусов!",
             "keyboard": {
               "type": "inline",
               "buttons": [
                 [
                   {
-                    "url": "{{project.domain}}/register",
+                    "url": "https://your-website.com/register",
                     "text": "🌐 Зарегистрироваться на сайте"
                   }
                 ],
@@ -877,9 +955,39 @@
       "sourceHandle": "false"
     },
     {
-      "id": "edge-activate-user-success-activated-user",
+      "id": "edge-activate-user-check-welcome-bonus-1760624947127",
       "type": "default",
       "source": "activate-user",
+      "target": "check-welcome-bonus",
+      "animated": true
+    },
+    {
+      "id": "edge-check-welcome-bonus-check-bonus-exists-1760624947128",
+      "type": "default",
+      "source": "check-welcome-bonus",
+      "target": "check-bonus-exists",
+      "animated": true
+    },
+    {
+      "id": "edge-check-bonus-exists-add-welcome-bonus-1760624947129",
+      "type": "default",
+      "source": "check-bonus-exists",
+      "target": "add-welcome-bonus",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-check-bonus-exists-success-activated-user-1760624947130",
+      "type": "default",
+      "source": "check-bonus-exists",
+      "target": "success-activated-user",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-add-welcome-bonus-success-activated-user-1760624947131",
+      "type": "default",
+      "source": "add-welcome-bonus",
       "target": "success-activated-user",
       "animated": true
     },
@@ -968,6 +1076,13 @@
       "type": "object",
       "description": "Данные пользователя по контакту/email",
       "defaultValue": null
+    },
+    {
+      "id": "hasWelcomeBonus",
+      "name": "hasWelcomeBonus",
+      "type": "boolean",
+      "description": "Есть ли приветственные бонусы",
+      "defaultValue": false
     }
   ],
   "settings": {

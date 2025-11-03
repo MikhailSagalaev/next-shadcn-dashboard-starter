@@ -2458,26 +2458,32 @@
         }
 
         // Восстанавливаем оригинальные стили поля промокода Tilda
-        if (tildaPromoWrapper && this.state.originalPromoStyles) {
+        if (tildaPromoWrapper) {
           try {
-            // Восстанавливаем инлайн-стили из атрибута style
-            if (this.state.originalPromoStyles.inline) {
-              tildaPromoWrapper.setAttribute('style', this.state.originalPromoStyles.inline);
+            // Принудительно показываем элемент сначала
+            tildaPromoWrapper.style.display = 'block';
+            
+            // Затем восстанавливаем оригинальные стили если есть
+            if (this.state.originalPromoStyles) {
+              if (this.state.originalPromoStyles.inline && this.state.originalPromoStyles.inline !== 'display: none') {
+                tildaPromoWrapper.setAttribute('style', this.state.originalPromoStyles.inline);
+              } else {
+                // Если инлайн-стилей не было или был display:none, устанавливаем минимально необходимые
+                tildaPromoWrapper.style.width = this.state.originalPromoStyles.width || '100%';
+                tildaPromoWrapper.style.display = 'block';
+              }
             } else {
-              // Если инлайн-стилей не было, устанавливаем минимально необходимые
-              tildaPromoWrapper.style.display = this.state.originalPromoStyles.display || 'block';
-              tildaPromoWrapper.style.width = this.state.originalPromoStyles.width || '100%';
+              // Если стили не были сохранены, устанавливаем базовые
+              tildaPromoWrapper.style.width = '100%';
             }
             
             console.log('✅ switchMode: восстановлены оригинальные стили поля промокода Tilda');
           } catch (error) {
             // Если не удалось восстановить, устанавливаем базовые стили
             tildaPromoWrapper.style.display = 'block';
+            tildaPromoWrapper.style.width = '100%';
             this.log('⚠️ Ошибка восстановления стилей, установлены базовые:', error);
           }
-        } else if (tildaPromoWrapper) {
-          // Если стили не были сохранены, просто показываем элемент
-          tildaPromoWrapper.style.display = 'block';
         }
       } else {
         // Переключаемся на режим бонусов
