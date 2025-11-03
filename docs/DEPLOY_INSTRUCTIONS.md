@@ -19,20 +19,32 @@ yarn install
 
 ### Шаг 3: Применить миграцию БД для email verification
 
-**Если используете PostgreSQL через Docker:**
+**⚠️ СНАЧАЛА ПРОВЕРЬТЕ, КАК ЗАПУЩЕН POSTGRESQL:**
 ```bash
-# Через контейнер
-docker exec -i your-postgres-container psql -U postgres -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
+# Проверить Docker контейнеры
+docker ps | grep postgres
+
+# Проверить, запущен ли контейнер bonus_system_db_prod
 ```
 
-**Если PostgreSQL на хосте напрямую:**
+**Способ 1: Через Docker контейнер (рекомендуется)**
 ```bash
-# Замените креды на свои
+# Если PostgreSQL в Docker контейнере bonus_system_db_prod
+docker exec -i bonus_system_db_prod psql -U bonus_admin -d bonus_system < prisma/migrations/add_email_verification_manual.sql
+```
+
+**Способ 2: Через psql на хосте**
+```bash
+# Если PostgreSQL на хосте напрямую
 psql -h localhost -p 5432 -U bonus_admin -d bonus_system -f prisma/migrations/add_email_verification_manual.sql
 ```
 
-**Альтернатива: Через TypeScript скрипт**
+**Способ 3: Через TypeScript скрипт (если app контейнер есть)**
 ```bash
+# Если есть контейнер bonus_system_app_prod
+docker exec bonus_system_app_prod yarn tsx scripts/apply-email-verification-migration.ts
+
+# Или если запущено через PM2
 yarn tsx scripts/apply-email-verification-migration.ts
 ```
 
