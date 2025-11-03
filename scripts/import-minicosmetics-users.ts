@@ -94,12 +94,25 @@ async function importMiniCosmeticsUsers() {
   let skippedCount = 0;
   let errorCount = 0;
 
+  // Определяем заголовки CSV файла
+  const csvHeaders = [
+    'ID', 'First Name', 'Last Name', 'return', 'ВИЗИТ', 'Подписка на телеграм канал',
+    'User ID', 'Nickname', 'Gender', 'Last Access', 'Created At', 'Channel Name',
+    'Channel ID', 'Channel Resource', 'UTM Source', 'UTM Medium', 'UTM Campaign',
+    'UTM Term', 'UTM Content', 'RS', 'Roistat', 'Roistat Visit', 'Openstat Service',
+    'Openstat Campaign', 'Openstat Ad', 'Openstat Source', 'From', 'GClientID',
+    'YM UID', 'YM Counter', 'gclid', 'yclid', 'fbclid', 'RB ClickID', 'phone',
+    'email', 'ПОДПИСКА НА КАНАЛ', 'ПРОМОКОД', 'Повторный запуск', 'Попытки',
+    'Задание', 'ПОПЫТКА', 'incoming_message_text'
+  ];
+
   // Читаем CSV файл
   const stream = fs.createReadStream(csvFilePath)
     .pipe(csv({
       separator: ',',
       quote: '"',
-      escape: '"'
+      escape: '"',
+      headers: csvHeaders
     }));
 
   // Собираем все данные из CSV
@@ -108,6 +121,11 @@ async function importMiniCosmeticsUsers() {
   }
 
   console.log(`📊 Найдено записей в CSV: ${users.length}`);
+  
+  // Проверяем первую строку - должна быть заголовок
+  if (users.length > 0 && users[0].ID === 'ID') {
+    console.log('✅ Первая строка - заголовок, пропускаем');
+  }
 
   // Импортируем пользователей
   for (const csvUser of users) {
@@ -115,11 +133,29 @@ async function importMiniCosmeticsUsers() {
       processedCount++;
 
       // Пропускаем заголовок
-      if (csvUser.ID === 'ID') continue;
+      if (csvUser.ID === 'ID' || csvUser.ID === undefined || !csvUser['User ID'] || csvUser['User ID'] === 'User ID') {
+        continue;
+      }
 
       // Логируем прогресс каждые 100 пользователей
       if (processedCount % 100 === 0) {
         console.log(`🔄 Обработано: ${processedCount}/${users.length}`);
+      }
+
+      // Валидация и преобразование telegramId
+      let telegramId: bigint | null = null;
+      if (csvUser['User ID']) {
+        const userIdStr = String(csvUser['User ID']).trim();
+        // Проверяем, что это число, а не заголовок
+        if (userIdStr && userIdStr !== 'User ID' && /^\d+$/.test(userIdStr)) {
+          try {
+            telegramId = BigInt(userIdStr);
+          } catch (error) {
+            console.log(`⚠️ Пропускаем пользователя ${csvUser.ID}: некорректный User ID: ${userIdStr}`);
+            skippedCount++;
+            continue;
+          }
+        }
       }
 
       // Извлекаем данные пользователя
@@ -129,7 +165,7 @@ async function importMiniCosmeticsUsers() {
         lastName: csvUser['Last Name']?.trim() || null,
         phone: csvUser.phone?.trim() || null,
         email: csvUser.email?.trim().toLowerCase() || null,
-        telegramId: csvUser['User ID'] ? BigInt(csvUser['User ID']) : null,
+        telegramId,
         telegramUsername: csvUser.Nickname?.trim() || null,
 
         // UTM метки
@@ -150,102 +186,64 @@ async function importMiniCosmeticsUsers() {
         continue;
       }
 
-      // Проверяем, существует ли уже пользователь в этом проекте по ВСЕМ возможным критериям
-      let existingUser = null;
-      let searchCriteria = '';
-
-      // Проверяем по telegramId (самый уникальный)
-      if (userData.telegramId) {
-        existingUser = await db.user.findFirst({
-          where: {
-            projectId,
-            telegramId: userData.telegramId
-          }
-        });
-        if (existingUser) {
-          searchCriteria = `telegramId: ${userData.telegramId}`;
-        }
-      }
-
-      // Если не нашли по telegramId, проверяем по email
-      if (!existingUser && userData.email) {
-        existingUser = await db.user.findFirst({
-          where: {
-            projectId,
-            email: userData.email
-          }
-        });
-        if (existingUser) {
-          searchCriteria = `email: ${userData.email}`;
-        }
-      }
-
-      // Если не нашли по email, проверяем по телефону
-      if (!existingUser && userData.phone) {
-        existingUser = await db.user.findFirst({
-          where: {
-            projectId,
-            phone: userData.phone
-          }
-        });
-        if (existingUser) {
-          searchCriteria = `phone: ${userData.phone}`;
-        }
-      }
-
-      if (existingUser) {
-        // Пользователь уже существует - пропускаем без обновления
-        console.log(`⚠️ Пользователь уже существует: ${searchCriteria}`);
-        skippedCount++;
-        continue;
-      }
-
-      // Проверяем, существует ли уже пользователь с такими же контактными данными
+      // Проверяем, что у пользователя есть хотя бы один контакт
       const orConditions = [
+        ...(userData.telegramId ? [{ telegramId: userData.telegramId }] : []),
         ...(userData.email ? [{ email: userData.email }] : []),
         ...(userData.phone ? [{ phone: userData.phone }] : []),
-        ...(userData.telegramId ? [{ telegramId: userData.telegramId }] : []),
       ];
 
       if (orConditions.length === 0) {
-        console.log(`⚠️ Пропускаем пользователя ${csvUser.ID}: нет контактных данных (email: ${userData.email}, phone: ${userData.phone}, telegramId: ${userData.telegramId})`);
+        console.log(`⚠️ Пропускаем пользователя ${csvUser.ID}: нет контактных данных`);
         skippedCount++;
         continue;
       }
 
-      const existingUsers = await db.user.findMany({
-        where: {
-          projectId,
-          OR: orConditions
-        }
-      });
-
-      // Если найден хотя бы один пользователь с такими же данными, пропускаем
-      if (existingUsers.length > 0) {
-        const conflicts = existingUsers.map(u => {
-          const reasons = [];
-          if (u.email === userData.email) reasons.push(`email: ${userData.email}`);
-          if (u.phone === userData.phone) reasons.push(`phone: ${userData.phone}`);
-          if (u.telegramId === userData.telegramId) reasons.push(`telegramId: ${userData.telegramId}`);
-          return reasons.join(', ');
-        }).filter(Boolean);
-
-        console.log(`⚠️ Пользователь ${csvUser.ID} уже существует: ${conflicts.join(' | ')}`);
-        skippedCount++;
-        continue;
-      }
-
-      // Создаем нового пользователя
+      // Создаем нового пользователя напрямую через Prisma (без UserService)
+      // Проверка существования выполняется базой данных через уникальные индексы
       try {
-        const newUser = await UserService.createUser(userData);
+        const newUser = await db.user.create({
+          data: {
+            projectId: userData.projectId,
+            email: userData.email,
+            phone: userData.phone,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            telegramId: userData.telegramId,
+            telegramUsername: userData.telegramUsername,
+            isActive: false, // Импортированные пользователи неактивны до регистрации на сайте
+            registeredAt: userData.registeredAt || new Date(),
+            currentLevel: 'Базовый',
+            totalPurchases: 0,
+            utmSource: userData.utmSource,
+            utmMedium: userData.utmMedium,
+            utmCampaign: userData.utmCampaign,
+            utmTerm: userData.utmTerm,
+            utmContent: userData.utmContent
+          }
+        });
         importedCount++;
-        console.log(`✅ Импортирован пользователь: ${newUser.firstName || ''} ${newUser.lastName || ''} (${newUser.email || newUser.phone || newUser.telegramUsername || 'ID: ' + newUser.id})`);
+        if (importedCount % 100 === 0 || importedCount <= 10) {
+          console.log(`✅ Импортирован пользователь ${importedCount}: ${newUser.firstName || ''} ${newUser.lastName || ''} (telegram: ${newUser.telegramId?.toString() || 'N/A'})`);
+        }
       } catch (createError: any) {
+        // Если ошибка уникальности - пользователь уже существует, пропускаем
         if (createError.code === 'P2002') {
-          console.log(`⚠️ Пользователь ${csvUser.ID} уже существует (уникальность нарушена): ${userData.email || userData.phone || userData.telegramId}`);
+          // Логируем детали ошибки для первых 10
+          if (skippedCount < 10) {
+            console.log(`⚠️ Ошибка уникальности P2002 для пользователя ${csvUser.ID}:`, {
+              telegramId: userData.telegramId?.toString(),
+              meta: createError.meta
+            });
+          }
+          
           skippedCount++;
+          if (skippedCount % 1000 === 0 || skippedCount <= 10) {
+            const field = createError.meta?.target || 'unknown';
+            console.log(`⚠️ Пользователь ${csvUser.ID} уже существует (${field}): ${userData.telegramId?.toString() || userData.email || userData.phone}`);
+          }
         } else {
-          console.error(`❌ Ошибка создания пользователя ${csvUser.ID}:`, createError);
+          console.error(`❌ Ошибка создания пользователя ${csvUser.ID}:`, createError.message || createError);
           errorCount++;
         }
         continue;

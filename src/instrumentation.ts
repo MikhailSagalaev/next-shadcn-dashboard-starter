@@ -30,7 +30,8 @@ export async function register() {
     }
   }
 
-  // Инициализируем Telegram ботов только в Node.js runtime
+  // Временно отключаем инициализацию Telegram ботов для быстрого запуска
+  /*
   if (process.env.NEXT_RUNTIME === 'nodejs' || !process.env.NEXT_RUNTIME) {
     // Динамический импорт для избежания проблем с crypto
     try {
@@ -40,6 +41,7 @@ export async function register() {
       console.error('Failed to initialize bots:', error);
     }
   }
+  */
 }
 
 export const onRequestError = Sentry.captureRequestError;
