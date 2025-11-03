@@ -27,6 +27,7 @@ graph TB
 - [📞 Webhook Integration](./webhook-integration.md) - гайд по интеграции
 - [🤖 Telegram Bots](./telegram-bots.md) - настройка и работа с ботами
 - [📧 Resend Setup](./RESEND_SETUP.md) - настройка email через Resend
+- [🚀 Deploy Instructions](./DEPLOY_INSTRUCTIONS.md) - инструкция по деплою на сервер
 
 ### 📋 Управление проектом:
 - [📝 Changelog](./changelog.md) - история изменений
