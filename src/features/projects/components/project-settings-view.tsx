@@ -74,8 +74,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     bonusPercentage: 1.0,
     bonusExpiryDays: 365,
     bonusBehavior: 'SPEND_AND_EARN' as 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY',
-    isActive: true,
-    welcomeBonusAmount: 0
+    isActive: true
   });
 
   const loadProject = async () => {
@@ -92,16 +91,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           bonusPercentage: Number(projectData.bonusPercentage) || 1.0,
           bonusExpiryDays: projectData.bonusExpiryDays || 365,
           bonusBehavior: (projectData.bonusBehavior || 'SPEND_AND_EARN') as 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY',
-          isActive: projectData.isActive ?? true,
-          welcomeBonusAmount: (() => {
-            const metaStr = projectData?.referralProgram?.description || null;
-            try {
-              const meta = metaStr ? JSON.parse(metaStr) : {};
-              return Number(meta.welcomeBonus || 0);
-            } catch {
-              return 0;
-            }
-          })()
+          isActive: projectData.isActive ?? true
         });
       } else if (response.status === 403) {
         // Проект не принадлежит текущему админу
@@ -331,26 +321,6 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   </div>
                 </div>
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <Label htmlFor='welcomeBonusAmount'>
-                      Приветственный бонус при регистрации (₽)
-                    </Label>
-                    <Input
-                      id='welcomeBonusAmount'
-                      type='number'
-                      step='0.01'
-                      min='0'
-                      value={formData.welcomeBonusAmount}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          welcomeBonusAmount: parseFloat(e.target.value) || 0
-                        })
-                      }
-                      placeholder='0.00'
-                    />
-                  </div>
-
                   <div className='space-y-2'>
                     <Label htmlFor='bonusBehavior'>Поведение бонусов</Label>
                     <Select
