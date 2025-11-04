@@ -903,10 +903,12 @@ export class RouterIntegration {
           userId
         });
         
-        await context.variables.set('contactReceived', contactReceivedData);
+        // ✅ КРИТИЧНО: Сохраняем contactReceived в workflow_variables с явным указанием scope 'session'
+        // ВАЖНО: Сохраняем ДО запуска workflow, чтобы переменные были доступны
+        await context.variables.set('contactReceived', contactReceivedData, 'session');
         
         // ✅ КРИТИЧНО: Сохраняем projectId в workflow_variables
-        await context.variables.set('projectId', this.projectId);
+        await context.variables.set('projectId', this.projectId, 'session');
         
         // ✅ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Проверяем, что переменные действительно сохранились
         const savedContactReceived = await context.variables.get('contactReceived', 'session');
@@ -918,8 +920,25 @@ export class RouterIntegration {
           savedContactReceived: savedContactReceived ? 'SAVED' : 'NOT SAVED',
           savedProjectId: savedProjectId ? 'SAVED' : 'NOT SAVED',
           contactReceivedData,
+          savedContactReceivedData: savedContactReceived,
           projectIdValue: this.projectId
         });
+        
+        // ✅ КРИТИЧНО: Проверяем, что переменная действительно доступна
+        if (!savedContactReceived) {
+          logger.error('❌ CRITICAL: contactReceived not saved to variables!', {
+            executionId: waitingExecution.id,
+            contactReceivedData,
+            attempt: 'retry'
+          });
+          // Пробуем сохранить еще раз
+          await context.variables.set('contactReceived', contactReceivedData, 'session');
+          const retryCheck = await context.variables.get('contactReceived', 'session');
+          logger.info('🔄 Retry save result', { 
+            saved: !!retryCheck,
+            retryCheck 
+          });
+        }
       } else if (waitType === 'callback' && data) {
         (context as any).callbackReceived = {
           data,

@@ -140,8 +140,15 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
           try {
             console.log(`🔍 Resolving workflow variable: ${varPath}`);
             const resolved = await this.resolveVariablePath(varPath, context);
-            console.log(`✅ Resolved ${varPath}:`, resolved);
-            resolvedValue = resolvedValue.replace(match, resolved !== undefined ? String(resolved) : match);
+            console.log(`✅ Resolved ${varPath}:`, resolved, 'type:', typeof resolved);
+            
+            if (resolved !== undefined && resolved !== null) {
+              // Заменяем переменную на значение
+              resolvedValue = resolvedValue.replace(match, String(resolved));
+            } else {
+              // Если переменная не разрешена, оставляем оригинал и логируем предупреждение
+              console.warn(`⚠️ Variable ${varPath} not resolved, keeping original:`, match);
+            }
           } catch (error) {
             console.warn(`❌ Failed to resolve variable ${varPath}:`, error);
             // Оставляем оригинальную переменную
@@ -189,19 +196,34 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
     const propertyPath = parts.slice(1);
     
     console.log(`🔍 Resolving nested variable: base=${baseVarName}, path=${propertyPath.join('.')}`);
+    console.log(`🔍 Context keys:`, Object.keys(context));
+    console.log(`🔍 Context.contactReceived:`, (context as any).contactReceived);
     
     // ✅ КРИТИЧНО: Сначала проверяем, есть ли base в контексте напрямую
     let baseValue: any;
     if ((context as any)[baseVarName] !== undefined) {
       baseValue = (context as any)[baseVarName];
-      console.log(`🔍 Base variable ${baseVarName} from context:`, baseValue);
+      console.log(`✅ Base variable ${baseVarName} from context:`, baseValue, 'type:', typeof baseValue);
     } else {
+      console.log(`🔍 Base variable ${baseVarName} not in context, checking session variables...`);
+      console.log(`🔍 Session ID:`, context.sessionId);
       baseValue = await context.variables.get(baseVarName, 'session');
-      console.log(`🔍 Base variable ${baseVarName} from session:`, baseValue);
+      console.log(`🔍 Base variable ${baseVarName} from session:`, baseValue, 'type:', typeof baseValue);
     }
     
     if (baseValue === undefined || baseValue === null) {
       console.log(`❌ Base variable ${baseVarName} not found`);
+      console.log(`❌ Available variables in context:`, Object.keys(context));
+      
+      // Попробуем получить все переменные сессии для диагностики
+      try {
+        const allSessionVars = await context.variables.list('session');
+        console.log(`🔍 All session variables:`, Object.keys(allSessionVars));
+        console.log(`🔍 Session variables values:`, allSessionVars);
+      } catch (e) {
+        console.log(`❌ Failed to list session variables:`, e);
+      }
+      
       return undefined;
     }
     
