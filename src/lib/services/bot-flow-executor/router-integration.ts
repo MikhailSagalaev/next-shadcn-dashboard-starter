@@ -629,59 +629,106 @@ export class RouterIntegration {
       if (waitType === 'contact') {
         const contact = data;
         const raw = contact.phone_number;
-        const digits = raw.replace(/[^0-9]/g, ''); // Удаляем ВСЕ нецифровые символы (пробелы, дефисы и т.д.)
-        const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
         
-          // Формируем только нормализованные варианты (БЕЗ raw с пробелами!)
-          const plus = `+${digits}`;
-          const candidates = new Set<string>([plus, digits, last10]);
+        // Используем функцию normalizePhone для получения нормализованного номера (как в БД)
+        const { normalizePhone } = await import('@/lib/phone');
+        const normalized = normalizePhone(raw);
+        
+        // Создаем все возможные варианты для поиска
+        const candidates = new Set<string>();
+        
+        // Добавляем нормализованный вариант (основной, как сохранен в БД)
+        if (normalized) {
+          candidates.add(normalized);
+        }
+        
+        // Добавляем исходный номер (на случай, если он сохранен с пробелами)
+        candidates.add(raw);
+        
+        // Извлекаем только цифры
+        const digits = raw.replace(/[^0-9]/g, '');
+        
+        // Добавляем варианты с цифрами
+        if (digits) {
+          candidates.add(digits);
           
-          // ✨ ДОПОЛНИТЕЛЬНО: Добавляем варианты с пробелами для поиска в базе
-          const withSpaces = `+${digits.slice(0, 1)} ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
-          candidates.add(withSpaces);
-          
-          // Дополнительные варианты для РФ номеров
-          if (digits.length === 11 && digits.startsWith('8')) {
-            candidates.add(`+7${digits.slice(1)}`);
-            candidates.add(`7${digits.slice(1)}`);
-            const withSpaces7 = `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
-            candidates.add(withSpaces7);
-          } else if (digits.length === 11 && digits.startsWith('7')) {
-            candidates.add(`+7${digits.slice(1)}`);
-            candidates.add(`8${digits.slice(1)}`);
-            const withSpaces7 = `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
-            candidates.add(withSpaces7);
+          // Для РФ номеров добавляем все варианты
+          if (digits.length === 11) {
+            if (digits.startsWith('8')) {
+              // 8XXXXXXXXXX → +7XXXXXXXXXX
+              candidates.add('+7' + digits.slice(1));
+              candidates.add('7' + digits.slice(1));
+              candidates.add('8' + digits.slice(1));
+            } else if (digits.startsWith('7')) {
+              // 7XXXXXXXXXX → +7XXXXXXXXXX
+              candidates.add('+7' + digits.slice(1));
+              candidates.add('7' + digits.slice(1));
+              candidates.add('8' + digits.slice(1));
+            }
+          } else if (digits.length === 10) {
+            // 10 цифр → +7XXXXXXXXXX
+            candidates.add('+7' + digits);
+            candidates.add('7' + digits);
+            candidates.add('8' + digits);
           }
+          
+          // Варианты с пробелами (на случай, если в БД сохранен с форматированием)
+          if (digits.length === 11 && digits.startsWith('7')) {
+            const formatted = `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 9)} ${digits.slice(9)}`;
+            candidates.add(formatted);
+          } else if (digits.length === 11 && digits.startsWith('8')) {
+            const formatted = `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 9)} ${digits.slice(9)}`;
+            candidates.add(formatted);
+          } else if (digits.length === 10) {
+            const formatted = `+7 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 8)} ${digits.slice(8)}`;
+            candidates.add(formatted);
+          }
+        }
 
         logger.info('📞 Contact received, normalized candidates', {
           raw,
+          normalized,
           digitsOnly: digits,
-          last10,
           candidates: Array.from(candidates),
           projectId: this.projectId
         });
 
-        const existing = await db.user.findFirst({
-          where: {
-            projectId: this.projectId,
-            OR: [
-              { telegramId: BigInt(telegramUserId) },
-              ...Array.from(candidates).map((ph) => ({ phone: ph }))
-            ]
-          }
-        });
+        // Используем UserService.findUserByContact для поиска (он уже имеет всю логику)
+        const { UserService } = await import('@/lib/services/user.service');
+        const existing = await UserService.findUserByContact(
+          this.projectId,
+          undefined,
+          raw
+        );
+
+        // Если не нашли через UserService, проверяем по telegramId
+        let userByTelegram = null;
+        if (!existing) {
+          const { db } = await import('@/lib/db');
+          userByTelegram = await db.user.findFirst({
+            where: {
+              projectId: this.projectId,
+              telegramId: BigInt(telegramUserId)
+            }
+          });
+        }
+        
+        const existingUser = existing || userByTelegram;
 
         logger.info('🔍 User search result in router-integration', {
-          found: !!existing,
-          userIdInDB: existing?.id,
-          phoneInDB: existing?.phone,
-          telegramIdInDB: existing?.telegramId?.toString(),
-          searchedCandidates: Array.from(candidates)
+          found: !!existingUser,
+          userIdInDB: existingUser?.id,
+          phoneInDB: existingUser?.phone,
+          phoneNormalized: normalized,
+          telegramIdInDB: existingUser?.telegramId?.toString(),
+          searchedCandidates: Array.from(candidates),
+          searchMethod: existing ? 'findUserByContact' : 'telegramId'
         });
 
-        if (existing) {
+        if (existingUser) {
+          const { db } = await import('@/lib/db');
           await db.user.update({
-            where: { id: existing.id },
+            where: { id: existingUser.id },
             data: {
               telegramId: BigInt(telegramUserId),
               telegramUsername: ctx.from?.username,
@@ -689,11 +736,19 @@ export class RouterIntegration {
             }
           });
           logger.info('✅ Matched and updated existing user', { 
-            userId: existing.id, 
-            phoneInDB: existing.phone,
+            userId: existingUser.id, 
+            phoneInDB: existingUser.phone,
+            phoneNormalized: normalized,
             newTelegramId: telegramUserId
           });
-          userId = existing.id;
+          userId = existingUser.id;
+        } else {
+          logger.warn('❌ User not found by phone', {
+            rawPhone: raw,
+            normalizedPhone: normalized,
+            candidates: Array.from(candidates),
+            projectId: this.projectId
+          });
         }
         userData = {
           contactReceived: {
