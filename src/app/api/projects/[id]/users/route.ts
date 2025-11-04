@@ -189,43 +189,74 @@ async function postHandler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  let id: string | undefined;
   try {
+    logger.info('Начало создания пользователя', {});
+    
     const admin = await getCurrentAdmin();
     if (!admin) {
+      logger.warn('Попытка создания пользователя без авторизации');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = await context.params;
+    id = (await context.params).id;
+    logger.info('Параметры получены', { projectId: id, adminId: admin.sub });
     
     // Проверяем доступ к проекту
     await ProjectService.verifyProjectAccess(id, admin.sub);
+    logger.info('Доступ к проекту подтвержден', { projectId: id });
 
-    const body = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      logger.error('Ошибка парсинга тела запроса', {
+        projectId: id,
+        error: parseError instanceof Error ? parseError.message : String(parseError)
+      });
+      return NextResponse.json(
+        { error: 'Неверный формат данных запроса' },
+        { status: 400 }
+      );
+    }
 
     // Проверяем существование проекта
+    logger.info('Проверка существования проекта', { projectId: id });
     const project = await db.project.findUnique({
       where: { id }
     });
 
     if (!project) {
+      logger.warn('Проект не найден', { projectId: id });
       return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
     }
+    logger.info('Проект найден', { projectId: id, projectName: project.name });
 
     // Проверка лимита пользователей
-    const { BillingService } = await import('@/lib/services/billing.service');
-    const limitCheck = await BillingService.checkLimit(admin.sub, 'users');
-    
-    if (!limitCheck.allowed) {
-      return NextResponse.json(
-        { 
-          error: `Лимит пользователей исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
-          limitReached: true,
-          currentUsage: limitCheck.used,
-          limit: limitCheck.limit,
-          planId: limitCheck.planId
-        },
-        { status: 402 }
-      );
+    try {
+      const { BillingService } = await import('@/lib/services/billing.service');
+      const limitCheck = await BillingService.checkLimit(admin.sub, 'users');
+      
+      if (!limitCheck.allowed) {
+        return NextResponse.json(
+          { 
+            error: `Лимит пользователей исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
+            limitReached: true,
+            currentUsage: limitCheck.used,
+            limit: limitCheck.limit,
+            planId: limitCheck.planId
+          },
+          { status: 402 }
+        );
+      }
+    } catch (billingError) {
+      logger.warn('Ошибка при проверке лимита пользователей', {
+        projectId: id,
+        adminId: admin.sub,
+        error: billingError instanceof Error ? billingError.message : String(billingError),
+        stack: billingError instanceof Error ? billingError.stack : undefined
+      });
+      // Продолжаем выполнение, если проверка лимита не удалась
     }
 
     // Очищаем пустые строки и null значения
@@ -239,7 +270,17 @@ async function postHandler(
     };
 
     // Валидация входных данных (с нормализацией телефона)
-    const normalizedPhone = cleanedBody.phone ? normalizePhone(cleanedBody.phone) : undefined;
+    let normalizedPhone: string | undefined = undefined;
+    try {
+      normalizedPhone = cleanedBody.phone ? normalizePhone(cleanedBody.phone) : undefined;
+    } catch (phoneError) {
+      logger.warn('Ошибка нормализации телефона', {
+        projectId: id,
+        phone: cleanedBody.phone,
+        error: phoneError instanceof Error ? phoneError.message : String(phoneError)
+      });
+      // Продолжаем без нормализации, валидация схемы покажет ошибку
+    }
     
     // Валидируем дату рождения
     // Поддерживаем форматы: YYYY-MM-DD, ISO datetime, Date объект
@@ -267,12 +308,23 @@ async function postHandler(
       }
     }
 
-    const validated = validateWithSchema(createUserSchema, {
-      ...cleanedBody,
-      phone: normalizedPhone || undefined,
-      projectId: id,
-      birthDate: validatedBirthDate
-    });
+    let validated: any;
+    try {
+      validated = validateWithSchema(createUserSchema, {
+        ...cleanedBody,
+        phone: normalizedPhone || undefined,
+        projectId: id,
+        birthDate: validatedBirthDate
+      });
+    } catch (validationError) {
+      logger.error('Ошибка валидации данных пользователя', {
+        projectId: id,
+        cleanedBody,
+        error: validationError instanceof Error ? validationError.message : String(validationError),
+        stack: validationError instanceof Error ? validationError.stack : undefined
+      });
+      throw validationError;
+    }
 
     if (validated.phone && !isValidNormalizedPhone(validated.phone)) {
       return NextResponse.json(
@@ -317,6 +369,12 @@ async function postHandler(
 
     // Создаем пользователя неактивным по умолчанию
     // Пользователь станет активным только после взаимодействия с ботом
+    logger.info('Создание пользователя в БД', {
+      projectId: id,
+      email: validated.email,
+      phone: validated.phone,
+      firstName: validated.firstName
+    });
     const newUser = await db.user.create({
       data: {
         projectId: id,
@@ -328,6 +386,7 @@ async function postHandler(
         isActive: false
       }
     });
+    logger.info('Пользователь создан в БД', { projectId: id, userId: newUser.id });
 
     // Приветственный бонус (фиксированная сумма), срок действия — как у проекта
     try {
@@ -402,12 +461,19 @@ async function postHandler(
 
     return NextResponse.json(formattedUser, { status: 201 });
   } catch (error) {
-    const { id } = await context.params;
+    let projectId: string | undefined = id;
+    if (!projectId) {
+      try {
+        projectId = (await context.params).id;
+      } catch (e) {
+        projectId = 'unknown';
+      }
+    }
     
     // Обрабатываем ошибки валидации отдельно
     if (error instanceof Error && error.message.includes('Ошибка валидации')) {
       logger.warn('Ошибка валидации при создании пользователя', {
-        projectId: id,
+        projectId,
         error: error.message
       });
       return NextResponse.json(
@@ -422,14 +488,16 @@ async function postHandler(
     }
     
     logger.error('Ошибка создания пользователя', {
-      projectId: id,
+      projectId,
       error:
         error instanceof Error
           ? error.message
           : typeof error === 'string'
             ? error
             : JSON.stringify(error),
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'Unknown',
+      cause: error instanceof Error ? error.cause : undefined
     });
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
