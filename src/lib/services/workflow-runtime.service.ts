@@ -607,19 +607,30 @@ export class WorkflowRuntimeService {
             );
             
             // ✅ КРИТИЧНО: Сохраняем контакт/email в переменные для использования в workflow
+            // ВАЖНО: Сохраняем объект contactReceived, а не отдельные переменные с точкой в ключе
             if (contactPhone) {
-              await resumedContext.variables.set('contactReceived.phoneNumber', contactPhone, 'session');
-              await resumedContext.variables.set('contactReceived.type', 'phone', 'session');
+              const contactReceivedData = {
+                phoneNumber: contactPhone,
+                type: 'phone',
+                receivedAt: new Date().toISOString()
+              };
+              await resumedContext.variables.set('contactReceived', contactReceivedData, 'session');
               logger.info('💾 Contact phone saved to variables', {
                 phoneNumber: contactPhone,
-                executionId: waitingExecution.id
+                executionId: waitingExecution.id,
+                contactReceivedData
               });
             } else if (contactEmail) {
-              await resumedContext.variables.set('contactReceived.email', contactEmail, 'session');
-              await resumedContext.variables.set('contactReceived.type', 'email', 'session');
+              const contactReceivedData = {
+                email: contactEmail,
+                type: 'email',
+                receivedAt: new Date().toISOString()
+              };
+              await resumedContext.variables.set('contactReceived', contactReceivedData, 'session');
               logger.info('💾 Contact email saved to variables', {
                 email: contactEmail,
-                executionId: waitingExecution.id
+                executionId: waitingExecution.id,
+                contactReceivedData
               });
             }
 
