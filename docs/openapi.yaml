@@ -26,7 +26,7 @@ servers:
     description: Development server
 
 security:
-  - ClerkAuth: []
+  - JwtAuth: []
 
 tags:
   - name: Webhook
@@ -117,7 +117,7 @@ paths:
         - Projects
       summary: Получить список проектов
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       responses:
         '200':
           description: Список проектов
@@ -138,7 +138,7 @@ paths:
         - Projects
       summary: Создать новый проект
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       requestBody:
         required: true
         content:
@@ -164,7 +164,7 @@ paths:
         - Projects
       summary: Получить информацию о проекте
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -191,7 +191,7 @@ paths:
         - Projects
       summary: Обновить проект
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -223,7 +223,7 @@ paths:
         - Users
       summary: Получить список пользователей проекта
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -269,7 +269,7 @@ paths:
         - Telegram
       summary: Отправить расширенные Telegram-уведомления
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -340,7 +340,7 @@ paths:
         - Bonuses
       summary: Начислить бонусы пользователю
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -378,7 +378,7 @@ paths:
         - Bonuses
       summary: Получить баланс пользователя
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -409,7 +409,7 @@ paths:
         - Analytics
       summary: Получить аналитику проекта
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -447,7 +447,7 @@ paths:
         - Telegram
       summary: Настроить Telegram бота
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -479,7 +479,7 @@ paths:
         - Telegram
       summary: Получить статус бота
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -505,7 +505,7 @@ paths:
         - Referral
       summary: Получить настройки реферальной программы
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -530,7 +530,7 @@ paths:
         - Referral
       summary: Обновить настройки реферальной программы
       security:
-        - ClerkAuth: []
+        - JwtAuth: []
       parameters:
         - name: id
           in: path
@@ -558,11 +558,11 @@ paths:
 
 components:
   securitySchemes:
-    ClerkAuth:
+    JwtAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Clerk JWT токен для аутентификации
+      description: JWT токен для аутентификации
 
   schemas:
     # Webhook Requests

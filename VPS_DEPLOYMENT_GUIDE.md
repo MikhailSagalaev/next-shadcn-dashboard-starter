@@ -92,8 +92,10 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/dashboard"
 JWT_SECRET="$(openssl rand -base64 32)"
 CRON_SECRET="$(openssl rand -base64 32)"
 
-# Sentry
-NEXT_PUBLIC_SENTRY_DISABLED="true"
+# Grafana + Loki (Monitoring)
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your_grafana_api_key_here
+LOKI_URL=http://localhost:3100
 EOF
 ```
 

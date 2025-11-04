@@ -108,3 +108,30 @@ export async function requireAdmin(
   }
   return admin;
 }
+
+/**
+ * Получить текущего супер-админа из cookie super_admin_auth
+ */
+export async function getCurrentSuperAdmin(): Promise<JwtPayload | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('super_admin_auth')?.value;
+  if (!token) return null;
+  
+  const payload = await verifyJwt(token);
+  if (!payload || payload.role !== 'SUPERADMIN') {
+    return null;
+  }
+  
+  return payload;
+}
+
+/**
+ * Требовать авторизацию супер-админа
+ */
+export async function requireSuperAdmin(): Promise<JwtPayload> {
+  const admin = await getCurrentSuperAdmin();
+  if (!admin) {
+    throw new Error('UNAUTHORIZED');
+  }
+  return admin;
+}

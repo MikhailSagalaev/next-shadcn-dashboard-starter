@@ -418,10 +418,13 @@
             "query": "add_bonus",
             "parameters": {
               "type": "WELCOME",
-              "amount": 100,
+              "amount": "555",
               "userId": "{{contactUser.id}}",
-              "description": "Приветственные бонусы за активацию аккаунта"
-            }
+              "description": "Приветственные бонусы за активацию аккаунта",
+              "expiresAt": ""
+            },
+            "assignTo": "",
+            "resultMapping": {}
           }
         }
       },

@@ -33,6 +33,7 @@ model Project {
   webhookLogs       WebhookLog[]
   workflowVariables WorkflowVariable[]
   workflows         Workflow[]
+  systemLogs        SystemLog[]
 
   @@map("projects")
 }
@@ -219,6 +220,7 @@ model AdminAccount {
   createdAt                 DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt                 DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
   projects                  Project[]
+  subscriptions             Subscription[]
 
   @@map("admin_accounts")
 }
@@ -425,4 +427,169 @@ enum AlphaTesterStatus {
   REJECTED
   ACTIVE
   INACTIVE
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String   // info, warn, error, debug
+  message   String
+  context   Json?
+  projectId String?  @map("project_id")
+  userId    String?  @map("user_id")
+  source    String   // bot, webhook, api, workflow
+  stack     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([level, createdAt])
+  @@index([projectId])
+  @@map("system_logs")
+}
+
+model SystemSettings {
+  id        String   @id @default("system")
+  settings  Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  currency    String   @default("RUB")
+  interval    String   // month, year
+  
+  // Лимиты
+  maxProjects     Int @map("max_projects")
+  maxUsersPerProject Int @map("max_users_per_project")
+  
+  // Фичи (JSON для гибкости)
+  features    Json
+  
+  isActive    Boolean  @default(true) @map("is_active")
+  isPublic    Boolean  @default(true) @map("is_public")
+  sortOrder   Int      @default(0) @map("sort_order")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  subscriptions Subscription[]
+  discounts     PlanDiscount[]
+  
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id              String   @id @default(cuid())
+  adminAccountId  String   @map("admin_account_id")
+  planId          String   @map("plan_id")
+  
+  status          String   // active, cancelled, expired, trial
+  
+  // Даты
+  startDate       DateTime @map("start_date")
+  endDate         DateTime? @map("end_date")
+  trialEndDate    DateTime? @map("trial_end_date")
+  cancelledAt     DateTime? @map("cancelled_at")
+  
+  // Промокод
+  promoCodeId     String?  @map("promo_code_id")
+  
+  // Кастомные лимиты (переопределяют план)
+  customLimits    Json?    @map("custom_limits")
+  
+  // Биллинг (для будущей интеграции)
+  billingEmail    String?  @map("billing_email")
+  paymentMethod   String?  @map("payment_method")
+  lastPaymentDate DateTime? @map("last_payment_date")
+  nextPaymentDate DateTime? @map("next_payment_date")
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  adminAccount    AdminAccount     @relation(fields: [adminAccountId], references: [id], onDelete: Cascade)
+  plan            SubscriptionPlan @relation(fields: [planId], references: [id])
+  promoCode       PromoCode?       @relation(fields: [promoCodeId], references: [id])
+  history         SubscriptionHistory[]
+  
+  @@map("subscriptions")
+}
+
+model SubscriptionHistory {
+  id             String   @id @default(cuid())
+  subscriptionId String   @map("subscription_id")
+  
+  action         String   // created, upgraded, downgraded, cancelled, renewed
+  fromPlanId     String?  @map("from_plan_id")
+  toPlanId       String?  @map("to_plan_id")
+  
+  reason         String?
+  metadata       Json?
+  
+  performedBy    String?  @map("performed_by") // adminId или system
+  createdAt      DateTime @default(now()) @map("created_at")
+  
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  @@map("subscription_history")
+}
+
+model PromoCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String?
+  
+  // Тип скидки
+  discountType   String  @map("discount_type") // percent, fixed_amount
+  discountValue  Decimal @db.Decimal(10, 2) @map("discount_value")
+  
+  // Применимость
+  applicablePlans String[] @map("applicable_plans") // ['pro', 'enterprise'] или [] для всех
+  
+  // Ограничения
+  maxUses         Int?     @map("max_uses")
+  usedCount       Int      @default(0) @map("used_count")
+  validFrom       DateTime @map("valid_from")
+  validUntil      DateTime? @map("valid_until")
+  
+  isActive        Boolean  @default(true) @map("is_active")
+  
+  createdBy       String?  @map("created_by") // superadmin id
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  subscriptions   Subscription[]
+  
+  @@map("promo_codes")
+}
+
+model PlanDiscount {
+  id          String   @id @default(cuid())
+  planId      String   @map("plan_id")
+  
+  name        String
+  description String?
+  
+  discountType   String  @map("discount_type") // percent, fixed_amount
+  discountValue  Decimal @db.Decimal(10, 2) @map("discount_value")
+  
+  // Условия
+  minMonths      Int?    @map("min_months") // например, скидка при оплате за год
+  
+  validFrom      DateTime @map("valid_from")
+  validUntil     DateTime? @map("valid_until")
+  
+  isActive       Boolean  @default(true) @map("is_active")
+  sortOrder      Int      @default(0) @map("sort_order")
+  
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  
+  @@map("plan_discounts")
 }

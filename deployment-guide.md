@@ -45,8 +45,8 @@ vercel --prod
 ```bash
 # Добавьте переменные через веб-интерфейс или CLI:
 vercel env add DATABASE_URL
-vercel env add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-vercel env add CLERK_SECRET_KEY
+vercel env add NEXT_PUBLIC_JWT Authentication_PUBLISHABLE_KEY
+vercel env add JWT Authentication_SECRET_KEY
 ```
 
 **Плюсы**:
@@ -99,10 +99,6 @@ docker-compose up -d
 ```env
 # Database
 DATABASE_URL="postgresql://user:password@host:5432/database"
-
-# Clerk Auth
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_live_xxx"
-CLERK_SECRET_KEY="sk_live_xxx"
 
 # App Config
 NEXTAUTH_URL="https://your-domain.com"

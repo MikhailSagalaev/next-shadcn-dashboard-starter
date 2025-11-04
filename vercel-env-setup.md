@@ -25,11 +25,7 @@ CRON_SECRET=your-super-secret-cron-key-here-123456789
 
 ## ОПЦИОНАЛЬНЫЕ (можно пропустить для начала):
 
-### Clerk Authentication (можно работать в keyless режиме):
-```
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
-```
+
 
 ### Sentry Error Tracking (опционально):
 ```

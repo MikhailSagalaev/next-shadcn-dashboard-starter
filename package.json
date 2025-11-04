@@ -31,6 +31,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:reset": "prisma migrate reset",
+    "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio --browser none --port 5555",
     "production:check": "yarn lint && yarn test && yarn build && npx tsc --noEmit",
     "pm2:start": "pm2 start ecosystem.config.cjs --update-env --only bonus-app && pm2 save",
@@ -89,7 +90,6 @@
     "@radix-ui/react-toggle": "^1.1.2",
     "@radix-ui/react-toggle-group": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.8",
-    "@sentry/nextjs": "^9.19.0",
     "@tabler/icons-react": "^3.31.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@tanstack/react-table": "^8.21.2",
@@ -166,6 +166,9 @@
   "overrides": {
     "@types/react": "19.0.1",
     "@types/react-dom": "19.0.2"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "packageManager": "yarn@4.5.1+sha512.341db9396b6e289fecc30cd7ab3af65060e05ebff4b3b47547b278b9e67b08f485ecd8c79006b405446262142c7a38154445ef7f17c1d5d1de7d90bf9ce7054d"
 }

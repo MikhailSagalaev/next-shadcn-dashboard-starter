@@ -27,7 +27,7 @@ Gupil - мультитенантная SaaS платформа для управ
 - 📝 OpenAPI документация
 - 🚦 Rate limiting для API
 - 🛡️ Защита от SQL инъекций
-- 📊 Мониторинг через Sentry
+- 📊 Мониторинг через Grafana + Loki (self-hosted)
 - 🐳 Docker поддержка
 
 ## 📋 Требования
@@ -64,14 +64,6 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5434/saas_bonus_system?sch
 # Redis
 REDIS_URL=redis://localhost:6379
 
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
-
 # Application
 NEXT_PUBLIC_APP_URL=http://localhost:5006
 NODE_ENV=development
@@ -79,10 +71,10 @@ NODE_ENV=development
 # Auth (обязательно для /api/auth/*)
 JWT_SECRET=dev_super_secret_change_me
 
-# Sentry (optional)
-NEXT_PUBLIC_SENTRY_DSN=https://...@sentry.io/...
-NEXT_PUBLIC_SENTRY_ORG=your-org
-NEXT_PUBLIC_SENTRY_PROJECT=your-project
+# Grafana + Loki (Monitoring - optional)
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your_grafana_api_key_here
+LOKI_URL=http://localhost:3100
 
 # Cron Jobs
 CRON_SECRET=your-cron-secret
@@ -329,18 +321,20 @@ vercel --prod
 
 ## 📊 Мониторинг
 
-### Sentry
+### Grafana + Loki
 
-Для включения мониторинга ошибок через Sentry:
+Для включения мониторинга ошибок через Grafana + Loki (self-hosted):
 
-1. Создайте проект на [sentry.io](https://sentry.io)
+1. Разверните Grafana + Loki через Docker Compose (см. `docs/grafana-loki-setup.md`)
 2. Добавьте переменные окружения:
 
 ```env
-NEXT_PUBLIC_SENTRY_DSN=https://...@sentry.io/...
-NEXT_PUBLIC_SENTRY_ORG=your-org
-NEXT_PUBLIC_SENTRY_PROJECT=your-project
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your_grafana_api_key_here
+LOKI_URL=http://localhost:3100
 ```
+
+См. [документацию по настройке Grafana + Loki](./docs/grafana-loki-setup.md) для подробных инструкций.
 
 ### Метрики
 
@@ -355,7 +349,7 @@ NEXT_PUBLIC_SENTRY_PROJECT=your-project
 
 ### Реализованные меры защиты
 
-- ✅ JWT аутентификация через Clerk
+- ✅ JWT аутентификация
 - ✅ Rate limiting для API endpoints
 - ✅ Валидация всех входящих данных (Zod)
 - ✅ Защита от SQL инъекций (Prisma)
@@ -405,7 +399,7 @@ NEXT_PUBLIC_SENTRY_PROJECT=your-project
 
 - [Next.js](https://nextjs.org/) - React framework
 - [Prisma](https://www.prisma.io/) - ORM
-- [Clerk](https://clerk.dev/) - Authentication
+
 - [Grammy](https://grammy.dev/) - Telegram bot framework
 - [Shadcn/ui](https://ui.shadcn.com/) - UI components
 - [Vercel](https://vercel.com/) - Hosting platform

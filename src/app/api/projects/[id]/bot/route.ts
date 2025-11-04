@@ -12,6 +12,7 @@ import { db } from '@/lib/db';
 import { ProjectService } from '@/lib/services/project.service';
 import { botManager } from '@/lib/telegram/bot-manager';
 import { logger } from '@/lib/logger';
+import { TelegramBotValidationService } from '@/lib/services/telegram-bot-validation.service';
 
 // Функция для создания CORS заголовков - разрешаем все origins для виджета
 function createCorsHeaders(request: NextRequest) {
@@ -254,29 +255,51 @@ export async function POST(
       }
     }
 
+    // Если botUsername не передан, получаем его из Telegram API
+    let botUsernameToSave = body.botUsername || '';
+    if (!botUsernameToSave && body.botToken) {
+      try {
+        const botInfo = await TelegramBotValidationService.getBotInfo(body.botToken);
+        if (botInfo.username) {
+          botUsernameToSave = botInfo.username;
+          logger.info('✅ Получен botUsername из Telegram API (POST)', {
+            projectId: id,
+            botUsername: botUsernameToSave,
+            component: 'bot-api'
+          });
+        }
+      } catch (error) {
+        logger.warn('Не удалось получить botUsername из Telegram API (POST)', {
+          projectId: id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          component: 'bot-api'
+        });
+      }
+    }
+    
     // Создаем настройки бота
     const botSettings = await db.botSettings.create({
       data: {
         projectId: id,
         botToken: body.botToken,
-        botUsername: body.botUsername,
+        botUsername: botUsernameToSave,
         functionalSettings: body.functionalSettings || {}
       }
     });
 
     // Инициализируем бота
-    try {
-      await botManager.createBot(id, {
-        id: body.id,
-        projectId: id,
-        botToken: body.botToken,
-        botUsername: body.botUsername,
-        functionalSettings: body.functionalSettings || {},
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-      logger.info('Бот успешно инициализирован', { projectId: id }, 'bot-api');
+          try {
+        await botManager.createBot(id, {
+          id: body.id,
+          projectId: id,
+          botToken: body.botToken,
+          botUsername: botUsernameToSave,
+          functionalSettings: body.functionalSettings || {},
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        logger.info('Бот успешно инициализирован', { projectId: id }, 'bot-api');
     } catch (botError) {
       logger.warn(
         'Не удалось инициализировать бота, но настройки сохранены',
@@ -337,17 +360,23 @@ export async function PUT(
       );
     }
 
-    // Получаем существующие настройки бота
-    const existingBotSettings = await db.botSettings.findUnique({
-      where: { projectId: id }
-    });
-
-    // Если обновляем только функциональные настройки (например, widgetSettings)
-    // и не передан botToken, используем существующие данные
-    if (!body.botToken && existingBotSettings) {
+    // Если передан только functionalSettings, обновляем только их
+    if (body.functionalSettings && !body.botToken && !body.botUsername) {
       logger.info('Обновляем только функциональные настройки бота', {
         projectId: id
       });
+
+      // Проверяем существование настроек бота перед обновлением
+      const existingSettings = await db.botSettings.findUnique({
+        where: { projectId: id }
+      });
+
+      if (!existingSettings) {
+        return NextResponse.json(
+          { error: 'Настройки бота не найдены. Сначала создайте бота через POST.' },
+          { status: 404, headers: createCorsHeaders(request) }
+        );
+      }
 
       // Обновляем только functionalSettings
       const updatedSettings = await db.botSettings.update({
@@ -422,13 +451,46 @@ export async function PUT(
       );
     }
 
-    // Обновляем настройки бота
-    const botSettings = await db.botSettings.update({
+    // Обновляем или создаем настройки бота (upsert)
+    // Если запись существует - обновляем, если нет - создаем
+    let botUsernameToSave = body.botUsername || '';
+    
+    // Если botUsername не передан или пустой, пытаемся получить его из Telegram API
+    if (!botUsernameToSave && body.botToken) {
+      try {
+        const botInfo = await TelegramBotValidationService.getBotInfo(body.botToken);
+        if (botInfo.username) {
+          botUsernameToSave = botInfo.username;
+          logger.info('✅ Получен botUsername из Telegram API', {
+            projectId: id,
+            botUsername: botUsernameToSave,
+            component: 'bot-api'
+          });
+        }
+      } catch (error) {
+        logger.warn('Не удалось получить botUsername из Telegram API', {
+          projectId: id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          component: 'bot-api'
+        });
+        // Продолжаем без username, можно будет обновить позже
+      }
+    }
+    
+    const botSettings = await db.botSettings.upsert({
       where: { projectId: id },
-      data: {
+      update: {
         botToken: body.botToken,
-        botUsername: body.botUsername,
-        functionalSettings: body.functionalSettings || {}
+        botUsername: botUsernameToSave,
+        functionalSettings: body.functionalSettings || {},
+        updatedAt: new Date()
+      },
+      create: {
+        projectId: id,
+        botToken: body.botToken,
+        botUsername: botUsernameToSave,
+        functionalSettings: body.functionalSettings || {},
+        isActive: true
       }
     });
 
@@ -456,18 +518,18 @@ export async function PUT(
         component: 'bot-api'
       });
 
-      try {
-        // Простое создание бота без сложной логики
-        await botManager.createBot(id, {
-          id: body.id,
-          projectId: id,
-          botToken: body.botToken,
-          botUsername: body.botUsername,
-          functionalSettings: body.functionalSettings || {},
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
+              try {
+          // Простое создание бота без сложной логики
+          await botManager.createBot(id, {
+            id: body.id,
+            projectId: id,
+            botToken: body.botToken,
+            botUsername: botUsernameToSave,
+            functionalSettings: body.functionalSettings || {},
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
         logger.info('Бот успешно создан в менеджере', {
           projectId: id,
           component: 'bot-api'
@@ -503,7 +565,7 @@ export async function PUT(
             id: body.id,
             projectId: id,
             botToken: body.botToken,
-            botUsername: body.botUsername,
+            botUsername: botUsernameToSave,
             functionalSettings: body.functionalSettings || {},
             isActive: true,
             createdAt: new Date(),
@@ -523,13 +585,13 @@ export async function PUT(
         }
       } else {
         // Если токен не изменился, просто обновляем настройки в памяти
-        try {
-          const bot = botManager.getBot(id);
-          if (bot) {
-            bot.bot.token = body.botToken;
-            bot.bot.username = body.botUsername;
-            bot.isActive = true;
-            bot.lastUpdated = new Date();
+                  try {
+            const bot = botManager.getBot(id);
+            if (bot) {
+              bot.bot.token = body.botToken;
+              bot.bot.username = botUsernameToSave;
+              bot.isActive = true;
+              bot.lastUpdated = new Date();
             logger.info('Настройки бота обновлены в менеджере', {
               projectId: id,
               component: 'bot-api'

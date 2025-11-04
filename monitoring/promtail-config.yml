@@ -1,0 +1,45 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Логи приложения из директории logs
+  - job_name: app-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: saas-bonus-app
+          __path__: /var/log/app/*.log
+    pipeline_stages:
+      - regex:
+          expression: '(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+(?P<level>\w+)\s+(?P<message>.*)'
+      - labels:
+          level:
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+  # Системные логи хоста (опционально)
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          __path__: /var/log/host/syslog
+    pipeline_stages:
+      - regex:
+          expression: '(?P<timestamp>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?P<hostname>\S+)\s+(?P<service>\S+):\s+(?P<message>.*)'
+      - labels:
+          hostname:
+          service:
+      - timestamp:
+          source: timestamp
+          format: Jan 2 15:04:05

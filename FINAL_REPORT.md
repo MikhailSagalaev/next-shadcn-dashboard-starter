@@ -31,7 +31,7 @@
   - `/auth/reset-password` - установка нового пароля
 
 - ✅ **Безопасность**:
-  - JWT токены через Clerk
+  - JWT токены
   - Rate limiting на auth endpoints
   - Безопасные ответы (не раскрывают email)
   - Токены восстановления с expiration (1 час)

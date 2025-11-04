@@ -90,12 +90,10 @@ services:
       NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: "/dashboard"
       NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: "/dashboard"
       
-      # Monitoring (Sentry)
-      NEXT_PUBLIC_SENTRY_DSN: "${SENTRY_DSN}"
-      NEXT_PUBLIC_SENTRY_ORG: "${SENTRY_ORG}"
-      NEXT_PUBLIC_SENTRY_PROJECT: "${SENTRY_PROJECT}"
-      SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN}"
-      NEXT_PUBLIC_SENTRY_DISABLED: "false"
+      # Monitoring (Grafana + Loki)
+      GRAFANA_URL: "${GRAFANA_URL:-http://localhost:3000}"
+      GRAFANA_API_KEY: "${GRAFANA_API_KEY}"
+      LOKI_URL: "${LOKI_URL:-http://localhost:3100}"
       
       # Telegram Bots
       TELEGRAM_BOT_TOKEN_1: "${TELEGRAM_BOT_TOKEN_1}"

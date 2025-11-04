@@ -67,10 +67,10 @@ CRON_SECRET=секрет_для_cron_задач_32_символа
 LOG_LEVEL=info
 ENABLE_CONSOLE_LOGS=false
 
-# ===== Sentry (опционально) =====
-# SENTRY_DSN=https://xxx@sentry.io/yyy
-# SENTRY_ORG=your-org
-# SENTRY_PROJECT=bonus-system
+# ===== Grafana + Loki (мониторинг, опционально) =====
+# GRAFANA_URL=http://localhost:3000
+# GRAFANA_API_KEY=your_grafana_api_key_here
+# LOKI_URL=http://localhost:3100
 
 # ===== Telegram Bot API (если нужен кастомный сервер) =====
 # TELEGRAM_API_URL=https://api.telegram.org

@@ -76,9 +76,7 @@ REDIS_URL=redis://localhost:6379
 NEXT_PUBLIC_APP_URL=http://localhost:5006
 JWT_SECRET=dev_super_secret_change_me
 
-# Clerk Auth (опционально — keyless mode по умолчанию)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
+
 
 # Email провайдер - Resend (https://resend.com)
 RESEND_API_KEY=re_your_api_key_here
@@ -152,7 +150,7 @@ yarn exec ts-node scripts/system-check.ts
 | Framework | Next.js 15 + React 19 |
 | Database | PostgreSQL + Prisma |
 | UI | Shadcn/ui + Tailwind CSS v4 |
-| Auth | Clerk |
+| Auth | JWT |
 | Telegram | Grammy |
 | Language | TypeScript |
 | Styling | HeroUI + Tailwind |

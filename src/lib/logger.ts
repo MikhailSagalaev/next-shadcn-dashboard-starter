@@ -2,11 +2,13 @@
  * @file: logger.ts
  * @description: Профессиональное логирование для SaaS Bonus System
  * @project: SaaS Bonus System
- * @dependencies: none
+ * @dependencies: @prisma/client
  * @created: 2025-01-23
- * @updated: 2025-01-27
+ * @updated: 2025-01-30
  * @author: AI Assistant + User
  */
+
+import { db } from './db';
 
 export interface LogContext {
   [key: string]: any;
@@ -76,8 +78,66 @@ class Logger {
     return logEntry;
   }
 
-  private async persistLog(logEntry: LogLevel) {
-    // В production здесь будет интеграция с внешними сервисами логирования
+    private async persistLog(logEntry: LogLevel) {
+    // Сохраняем только error и warn в SystemLog для мониторинга
+    if (logEntry.level === 'error' || logEntry.level === 'warn') {
+      try {
+        // Определяем источник из component или context
+        let source = 'api';
+        if (logEntry.component) {
+          if (logEntry.component.includes('bot') || logEntry.component.includes('telegram')) {
+            source = 'bot';
+          } else if (logEntry.component.includes('webhook')) {
+            source = 'webhook';
+          } else if (logEntry.component.includes('workflow')) {
+            source = 'workflow';
+          }
+        }
+
+        // Извлекаем projectId и userId из context если есть
+        const projectId = logEntry.context?.projectId as string | undefined;
+        const userId = logEntry.context?.userId as string | undefined;
+
+        // Извлекаем stack trace из context если есть
+        const stack = logEntry.context?.stack as string | undefined;
+        const error = logEntry.context?.error;
+        let errorStack: string | undefined = stack;
+        
+        // Если есть вложенный error объект, извлекаем stack
+        if (error && typeof error === 'object' && 'stack' in error) {
+          errorStack = error.stack as string;
+        }
+
+        // Сохраняем в БД (async, не блокируем основной поток)
+        db.systemLog
+          .create({
+            data: {
+              level: logEntry.level,
+              message: logEntry.message,
+              context: logEntry.context ? (logEntry.context as any) : undefined,
+              projectId: projectId || null,
+              userId: userId || null,
+              source,
+              stack: errorStack || null
+            }
+          })
+          .catch((err) => {
+            // Не логируем ошибки логирования в консоль, чтобы избежать циклов
+            // Только в development режиме для отладки
+            if (this.isDevelopment) {
+              console.error('Failed to persist log to SystemLog:', err);
+            }
+          });
+      } catch (error) {
+        // Не выбрасываем ошибку, чтобы не нарушить основной флоу
+        // Только в development режиме для отладки
+        if (this.isDevelopment) {
+          console.error('Error in persistLog:', error);
+        }
+      }
+    }
+
+    // В production здесь также может быть интеграция с внешними сервисами логирования
     // Например: Winston, Pino, DataDog, Sentry и т.д.
     if (this.isDevelopment && process.env.PERSIST_LOGS === 'true') {
       try {

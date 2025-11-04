@@ -13,7 +13,7 @@
 CREATE TABLE project_groups (
   id UUID PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
-  owner_clerk_user_id VARCHAR(255) NOT NULL, -- владелец группы
+      owner_user_id VARCHAR(255) NOT NULL, -- владелец группы
   shared_bonuses BOOLEAN DEFAULT false,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -101,7 +101,7 @@ GET /api/groups/:groupId/analytics
 4. Обновить widget и API
 
 ## Безопасность
-- Доступ к группе только у owner_clerk_user_id
+- Доступ к группе только у owner_user_id
 - Валидация принадлежности проектов к группе
 - Логирование межпроектных операций
 

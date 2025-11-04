@@ -137,13 +137,7 @@ REDIS_URL="redis://localhost:6379"
 REDIS_HOST="localhost"
 REDIS_PORT="6379"
 
-# Clerk Authentication (получите ключи на https://clerk.com)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
-CLERK_SECRET_KEY="sk_test_..."
-NEXT_PUBLIC_CLERK_SIGN_IN_URL="/auth/sign-in"
-NEXT_PUBLIC_CLERK_SIGN_UP_URL="/auth/sign-up"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/dashboard"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/dashboard"
+
 
 # Application
 NEXT_PUBLIC_APP_URL="http://localhost:5006"
@@ -153,9 +147,9 @@ NODE_ENV="development"
 CRON_SECRET="your-random-secret-here"
 ```
 
-### Шаг 5: Получение Clerk ключей
+### Шаг 5: Получение JWT Authentication ключей
 
-1. Зарегистрируйтесь на https://clerk.com
+1. Зарегистрируйтесь на https://JWT Authentication.com
 2. Создайте новое приложение
 3. Скопируйте API ключи из Dashboard
 4. Вставьте их в `.env.local`
@@ -212,7 +206,7 @@ curl http://localhost:5006/api/health
 ### 2. Проверка через браузер
 
 1. Откройте http://localhost:5006
-2. Вы должны увидеть страницу входа Clerk
+2. Вы должны увидеть страницу входа JWT Authentication
 3. Зарегистрируйтесь или войдите
 4. Попадете в Dashboard
 
@@ -240,7 +234,7 @@ redis-cli ping
 sudo systemctl start redis-server
 ```
 
-### Проблема: "Clerk keys not configured"
+### Проблема: "JWT Authentication keys not configured"
 
 **Решение:**
 1. Убедитесь, что ключи добавлены в `.env.local`

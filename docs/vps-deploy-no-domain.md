@@ -54,9 +54,7 @@ NEXTAUTH_SECRET=$(openssl rand -base64 32)
 CRON_SECRET=$(openssl rand -base64 32)
 JWT_SECRET=$(openssl rand -base64 32)
 
-# Clerk (временно тестовые/пустые)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_dummy
-CLERK_SECRET_KEY=sk_test_dummy
+
 
 # Email провайдер - Resend (https://resend.com)
 # Получите API ключ: https://resend.com/dashboard/api-keys
