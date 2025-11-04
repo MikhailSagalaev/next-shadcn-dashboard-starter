@@ -2461,12 +2461,17 @@
         if (tildaPromoWrapper) {
           try {
             // Принудительно показываем элемент сначала
+            // Убираем все возможные скрывающие стили
             tildaPromoWrapper.style.display = 'block';
+            tildaPromoWrapper.style.visibility = 'visible';
+            tildaPromoWrapper.style.opacity = '1';
             
             // Затем восстанавливаем оригинальные стили если есть
             if (this.state.originalPromoStyles) {
               if (this.state.originalPromoStyles.inline && this.state.originalPromoStyles.inline !== 'display: none') {
-                tildaPromoWrapper.setAttribute('style', this.state.originalPromoStyles.inline);
+                // Восстанавливаем оригинальные стили, но гарантируем display: block
+                const originalStyle = this.state.originalPromoStyles.inline.replace(/display\s*:\s*[^;]+/gi, '');
+                tildaPromoWrapper.setAttribute('style', originalStyle + (originalStyle ? '; ' : '') + 'display: block !important;');
               } else {
                 // Если инлайн-стилей не было или был display:none, устанавливаем минимально необходимые
                 tildaPromoWrapper.style.width = this.state.originalPromoStyles.width || '100%';
@@ -2475,15 +2480,29 @@
             } else {
               // Если стили не были сохранены, устанавливаем базовые
               tildaPromoWrapper.style.width = '100%';
+              tildaPromoWrapper.style.display = 'block';
             }
             
-            console.log('✅ switchMode: восстановлены оригинальные стили поля промокода Tilda');
+            // Дополнительно проверяем, что элемент действительно видим
+            const computedDisplay = window.getComputedStyle(tildaPromoWrapper).display;
+            if (computedDisplay === 'none') {
+              console.warn('⚠️ Поле промокода все еще скрыто через CSS, принудительно показываем');
+              tildaPromoWrapper.style.setProperty('display', 'block', 'important');
+            }
+            
+            console.log('✅ switchMode: восстановлены оригинальные стили поля промокода Tilda', {
+              display: tildaPromoWrapper.style.display,
+              computedDisplay: window.getComputedStyle(tildaPromoWrapper).display,
+              width: tildaPromoWrapper.style.width
+            });
           } catch (error) {
             // Если не удалось восстановить, устанавливаем базовые стили
-            tildaPromoWrapper.style.display = 'block';
+            tildaPromoWrapper.style.setProperty('display', 'block', 'important');
             tildaPromoWrapper.style.width = '100%';
             this.log('⚠️ Ошибка восстановления стилей, установлены базовые:', error);
           }
+        } else {
+          console.warn('⚠️ switchMode: поле промокода Tilda не найдено (.t-inputpromocode__wrapper)');
         }
       } else {
         // Переключаемся на режим бонусов
@@ -3225,7 +3244,7 @@
 
       if (this.state.bonusBalance > 0) {
         balanceElement.style.display = 'block';
-        balanceAmount.textContent = this.state.bonusBalance;
+        balanceAmount.textContent = Number(this.state.bonusBalance).toFixed(2);
         amountInput.style.display = 'block';
         applyButton.style.display = 'block';
 
