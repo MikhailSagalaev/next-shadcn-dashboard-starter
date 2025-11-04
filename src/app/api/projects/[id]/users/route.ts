@@ -228,13 +228,50 @@ async function postHandler(
       );
     }
 
+    // Очищаем пустые строки и null значения
+    // Преобразуем пустые строки в undefined для корректной валидации опциональных полей
+    const cleanedBody = {
+      firstName: body.firstName && body.firstName.trim() ? body.firstName.trim() : undefined,
+      lastName: body.lastName && body.lastName.trim() ? body.lastName.trim() : undefined,
+      email: body.email && body.email.trim() ? body.email.trim() : undefined,
+      phone: body.phone && body.phone.trim() ? body.phone.trim() : undefined,
+      birthDate: body.birthDate && body.birthDate.trim() ? body.birthDate.trim() : undefined
+    };
+
     // Валидация входных данных (с нормализацией телефона)
-    const normalizedPhone = normalizePhone(body.phone);
+    const normalizedPhone = cleanedBody.phone ? normalizePhone(cleanedBody.phone) : undefined;
+    
+    // Валидируем дату рождения
+    // Поддерживаем форматы: YYYY-MM-DD, ISO datetime, Date объект
+    let validatedBirthDate: Date | undefined = undefined;
+    if (cleanedBody.birthDate) {
+      try {
+        // Если это строка в формате YYYY-MM-DD, добавляем время для валидации
+        const dateStr = cleanedBody.birthDate;
+        const date = dateStr.includes('T') 
+          ? new Date(dateStr) 
+          : new Date(dateStr + 'T00:00:00.000Z');
+        
+        if (isNaN(date.getTime())) {
+          return NextResponse.json(
+            { error: 'Неверный формат даты рождения' },
+            { status: 400 }
+          );
+        }
+        validatedBirthDate = date;
+      } catch (e) {
+        return NextResponse.json(
+          { error: 'Неверный формат даты рождения' },
+          { status: 400 }
+        );
+      }
+    }
+
     const validated = validateWithSchema(createUserSchema, {
-      ...body,
+      ...cleanedBody,
       phone: normalizedPhone || undefined,
       projectId: id,
-      birthDate: body.birthDate ? new Date(body.birthDate) : undefined
+      birthDate: validatedBirthDate
     });
 
     if (validated.phone && !isValidNormalizedPhone(validated.phone)) {
@@ -287,7 +324,7 @@ async function postHandler(
         lastName: validated.lastName || null,
         email: validated.email || null,
         phone: validated.phone || null,
-        birthDate: validated.birthDate ? new Date(validated.birthDate) : null,
+        birthDate: validated.birthDate || null,
         isActive: false
       }
     });
@@ -302,11 +339,7 @@ async function postHandler(
       if (welcomeAmount > 0) {
         const expiresAt = new Date();
         expiresAt.setDate(
-          expiresAt.getDate() +
-            Number(
-              (await db.project.findUnique({ where: { id } }))
-                ?.bonusExpiryDays || 365
-            )
+          expiresAt.getDate() + Number(project.bonusExpiryDays || 365)
         );
 
         const bonus = await db.bonus.create({
@@ -370,6 +403,24 @@ async function postHandler(
     return NextResponse.json(formattedUser, { status: 201 });
   } catch (error) {
     const { id } = await context.params;
+    
+    // Обрабатываем ошибки валидации отдельно
+    if (error instanceof Error && error.message.includes('Ошибка валидации')) {
+      logger.warn('Ошибка валидации при создании пользователя', {
+        projectId: id,
+        error: error.message
+      });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
+    // Обрабатываем ошибки доступа
+    if (error instanceof Error && error.message === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
     logger.error('Ошибка создания пользователя', {
       projectId: id,
       error:
@@ -377,7 +428,8 @@ async function postHandler(
           ? error.message
           : typeof error === 'string'
             ? error
-            : JSON.stringify(error)
+            : JSON.stringify(error),
+      stack: error instanceof Error ? error.stack : undefined
     });
     return NextResponse.json(
       { error: 'Внутренняя ошибка сервера' },
