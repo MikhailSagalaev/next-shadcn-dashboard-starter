@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import type { UpdateWorkflowRequest } from '@/types/workflow';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
 
@@ -183,6 +184,49 @@ export async function PUT(
 
     // Инвалидируем кэш workflow для проекта
     await WorkflowRuntimeService.invalidateCache(projectId);
+    
+    // ✅ КРИТИЧНО: Если workflow активен и бот запущен, перезапускаем бота
+    // чтобы он загрузил актуальную версию workflow
+    if (workflow.isActive) {
+      try {
+        const { botManager } = await import('@/lib/telegram/bot-manager');
+        const botInstance = botManager.getBot(projectId);
+        
+        if (botInstance && botInstance.isActive) {
+          logger.info('🔄 Перезапускаем активный бот для загрузки обновленного workflow', {
+            projectId,
+            workflowId
+          });
+          
+          // Получаем настройки бота
+          const project = await db.project.findUnique({
+            where: { id: projectId },
+            include: { botSettings: true }
+          });
+          
+          if (project?.botSettings) {
+            // Останавливаем текущий бот
+            await botManager.stopBot(projectId);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Запускаем бот заново с новым workflow
+            await botManager.createBot(projectId, project.botSettings as any);
+            
+            logger.info('✅ Бот перезапущен с обновленным workflow', {
+              projectId,
+              workflowId
+            });
+          }
+        }
+      } catch (botError) {
+        // Не критично, если бот не запущен - просто логируем
+        logger.warn('⚠️ Не удалось перезапустить бот при обновлении workflow', {
+          projectId,
+          workflowId,
+          error: botError instanceof Error ? botError.message : 'Unknown error'
+        });
+      }
+    }
 
     return NextResponse.json({ workflow });
   } catch (error) {

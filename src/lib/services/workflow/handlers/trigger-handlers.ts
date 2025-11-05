@@ -14,6 +14,7 @@ import type {
   ExecutionContext,
   ValidationResult
 } from '@/types/workflow';
+import { RegexValidator } from '@/lib/security/regex-validator';
 
 /**
  * Обработчик для trigger.command
@@ -76,6 +77,14 @@ export class MessageTriggerHandler extends BaseNodeHandler {
     // или с паттерном регулярного выражения
     if (config?.pattern && typeof config.pattern !== 'string') {
       errors.push('Pattern must be a string');
+    }
+
+    // ✅ ReDoS защита: валидация regex паттерна
+    if (config?.pattern && typeof config.pattern === 'string' && config.pattern.trim()) {
+      const validation = RegexValidator.validate(config.pattern, config.flags);
+      if (!validation.isValid) {
+        errors.push(`Invalid or unsafe regex pattern: ${validation.error || 'Unknown error'}`);
+      }
     }
 
     return {

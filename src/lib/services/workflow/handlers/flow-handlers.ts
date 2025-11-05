@@ -14,9 +14,11 @@ import type {
   ExecutionContext,
   ValidationResult
 } from '@/types/workflow';
+import { DelayJobService } from '../delay-job.service';
 
 /**
  * Обработчик для flow.delay
+ * Использует Bull queue для неблокирующих задержек
  */
 export class DelayFlowHandler extends BaseNodeHandler {
   canHandle(nodeType: WorkflowNodeType): boolean {
@@ -45,20 +47,127 @@ export class DelayFlowHandler extends BaseNodeHandler {
         throw new Error('Invalid delay value');
       }
 
-      this.logStep(context, node, `Delaying execution for ${delayMs}ms`, 'info');
+      // Максимальная задержка: 24 часа
+      const MAX_DELAY_MS = 24 * 60 * 60 * 1000; // 86400000 ms
+      if (delayMs > MAX_DELAY_MS) {
+        throw new Error(
+          `Delay exceeds maximum allowed time (24 hours). Requested: ${delayMs}ms, Max: ${MAX_DELAY_MS}ms`
+        );
+      }
 
-      // Ждем указанное время
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      this.logStep(context, node, `Scheduling workflow delay for ${delayMs}ms`, 'info');
 
-      this.logStep(context, node, 'Delay completed', 'info');
+      // Для задержек менее 1 секунды используем синхронное ожидание (быстрее)
+      if (delayMs < 1000) {
+        this.logStep(context, node, `Using synchronous delay (<1s)`, 'debug');
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        this.logStep(context, node, 'Delay completed', 'info');
+        // Следующий нод определяется по connections
+        return null;
+      }
 
-      // Следующий нод определяется по connections
-      return null;
+      // Для длительных задержек используем Bull queue (неблокирующее)
+      try {
+        // Находим следующий нод для продолжения после задержки
+        const nextNodeId = this.findNextNodeId(node, context) || null;
 
+        // Обновляем execution: сохраняем состояние задержки
+        const { db } = await import('@/lib/db');
+        await db.workflowExecution.update({
+          where: { id: context.executionId },
+          data: {
+            status: 'waiting',
+            waitType: 'delay' as any,
+            currentNodeId: nextNodeId || node.id, // Сохраняем следующий нод для продолжения
+            waitPayload: {
+              delayMs,
+              originalNodeId: node.id,
+              scheduledAt: new Date().toISOString()
+            }
+          }
+        });
+
+        // Планируем отложенное выполнение через Bull queue
+        // Используем nextNodeId если найден, иначе node.id (processor сам найдет следующий через getNextNodeId)
+        const jobId = await DelayJobService.scheduleDelay(
+          context.executionId,
+          nextNodeId || node.id,
+          context.projectId,
+          context.workflowId,
+          delayMs
+        );
+
+        // Сохраняем jobId в переменные сессии для возможности отмены
+        if (!jobId.startsWith('sync:')) {
+          await this.setVariable('delayJobId', jobId, context, 'session');
+          this.logStep(context, node, `Delay scheduled in queue (jobId: ${jobId})`, 'info', {
+            jobId,
+            delayMs,
+            scheduledFor: new Date(Date.now() + delayMs).toISOString()
+          });
+        }
+
+        // Останавливаем выполнение workflow - оно будет возобновлено через Bull queue
+        // Возвращаем null, чтобы остановить текущее выполнение
+        return null;
+      } catch (queueError) {
+        // Если очередь недоступна, используем синхронное ожидание как fallback
+        this.logStep(context, node, 'Queue unavailable, falling back to synchronous delay', 'warn', {
+          error: queueError instanceof Error ? queueError.message : String(queueError)
+        });
+
+        // Для задержек более 5 минут в синхронном режиме выдаем предупреждение
+        if (delayMs > 5 * 60 * 1000) {
+          this.logStep(
+            context,
+            node,
+            'WARNING: Long delay in synchronous mode may block event loop',
+            'warn'
+          );
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        this.logStep(context, node, 'Synchronous delay completed', 'info');
+        return null;
+      }
     } catch (error) {
       this.logStep(context, node, 'Delay failed', 'error', { error });
       throw error;
     }
+  }
+
+  /**
+   * Находит ID следующего нода для продолжения выполнения после задержки
+   */
+  private findNextNodeId(node: WorkflowNode, context: ExecutionContext): string | null {
+    // Пытаемся получить connections из разных источников
+    let connections: Array<{ source: string; target: string }> | null = null;
+
+    // 1. Попытка из workflowVersion в контексте (если есть)
+    const workflowVersion = (context as any).workflowVersion;
+    if (workflowVersion?.connections) {
+      connections = workflowVersion.connections as Array<{ source: string; target: string }>;
+    } else {
+      // 2. Попытка получить из processor (если доступен)
+      const processor = (context as any).processor;
+      if (processor?.connectionsMap) {
+        const connectionsMap = processor.connectionsMap as Map<string, { source: string; target: string }>;
+        connections = Array.from(connectionsMap.values());
+      }
+    }
+
+    if (!connections || connections.length === 0) {
+      // Если connections недоступны, возвращаем null
+      // SimpleWorkflowProcessor сам найдет следующий нод через getNextNodeId
+      return null;
+    }
+
+    // Ищем первый connection типа 'default', который начинается с текущей ноды
+    const nextConnection = connections.find(
+      conn => conn.source === node.id && (conn as any).type === 'default'
+    ) || connections.find(conn => conn.source === node.id);
+
+    return nextConnection?.target || null;
   }
 
   async validate(config: any): Promise<ValidationResult> {
@@ -71,6 +180,12 @@ export class DelayFlowHandler extends BaseNodeHandler {
 
     if (config.delayMs !== undefined && (typeof config.delayMs !== 'number' || config.delayMs < 0)) {
       errors.push('delayMs must be a non-negative number');
+    }
+
+    // Валидация максимальной задержки (24 часа)
+    const MAX_DELAY_MS = 24 * 60 * 60 * 1000;
+    if (config.delayMs !== undefined && config.delayMs > MAX_DELAY_MS) {
+      errors.push(`delayMs must not exceed ${MAX_DELAY_MS}ms (24 hours)`);
     }
 
     if (config.variableDelay && typeof config.variableDelay !== 'string') {

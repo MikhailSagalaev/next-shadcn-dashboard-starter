@@ -88,8 +88,8 @@ export class ConversationsIntegration {
 
         const input = response.message.text.trim();
 
-        // Валидируем ввод
-        if (this.validateInput(input, config.validation)) {
+                  // Валидируем ввод
+        if (await this.validateInput(input, config.validation)) {
           // Сохраняем в переменную
           if (config.variableName) {
             BotSessionService.setSessionVariable(
@@ -261,8 +261,8 @@ export class ConversationsIntegration {
 
           const input = response.message.text.trim();
 
-          // Валидируем
-          if (this.validateInput(input, step.validation)) {
+                      // Валидируем
+          if (await this.validateInput(input, step.validation)) {
             formData[step.field] = input;
 
             // Подтверждаем
@@ -357,7 +357,7 @@ export class ConversationsIntegration {
   /**
    * Валидация ввода пользователя
    */
-  private validateInput(input: string, validation?: any): boolean {
+  private async validateInput(input: string, validation?: any): Promise<boolean> {
     if (!validation) return true;
 
     switch (validation.type) {
@@ -369,10 +369,12 @@ export class ConversationsIntegration {
         return true;
 
       case 'email':
+        // ✅ Безопасный regex для email (безопасный паттерн)
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(input);
 
       case 'phone':
+        // ✅ Безопасный regex для телефона (безопасный паттерн)
         const phoneRegex = /^\+?[\d\s\-\(\)]{10,}$/;
         return phoneRegex.test(input);
 
@@ -386,7 +388,21 @@ export class ConversationsIntegration {
       case 'regex':
         if (!validation.pattern) return true;
         try {
-          return new RegExp(validation.pattern).test(input);
+          // ✅ ReDoS защита: валидация regex перед использованием
+          const { RegexValidator } = await import('@/lib/security/regex-validator');
+          const regexValidation = RegexValidator.validate(validation.pattern);
+          if (!regexValidation.isValid) {
+            const { logger } = await import('@/lib/logger');
+            logger.warn('Unsafe regex pattern in input validation', {
+              pattern: validation.pattern?.substring(0, 100),
+              error: regexValidation.error
+            });
+            return false;
+          }
+          const regex = new RegExp(validation.pattern);
+          // Используем безопасный test с таймаутом
+          const result = await RegexValidator.safeTest(regex, input, 100);
+          return result ?? false;
         } catch {
           return false;
         }

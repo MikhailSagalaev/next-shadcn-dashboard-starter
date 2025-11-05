@@ -94,11 +94,11 @@ export function ProjectIntegrationView({
     marginBottom: '12px',
     iconSize: '24px',
     titleFontSize: '18px',
-    titleFontWeight: 'bold',
+    titleFontWeight: 'bold', // Жирный (Bold)
     descriptionFontSize: '14px',
     buttonFontSize: '14px',
-    buttonFontWeight: '500',
-    buttonPadding: '8px 16px',
+    buttonFontWeight: '500', // Средний (Medium)
+    buttonPadding: '10px 20px',
     buttonBorderRadius: '6px',
     fallbackFontSize: '14px',
     fallbackPadding: '8px',
@@ -107,7 +107,7 @@ export function ProjectIntegrationView({
     // Эффекты и тени плашки
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
     buttonBoxShadow: 'none',
-    iconAnimation: 'none', // none, pulse, bounce, shake
+    iconAnimation: 'jump', // none, pulse, bounce, shake, jump
 
     // Эмодзи и иконки плашки
     iconEmoji: '🎁',
@@ -124,18 +124,18 @@ export function ProjectIntegrationView({
     fontSize: '14px',
 
     // ========== НАСТРОЙКИ САМОГО ВИДЖЕТА БОНУСОВ ==========
-    // Цвета виджета
+    // Цвета виджета (по умолчанию из формы)
     widgetBackgroundColor: '#ffffff',
     widgetBorderColor: '#e5e7eb',
-    widgetTextColor: '#1f2937',
+    widgetTextColor: '#424242',
     widgetLabelColor: '#6b7280',
     widgetInputBackground: '#ffffff',
     widgetInputBorder: '#d1d5db',
-    widgetInputText: '#111827',
-    widgetButtonBackground: '#3b82f6',
+    widgetInputText: '#424242',
+    widgetButtonBackground: '#424242',
     widgetButtonText: '#ffffff',
-    widgetButtonHover: '#2563eb',
-    widgetBalanceColor: '#059669',
+    widgetButtonHover: '#696969',
+    widgetBalanceColor: '#000000',
     widgetErrorColor: '#dc2626',
     widgetSuccessColor: '#059669',
 
@@ -303,7 +303,7 @@ export function ProjectIntegrationView({
               buttonFontWeight:
                 functionalSettings.widgetSettings.buttonFontWeight || '500',
               buttonPadding:
-                functionalSettings.widgetSettings.buttonPadding || '8px 16px',
+                functionalSettings.widgetSettings.buttonPadding || '10px 20px',
               buttonBorderRadius:
                 functionalSettings.widgetSettings.buttonBorderRadius || '6px',
               fallbackFontSize:
@@ -320,7 +320,7 @@ export function ProjectIntegrationView({
               buttonBoxShadow:
                 functionalSettings.widgetSettings.buttonBoxShadow || 'none',
               iconAnimation:
-                functionalSettings.widgetSettings.iconAnimation || 'none',
+                functionalSettings.widgetSettings.iconAnimation || 'jump',
 
               // Эмодзи и иконки
               iconEmoji: functionalSettings.widgetSettings.iconEmoji || '🎁',
@@ -351,7 +351,7 @@ export function ProjectIntegrationView({
                 functionalSettings.widgetSettings.widgetBorderColor ||
                 '#e5e7eb',
               widgetTextColor:
-                functionalSettings.widgetSettings.widgetTextColor || '#1f2937',
+                functionalSettings.widgetSettings.widgetTextColor || '#424242',
               widgetLabelColor:
                 functionalSettings.widgetSettings.widgetLabelColor || '#6b7280',
               widgetInputBackground:
@@ -361,18 +361,18 @@ export function ProjectIntegrationView({
                 functionalSettings.widgetSettings.widgetInputBorder ||
                 '#d1d5db',
               widgetInputText:
-                functionalSettings.widgetSettings.widgetInputText || '#111827',
+                functionalSettings.widgetSettings.widgetInputText || '#424242',
               widgetButtonBackground:
                 functionalSettings.widgetSettings.widgetButtonBackground ||
-                '#3b82f6',
+                '#424242',
               widgetButtonText:
                 functionalSettings.widgetSettings.widgetButtonText || '#ffffff',
               widgetButtonHover:
                 functionalSettings.widgetSettings.widgetButtonHover ||
-                '#2563eb',
+                '#696969',
               widgetBalanceColor:
                 functionalSettings.widgetSettings.widgetBalanceColor ||
-                '#059669',
+                '#000000',
               widgetErrorColor:
                 functionalSettings.widgetSettings.widgetErrorColor || '#dc2626',
               widgetSuccessColor:

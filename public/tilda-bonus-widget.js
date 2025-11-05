@@ -1868,7 +1868,7 @@
           // Эффекты и тени
           boxShadow: widgetSettings?.boxShadow || '0 4px 6px rgba(0,0,0,0.1)',
           buttonBoxShadow: widgetSettings?.buttonBoxShadow || 'none',
-          iconAnimation: widgetSettings?.iconAnimation || 'none',
+          iconAnimation: widgetSettings?.iconAnimation || 'jump', // По умолчанию: Прыжок (Jump)
 
           // Эмодзи и иконки
           iconEmoji: widgetSettings?.iconEmoji || '🎁',

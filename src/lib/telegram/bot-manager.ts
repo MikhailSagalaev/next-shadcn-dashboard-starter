@@ -36,6 +36,7 @@ type MyContext = Context & SessionFlavor<SessionData>;
 interface BotInstance {
   bot: Bot<MyContext>;
   webhook: ReturnType<typeof webhookCallback> | null; // null в dev режиме (polling), webhookCallback в prod режиме
+  runner: ReturnType<typeof run> | null; // Runner instance для polling режима
   isActive: boolean;
   projectId: string;
   lastUpdated: Date;
@@ -347,6 +348,15 @@ class BotManager {
         botInstance.isPolling = false;
         botInstance.isActive = false;
 
+        // ✅ КРИТИЧНО: Останавливаем runner ПЕРВЫМ делом (если используется)
+        if (botInstance.runner && botInstance.runner.isRunning()) {
+          try {
+            await botInstance.runner.stop();
+          } catch (runnerError) {
+            // Игнорируем ошибки остановки runner
+          }
+        }
+
         // Удаляем webhook
         try {
           await botInstance.bot.api.deleteWebhook({
@@ -356,7 +366,7 @@ class BotManager {
           // Игнорируем ошибки webhook
         }
 
-        // Останавливаем polling
+        // Останавливаем бота (для совместимости)
         try {
           await botInstance.bot.stop();
         } catch (stopError) {
@@ -542,6 +552,7 @@ class BotManager {
       });
 
       let webhook = null;
+      let runner: ReturnType<typeof run> | null = null;
       let isPolling = false;
 
       // ИСПРАВЛЕННОЕ РЕШЕНИЕ: Используем правильный режим для каждой среды
@@ -565,12 +576,13 @@ class BotManager {
             component: 'bot-manager'
           });
 
-          void run(bot); // runner сам управляет polling и параллельностью
+          runner = run(bot); // runner сам управляет polling и параллельностью
 
           isPolling = true;
           logger.info(`✅ RUNNER ИНИЦИИРОВАН (ЛОКАЛЬНАЯ РАЗРАБОТКА)`, {
             projectId,
             token: '***' + bot.token.slice(-4),
+            runnerActive: runner.isRunning(),
             component: 'bot-manager'
           });
         } catch (error) {
@@ -589,6 +601,7 @@ class BotManager {
             const botInstance: BotInstance = {
               bot,
               webhook: null, // null в dev режиме (polling)
+              runner: null, // Runner не запущен
               isActive: false,
               isPolling: false,
               lastUpdated: new Date(),
@@ -758,12 +771,13 @@ class BotManager {
               component: 'bot-manager'
             });
 
-            void run(bot); // runner сам управляет polling и параллельностью
+            runner = run(bot); // runner сам управляет polling и параллельностью
 
             isPolling = true;
             logger.info(`✅ RUNNER ИНИЦИИРОВАН (POLLING)`, {
               projectId,
               token: '***' + bot.token.slice(-4),
+              runnerActive: runner.isRunning(),
               component: 'bot-manager'
             });
           } catch (error) {
@@ -786,6 +800,7 @@ class BotManager {
               const botInstance: BotInstance = {
                 bot,
                 webhook: null, // null в dev режиме (polling)
+                runner: null, // Runner не запущен
                 isActive: false,
                 isPolling: false,
                 lastUpdated: new Date(),
@@ -887,6 +902,7 @@ class BotManager {
       const botInstance: BotInstance = {
         bot,
         webhook: webhook as any, // null в dev режиме, webhookCallback в prod режиме
+        runner: runner, // Runner instance для polling режима
         isActive: botSettings.isActive,
         projectId,
         lastUpdated: new Date(),
@@ -1055,7 +1071,30 @@ class BotManager {
         botInstance.isPolling = false;
         botInstance.isActive = false;
 
-        // Удаляем webhook ПЕРВЫМ делом для предотвращения конфликтов
+        // ✅ КРИТИЧНО: Останавливаем runner ПЕРВЫМ делом (если используется)
+        if (botInstance.runner && botInstance.runner.isRunning()) {
+          try {
+            logger.info(`🛑 Остановка runner для бота ${projectId}`, {
+              projectId,
+              component: 'bot-manager'
+            });
+            
+            await botInstance.runner.stop();
+            
+            logger.info(`✅ Runner остановлен для бота ${projectId}`, {
+              projectId,
+              component: 'bot-manager'
+            });
+          } catch (runnerError) {
+            logger.warn(`⚠️ Ошибка остановки runner для бота ${projectId}`, {
+              projectId,
+              error: runnerError instanceof Error ? runnerError.message : 'Неизвестная ошибка',
+              component: 'bot-manager'
+            });
+          }
+        }
+
+        // Удаляем webhook для предотвращения конфликтов
         try {
           await botInstance.bot.api.deleteWebhook({
             drop_pending_updates: true
@@ -1072,20 +1111,20 @@ class BotManager {
           });
         }
 
-        // Останавливаем polling с коротким таймаутом
+        // Останавливаем бота (для совместимости, если runner не использовался)
         try {
           const stopPromise = botInstance.bot.stop();
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Stop timeout')), 1000)
+            setTimeout(() => reject(new Error('Stop timeout')), 2000)
           );
 
           await Promise.race([stopPromise, timeoutPromise]);
-          logger.info(`✅ Polling остановлен для бота ${projectId}`, {
+          logger.info(`✅ Бот остановлен для ${projectId}`, {
             projectId,
             component: 'bot-manager'
           });
         } catch (stopError) {
-          logger.warn(`⚠️ Принудительная остановка polling для бота ${projectId}`, {
+          logger.warn(`⚠️ Ошибка остановки бота ${projectId} (может быть уже остановлен)`, {
             projectId,
             error: stopError instanceof Error ? stopError.message : 'Timeout',
             component: 'bot-manager'

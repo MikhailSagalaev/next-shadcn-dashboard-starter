@@ -381,12 +381,12 @@ export class FlowExecutor {
     // Получаем значение переменной
     const variableValue = this.getVariableValue(ctx, config.variable);
 
-    // Выполняем сравнение
-    const conditionMet = this.evaluateCondition(
-      variableValue,
-      config.operator,
-      config.value
-    );
+          // Выполняем сравнение
+      const conditionMet = await this.evaluateCondition(
+        variableValue,
+        config.operator,
+        config.value
+      );
 
     // Определяем следующую ноду
     const nextNodeId = conditionMet ? config.trueNodeId : config.falseNodeId;
@@ -548,11 +548,11 @@ export class FlowExecutor {
     }
   }
 
-  private evaluateCondition(
+  private async evaluateCondition(
     value: any,
     operator: string,
     compareValue: any
-  ): boolean {
+  ): Promise<boolean> {
     switch (operator) {
       case 'equals':
         return value == compareValue; // loose equality
@@ -572,7 +572,20 @@ export class FlowExecutor {
         return Number(value) <= Number(compareValue);
       case 'regex':
         try {
-          return new RegExp(compareValue).test(String(value));
+          // ✅ ReDoS защита: валидация regex перед использованием
+          const { RegexValidator } = await import('@/lib/security/regex-validator');
+          const validation = RegexValidator.validate(compareValue);
+          if (!validation.isValid) {
+            logger.warn('Unsafe regex pattern in condition evaluation', {
+              pattern: compareValue?.substring(0, 100),
+              error: validation.error
+            });
+            return false;
+          }
+          const regex = new RegExp(compareValue);
+          // Используем безопасный test с таймаутом
+          const result = await RegexValidator.safeTest(regex, String(value), 100);
+          return result ?? false;
         } catch {
           return false;
         }

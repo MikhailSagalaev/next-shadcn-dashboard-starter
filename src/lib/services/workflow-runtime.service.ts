@@ -230,10 +230,11 @@ export class WorkflowRuntimeService {
       // Проверяем кэш в памяти
       const memoryCached = this.getCachedVersion(projectId);
       if (memoryCached) {
-        logger.debug('Returning in-memory cached active workflow version', {
+        logger.info('📦 Возвращаем workflow из кэша в памяти', {
           projectId,
           workflowId: memoryCached.workflowId,
-          version: memoryCached.version
+          version: memoryCached.version,
+          versionId: memoryCached.id
         });
         return memoryCached;
       }
@@ -246,16 +247,17 @@ export class WorkflowRuntimeService {
       if (redisCached) {
         const hydrated = this.deserializeWorkflowVersion(redisCached);
         this.setMemoryCache(projectId, hydrated);
-        logger.debug('Returning Redis cached active workflow version', {
+        logger.info('📦 Возвращаем workflow из Redis кэша', {
           projectId,
           workflowId: hydrated.workflowId,
-          version: hydrated.version
+          version: hydrated.version,
+          versionId: hydrated.id
         });
         return hydrated;
       }
 
       // Загружаем активную версию из БД
-      logger.debug('Loading active workflow version from database', { projectId });
+      logger.info('💾 Загружаем активную версию workflow из БД', { projectId });
 
       const activeVersion = await db.workflowVersion.findFirst({
         where: {
@@ -301,22 +303,16 @@ export class WorkflowRuntimeService {
         connections: activeVersion.workflow.connections as any
       };
 
-      console.log('🔁 Loaded active workflow version from DB:', {
+      logger.info('✅ Загружена активная версия workflow из БД и закэширована', {
         projectId,
         workflowId: workflowVersion.workflowId,
         version: workflowVersion.version,
+        versionId: workflowVersion.id,
         nodesCount: Object.keys(workflowVersion.nodes || {}).length
       });
 
       // Кэшируем в памяти и Redis
       await this.cacheActiveVersion(projectId, workflowVersion);
-
-      logger.info('Active workflow version loaded', {
-        projectId,
-        workflowId: workflowVersion.workflowId,
-        version: workflowVersion.version,
-        nodesCount: Object.keys(workflowVersion.nodes || {}).length
-      });
 
       return workflowVersion;
     } catch (error) {
@@ -1091,6 +1087,120 @@ export class WorkflowRuntimeService {
         userId,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  }
+
+  /**
+   * Возобновляет выполнение workflow после задержки
+   * Вызывается из Bull queue job handler в DelayJobService
+   */
+  static async resumeWorkflowAfterDelay(
+    executionId: string,
+    nodeId: string,
+    projectId: string,
+    workflowId: string
+  ): Promise<void> {
+    logger.info('Resuming workflow after delay', {
+      executionId,
+      nodeId,
+      projectId,
+      workflowId
+    });
+
+    try {
+      // Получаем execution из БД
+      const execution = await db.workflowExecution.findUnique({
+        where: { id: executionId }
+      });
+
+      if (!execution) {
+        throw new Error(`Workflow execution ${executionId} not found`);
+      }
+
+      // Проверяем, что execution еще активен
+      if (execution.status === 'finished') {
+        logger.warn('Cannot resume finished workflow execution', { executionId });
+        return;
+      }
+
+      // Получаем версию workflow
+      const versionRecord = await db.workflowVersion.findFirst({
+        where: {
+          workflowId,
+          version: execution.version
+        }
+      });
+
+      if (!versionRecord) {
+        throw new Error(`Workflow version not found: workflowId=${workflowId}, version=${execution.version}`);
+      }
+
+      // Преобразуем nodes в нужный формат
+      let nodesObject: Record<string, WorkflowNode>;
+      if (Array.isArray(versionRecord.nodes)) {
+        nodesObject = {};
+        (versionRecord.nodes as any[]).forEach((node: any) => {
+          nodesObject[node.id] = node;
+        });
+      } else {
+        nodesObject = (versionRecord.nodes as Record<string, any>) || {};
+      }
+
+      const workflowVersion: WorkflowVersion = {
+        id: versionRecord.id,
+        workflowId: versionRecord.workflowId,
+        version: versionRecord.version,
+        nodes: nodesObject as unknown as Record<string, WorkflowNode>,
+        entryNodeId: versionRecord.entryNodeId
+      };
+
+      // Создаем processor для выполнения workflow
+      const processor = new SimpleWorkflowProcessor(workflowVersion, projectId);
+
+      // Возобновляем контекст выполнения
+      const context = await ExecutionContextManager.resumeContext(executionId);
+
+      // Обновляем статус execution на 'running'
+      await db.workflowExecution.update({
+        where: { id: executionId },
+        data: {
+          status: 'running',
+          currentNodeId: nodeId
+        }
+      });
+
+      // Возобновляем выполнение workflow с указанной ноды
+      await processor.resumeWorkflow(context, nodeId);
+
+      logger.info('Workflow resumed successfully after delay', {
+        executionId,
+        nodeId
+      });
+    } catch (error) {
+      logger.error('Failed to resume workflow after delay', {
+        executionId,
+        nodeId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+
+      // Обновляем статус execution на 'error'
+      try {
+        await db.workflowExecution.update({
+          where: { id: executionId },
+          data: {
+            status: 'error',
+            error: error instanceof Error ? error.message : String(error),
+            finishedAt: new Date()
+          }
+        });
+      } catch (updateError) {
+        logger.error('Failed to update execution status to error', {
+          executionId,
+          updateError: updateError instanceof Error ? updateError.message : String(updateError)
+        });
+      }
+
+      throw error;
     }
   }
 }

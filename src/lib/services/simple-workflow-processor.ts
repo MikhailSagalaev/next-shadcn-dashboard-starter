@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { db } from '@/lib/db';
 import { nodeHandlersRegistry } from './workflow/node-handlers-registry';
 import { ExecutionContextManager } from './workflow/execution-context-manager';
+import { RateLimiterService } from './rate-limiter.service';
 import type {
   Workflow,
   WorkflowVersion,
@@ -62,20 +63,80 @@ export class SimpleWorkflowProcessor {
   async process(ctx: Context, trigger: 'start' | 'message' | 'callback'): Promise<boolean> {
     let context: ExecutionContext | null = null;
 
-    try {
-      logger.info('🎯 Начало обработки workflow', {
-        projectId: this.projectId,
-        workflowId: this.workflowVersion.workflowId,
-        version: this.workflowVersion.version,
-        trigger,
-        userId: ctx.from?.id,
-        username: ctx.from?.username,
-        totalNodes: this.nodesMap.size
-      });
+          try {
+        logger.info('🎯 Начало обработки workflow', {
+          projectId: this.projectId,
+          workflowId: this.workflowVersion.workflowId,
+          version: this.workflowVersion.version,
+          trigger,
+          userId: ctx.from?.id,
+          username: ctx.from?.username,
+          totalNodes: this.nodesMap.size
+        });
 
-      // Создаем контекст выполнения
-      const telegramUserId = ctx.from?.id?.toString();
-      const chatId = ctx.chat?.id?.toString();
+        // Создаем контекст выполнения
+        const telegramUserId = ctx.from?.id?.toString();
+        const chatId = ctx.chat?.id?.toString();
+
+        // ✅ Rate limiting: проверка лимита для Telegram сообщений
+        if (telegramUserId) {
+          const messageLimit = await RateLimiterService.checkLimit(
+            'TELEGRAM_MESSAGE',
+            telegramUserId
+          );
+
+          if (!messageLimit.allowed) {
+            logger.warn('Telegram message rate limit exceeded', {
+              telegramUserId,
+              projectId: this.projectId,
+              remaining: messageLimit.remaining,
+              retryAfter: messageLimit.retryAfter
+            });
+
+            // Отправляем пользователю сообщение о превышении лимита
+            try {
+              await ctx.reply(
+                '⚠️ Слишком много запросов. Пожалуйста, подождите немного перед следующим запросом.'
+              );
+            } catch (replyError) {
+              logger.error('Failed to send rate limit message', {
+                error: replyError instanceof Error ? replyError.message : String(replyError)
+              });
+            }
+
+            return false;
+          }
+        }
+
+        // ✅ Rate limiting: проверка лимита для workflow execution (per user)
+        if (telegramUserId) {
+          const workflowLimit = await RateLimiterService.checkLimit(
+            'WORKFLOW_EXECUTION',
+            `${this.projectId}:${telegramUserId}`
+          );
+
+          if (!workflowLimit.allowed) {
+            logger.warn('Workflow execution rate limit exceeded', {
+              telegramUserId,
+              projectId: this.projectId,
+              remaining: workflowLimit.remaining,
+              retryAfter: workflowLimit.retryAfter
+            });
+
+            // Отправляем пользователю сообщение
+            try {
+              await ctx.reply(
+                '⚠️ Превышен лимит выполнения сценариев. Попробуйте позже.'
+              );
+            } catch (replyError) {
+              logger.error('Failed to send workflow rate limit message', {
+                error: replyError instanceof Error ? replyError.message : String(replyError)
+              });
+            }
+
+            return false;
+          }
+        }
 
       // Находим пользователя в базе данных по Telegram ID
       let userId: string | undefined;

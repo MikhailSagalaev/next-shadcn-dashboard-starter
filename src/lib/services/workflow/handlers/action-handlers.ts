@@ -504,6 +504,44 @@ export class ApiRequestHandler extends BaseNodeHandler {
       throw new Error('API request URL is required');
     }
 
+    // ✅ Rate limiting: проверка лимита для API requests (per project)
+    const { RateLimiterService } = await import('../../rate-limiter.service');
+    const apiLimit = await RateLimiterService.checkLimit(
+      'API_REQUEST',
+      context.projectId
+    );
+
+    if (!apiLimit.allowed) {
+      this.logStep(context, node, 'API request rate limit exceeded', 'warn', {
+        projectId: context.projectId,
+        remaining: apiLimit.remaining,
+        retryAfter: apiLimit.retryAfter
+      });
+      throw new Error(
+        `API request rate limit exceeded. Retry after ${apiLimit.retryAfter || 60} seconds.`
+      );
+    }
+
+    // ✅ SSRF защита: валидация URL
+    const { UrlValidator } = await import('@/lib/security/url-validator');
+    const urlValidation = UrlValidator.validate(url);
+
+    if (!urlValidation.isValid) {
+      this.logStep(context, node, 'URL validation failed (SSRF protection)', 'error', {
+        url,
+        error: urlValidation.error
+      });
+      logger.warn('SSRF attempt blocked', {
+        projectId: context.projectId,
+        url,
+        error: urlValidation.error
+      });
+      throw new Error(`Invalid or unsafe URL: ${urlValidation.error}`);
+    }
+
+    // Используем санитизированный URL
+    const safeUrl = urlValidation.sanitizedUrl || url;
+
     const method = (config.method || 'GET').toUpperCase();
     const headers = await resolveTemplateValue<Record<string, string | number | boolean>>(
       config.headers || {},
@@ -512,12 +550,13 @@ export class ApiRequestHandler extends BaseNodeHandler {
     const body = await resolveTemplateValue(config.body, context);
     const timeout = config.timeout ?? 30000;
 
-    this.logStep(context, node, 'Executing API request', 'info', {
-      method,
-      url,
-      hasBody: body !== undefined && body !== null,
-      timeout
-    });
+          this.logStep(context, node, 'Executing API request', 'info', {
+        method,
+        url: safeUrl, // Логируем безопасный URL
+        originalUrl: url !== safeUrl ? url : undefined,
+        hasBody: body !== undefined && body !== null,
+        timeout
+      });
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
@@ -551,7 +590,7 @@ export class ApiRequestHandler extends BaseNodeHandler {
         }
       }
 
-      const response = await fetch(url, options);
+      const response = await fetch(safeUrl, options);
       const contentType = response.headers.get('content-type') || '';
       let responseData: any = null;
 

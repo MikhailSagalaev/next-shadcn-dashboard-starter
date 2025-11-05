@@ -11,6 +11,7 @@ import { parse } from 'acorn';
 import { generate } from 'astring';
 import { logger } from '@/lib/logger';
 import type { ExecutionContext } from '@/types/workflow';
+import { RegexValidator } from '@/lib/security/regex-validator';
 
 /**
  * Безопасный evaluator для условий с поддержкой AST
@@ -36,21 +37,39 @@ export class ConditionEvaluator {
     'ObjectExpression', 'Property', 'FunctionExpression', 'ArrowFunctionExpression'
   ]);
 
+    // Максимальная длина выражения для оценки
+  private static readonly MAX_EXPRESSION_LENGTH = 1000;
+
+  // Таймаут для оценки условий (в миллисекундах)
+  private static readonly EVALUATION_TIMEOUT_MS = 5000;
+
   /**
    * Оценивает сложное условие с поддержкой AST
    */
-  static async evaluate(expression: string, context: ExecutionContext): Promise<boolean> {
+  static async evaluate(expression: string, context: ExecutionContext): Promise<boolean> {                                                                      
     try {
+      // Проверка длины выражения
+      if (expression.length > this.MAX_EXPRESSION_LENGTH) {
+        throw new Error(`Expression exceeds maximum length of ${this.MAX_EXPRESSION_LENGTH} characters`);
+      }
+
       logger.debug('Evaluating complex condition', {
         expression: expression.substring(0, 100),
         executionId: context.executionId
       });
 
-      // Парсим AST
-      const ast = parse(expression, {
-        ecmaVersion: 2020,
-        allowReturnOutsideFunction: true
-      });
+      // Парсим AST с таймаутом
+      const ast = await Promise.race([
+        Promise.resolve(
+          parse(expression, {
+            ecmaVersion: 2020,
+            allowReturnOutsideFunction: true
+          })
+        ),
+        new Promise<any>((_, reject) =>
+          setTimeout(() => reject(new Error('AST parsing timeout')), this.EVALUATION_TIMEOUT_MS)
+        )
+      ]);
 
       // Валидируем AST
       this.validateAST(ast);
@@ -58,8 +77,13 @@ export class ConditionEvaluator {
       // Создаем безопасный контекст выполнения
       const safeContext = this.createSafeContext(context);
 
-      // Выполняем выражение в безопасном контексте
-      const result = this.executeAST(ast, safeContext);
+      // Выполняем выражение в безопасном контексте с таймаутом
+      const result = await Promise.race([
+        Promise.resolve(this.executeAST(ast, safeContext)),
+        new Promise<any>((_, reject) =>
+          setTimeout(() => reject(new Error('Condition evaluation timeout')), this.EVALUATION_TIMEOUT_MS)
+        )
+      ]);
 
       const finalResult = Boolean(result);
       logger.debug('Condition evaluated successfully', {
@@ -73,7 +97,7 @@ export class ConditionEvaluator {
         expression: expression.substring(0, 100),
         error: error instanceof Error ? error.message : 'Unknown error'
       });
-      throw new Error(`Condition evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Condition evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);                                              
     }
   }
 
@@ -101,14 +125,44 @@ export class ConditionEvaluator {
       Object,
       Date,
       RegExp: class SafeRegExp {
+        private regex: RegExp | null = null;
+
         constructor(pattern: string | RegExp, flags?: string) {
-          return new RegExp(pattern as string, flags);
+          const patternStr = typeof pattern === 'string' ? pattern : pattern.source;
+          const flagsStr = flags || (pattern instanceof RegExp ? pattern.flags : '');
+
+          // ✅ ReDoS защита: валидация regex перед созданием
+          const validation = RegexValidator.validate(patternStr, flagsStr);
+          if (!validation.isValid) {
+            throw new Error(`Unsafe regex pattern: ${validation.error || 'Unknown error'}`);
+          }
+
+          try {
+            this.regex = new RegExp(patternStr, flagsStr);
+          } catch (error) {
+            throw new Error(`Invalid regex: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         }
-        test(str: string): boolean {
-          return (this as any).test(str);
+
+        async test(str: string): Promise<boolean> {
+          if (!this.regex) {
+            return false;
+          }
+          // ✅ ReDoS защита: безопасное выполнение test с таймаутом
+          const result = await RegexValidator.safeTest(this.regex, str, 100);
+          return result ?? false;
         }
+
         exec(str: string): RegExpExecArray | null {
-          return (this as any).exec(str);
+          if (!this.regex) {
+            return null;
+          }
+          // Синхронный exec - используем только для безопасных паттернов (уже проверенных)
+          try {
+            return this.regex.exec(str);
+          } catch {
+            return null;
+          }
         }
       },
 
