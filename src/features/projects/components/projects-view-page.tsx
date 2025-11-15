@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   Search,
@@ -17,7 +17,9 @@ import {
   Users,
   BarChart3,
   Bot,
-  BotOff
+  BotOff,
+  ShoppingCart,
+  MessageSquare
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -241,27 +243,73 @@ function ProjectCard({ project }: { project: Project }) {
             </Button>
           </Link>
         </div>
+        {/* Новый функционал - СКРЫТ */}
+        {/* 
+        <div className='flex w-full gap-2'>
+          <Link
+            href={`/dashboard/projects/${project.id}/orders`}
+            className='flex-1'
+          >
+            <Button variant='outline' size='sm' className='w-full'>
+              <ShoppingCart className='mr-2 h-4 w-4' />
+              Заказы
+            </Button>
+          </Link>
+          <Link
+            href={`/dashboard/projects/${project.id}/chats`}
+            className='flex-1'
+          >
+            <Button variant='outline' size='sm' className='w-full'>
+              <MessageSquare className='mr-2 h-4 w-4' />
+              Чаты
+            </Button>
+          </Link>
+        </div>
+        */}
       </CardFooter>
     </Card>
   );
 }
+
+// Кэш для статуса ботов
+const BOT_STATUS_CACHE_KEY = (projectId: string) => `bot-status-${projectId}`;
+const BOT_STATUS_CACHE_DURATION = 30000; // 30 секунд
 
 // Компонент кнопки статуса бота
 function BotStatusButton({ project }: { project: Project }) {
   const [botSettings, setBotSettings] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const loadBotSettings = async () => {
+  const loadBotSettings = useCallback(async () => {
     try {
+      // Проверяем кэш
+      const cacheKey = BOT_STATUS_CACHE_KEY(project.id);
+      const cached = sessionStorage.getItem(cacheKey);
+      
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < BOT_STATUS_CACHE_DURATION) {
+          setBotSettings(data);
+          return;
+        }
+      }
+
+      // Запрос к API
       const response = await fetch(`/api/projects/${project.id}/bot`);
       if (response.ok) {
         const data = await response.json();
         setBotSettings(data);
+        
+        // Сохраняем в кэш
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
       }
     } catch (error) {
       console.error('Ошибка загрузки настроек бота:', error);
     }
-  };
+  }, [project.id]);
 
   useEffect(() => {
     loadBotSettings();

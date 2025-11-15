@@ -57,11 +57,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Логируем начало процесса
+    logger.info('Creating new project - started', {
+      adminId: admin.sub,
+      component: 'projects-api'
+    });
+
     // Проверка лимита проектов
     const { BillingService } = await import('@/lib/services/billing.service');
     const limitCheck = await BillingService.checkLimit(admin.sub, 'projects');
     
+    logger.info('Project limit check result', {
+      adminId: admin.sub,
+      allowed: limitCheck.allowed,
+      used: limitCheck.used,
+      limit: limitCheck.limit,
+      planId: limitCheck.planId
+    });
+    
     if (!limitCheck.allowed) {
+      logger.warn('Project limit reached', {
+        adminId: admin.sub,
+        used: limitCheck.used,
+        limit: limitCheck.limit
+      });
       return NextResponse.json(
         { 
           error: `Лимит проектов исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
@@ -76,35 +95,53 @@ export async function POST(request: NextRequest) {
 
     // Валидация входных данных с Zod
     const validatedData = await validateRequest(request, createProjectSchema);
+    
+    logger.info('Creating project with data', {
+      adminId: admin.sub,
+      projectName: validatedData.name,
+      hasDomain: !!validatedData.domain
+    });
 
-    // Zod гарантирует валидность данных, поэтому можем safely cast
+    // Создаем проект
     const project = await ProjectService.createProject(validatedData as any, admin.sub);
+
+    logger.info('Project created successfully', {
+      adminId: admin.sub,
+      projectId: project.id,
+      projectName: project.name
+    });
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
-    // Обработка ошибок валидации
-    if (
-      error instanceof Error &&
-      error.message.startsWith('Validation error:')
-    ) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    logger.error('Ошибка создания проекта', {
+    // Детальное логирование ошибки
+    logger.error('Failed to create project', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      stack: error instanceof Error ? error.stack : undefined,
       component: 'projects-api',
       action: 'POST'
     });
 
-    if (error instanceof Error && error.message.includes('Unique constraint')) {
-      return NextResponse.json(
-        { error: 'Проект с таким доменом уже существует' },
-        { status: 409 }
-      );
+    // Обработка известных ошибок
+    if (error instanceof Error) {
+      if (error.message.startsWith('Validation error:')) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      
+      if (error.message.includes('Unique constraint')) {
+        return NextResponse.json(
+          { error: 'Проект с таким доменом уже существует' },
+          { status: 409 }
+        );
+      }
     }
 
+    // В development режиме возвращаем детали ошибки
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { error: 'Ошибка создания проекта' },
+      { 
+        error: 'Ошибка создания проекта',
+        ...(isDev && error instanceof Error && { details: error.message })
+      },
       { status: 500 }
     );
   }

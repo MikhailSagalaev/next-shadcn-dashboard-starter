@@ -23,7 +23,15 @@ const segmentTranslations: Record<string, string> = {
   overview: 'Обзор',
   notifications: 'Уведомления',
   billing: 'Биллинг',
-  profile: 'Профиль'
+  profile: 'Профиль',
+  orders: 'Заказы',
+  products: 'Товары',
+  retailcrm: 'RetailCRM',
+  segments: 'Сегменты',
+  mailings: 'Рассылки',
+  chats: 'Чаты',
+  workflow: 'Workflow',
+  constructor: 'Конструктор'
 };
 
 // Пользовательские маршруты с полными переводами

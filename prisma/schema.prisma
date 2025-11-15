@@ -8,32 +8,43 @@ datasource db {
 }
 
 model Project {
-  id                String             @id @default(cuid())
-  name              String
-  domain            String?            @unique
-  webhookSecret     String             @unique @default(cuid()) @map("webhook_secret")
-  bonusPercentage   Decimal            @default(1.0) @map("bonus_percentage") @db.Decimal(5, 2)
-  bonusExpiryDays   Int                @default(365) @map("bonus_expiry_days")
-  bonusBehavior     BonusBehavior      @default(SPEND_AND_EARN) @map("bonus_behavior")
-  isActive          Boolean            @default(true) @map("is_active")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  botStatus         BotStatus          @default(INACTIVE) @map("bot_status")
-  botToken          String?            @map("bot_token")
-  botUsername       String?            @map("bot_username")
-  ownerId           String?            @map("owner_id")
-  bonusLevels       BonusLevel[]
-  botFlows          BotFlow[]
-  botSettings       BotSettings?
-  notifications     Notification[]
-  projectVariables  ProjectVariable[]
-  owner             AdminAccount?      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  referralProgram   ReferralProgram?
-  users             User[]
-  webhookLogs       WebhookLog[]
-  workflowVariables WorkflowVariable[]
-  workflows         Workflow[]
-  systemLogs        SystemLog[]
+  id                   String                @id @default(cuid())
+  name                 String
+  domain               String?               @unique
+  webhookSecret        String                @unique @default(cuid()) @map("webhook_secret")
+  bonusPercentage      Decimal               @default(1.0) @map("bonus_percentage") @db.Decimal(5, 2)
+  bonusExpiryDays      Int                   @default(365) @map("bonus_expiry_days")
+  bonusBehavior        BonusBehavior         @default(SPEND_AND_EARN) @map("bonus_behavior")
+  isActive             Boolean               @default(true) @map("is_active")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  botStatus            BotStatus             @default(INACTIVE) @map("bot_status")
+  botToken             String?               @map("bot_token")
+  botUsername          String?               @map("bot_username")
+  ownerId              String?               @map("owner_id")
+  bonusLevels          BonusLevel[]
+  botFlows             BotFlow[]
+  botSettings          BotSettings?
+  notifications        Notification[]
+  projectVariables     ProjectVariable[]
+  owner                AdminAccount?         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  referralProgram      ReferralProgram?
+  users                User[]
+  webhookLogs          WebhookLog[]
+  workflowVariables    WorkflowVariable[]
+  workflows            Workflow[]
+  systemLogs           SystemLog[]
+  orders               Order[]
+  products             Product[]
+  productCategories    ProductCategory[]
+  analyticsEvents      AnalyticsEvent[]
+  analyticsMetrics     AnalyticsMetric[]
+  segments             Segment[]
+  mailings             Mailing[]
+  mailingTemplates     MailingTemplate[]
+  retailCrmIntegration RetailCrmIntegration?
+  ChatChannel          ChatChannel[]
+  Chat                 Chat[]
 
   @@map("projects")
 }
@@ -122,33 +133,38 @@ model BotSession {
 }
 
 model User {
-  id               String         @id @default(cuid())
-  projectId        String         @map("project_id")
-  email            String?
-  phone            String?
-  firstName        String?        @map("first_name")
-  lastName         String?        @map("last_name")
-  birthDate        DateTime?      @map("birth_date") @db.Date
-  telegramId       BigInt?        @map("telegram_id")
-  telegramUsername String?        @map("telegram_username")
-  isActive         Boolean        @default(true) @map("is_active")
-  registeredAt     DateTime       @default(now()) @map("registered_at")
-  updatedAt        DateTime       @updatedAt @map("updated_at")
-  currentLevel     String         @default("Базовый") @map("current_level")
-  referralCode     String?        @unique @map("referral_code")
-  referredBy       String?        @map("referred_by")
-  totalPurchases   Decimal        @default(0) @map("total_purchases") @db.Decimal(10, 2)
-  utmCampaign      String?        @map("utm_campaign")
-  utmContent       String?        @map("utm_content")
-  utmMedium        String?        @map("utm_medium")
-  utmSource        String?        @map("utm_source")
-  utmTerm          String?        @map("utm_term")
-  bonuses          Bonus[]
-  notifications    Notification[]
-  transactions     Transaction[]
-  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  referrer         User?          @relation("UserReferrals", fields: [referredBy], references: [id])
-  referrals        User[]         @relation("UserReferrals")
+  id                String             @id @default(cuid())
+  projectId         String             @map("project_id")
+  email             String?
+  phone             String?
+  firstName         String?            @map("first_name")
+  lastName          String?            @map("last_name")
+  birthDate         DateTime?          @map("birth_date") @db.Date
+  telegramId        BigInt?            @map("telegram_id")
+  telegramUsername  String?            @map("telegram_username")
+  isActive          Boolean            @default(true) @map("is_active")
+  registeredAt      DateTime           @default(now()) @map("registered_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  currentLevel      String             @default("Базовый") @map("current_level")
+  referralCode      String?            @unique @map("referral_code")
+  referredBy        String?            @map("referred_by")
+  totalPurchases    Decimal            @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  utmCampaign       String?            @map("utm_campaign")
+  utmContent        String?            @map("utm_content")
+  utmMedium         String?            @map("utm_medium")
+  utmSource         String?            @map("utm_source")
+  utmTerm           String?            @map("utm_term")
+  bonuses           Bonus[]
+  notifications     Notification[]
+  transactions      Transaction[]
+  orders            Order[]
+  analyticsEvents   AnalyticsEvent[]
+  segmentMembers    SegmentMember[]
+  mailingRecipients MailingRecipient[]
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  referrer          User?              @relation("UserReferrals", fields: [referredBy], references: [id])
+  referrals         User[]             @relation("UserReferrals")
+  Chat              Chat[]
 
   @@unique([projectId, email])
   @@unique([projectId, phone])
@@ -208,19 +224,19 @@ model WebhookLog {
 }
 
 model AdminAccount {
-  id                        String    @id @default(cuid())
-  email                     String    @unique
-  passwordHash              String    @map("password_hash")
-  role                      String?   @default("ADMIN")
-  isActive                  Boolean?  @default(true) @map("is_active")
-  emailVerified             Boolean   @default(false) @map("email_verified")
-  emailVerificationToken    String?   @map("email_verification_token")
-  emailVerificationExpires  DateTime? @map("email_verification_expires")
-  metadata                  Json?
-  createdAt                 DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt                 DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  projects                  Project[]
-  subscriptions             Subscription[]
+  id                       String         @id @default(cuid())
+  email                    String         @unique
+  passwordHash             String         @map("password_hash")
+  role                     String?        @default("ADMIN")
+  isActive                 Boolean?       @default(true) @map("is_active")
+  emailVerified            Boolean        @default(false) @map("email_verified")
+  emailVerificationToken   String?        @map("email_verification_token")
+  emailVerificationExpires DateTime?      @map("email_verification_expires")
+  metadata                 Json?
+  createdAt                DateTime?      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                DateTime?      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  projects                 Project[]
+  subscriptions            Subscription[]
 
   @@map("admin_accounts")
 }
@@ -429,14 +445,24 @@ enum AlphaTesterStatus {
   INACTIVE
 }
 
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
 model SystemLog {
   id        String   @id @default(cuid())
-  level     String   // info, warn, error, debug
+  level     String // info, warn, error, debug
   message   String
   context   Json?
   projectId String?  @map("project_id")
   userId    String?  @map("user_id")
-  source    String   // bot, webhook, api, workflow
+  source    String // bot, webhook, api, workflow
   stack     String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at")
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -455,141 +481,482 @@ model SystemSettings {
 }
 
 model SubscriptionPlan {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
-  slug        String   @unique
+  slug        String  @unique
   description String?
-  price       Decimal  @db.Decimal(10, 2)
-  currency    String   @default("RUB")
-  interval    String   // month, year
-  
+  price       Decimal @db.Decimal(10, 2)
+  currency    String  @default("RUB")
+  interval    String // month, year
+
   // Лимиты
-  maxProjects     Int @map("max_projects")
+  maxProjects        Int @map("max_projects")
   maxUsersPerProject Int @map("max_users_per_project")
-  
+
   // Фичи (JSON для гибкости)
-  features    Json
-  
-  isActive    Boolean  @default(true) @map("is_active")
-  isPublic    Boolean  @default(true) @map("is_public")
-  sortOrder   Int      @default(0) @map("sort_order")
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  
+  features Json
+
+  isActive  Boolean @default(true) @map("is_active")
+  isPublic  Boolean @default(true) @map("is_public")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   subscriptions Subscription[]
   discounts     PlanDiscount[]
-  
+
   @@map("subscription_plans")
 }
 
 model Subscription {
-  id              String   @id @default(cuid())
-  adminAccountId  String   @map("admin_account_id")
-  planId          String   @map("plan_id")
-  
-  status          String   // active, cancelled, expired, trial
-  
+  id             String @id @default(cuid())
+  adminAccountId String @map("admin_account_id")
+  planId         String @map("plan_id")
+
+  status String // active, cancelled, expired, trial
+
   // Даты
-  startDate       DateTime @map("start_date")
-  endDate         DateTime? @map("end_date")
-  trialEndDate    DateTime? @map("trial_end_date")
-  cancelledAt     DateTime? @map("cancelled_at")
-  
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime? @map("end_date")
+  trialEndDate DateTime? @map("trial_end_date")
+  cancelledAt  DateTime? @map("cancelled_at")
+
   // Промокод
-  promoCodeId     String?  @map("promo_code_id")
-  
+  promoCodeId String? @map("promo_code_id")
+
   // Кастомные лимиты (переопределяют план)
-  customLimits    Json?    @map("custom_limits")
-  
+  customLimits Json? @map("custom_limits")
+
   // Биллинг (для будущей интеграции)
-  billingEmail    String?  @map("billing_email")
-  paymentMethod   String?  @map("payment_method")
+  billingEmail    String?   @map("billing_email")
+  paymentMethod   String?   @map("payment_method")
   lastPaymentDate DateTime? @map("last_payment_date")
   nextPaymentDate DateTime? @map("next_payment_date")
-  
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  adminAccount    AdminAccount     @relation(fields: [adminAccountId], references: [id], onDelete: Cascade)
-  plan            SubscriptionPlan @relation(fields: [planId], references: [id])
-  promoCode       PromoCode?       @relation(fields: [promoCodeId], references: [id])
-  history         SubscriptionHistory[]
-  
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  adminAccount AdminAccount          @relation(fields: [adminAccountId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan      @relation(fields: [planId], references: [id])
+  promoCode    PromoCode?            @relation(fields: [promoCodeId], references: [id])
+  history      SubscriptionHistory[]
+
   @@map("subscriptions")
 }
 
 model SubscriptionHistory {
-  id             String   @id @default(cuid())
-  subscriptionId String   @map("subscription_id")
-  
-  action         String   // created, upgraded, downgraded, cancelled, renewed
-  fromPlanId     String?  @map("from_plan_id")
-  toPlanId       String?  @map("to_plan_id")
-  
-  reason         String?
-  metadata       Json?
-  
-  performedBy    String?  @map("performed_by") // adminId или system
-  createdAt      DateTime @default(now()) @map("created_at")
-  
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  
+  id             String @id @default(cuid())
+  subscriptionId String @map("subscription_id")
+
+  action     String // created, upgraded, downgraded, cancelled, renewed
+  fromPlanId String? @map("from_plan_id")
+  toPlanId   String? @map("to_plan_id")
+
+  reason   String?
+  metadata Json?
+
+  performedBy String?  @map("performed_by") // adminId или system
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
   @@map("subscription_history")
 }
 
 model PromoCode {
-  id          String   @id @default(cuid())
-  code        String   @unique
+  id          String  @id @default(cuid())
+  code        String  @unique
   description String?
-  
+
   // Тип скидки
-  discountType   String  @map("discount_type") // percent, fixed_amount
-  discountValue  Decimal @db.Decimal(10, 2) @map("discount_value")
-  
+  discountType  String  @map("discount_type") // percent, fixed_amount
+  discountValue Decimal @map("discount_value") @db.Decimal(10, 2)
+
   // Применимость
   applicablePlans String[] @map("applicable_plans") // ['pro', 'enterprise'] или [] для всех
-  
+
   // Ограничения
-  maxUses         Int?     @map("max_uses")
-  usedCount       Int      @default(0) @map("used_count")
-  validFrom       DateTime @map("valid_from")
-  validUntil      DateTime? @map("valid_until")
-  
-  isActive        Boolean  @default(true) @map("is_active")
-  
-  createdBy       String?  @map("created_by") // superadmin id
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  subscriptions   Subscription[]
-  
+  maxUses    Int?      @map("max_uses")
+  usedCount  Int       @default(0) @map("used_count")
+  validFrom  DateTime  @map("valid_from")
+  validUntil DateTime? @map("valid_until")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdBy String?  @map("created_by") // superadmin id
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
   @@map("promo_codes")
 }
 
 model PlanDiscount {
-  id          String   @id @default(cuid())
-  planId      String   @map("plan_id")
-  
+  id     String @id @default(cuid())
+  planId String @map("plan_id")
+
   name        String
   description String?
-  
-  discountType   String  @map("discount_type") // percent, fixed_amount
-  discountValue  Decimal @db.Decimal(10, 2) @map("discount_value")
-  
+
+  discountType  String  @map("discount_type") // percent, fixed_amount
+  discountValue Decimal @map("discount_value") @db.Decimal(10, 2)
+
   // Условия
-  minMonths      Int?    @map("min_months") // например, скидка при оплате за год
-  
-  validFrom      DateTime @map("valid_from")
-  validUntil     DateTime? @map("valid_until")
-  
-  isActive       Boolean  @default(true) @map("is_active")
-  sortOrder      Int      @default(0) @map("sort_order")
-  
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  
-  plan           SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  
+  minMonths Int? @map("min_months") // например, скидка при оплате за год
+
+  validFrom  DateTime  @map("valid_from")
+  validUntil DateTime? @map("valid_until")
+
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
   @@map("plan_discounts")
+}
+
+model Order {
+  id              String           @id @default(cuid())
+  projectId       String           @map("project_id")
+  userId          String?          @map("user_id")
+  orderNumber     String           @unique @map("order_number")
+  status          OrderStatus      @default(PENDING)
+  totalAmount     Decimal          @map("total_amount") @db.Decimal(10, 2)
+  paidAmount      Decimal          @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  bonusAmount     Decimal          @default(0) @map("bonus_amount") @db.Decimal(10, 2)
+  deliveryAddress String?          @map("delivery_address") @db.Text
+  paymentMethod   String?          @map("payment_method")
+  deliveryMethod  String?          @map("delivery_method")
+  metadata        Json?
+  history         OrderHistory[]
+  items           OrderItem[]
+  analyticsEvents AnalyticsEvent[]
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectId, createdAt])
+  @@index([userId])
+  @@index([orderNumber])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String   @map("order_id")
+  productId String?  @map("product_id")
+  name      String
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2)
+  total     Decimal  @db.Decimal(10, 2)
+  metadata  Json?
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderHistory {
+  id        String      @id @default(cuid())
+  orderId   String      @map("order_id")
+  status    OrderStatus
+  comment   String?     @db.Text
+  changedBy String?     @map("changed_by")
+  metadata  Json?
+  createdAt DateTime    @default(now()) @map("created_at")
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_history")
+}
+
+model ProductCategory {
+  id          String            @id @default(cuid())
+  projectId   String            @map("project_id")
+  name        String
+  description String?           @db.Text
+  parentId    String?           @map("parent_id")
+  sortOrder   Int               @default(0) @map("sort_order")
+  isActive    Boolean           @default(true) @map("is_active")
+  metadata    Json?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent      ProductCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    ProductCategory[] @relation("CategoryHierarchy")
+  products    Product[]
+
+  @@index([projectId])
+  @@index([parentId])
+  @@map("product_categories")
+}
+
+model Product {
+  id          String           @id @default(cuid())
+  projectId   String           @map("project_id")
+  name        String
+  sku         String?          @unique
+  price       Decimal          @db.Decimal(10, 2)
+  categoryId  String?          @map("category_id")
+  description String?          @db.Text
+  isActive    Boolean          @default(true) @map("is_active")
+  metadata    Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  category    ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items       OrderItem[]
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([categoryId])
+  @@index([sku])
+  @@map("products")
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  eventType String   @map("event_type")
+  userId    String?  @map("user_id")
+  orderId   String?  @map("order_id")
+  data      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, eventType, createdAt])
+  @@index([userId])
+  @@index([orderId])
+  @@map("analytics_events")
+}
+
+model AnalyticsMetric {
+  id         String   @id @default(cuid())
+  projectId  String   @map("project_id")
+  metricType String   @map("metric_type")
+  period     String // day, week, month, year
+  value      Decimal  @db.Decimal(10, 2)
+  metadata   Json?
+  date       DateTime @db.Date
+  createdAt  DateTime @default(now()) @map("created_at")
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, metricType, period, date])
+  @@index([projectId, metricType, date])
+  @@map("analytics_metrics")
+}
+
+enum SegmentType {
+  MANUAL
+  AUTO
+  DYNAMIC
+}
+
+model Segment {
+  id          String          @id @default(cuid())
+  projectId   String          @map("project_id")
+  name        String
+  description String?         @db.Text
+  rules       Json // Дерево условий для сегментации
+  type        SegmentType     @default(MANUAL)
+  memberCount Int             @default(0) @map("member_count")
+  isActive    Boolean         @default(true) @map("is_active")
+  members     SegmentMember[]
+  mailings    Mailing[]
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("segments")
+}
+
+model SegmentMember {
+  id        String   @id @default(cuid())
+  segmentId String   @map("segment_id")
+  userId    String   @map("user_id")
+  addedAt   DateTime @default(now()) @map("added_at")
+  segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([segmentId, userId])
+  @@index([segmentId])
+  @@index([userId])
+  @@map("segment_members")
+}
+
+enum MailingType {
+  EMAIL
+  SMS
+  TELEGRAM
+  WHATSAPP
+  VIBER
+}
+
+enum MailingStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+model Mailing {
+  id          String             @id @default(cuid())
+  projectId   String             @map("project_id")
+  name        String
+  type        MailingType
+  segmentId   String?            @map("segment_id")
+  templateId  String?            @map("template_id")
+  status      MailingStatus      @default(DRAFT)
+  scheduledAt DateTime?          @map("scheduled_at")
+  sentAt      DateTime?          @map("sent_at")
+  recipients  MailingRecipient[]
+  statistics  Json?
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  segment     Segment?           @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  template    MailingTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([segmentId])
+  @@map("mailings")
+}
+
+model MailingTemplate {
+  id        String      @id @default(cuid())
+  projectId String      @map("project_id")
+  name      String
+  subject   String
+  body      String      @db.Text
+  type      MailingType
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  mailings  Mailing[]
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("mailing_templates")
+}
+
+model MailingRecipient {
+  id        String    @id @default(cuid())
+  mailingId String    @map("mailing_id")
+  userId    String?   @map("user_id")
+  email     String?
+  phone     String?
+  status    String    @default("PENDING") // PENDING, SENT, FAILED, BOUNCED
+  sentAt    DateTime? @map("sent_at")
+  error     String?   @db.Text
+  metadata  Json?
+  mailing   Mailing   @relation(fields: [mailingId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([mailingId, status])
+  @@index([userId])
+  @@map("mailing_recipients")
+}
+
+model RetailCrmIntegration {
+  id            String    @id @default(cuid())
+  projectId     String    @unique @map("project_id")
+  apiUrl        String    @map("api_url")
+  apiKey        String    @map("api_key")
+  isActive      Boolean   @default(false) @map("is_active")
+  syncOrders    Boolean   @default(true) @map("sync_orders")
+  syncCustomers Boolean   @default(true) @map("sync_customers")
+  lastSyncAt    DateTime? @map("last_sync_at")
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("retailcrm_integrations")
+}
+
+enum ChatChannelType {
+  TELEGRAM
+  WHATSAPP
+  INSTAGRAM
+  VK
+  MESSENGER
+  VIBER
+}
+
+enum ChatStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+  WAITING
+}
+
+model ChatChannel {
+  id          String          @id @default(cuid())
+  projectId   String          @map("project_id")
+  type        ChatChannelType
+  name        String
+  credentials Json // Зашифрованные учетные данные
+  isActive    Boolean         @default(true) @map("is_active")
+  metadata    Json?
+  chats       Chat[]
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, type])
+  @@map("chat_channels")
+}
+
+model Chat {
+  id            String        @id @default(cuid())
+  projectId     String        @map("project_id")
+  channelId     String        @map("channel_id")
+  userId        String?       @map("user_id")
+  externalId    String        @map("external_id") // ID чата во внешней системе
+  status        ChatStatus    @default(OPEN)
+  lastMessage   String?       @map("last_message") @db.Text
+  lastMessageAt DateTime?     @map("last_message_at")
+  unreadCount   Int           @default(0) @map("unread_count")
+  metadata      Json?
+  messages      ChatMessage[]
+  channel       ChatChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, channelId, externalId])
+  @@index([projectId, status])
+  @@index([userId])
+  @@index([channelId])
+  @@index([lastMessageAt])
+  @@map("chats")
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  chatId     String   @map("chat_id")
+  externalId String?  @map("external_id") // ID сообщения во внешней системе
+  message    String   @db.Text
+  direction  String // INCOMING, OUTGOING
+  senderName String?  @map("sender_name")
+  senderId   String?  @map("sender_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@index([externalId])
+  @@map("chat_messages")
 }

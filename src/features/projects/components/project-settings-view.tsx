@@ -25,7 +25,13 @@ import {
   BookOpen,
   Wrench,
   Library,
-  Workflow
+  Workflow,
+  ShoppingCart,
+  Package,
+  ShoppingBag,
+  Users2,
+  Mail,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -507,10 +513,71 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   Интеграция на сайт
                 </Button>
               </Link>
-
-              {/* Кнопка логов интеграции удалена */}
             </CardContent>
           </Card>
+
+          {/* Новый функционал - СКРЫТ */}
+          {/* 
+          <Card>
+            <CardHeader>
+              <CardTitle className='text-lg'>Продажи и аналитика</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-3'>
+              <Link href={`/dashboard/projects/${projectId}/orders`}>
+                <Button variant='outline' className='w-full justify-start'>
+                  <ShoppingCart className='mr-2 h-4 w-4' />
+                  Заказы
+                </Button>
+              </Link>
+              <Link href={`/dashboard/projects/${projectId}/products`}>
+                <Button variant='outline' className='mt-2 w-full justify-start'>
+                  <Package className='mr-2 h-4 w-4' />
+                  Товары
+                </Button>
+              </Link>
+              <Link href={`/dashboard/projects/${projectId}/retailcrm`}>
+                <Button variant='outline' className='mt-2 w-full justify-start'>
+                  <ShoppingBag className='mr-2 h-4 w-4' />
+                  RetailCRM
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className='text-lg'>Маркетинг</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-3'>
+              <Link href={`/dashboard/projects/${projectId}/segments`}>
+                <Button variant='outline' className='w-full justify-start'>
+                  <Users2 className='mr-2 h-4 w-4' />
+                  Сегменты
+                </Button>
+              </Link>
+              <Link href={`/dashboard/projects/${projectId}/mailings`}>
+                <Button variant='outline' className='mt-2 w-full justify-start'>
+                  <Mail className='mr-2 h-4 w-4' />
+                  Рассылки
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className='text-lg'>Коммуникации</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-3'>
+              <Link href={`/dashboard/projects/${projectId}/chats`}>
+                <Button variant='outline' className='w-full justify-start'>
+                  <MessageSquare className='mr-2 h-4 w-4' />
+                  Чаты
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+          */}
 
           {/* Project Info */}
           {project && (

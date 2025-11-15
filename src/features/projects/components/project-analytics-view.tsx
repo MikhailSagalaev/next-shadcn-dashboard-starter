@@ -54,6 +54,7 @@ import {
 } from 'recharts';
 import type { Project } from '@/types/bonus';
 import type { ProjectAnalytics } from '@/types/analytics';
+import { SalesAnalyticsSection } from './sales-analytics-section';
 
 interface ProjectAnalyticsViewProps {
   projectId: string;
@@ -657,6 +658,10 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Sales Analytics Section */}
+      <Separator />
+      <SalesAnalyticsSection projectId={projectId} />
     </div>
   );
 }
