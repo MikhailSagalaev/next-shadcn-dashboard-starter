@@ -8,7 +8,7 @@
  * @author: AI Assistant
  */
 
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import {
   type ColumnDef,
   type SortingState,
@@ -26,9 +26,8 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/table/data-table-pagination';
-import { Search, Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -37,6 +36,8 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 interface ErrorLog {
   id: string;
@@ -44,10 +45,101 @@ interface ErrorLog {
   message: string;
   source: string;
   createdAt: string;
+  stack?: string | null;
+  context?: Record<string, unknown> | null;
+  projectId?: string | null;
+  userId?: string | null;
   project: {
     id: string;
     name: string;
   } | null;
+}
+
+const formatJson = (data?: Record<string, unknown> | null) => {
+  if (!data) {
+    return 'Нет данных';
+  }
+  try {
+    return JSON.stringify(data, null, 2);
+  } catch {
+    return String(data);
+  }
+};
+
+function LogDetails({ log }: { log: ErrorLog }) {
+  const { toast } = useToast();
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        JSON.stringify(
+          {
+            id: log.id,
+            level: log.level,
+            message: log.message,
+            source: log.source,
+            project: log.project?.name || 'system',
+            projectId: log.projectId,
+            userId: log.userId,
+            stack: log.stack,
+            context: log.context
+          },
+          null,
+          2
+        )
+      );
+      toast({
+        title: 'Скопировано',
+        description: 'Полная запись лога скопирована в буфер обмена'
+      });
+    } catch (error) {
+      console.error('Clipboard error', error);
+      toast({
+        title: 'Не удалось скопировать',
+        description: 'Попробуйте скопировать вручную',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  return (
+    <div className='space-y-4 text-sm'>
+      <div className='flex flex-wrap gap-4 text-muted-foreground'>
+        <div>
+          <span className='font-medium text-foreground'>Проект:</span>{' '}
+          {log.project?.name || 'Система'}
+        </div>
+        <div>
+          <span className='font-medium text-foreground'>Источник:</span>{' '}
+          {log.source}
+        </div>
+        {log.userId && (
+          <div>
+            <span className='font-medium text-foreground'>UserId:</span>{' '}
+            {log.userId}
+          </div>
+        )}
+        <Button variant='outline' size='sm' className='ml-auto' onClick={handleCopy}>
+          <Copy className='mr-2 h-3 w-3' />
+          Скопировать JSON
+        </Button>
+      </div>
+
+      <div className='space-y-2'>
+        <p className='text-sm font-medium text-foreground'>Stack Trace</p>
+        <pre className='max-h-72 overflow-auto rounded bg-muted p-3 text-xs leading-relaxed'>
+          {log.stack || '—'}
+        </pre>
+      </div>
+
+      <div className='space-y-2'>
+        <p className='text-sm font-medium text-foreground'>Context / Payload</p>
+        <pre className='max-h-96 overflow-auto rounded bg-muted p-3 text-xs leading-relaxed'>
+          {formatJson(log.context)}
+        </pre>
+      </div>
+    </div>
+  );
 }
 
 export function ErrorsTable() {
@@ -60,6 +152,7 @@ export function ErrorsTable() {
   const [levelFilter, setLevelFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -158,6 +251,36 @@ export function ErrorsTable() {
               minute: '2-digit'
             })}
           </div>
+        );
+      }
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => {
+        const log = row.original;
+        const isExpanded = expandedRows[log.id];
+        return (
+          <Button
+            variant='ghost'
+            size='sm'
+            onClick={() =>
+              setExpandedRows((prev) => ({
+                ...prev,
+                [log.id]: !prev[log.id]
+              }))
+            }
+          >
+            {isExpanded ? (
+              <>
+                Скрыть <ChevronUp className='ml-1 h-4 w-4' />
+              </>
+            ) : (
+              <>
+                Детали <ChevronDown className='ml-1 h-4 w-4' />
+              </>
+            )}
+          </Button>
         );
       }
     }
@@ -278,18 +401,31 @@ export function ErrorsTable() {
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const log = row.original;
+                const isExpanded = expandedRows[log.id];
+                return (
+                  <Fragment key={row.id}>
+                    <TableRow>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow className='bg-muted/30'>
+                        <TableCell colSpan={columns.length}>
+                          <LogDetails log={log} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell

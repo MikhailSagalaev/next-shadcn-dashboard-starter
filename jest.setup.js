@@ -1,20 +1,14 @@
 /**
  * @file: jest.setup.js
- * @description: Jest setup файл для конфигурации тестового окружения
- * @project: SaaS Bonus System
- * @created: 2025-01-28
- * @author: AI Assistant + User
+ * @description: Глобальные настройки Jest
  */
 
-// Learn more: https://github.com/testing-library/jest-dom
-import '@testing-library/jest-dom';
+require('@testing-library/jest-dom');
 
-// Mock environment variables
-process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
-process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/test';
+process.env.NEXT_PUBLIC_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 process.env.NODE_ENV = 'test';
 
-// Mock Prisma client
 jest.mock('@/lib/db', () => ({
   db: {
     project: {
@@ -63,7 +57,6 @@ jest.mock('@/lib/db', () => ({
   }
 }));
 
-// Mock Next.js router
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -79,14 +72,11 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/test'
 }));
 
-// Suppress console errors in tests
 const originalError = console.error;
+
 beforeAll(() => {
   console.error = (...args) => {
-    if (
-      typeof args[0] === 'string' &&
-      args[0].includes('Warning: ReactDOM.render')
-    ) {
+    if (typeof args[0] === 'string' && args[0].includes('Warning: ReactDOM.render')) {
       return;
     }
     originalError.call(console, ...args);
@@ -96,3 +86,14 @@ beforeAll(() => {
 afterAll(() => {
   console.error = originalError;
 });
+
+const mockCssColor = {
+  parse: () => null,
+  format: () => '',
+  keywords: {}
+};
+
+jest.mock('@asamuzakjp/css-color', () => mockCssColor, { virtual: true });
+jest.mock('@asamuzakjp/css-color/dist/cjs/index.cjs', () => mockCssColor, { virtual: true });
+
+

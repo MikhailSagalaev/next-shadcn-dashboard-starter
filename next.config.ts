@@ -1,5 +1,7 @@
 import type { NextConfig } from 'next';
 
+const isTest = process.env.NODE_ENV === 'test';
+
 // Define the base Next.js configuration
 const baseConfig: NextConfig = {
   // Production optimization
@@ -24,7 +26,7 @@ const baseConfig: NextConfig = {
       }
     ]
   },
-  transpilePackages: ['geist'],
+  transpilePackages: isTest ? [] : ['geist'],
 
   // Performance optimizations
   turbopack: {

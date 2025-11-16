@@ -8,6 +8,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SubscriptionsTable } from '@/components/super-admin/subscriptions-table';
+import { SubscriptionPlansTable } from '@/components/super-admin/subscription-plans-table';
 
 export default function SuperAdminSubscriptionsPage() {
   return (
@@ -18,6 +19,15 @@ export default function SuperAdminSubscriptionsPage() {
           Управление тарифными планами и подписками пользователей
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Тарифные планы</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SubscriptionPlansTable />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
