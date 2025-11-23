@@ -16,9 +16,11 @@ import type { MailingType } from '@prisma/client';
 const getRedisConfig = () => {
   if (process.env.REDIS_HOST) {
     return {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
+      redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD
+      },
       maxRetriesPerRequest: 3,
       retryStrategy: (times: number) => {
         const delay = Math.min(times * 50, 2000);
@@ -26,7 +28,7 @@ const getRedisConfig = () => {
       }
     };
   }
-  
+
   return {
     redis: process.env.REDIS_URL || 'redis://localhost:6379',
     maxRetriesPerRequest: 3,
@@ -53,11 +55,15 @@ export interface MailingJobData {
 }
 
 // Создаем очередь для рассылок
-export const mailingQueue = new Bull<MailingJobData>('mailing', getRedisConfig());
+export const mailingQueue = new Bull<MailingJobData>(
+  'mailing',
+  getRedisConfig()
+);
 
 // Обработчик задач рассылки
 mailingQueue.process(async (job: Bull.Job<MailingJobData>) => {
-  const { mailingId, recipientId, type, recipient, subject, body, metadata } = job.data;
+  const { mailingId, recipientId, type, recipient, subject, body, metadata } =
+    job.data;
 
   try {
     logger.info('Processing mailing job', {
@@ -117,8 +123,8 @@ mailingQueue.process(async (job: Bull.Job<MailingJobData>) => {
       data: {
         status: success ? 'SENT' : 'FAILED',
         sentAt: success ? new Date() : null,
-        error: error || null,
-      },
+        error: error || null
+      }
     });
 
     if (success) {
@@ -153,8 +159,8 @@ mailingQueue.process(async (job: Bull.Job<MailingJobData>) => {
       where: { id: recipientId },
       data: {
         status: 'FAILED',
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      },
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+      }
     });
 
     throw error;
@@ -177,4 +183,3 @@ mailingQueue.on('completed', (job) => {
     component: 'mailing-queue'
   });
 });
-

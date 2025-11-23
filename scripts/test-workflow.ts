@@ -36,16 +36,26 @@ async function testWorkflow() {
       return;
     }
 
+    const typedWorkflowVersion = {
+      ...workflowVersion,
+      nodes: workflowVersion.nodes as Record<string, any>
+    };
+
     console.log(`✅ Найдена версия workflow: ${workflowVersion.version}`);
     console.log(`  Workflow ID: ${workflowVersion.workflowId}`);
-    console.log(`  Количество нод: ${Object.keys(workflowVersion.nodes).length}`);
+    console.log(
+      `  Количество нод: ${Object.keys(typedWorkflowVersion.nodes).length}`
+    );
 
     // Создаем процессор
-    const processor = new SimpleWorkflowProcessor(workflowVersion, 'cmh2d0uv30000v8h8ujr7u233');
+    const processor = new SimpleWorkflowProcessor(
+      typedWorkflowVersion as any,
+      'cmh2d0uv30000v8h8ujr7u233'
+    );
 
     // Тестируем сценарий для существующего пользователя
     console.log('\n🧪 Тестируем сценарий для существующего пользователя...');
-    
+
     // Создаем мок контекст
     const mockContext = {
       from: { id: 524567338, username: 'MIXAdev' },
@@ -55,9 +65,8 @@ async function testWorkflow() {
 
     // Выполняем workflow
     const result = await processor.process(mockContext as any, 'start');
-    
-    console.log(`Результат выполнения: ${result ? '✅ Успешно' : '❌ Ошибка'}`);
 
+    console.log(`Результат выполнения: ${result ? '✅ Успешно' : '❌ Ошибка'}`);
   } catch (error) {
     console.error('❌ Ошибка при тестировании workflow:', error);
   } finally {

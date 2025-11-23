@@ -29,6 +29,7 @@ model Project {
   projectVariables     ProjectVariable[]
   owner                AdminAccount?         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   referralProgram      ReferralProgram?
+  referralLevels       ReferralLevel[]
   users                User[]
   webhookLogs          WebhookLog[]
   workflowVariables    WorkflowVariable[]
@@ -68,17 +69,38 @@ model BonusLevel {
 }
 
 model ReferralProgram {
-  id            String   @id @default(cuid())
-  projectId     String   @unique @map("project_id")
-  isActive      Boolean  @default(true) @map("is_active")
-  bonusPercent  Int      @default(5) @map("bonus_percent")
-  referrerBonus Decimal  @default(0) @map("referrer_bonus") @db.Decimal(10, 2)
-  description   String?
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                String        @id @default(cuid())
+  projectId         String        @unique @map("project_id")
+  isActive          Boolean       @default(true) @map("is_active")
+  bonusPercent      Int           @default(5) @map("bonus_percent")
+  referrerBonus     Decimal       @default(0) @map("referrer_bonus") @db.Decimal(10, 2)
+  minPurchaseAmount Decimal       @default(0) @map("min_purchase_amount") @db.Decimal(10, 2)
+  cookieLifetime    Int           @default(30) @map("cookie_lifetime")
+  welcomeBonus      Decimal       @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
+  description       String?
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  levels            ReferralLevel[]
 
   @@map("referral_programs")
+}
+
+model ReferralLevel {
+  id                String          @id @default(cuid())
+  projectId         String          @map("project_id")
+  referralProgramId String          @map("referral_program_id")
+  level             Int
+  percent           Decimal         @default(0) @db.Decimal(5, 2)
+  isActive          Boolean         @default(true) @map("is_active")
+  order             Int             @default(0)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  program           ReferralProgram @relation(fields: [referralProgramId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, level])
+  @@map("referral_levels")
 }
 
 model BotSettings {
@@ -182,6 +204,7 @@ model Bonus {
   isUsed       Boolean       @default(false) @map("is_used")
   metadata     Json?
   createdAt    DateTime      @default(now()) @map("created_at")
+  referralLevel Int?         @map("referral_level")
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
 
@@ -200,6 +223,7 @@ model Transaction {
   appliedPercent  Int?            @map("applied_percent")
   isReferralBonus Boolean         @default(false) @map("is_referral_bonus")
   referralUserId  String?         @map("referral_user_id")
+  referralLevel   Int?            @map("referral_level")
   userLevel       String?         @map("user_level")
   bonus           Bonus?          @relation(fields: [bonusId], references: [id])
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -232,6 +256,9 @@ model AdminAccount {
   emailVerified            Boolean        @default(false) @map("email_verified")
   emailVerificationToken   String?        @map("email_verification_token")
   emailVerificationExpires DateTime?      @map("email_verification_expires")
+  twoFactorSecret          String?        @map("two_factor_secret")
+  twoFactorTempSecret      String?        @map("two_factor_temp_secret")
+  twoFactorEnabled         Boolean        @default(false) @map("two_factor_enabled")
   metadata                 Json?
   createdAt                DateTime?      @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt                DateTime?      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)

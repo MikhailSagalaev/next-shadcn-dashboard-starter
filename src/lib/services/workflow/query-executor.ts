@@ -79,18 +79,18 @@ export const SAFE_QUERIES = {
         include: {
           bonuses: {
             where: {
-              OR: [
-                { expiresAt: null },
-                { expiresAt: { gt: new Date() } }
-              ]
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
             }
           }
         }
       });
 
       if (user) {
-        const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-        
+        const balance = user.bonuses.reduce(
+          (sum, bonus) => sum + Number(bonus.amount),
+          0
+        );
+
         // Возвращаем только сериализуемые данные пользователя
         return {
           id: user.id,
@@ -129,18 +129,18 @@ export const SAFE_QUERIES = {
         include: {
           bonuses: {
             where: {
-              OR: [
-                { expiresAt: null },
-                { expiresAt: { gt: new Date() } }
-              ]
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
             }
           }
         }
       });
 
       if (user) {
-        const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-        
+        const balance = user.bonuses.reduce(
+          (sum, bonus) => sum + Number(bonus.amount),
+          0
+        );
+
         // Возвращаем только сериализуемые данные пользователя
         return {
           id: user.id,
@@ -179,18 +179,18 @@ export const SAFE_QUERIES = {
         include: {
           bonuses: {
             where: {
-              OR: [
-                { expiresAt: null },
-                { expiresAt: { gt: new Date() } }
-              ]
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
             }
           }
         }
       });
 
       if (user) {
-        const balance = user.bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
-        
+        const balance = user.bonuses.reduce(
+          (sum, bonus) => sum + Number(bonus.amount),
+          0
+        );
+
         // Возвращаем только сериализуемые данные пользователя
         return {
           id: user.id,
@@ -263,7 +263,13 @@ export const SAFE_QUERIES = {
       data: {
         userId: params.userId,
         amount: params.amount,
-        type: params.type as 'PURCHASE' | 'BIRTHDAY' | 'MANUAL' | 'REFERRAL' | 'PROMO' | 'WELCOME',
+        type: params.type as
+          | 'PURCHASE'
+          | 'BIRTHDAY'
+          | 'MANUAL'
+          | 'REFERRAL'
+          | 'PROMO'
+          | 'WELCOME',
         description: params.description,
         expiresAt: params.expiresAt
       }
@@ -293,20 +299,22 @@ export const SAFE_QUERIES = {
       where: {
         userId: params.userId,
         amount: { gt: 0 },
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } }
-        ]
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
       },
       orderBy: {
         createdAt: 'asc' // FIFO - сначала старые
       }
     });
 
-    const totalAvailable = bonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+    const totalAvailable = bonuses.reduce(
+      (sum, b) => sum + Number(b.amount),
+      0
+    );
 
     if (totalAvailable < params.amount) {
-      throw new Error(`Insufficient bonus balance. Available: ${totalAvailable}, Required: ${params.amount}`);
+      throw new Error(
+        `Insufficient bonus balance. Available: ${totalAvailable}, Required: ${params.amount}`
+      );
     }
 
     // Списываем бонусы
@@ -318,7 +326,7 @@ export const SAFE_QUERIES = {
 
       const bonusAmount = Number(bonus.amount);
       const toSpend = Math.min(bonusAmount, remaining);
-      
+
       updates.push(
         db.bonus.update({
           where: { id: bonus.id },
@@ -356,7 +364,7 @@ export const SAFE_QUERIES = {
     try {
       const { UserService } = await import('@/lib/services/user.service');
       const balance = await UserService.getUserBalance(params.userId);
-      
+
       logger.debug('User balance retrieved via UserService', {
         userId: params.userId,
         balance: balance.currentBalance,
@@ -372,24 +380,27 @@ export const SAFE_QUERIES = {
         expiringSoon: balance.expiringSoon
       };
     } catch (error) {
-      logger.error('Error getting user balance via UserService, falling back to bonus calculation', {
-        userId: params.userId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      
+      logger.error(
+        'Error getting user balance via UserService, falling back to bonus calculation',
+        {
+          userId: params.userId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      );
+
       // Fallback на старый способ расчета (для обратной совместимости)
       const bonuses = await db.bonus.findMany({
         where: {
           userId: params.userId,
           amount: { gt: 0 },
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } }
-          ]
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
         }
       });
 
-      const balance = bonuses.reduce((sum, bonus) => sum + Number(bonus.amount), 0);
+      const balance = bonuses.reduce(
+        (sum, bonus) => sum + Number(bonus.amount),
+        0
+      );
 
       return { userId: params.userId, balance };
     }
@@ -412,7 +423,10 @@ export const SAFE_QUERIES = {
   /**
    * Получить историю транзакций
    */
-  get_transactions: async (db: PrismaClient, params: { userId: string; limit?: number }) => {
+  get_transactions: async (
+    db: PrismaClient,
+    params: { userId: string; limit?: number }
+  ) => {
     logger.debug('Executing get_transactions', { params });
 
     const transactions = await db.transaction.findMany({
@@ -441,10 +455,7 @@ export const SAFE_QUERIES = {
         where: {
           userId: params.userId,
           amount: { gt: 0 },
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } }
-          ]
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
         }
       })
     ]);
@@ -454,16 +465,19 @@ export const SAFE_QUERIES = {
     }
 
     const totalEarned = transactions
-      .filter(t => t.type === 'EARN')
+      .filter((t) => t.type === 'EARN')
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
     const totalSpent = Math.abs(
       transactions
-        .filter(t => t.type === 'SPEND')
+        .filter((t) => t.type === 'SPEND')
         .reduce((sum, t) => sum + Number(t.amount), 0)
     );
 
-    const currentBalance = bonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+    const currentBalance = bonuses.reduce(
+      (sum, b) => sum + Number(b.amount),
+      0
+    );
 
     return {
       user,
@@ -484,8 +498,12 @@ export const SAFE_QUERIES = {
     logger.debug('Executing get_user_profile (optimized)', { params });
 
     // ✅ Проверяем кеш user profile
-    const { WorkflowRuntimeService } = await import('@/lib/services/workflow-runtime.service');
-    const cachedProfile = await WorkflowRuntimeService.getCachedUserProfile(params.userId);
+    const { WorkflowRuntimeService } = await import(
+      '@/lib/services/workflow-runtime.service'
+    );
+    const cachedProfile = await WorkflowRuntimeService.getCachedUserProfile(
+      params.userId
+    );
     if (cachedProfile) {
       logger.debug('✅ Returning cached user profile', {
         userId: params.userId,
@@ -500,10 +518,7 @@ export const SAFE_QUERIES = {
       include: {
         bonuses: {
           where: {
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gt: new Date() } }
-            ]
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
           },
           orderBy: { createdAt: 'desc' }
         },
@@ -532,25 +547,28 @@ export const SAFE_QUERIES = {
       const { UserService } = await import('@/lib/services/user.service');
       const balanceData = await UserService.getUserBalance(params.userId);
       balance = balanceData.currentBalance;
-      logger.debug('User balance retrieved via UserService in get_user_profile', {
-        userId: params.userId,
-        balance: balance,
-        totalEarned: balanceData.totalEarned,
-        totalSpent: balanceData.totalSpent
-      });
+      logger.debug(
+        'User balance retrieved via UserService in get_user_profile',
+        {
+          userId: params.userId,
+          balance: balance,
+          totalEarned: balanceData.totalEarned,
+          totalSpent: balanceData.totalSpent
+        }
+      );
     } catch (error) {
-      logger.warn('Failed to get user balance via UserService, falling back to bonus calculation', {
-        userId: params.userId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.warn(
+        'Failed to get user balance via UserService, falling back to bonus calculation',
+        {
+          userId: params.userId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      );
       // Fallback на старый способ расчета (для обратной совместимости)
       const balanceResult = await db.bonus.aggregate({
         where: {
           userId: params.userId,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } }
-          ]
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
         },
         _sum: { amount: true }
       });
@@ -594,16 +612,13 @@ export const SAFE_QUERIES = {
       db.bonus.count({
         where: {
           userId: params.userId,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } }
-          ]
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
         }
       })
     ]);
 
     // Форматируем историю транзакций (только последние 10)
-    const transactionHistory = user.transactions.map(t => ({
+    const transactionHistory = user.transactions.map((t) => ({
       id: t.id,
       amount: Number(t.amount),
       type: t.type,
@@ -613,7 +628,7 @@ export const SAFE_QUERIES = {
     }));
 
     // Форматируем активные бонусы
-    const activeBonuses = user.bonuses.map(b => ({
+    const activeBonuses = user.bonuses.map((b) => ({
       id: b.id,
       amount: Number(b.amount),
       type: b.type,
@@ -659,10 +674,11 @@ export const SAFE_QUERIES = {
       })(),
       referralCode: user.referralCode,
       referredBy: user.referredBy,
-      referrerName: user.referrer ?
-        `${user.referrer.firstName || ''} ${user.referrer.lastName || ''}`.trim() ||
-        user.referrer.telegramUsername ||
-        'Неизвестно' : null,
+      referrerName: user.referrer
+        ? `${user.referrer.firstName || ''} ${user.referrer.lastName || ''}`.trim() ||
+          user.referrer.telegramUsername ||
+          'Неизвестно'
+        : null,
 
       // Даты
       registeredAt: user.registeredAt,
@@ -679,7 +695,10 @@ export const SAFE_QUERIES = {
     try {
       await WorkflowRuntimeService.cacheUserProfile(params.userId, result);
     } catch (cacheError) {
-      logger.warn('Failed to cache user profile', { userId: params.userId, error: cacheError });
+      logger.warn('Failed to cache user profile', {
+        userId: params.userId,
+        error: cacheError
+      });
       // Не критично, продолжаем выполнение
     }
 
@@ -689,7 +708,9 @@ export const SAFE_QUERIES = {
       currentLevel: user.currentLevel,
       currentLevelType: typeof user.currentLevel,
       currentLevelLength: user.currentLevel?.length,
-      isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(user.currentLevel)
+      isValidLevel: ['Базовый', 'Серебряный', 'Золотой', 'Платиновый'].includes(
+        user.currentLevel
+      )
     });
 
     return result;
@@ -699,7 +720,10 @@ export const SAFE_QUERIES = {
    * Получить реферальную ссылку пользователя
    * ✅ ДОБАВЛЕНО: Расширенное логирование для диагностики проблем с projectId
    */
-  get_referral_link: async (db: PrismaClient, params: { userId: string; projectId: string }) => {
+  get_referral_link: async (
+    db: PrismaClient,
+    params: { userId: string; projectId: string }
+  ) => {
     logger.debug('Executing get_referral_link', { params });
 
     // ✅ ДОБАВЛЕНО: Подробное логирование параметров
@@ -720,7 +744,9 @@ export const SAFE_QUERIES = {
     });
 
     if (!user) {
-      console.log('❌ get_referral_link: User not found', { userId: params.userId });
+      console.log('❌ get_referral_link: User not found', {
+        userId: params.userId
+      });
       return null;
     }
 
@@ -733,8 +759,12 @@ export const SAFE_QUERIES = {
     let referralCode = user.referralCode;
     if (!referralCode) {
       const { ReferralService } = await import('../referral.service');
-      referralCode = await ReferralService.ensureUserReferralCode(params.userId);
-      console.log('✅ get_referral_link: Generated new referral code', { referralCode });
+      referralCode = await ReferralService.ensureUserReferralCode(
+        params.userId
+      );
+      console.log('✅ get_referral_link: Generated new referral code', {
+        referralCode
+      });
     }
 
     // Получаем данные проекта
@@ -751,7 +781,9 @@ export const SAFE_QUERIES = {
     });
 
     if (!project) {
-      console.log('❌ get_referral_link: Project not found', { projectId: params.projectId });
+      console.log('❌ get_referral_link: Project not found', {
+        projectId: params.projectId
+      });
     }
 
     // Формируем ссылку на сайт клиента с utm_ref
@@ -780,124 +812,133 @@ export const SAFE_QUERIES = {
   /**
    * Проверить пользователя по контакту (телефон или email)
    */
-        check_user_by_contact: async (db: PrismaClient, params: { phone?: string | object; email?: string; projectId: string }) => {
-          console.log('🔍 check_user_by_contact called with params', { 
-            phone: params.phone,
-            phoneType: typeof params.phone,
-            email: params.email,
+  check_user_by_contact: async (
+    db: PrismaClient,
+    params: { phone?: string | object; email?: string; projectId: string }
+  ) => {
+    console.log('🔍 check_user_by_contact called with params', {
+      phone: params.phone,
+      phoneType: typeof params.phone,
+      email: params.email,
+      projectId: params.projectId
+    });
+
+    let user = null;
+
+    // Обрабатываем телефон
+    if (params.phone) {
+      let phoneNumber: string;
+
+      // Если phone - это объект contactReceived, извлекаем phoneNumber
+      if (typeof params.phone === 'object' && params.phone !== null) {
+        phoneNumber = (params.phone as any).phoneNumber || '';
+      } else if (typeof params.phone === 'string') {
+        phoneNumber = params.phone.trim();
+      } else {
+        phoneNumber = '';
+      }
+
+      console.log('📞 Ищем по телефону:', phoneNumber);
+
+      // Пропускаем поиск если телефон пустой или содержит неразрешенные переменные
+      if (
+        phoneNumber &&
+        !phoneNumber.includes('{{') &&
+        !phoneNumber.includes('}}')
+      ) {
+        // Создаем варианты для поиска
+        const digits = phoneNumber.replace(/[^0-9]/g, '');
+        const variants = [phoneNumber, digits, `+${digits}`, digits.slice(-10)];
+
+        // Добавляем варианты для российских номеров
+        if (digits.startsWith('8') && digits.length === 11) {
+          variants.push(`+7${digits.slice(1)}`);
+          variants.push(`7${digits.slice(1)}`);
+        } else if (digits.startsWith('7') && digits.length === 11) {
+          variants.push(`8${digits.slice(1)}`);
+        }
+
+        console.log('📞 Варианты для поиска:', variants);
+
+        user = await db.user.findFirst({
+          where: {
+            projectId: params.projectId,
+            OR: variants.map((phone) => ({ phone }))
+          }
+        });
+      } else {
+        console.log(
+          '⚠️ Пропускаем поиск по телефону - неразрешенная переменная или пустое значение'
+        );
+      }
+    }
+
+    // Если не нашли по телефону, ищем по email
+    if (!user && params.email) {
+      const email = (params.email || '').trim().toLowerCase();
+      console.log('📧 Ищем по email:', email);
+
+      // Пропускаем поиск если email пустой или содержит неразрешенные переменные
+      if (email && !email.includes('{{') && !email.includes('}}')) {
+        user = await db.user.findFirst({
+          where: {
+            email,
             projectId: params.projectId
-          });
-
-          let user = null;
-
-          // Обрабатываем телефон
-          if (params.phone) {
-            let phoneNumber: string;
-            
-            // Если phone - это объект contactReceived, извлекаем phoneNumber
-            if (typeof params.phone === 'object' && params.phone !== null) {
-              phoneNumber = (params.phone as any).phoneNumber || '';
-            } else if (typeof params.phone === 'string') {
-              phoneNumber = params.phone.trim();
-            } else {
-              phoneNumber = '';
-            }
-            
-            console.log('📞 Ищем по телефону:', phoneNumber);
-            
-            // Пропускаем поиск если телефон пустой или содержит неразрешенные переменные
-            if (phoneNumber && !phoneNumber.includes('{{') && !phoneNumber.includes('}}')) {
-              // Создаем варианты для поиска
-              const digits = phoneNumber.replace(/[^0-9]/g, '');
-              const variants = [
-                phoneNumber,
-                digits,
-                `+${digits}`,
-                digits.slice(-10)
-              ];
-              
-              // Добавляем варианты для российских номеров
-              if (digits.startsWith('8') && digits.length === 11) {
-                variants.push(`+7${digits.slice(1)}`);
-                variants.push(`7${digits.slice(1)}`);
-              } else if (digits.startsWith('7') && digits.length === 11) {
-                variants.push(`8${digits.slice(1)}`);
-              }
-              
-              console.log('📞 Варианты для поиска:', variants);
-
-              user = await db.user.findFirst({
-                where: {
-                  projectId: params.projectId,
-                  OR: variants.map(phone => ({ phone }))
-                }
-              });
-            } else {
-              console.log('⚠️ Пропускаем поиск по телефону - неразрешенная переменная или пустое значение');
-            }
           }
+        });
+      } else {
+        console.log(
+          '⚠️ Пропускаем поиск по email - неразрешенная переменная или пустое значение'
+        );
+      }
+    }
 
-          // Если не нашли по телефону, ищем по email
-          if (!user && params.email) {
-            const email = (params.email || '').trim().toLowerCase();
-            console.log('📧 Ищем по email:', email);
-            
-            // Пропускаем поиск если email пустой или содержит неразрешенные переменные
-            if (email && !email.includes('{{') && !email.includes('}}')) {
-              user = await db.user.findFirst({
-                where: {
-                  email,
-                  projectId: params.projectId
-                }
-              });
-            } else {
-              console.log('⚠️ Пропускаем поиск по email - неразрешенная переменная или пустое значение');
-            }
-          }
+    if (user) {
+      console.log('✅ Пользователь найден:', {
+        userId: user.id,
+        phone: user.phone,
+        email: user.email,
+        isActive: user.isActive
+      });
 
-          if (user) {
-            console.log('✅ Пользователь найден:', {
-              userId: user.id,
-              phone: user.phone,
-              email: user.email,
-              isActive: user.isActive
-            });
-            
-            // Возвращаем только сериализуемые данные пользователя
-            return {
-              id: user.id,
-              projectId: user.projectId,
-              email: user.email,
-              phone: user.phone,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              birthDate: user.birthDate,
-              telegramId: user.telegramId?.toString(),
-              telegramUsername: user.telegramUsername,
-              isActive: user.isActive,
-              registeredAt: user.registeredAt,
-              updatedAt: user.updatedAt,
-              currentLevel: user.currentLevel,
-              referralCode: user.referralCode,
-              referredBy: user.referredBy,
-              totalPurchases: Number(user.totalPurchases),
-              utmCampaign: user.utmCampaign,
-              utmContent: user.utmContent,
-              utmMedium: user.utmMedium,
-              utmSource: user.utmSource,
-              utmTerm: user.utmTerm
-            };
-          }
+      // Возвращаем только сериализуемые данные пользователя
+      return {
+        id: user.id,
+        projectId: user.projectId,
+        email: user.email,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        birthDate: user.birthDate,
+        telegramId: user.telegramId?.toString(),
+        telegramUsername: user.telegramUsername,
+        isActive: user.isActive,
+        registeredAt: user.registeredAt,
+        updatedAt: user.updatedAt,
+        currentLevel: user.currentLevel,
+        referralCode: user.referralCode,
+        referredBy: user.referredBy,
+        totalPurchases: Number(user.totalPurchases),
+        utmCampaign: user.utmCampaign,
+        utmContent: user.utmContent,
+        utmMedium: user.utmMedium,
+        utmSource: user.utmSource,
+        utmTerm: user.utmTerm
+      };
+    }
 
-          console.log('❌ Пользователь не найден');
-          return null;
-        },
+    console.log('❌ Пользователь не найден');
+    return null;
+  },
 
   /**
    * Активировать пользователя (привязать Telegram)
    * Автоматически начисляет приветственные бонусы, если они настроены в проекте
    */
-  activate_user: async (db: PrismaClient, params: { userId: string; telegramId: string; telegramUsername?: string }) => {
+  activate_user: async (
+    db: PrismaClient,
+    params: { userId: string; telegramId: string; telegramUsername?: string }
+  ) => {
     logger.debug('Executing activate_user', { params });
 
     const user = await db.user.update({
@@ -916,12 +957,11 @@ export const SAFE_QUERIES = {
     // ✅ АВТОМАТИЧЕСКОЕ начисление приветственных бонусов
     try {
       const program = await db.referralProgram.findUnique({
-        where: { projectId: user.projectId }
+        where: { projectId: user.projectId },
+        select: { welcomeBonus: true }
       });
-      
-      const meta = program?.description ? JSON.parse(program.description as any) : {};
-      const welcomeAmount = Number(meta?.welcomeBonus || 0);
-      
+      const welcomeAmount = Number(program?.welcomeBonus || 0);
+
       if (welcomeAmount > 0) {
         // Проверяем, не начислены ли уже приветственные бонусы
         const existingWelcomeBonus = await db.bonus.findFirst({
@@ -934,7 +974,9 @@ export const SAFE_QUERIES = {
         if (!existingWelcomeBonus) {
           // Получаем срок действия бонусов из настроек проекта
           const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + Number(user.project.bonusExpiryDays || 365));
+          expiresAt.setDate(
+            expiresAt.getDate() + Number(user.project.bonusExpiryDays || 365)
+          );
 
           // Начисляем приветственные бонусы
           const bonus = await db.bonus.create({
@@ -1012,14 +1054,19 @@ export class QueryExecutor {
     // Проверяем, что запрос в whitelist
     if (!(queryType in SAFE_QUERIES)) {
       logger.error('Attempted to execute unauthorized query', { queryType });
-      throw new Error(`Unauthorized query type: ${queryType}. Only whitelisted queries are allowed.`);
+      throw new Error(
+        `Unauthorized query type: ${queryType}. Only whitelisted queries are allowed.`
+      );
     }
 
     const queryFn = SAFE_QUERIES[queryType as QueryType];
 
     try {
       const result = await queryFn(db, params);
-      logger.info('Query executed successfully', { queryType, hasResult: !!result });
+      logger.info('Query executed successfully', {
+        queryType,
+        hasResult: !!result
+      });
       return result;
     } catch (error) {
       logger.error('Query execution failed', { queryType, error });
@@ -1043,4 +1090,3 @@ export class QueryExecutor {
 }
 
 export default QueryExecutor;
-

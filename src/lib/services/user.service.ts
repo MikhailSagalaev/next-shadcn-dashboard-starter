@@ -519,8 +519,10 @@ export class UserService {
 export class BonusService {
   // Начисление бонусов пользователю с учётом уровня
   static async awardBonus(data: CreateBonusInput): Promise<Bonus> {
+    const { isReferralBonus, referralUserId, referralLevel, ...bonusData } =
+      data;
     const user = await db.user.findUnique({
-      where: { id: data.userId },
+      where: { id: bonusData.userId },
       include: { project: true }
     });
 
@@ -537,7 +539,8 @@ export class BonusService {
 
     const bonus = await db.bonus.create({
       data: {
-        ...data,
+        ...bonusData,
+        referralLevel: referralLevel ?? null,
         expiresAt
       },
       include: {
@@ -548,12 +551,16 @@ export class BonusService {
 
     // Создаем транзакцию начисления с метаданными из data.metadata
     await this.createTransaction({
-      userId: data.userId,
+      userId: bonusData.userId,
       bonusId: bonus.id,
-      amount: data.amount,
+      amount: bonusData.amount,
       type: 'EARN',
-      description: data.description || `Начисление бонусов: ${data.type}`,
-      metadata: data.metadata || undefined
+      description:
+        bonusData.description || `Начисление бонусов: ${bonusData.type}`,
+      metadata: bonusData.metadata || undefined,
+      isReferralBonus,
+      referralUserId,
+      referralLevel
     });
 
     // Отправляем уведомление в Telegram (неблокирующе)
@@ -561,7 +568,7 @@ export class BonusService {
       await sendBonusNotification(user as any, bonus as any, user.projectId);
     } catch (error) {
       logger.error('Ошибка отправки уведомления о бонусах', {
-        userId: data.userId,
+        userId: bonusData.userId,
         bonusId: bonus.id,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
         component: 'bonus-service'

@@ -232,6 +232,55 @@ export function ReferralStatsView({ projectId }: ReferralStatsViewProps) {
         </Card>
       </div>
 
+      {stats.levelBreakdown && stats.levelBreakdown.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Распределение по уровням</CardTitle>
+            <CardDescription>
+              Сколько бонусов выплачено на каждом уровне реферальной сети
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className='grid gap-4 md:grid-cols-3'>
+              {stats.levelBreakdown.map((level) => (
+                <div
+                  key={level.level}
+                  className='space-y-2 rounded-lg border p-4'
+                >
+                  <div className='flex items-center justify-between'>
+                    <p className='font-semibold'>Уровень {level.level}</p>
+                    <Badge
+                      variant={level.level === 1 ? 'default' : 'secondary'}
+                    >
+                      {level.payouts} выплат
+                    </Badge>
+                  </div>
+                  <p className='text-sm text-gray-600'>
+                    Выплачено {formatCurrency(level.totalBonus)}
+                  </p>
+                  <div className='h-2 rounded-full bg-gray-100'>
+                    <div
+                      className='h-2 rounded-full bg-emerald-500'
+                      style={{
+                        width: `${
+                          (level.totalBonus /
+                            Math.max(
+                              ...stats.levelBreakdown.map(
+                                (l) => l.totalBonus || 1
+                              )
+                            )) *
+                          100
+                        }%`
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Top Referrers */}
       <Card>
         <CardHeader>

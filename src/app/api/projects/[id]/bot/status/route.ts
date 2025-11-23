@@ -61,20 +61,27 @@ export async function GET(
 
     // Проверяем статус бота в BotManager - это реальный источник правды
     const botInstance = botManager.getBot(projectId);
-    const isBotRunning = botInstance && botInstance.isActive && botInstance.isPolling;
-    
+    const isBotRunning =
+      botInstance && botInstance.isActive && botInstance.isPolling;
+
     // КРИТИЧНО: Сначала проверяем реальное состояние BotManager, а не Telegram API
     // Если бот запущен через long polling (isPolling), он работает независимо от webhook
     if (isBotRunning) {
       // Бот реально работает через polling
       // Безопасная проверка botInfo - может быть не загружен
-      const botInfo = botInstance?.botInfo;
-      
+      const botInfo = (botInstance?.bot as any)?.botInfo as
+        | {
+            id?: number;
+            username?: string;
+            first_name?: string;
+          }
+        | undefined;
+
       // Если botInfo не загружен, используем данные из базы
       const finalBotUsername = botInfo?.username || botUsername || '';
       const finalBotId = botInfo?.id || null;
       const finalBotFirstName = botInfo?.first_name || null;
-      
+
       const statusInfo = {
         configured: true,
         status: 'ACTIVE' as const,
@@ -92,7 +99,10 @@ export async function GET(
       };
 
       // Обновляем статус в базе данных если он изменился
-      if (project.botStatus !== 'ACTIVE' || (finalBotUsername && project.botUsername !== finalBotUsername)) {
+      if (
+        project.botStatus !== 'ACTIVE' ||
+        (finalBotUsername && project.botUsername !== finalBotUsername)
+      ) {
         await db.project.update({
           where: { id: projectId },
           data: {
@@ -100,9 +110,13 @@ export async function GET(
             botUsername: finalBotUsername || project.botUsername
           }
         });
-        
+
         // Также обновляем botUsername в botSettings, если он изменился
-        if (finalBotUsername && botSettings && botSettings.botUsername !== finalBotUsername) {
+        if (
+          finalBotUsername &&
+          botSettings &&
+          botSettings.botUsername !== finalBotUsername
+        ) {
           await db.botSettings.update({
             where: { projectId },
             data: { botUsername: finalBotUsername }
@@ -135,7 +149,7 @@ export async function GET(
 
     // Корректируем статус на основе реального состояния BotManager
     let finalStatus = statusInfo.status;
-    
+
     // Если бот не запущен в BotManager, но Telegram API говорит что он активен,
     // это значит бот работает через webhook или не запущен вообще
     if (!isBotRunning && statusInfo.status === 'ACTIVE') {
@@ -153,7 +167,10 @@ export async function GET(
 
     // Обновляем статус в базе данных если он изменился
     const telegramBotUsername = statusInfo.bot?.username || botUsername || '';
-    if (project.botStatus !== finalStatus || (telegramBotUsername && project.botUsername !== telegramBotUsername)) {
+    if (
+      project.botStatus !== finalStatus ||
+      (telegramBotUsername && project.botUsername !== telegramBotUsername)
+    ) {
       await db.project.update({
         where: { id: projectId },
         data: {
@@ -161,18 +178,24 @@ export async function GET(
           botUsername: telegramBotUsername || project.botUsername
         }
       });
-      
+
       // Также обновляем botUsername в botSettings, если он изменился
-      if (telegramBotUsername && botSettings && botSettings.botUsername !== telegramBotUsername) {
-        await db.botSettings.update({
-          where: { projectId },
-          data: { botUsername: telegramBotUsername }
-        }).catch(err => {
-          logger.warn('Failed to update botUsername in botSettings', {
-            projectId,
-            error: err instanceof Error ? err.message : String(err)
+      if (
+        telegramBotUsername &&
+        botSettings &&
+        botSettings.botUsername !== telegramBotUsername
+      ) {
+        await db.botSettings
+          .update({
+            where: { projectId },
+            data: { botUsername: telegramBotUsername }
+          })
+          .catch((err) => {
+            logger.warn('Failed to update botUsername in botSettings', {
+              projectId,
+              error: err instanceof Error ? err.message : String(err)
+            });
           });
-        });
       }
 
       logger.info('Bot status updated in database', {

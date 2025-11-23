@@ -79,7 +79,10 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     domain: '',
     bonusPercentage: 1.0,
     bonusExpiryDays: 365,
-    bonusBehavior: 'SPEND_AND_EARN' as 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY',
+    bonusBehavior: 'SPEND_AND_EARN' as
+      | 'SPEND_AND_EARN'
+      | 'SPEND_ONLY'
+      | 'EARN_ONLY',
     isActive: true,
     welcomeBonusAmount: 0
   });
@@ -97,23 +100,21 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           domain: projectData.domain || '',
           bonusPercentage: Number(projectData.bonusPercentage) || 1.0,
           bonusExpiryDays: projectData.bonusExpiryDays || 365,
-          bonusBehavior: (projectData.bonusBehavior || 'SPEND_AND_EARN') as 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY',
+          bonusBehavior: (projectData.bonusBehavior || 'SPEND_AND_EARN') as
+            | 'SPEND_AND_EARN'
+            | 'SPEND_ONLY'
+            | 'EARN_ONLY',
           isActive: projectData.isActive ?? true,
-          welcomeBonusAmount: (() => {
-            const metaStr = projectData?.referralProgram?.description || null;
-            try {
-              const meta = metaStr ? JSON.parse(metaStr) : {};
-              return Number(meta.welcomeBonus || 0);
-            } catch {
-              return 0;
-            }
-          })()
+          welcomeBonusAmount: Number(
+            projectData?.referralProgram?.welcomeBonus || 0
+          )
         });
       } else if (response.status === 403) {
         // Проект не принадлежит текущему админу
         toast({
           title: 'Доступ запрещен',
-          description: 'Этот проект не принадлежит вашему аккаунту. Если проект был создан до обновления, его нужно привязать через миграцию.',
+          description:
+            'Этот проект не принадлежит вашему аккаунту. Если проект был создан до обновления, его нужно привязать через миграцию.',
           variant: 'destructive'
         });
       } else if (response.status === 404) {
@@ -236,16 +237,19 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
   if (!project) {
     return (
       <div className='flex flex-1 flex-col items-center justify-center space-y-4 p-8'>
-        <div className='text-center space-y-4 max-w-md'>
+        <div className='max-w-md space-y-4 text-center'>
           <h3 className='text-lg font-semibold'>Проект не найден</h3>
           <p className='text-muted-foreground text-sm'>
-            Не удалось загрузить данные проекта. Возможно, проект не принадлежит вашему аккаунту.
+            Не удалось загрузить данные проекта. Возможно, проект не принадлежит
+            вашему аккаунту.
           </p>
-          <div className='p-4 bg-yellow-50 border border-yellow-200 rounded-md text-left'>
+          <div className='rounded-md border border-yellow-200 bg-yellow-50 p-4 text-left'>
             <p className='text-sm text-yellow-800'>
-              <strong>Примечание:</strong> Если проект был создан до обновления, 
-              его нужно привязать к вашему аккаунту через миграцию. 
-              Запустите: <code className='bg-yellow-100 px-2 py-1 rounded'>npm run migrate-owners migrate &lt;ваш_email&gt;</code>
+              <strong>Примечание:</strong> Если проект был создан до обновления,
+              его нужно привязать к вашему аккаунту через миграцию. Запустите:{' '}
+              <code className='rounded bg-yellow-100 px-2 py-1'>
+                npm run migrate-owners migrate &lt;ваш_email&gt;
+              </code>
             </p>
           </div>
           <Button
@@ -361,9 +365,9 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                     <Label htmlFor='bonusBehavior'>Поведение бонусов</Label>
                     <Select
                       value={formData.bonusBehavior}
-                      onValueChange={(value: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY') =>
-                        setFormData({ ...formData, bonusBehavior: value })
-                      }
+                      onValueChange={(
+                        value: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY'
+                      ) => setFormData({ ...formData, bonusBehavior: value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder='Выберите поведение бонусов' />
@@ -381,7 +385,8 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                       </SelectContent>
                     </Select>
                     <p className='text-muted-foreground text-xs'>
-                      Определяет, можно ли списывать бонусы при покупке и начислять ли новые бонусы
+                      Определяет, можно ли списывать бонусы при покупке и
+                      начислять ли новые бонусы
                     </p>
                   </div>
                 </div>

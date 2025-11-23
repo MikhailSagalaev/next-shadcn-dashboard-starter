@@ -76,13 +76,13 @@ interface SegmentsTableProps {
 const typeLabels: Record<string, string> = {
   MANUAL: 'Ручной',
   AUTO: 'Автоматический',
-  DYNAMIC: 'Динамический',
+  DYNAMIC: 'Динамический'
 };
 
 const typeColors: Record<string, 'default' | 'secondary' | 'outline'> = {
   MANUAL: 'secondary',
   AUTO: 'default',
-  DYNAMIC: 'outline',
+  DYNAMIC: 'outline'
 };
 
 export function SegmentsTable({
@@ -125,7 +125,7 @@ export function SegmentsTable({
             )}
           </div>
         );
-      },
+      }
     },
     {
       accessorKey: 'type',
@@ -137,7 +137,7 @@ export function SegmentsTable({
             {typeLabels[type] || type}
           </Badge>
         );
-      },
+      }
     },
     {
       accessorKey: 'memberCount',
@@ -160,7 +160,7 @@ export function SegmentsTable({
             {count}
           </div>
         );
-      },
+      }
     },
     {
       accessorKey: 'isActive',
@@ -172,7 +172,7 @@ export function SegmentsTable({
             {isActive ? 'Активен' : 'Неактивен'}
           </Badge>
         );
-      },
+      }
     },
     {
       id: 'actions',
@@ -189,15 +189,11 @@ export function SegmentsTable({
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end'>
               <DropdownMenuLabel>Действия</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => onSegmentClick?.(segment)}
-              >
+              <DropdownMenuItem onClick={() => onSegmentClick?.(segment)}>
                 <Eye className='mr-2 h-4 w-4' />
                 Просмотр
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onEdit?.(segment)}
-              >
+              <DropdownMenuItem onClick={() => onEdit?.(segment)}>
                 <Edit className='mr-2 h-4 w-4' />
                 Редактировать
               </DropdownMenuItem>
@@ -212,18 +208,28 @@ export function SegmentsTable({
             </DropdownMenuContent>
           </DropdownMenu>
         );
-      },
-    },
+      }
+    }
   ];
 
   const table = useReactTable({
     data,
     columns,
+    state: {
+      sorting,
+      pagination: {
+        pageIndex: Math.max(0, currentPage - 1),
+        pageSize
+      }
+    },
     getCoreRowModel: getCoreRowModel(),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
     manualPagination: true,
-    pageCount: Math.ceil(totalCount / pageSize),
+    pageCount: Math.max(1, Math.ceil(totalCount / pageSize)),
+    onPaginationChange: () => {
+      // Pagination is controlled via parent callbacks (onPageChange/onPageSizeChange)
+    }
   });
 
   if (loading) {
@@ -291,12 +297,9 @@ export function SegmentsTable({
           table={table}
           onPageChange={onPageChange}
           onPageSizeChange={onPageSizeChange}
-          currentPage={currentPage}
-          pageSize={pageSize}
           totalCount={totalCount}
         />
       )}
     </div>
   );
 }
-

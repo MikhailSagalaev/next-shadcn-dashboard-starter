@@ -1,10 +1,8 @@
 /**
  * @file: src/app/dashboard/billing/page.tsx
- * @description: Страница управления подпиской и биллингом
+ * @description: Клиентская страница управления подпиской и лимитами проекта
  * @project: SaaS Bonus System
- * @dependencies: Next.js, React, UI components
- * @created: 2025-01-28
- * @author: AI Assistant + User
+ * @dependencies: Next.js App Router, shadcn/ui
  */
 
 'use client';
@@ -30,7 +28,6 @@ import {
   Bot,
   Calendar,
   Download,
-  AlertCircle,
   CheckCircle,
   Crown,
   Zap,
@@ -38,172 +35,92 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface BillingPlan {
+type PlanLimits = {
+  projects: number;
+  users: number;
+  bots: number;
+  notifications: number;
+};
+
+type BillingPlan = {
   id: string;
+  slug: string;
   name: string;
+  description?: string | null;
   price: number;
   currency: string;
   interval: 'month' | 'year';
   features: string[];
-  limits: {
-    projects: number;
-    users: number;
-    bots: number;
-    notifications: number;
-  };
+  limits: PlanLimits;
   popular?: boolean;
-}
+  status?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  nextPaymentDate?: string | null;
+};
 
-interface UsageStats {
-  projects: {
-    used: number;
-    limit: number;
-  };
-  users: {
-    used: number;
-    limit: number;
-  };
-  bots: {
-    used: number;
-    limit: number;
-  };
-  notifications: {
-    used: number;
-    limit: number;
-  };
-}
+type UsageMetric = { used: number; limit: number };
 
-interface PaymentHistory {
+type UsageStats = {
+  projects: UsageMetric;
+  users: UsageMetric;
+  bots: UsageMetric;
+  notifications: UsageMetric;
+};
+
+type PaymentHistoryEntry = {
   id: string;
   date: string;
   amount: number;
   currency: string;
   status: 'paid' | 'pending' | 'failed';
   description: string;
-  invoiceUrl?: string;
-}
+};
 
-const PLANS: BillingPlan[] = [
-  {
-    id: 'starter',
-    name: 'Стартовый',
-    price: 0,
-    currency: 'RUB',
-    interval: 'month',
-    features: [
-      'До 1 проекта',
-      'До 100 пользователей',
-      '1 Telegram бот',
-      'Базовые уведомления',
-      'Email поддержка'
-    ],
-    limits: {
-      projects: 1,
-      users: 100,
-      bots: 1,
-      notifications: 1000
-    }
-  },
-  {
-    id: 'professional',
-    name: 'Профессиональный',
-    price: 2990,
-    currency: 'RUB',
-    interval: 'month',
-    features: [
-      'До 5 проектов',
-      'До 1000 пользователей',
-      '5 Telegram ботов',
-      'Расширенные уведомления',
-      'Приоритетная поддержка',
-      'Аналитика и отчеты'
-    ],
-    limits: {
-      projects: 5,
-      users: 1000,
-      bots: 5,
-      notifications: 10000
-    },
-    popular: true
-  },
-  {
-    id: 'enterprise',
-    name: 'Корпоративный',
-    price: 9990,
-    currency: 'RUB',
-    interval: 'month',
-    features: [
-      'Неограниченные проекты',
-      'Неограниченные пользователи',
-      'Неограниченные боты',
-      'Все уведомления',
-      'Персональный менеджер',
-      'API доступ',
-      'Кастомные интеграции'
-    ],
-    limits: {
-      projects: -1,
-      users: -1,
-      bots: -1,
-      notifications: -1
-    }
-  }
-];
+const formatCurrency = (value: number, currency: string) =>
+  new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0
+  }).format(value);
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString('ru-RU', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+const renderLimit = (limit: number) => (limit === -1 ? '∞' : limit);
+
+const getUsagePercentage = (used: number, limit: number) => {
+  if (limit === -1 || limit === 0) return 0;
+  return Math.min((used / limit) * 100, 100);
+};
 
 export default function BillingPage() {
   const router = useRouter();
-  const [currentPlan, setCurrentPlan] = useState<BillingPlan>(PLANS[1]); // Professional
-  const [usageStats, setUsageStats] = useState<UsageStats>({
-    projects: { used: 2, limit: 5 },
-    users: { used: 156, limit: 1000 },
-    bots: { used: 3, limit: 5 },
-    notifications: { used: 2340, limit: 10000 }
-  });
-  const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([
-    {
-      id: '1',
-      date: '2025-01-01',
-      amount: 2990,
-      currency: 'RUB',
-      status: 'paid',
-      description: 'Профессиональный план - Январь 2025',
-      invoiceUrl: '#'
-    },
-    {
-      id: '2',
-      date: '2024-12-01',
-      amount: 2990,
-      currency: 'RUB',
-      status: 'paid',
-      description: 'Профессиональный план - Декабрь 2024',
-      invoiceUrl: '#'
-    },
-    {
-      id: '3',
-      date: '2024-11-01',
-      amount: 2990,
-      currency: 'RUB',
-      status: 'paid',
-      description: 'Профессиональный план - Ноябрь 2024',
-      invoiceUrl: '#'
-    }
-  ]);
-
-  const [loading, setLoading] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<BillingPlan | null>(null);
+  const [planCatalog, setPlanCatalog] = useState<BillingPlan[]>([]);
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryEntry[]>(
+    []
+  );
+  const [loading, setLoading] = useState(true);
+  const [changingPlanId, setChangingPlanId] = useState<string | null>(null);
 
   const loadBillingData = useCallback(async () => {
     try {
       setLoading(true);
-
       const response = await fetch('/api/billing');
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentPlan(data.currentPlan);
-        setUsageStats(data.usageStats);
-        setPaymentHistory(data.paymentHistory);
-      } else {
+      if (!response.ok) {
         toast.error('Ошибка загрузки данных биллинга');
+        return;
       }
+      const data = await response.json();
+      setCurrentPlan(data.currentPlan);
+      setUsageStats(data.usageStats);
+      setPaymentHistory(data.paymentHistory || []);
     } catch (error) {
       console.error('Error loading billing data:', error);
       toast.error('Ошибка загрузки данных биллинга');
@@ -212,71 +129,59 @@ export default function BillingPage() {
     }
   }, []);
 
+  const loadPlanCatalog = useCallback(async () => {
+    try {
+      const response = await fetch(
+        '/api/billing/plans?isActive=true&isPublic=true'
+      );
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      setPlanCatalog(data.plans || []);
+    } catch (error) {
+      console.error('Error loading plan catalog:', error);
+    }
+  }, []);
+
   useEffect(() => {
     loadBillingData();
-  }, [loadBillingData]);
+    loadPlanCatalog();
+  }, [loadBillingData, loadPlanCatalog]);
 
-  const handleUpgradePlan = async (planId: string) => {
+  const handleUpgradePlan = async (plan: BillingPlan) => {
+    if (plan.slug === currentPlan?.slug) {
+      toast.info('Этот тариф уже активен');
+      return;
+    }
+
     try {
-      toast.info('Обновление тарифного плана...');
-
+      setChangingPlanId(plan.id);
       const response = await fetch('/api/billing/plan', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ planId })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: plan.id })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentPlan(data.plan);
-        toast.success(data.message);
-        // Перезагружаем данные биллинга
-        await loadBillingData();
-      } else {
-        const error = await response.json();
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
         toast.error(error.error || 'Ошибка обновления тарифного плана');
+        return;
       }
+
+      const data = await response.json();
+      setCurrentPlan(data.plan);
+      toast.success(data.message);
+      await loadBillingData();
     } catch (error) {
       console.error('Error upgrading plan:', error);
       toast.error('Ошибка обновления тарифного плана');
+    } finally {
+      setChangingPlanId(null);
     }
   };
 
-  const handleDownloadInvoice = (invoiceId: string) => {
-    toast.info('Скачивание счета...');
-    // В реальном приложении здесь был бы запрос к API
-  };
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const getUsagePercentage = (used: number, limit: number) => {
-    if (limit === -1) return 0; // Unlimited
-    return Math.min((used / limit) * 100, 100);
-  };
-
-  const getUsageColor = (percentage: number) => {
-    if (percentage >= 90) return 'bg-red-500';
-    if (percentage >= 70) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
-
-  if (loading) {
+  if (loading || !currentPlan || !usageStats) {
     return (
       <div className='bg-background min-h-screen'>
         <div className='container mx-auto px-6 py-8'>
@@ -293,35 +198,39 @@ export default function BillingPage() {
     );
   }
 
+  const plansToRender = planCatalog.length ? planCatalog : [currentPlan];
+
   return (
     <div className='bg-background min-h-screen'>
       <div className='container mx-auto px-6 py-8'>
         <div className='space-y-8'>
-          {/* Заголовок */}
           <div>
             <h1 className='text-3xl font-bold tracking-tight'>Биллинг</h1>
             <p className='text-muted-foreground'>
-              Управление подпиской и тарифными планами
+              Управление подпиской, лимитами и историей оплат
             </p>
           </div>
 
-          {/* Кнопки действий */}
           <div className='flex gap-2'>
             <Button variant='outline' onClick={() => router.push('/dashboard')}>
               Вернуться в дашборд
             </Button>
           </div>
 
-          {/* Текущий план */}
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
                 <Crown className='h-5 w-5' />
                 Текущий тарифный план
               </CardTitle>
+              <CardDescription>
+                {currentPlan.startDate
+                  ? `Активирован: ${formatDate(currentPlan.startDate)}`
+                  : 'Активная подписка'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className='flex items-center justify-between'>
+              <div className='flex flex-wrap items-center justify-between gap-4'>
                 <div>
                   <h3 className='text-2xl font-bold'>{currentPlan.name}</h3>
                   <p className='text-muted-foreground'>
@@ -331,13 +240,16 @@ export default function BillingPage() {
                   </p>
                 </div>
                 <Badge variant={currentPlan.popular ? 'default' : 'secondary'}>
-                  {currentPlan.popular ? 'Популярный' : 'Активный'}
+                  {currentPlan.status === 'trial'
+                    ? 'Пробный период'
+                    : currentPlan.popular
+                      ? 'Популярный'
+                      : 'Активный'}
                 </Badge>
               </div>
             </CardContent>
           </Card>
 
-          {/* Использование ресурсов */}
           <Card>
             <CardHeader>
               <CardTitle className='flex items-center gap-2'>
@@ -345,103 +257,53 @@ export default function BillingPage() {
                 Использование ресурсов
               </CardTitle>
               <CardDescription>
-                Текущее использование ресурсов в рамках вашего тарифного плана
+                Текущее потребление лимитов в рамках подписки
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-6'>
               <div className='grid gap-4 md:grid-cols-2'>
-                <div className='space-y-2'>
-                  <div className='flex items-center justify-between'>
-                    <div className='flex items-center gap-2'>
-                      <Users className='h-4 w-4' />
-                      <span className='text-sm font-medium'>Проекты</span>
+                {[
+                  {
+                    label: 'Проекты',
+                    icon: Users,
+                    metric: usageStats.projects
+                  },
+                  {
+                    label: 'Пользователи',
+                    icon: Users,
+                    metric: usageStats.users
+                  },
+                  {
+                    label: 'Telegram боты',
+                    icon: Bot,
+                    metric: usageStats.bots
+                  },
+                  {
+                    label: 'Уведомления',
+                    icon: Zap,
+                    metric: usageStats.notifications
+                  }
+                ].map(({ label, icon: Icon, metric }) => (
+                  <div key={label} className='space-y-2'>
+                    <div className='flex items-center justify-between'>
+                      <div className='flex items-center gap-2'>
+                        <Icon className='h-4 w-4' />
+                        <span className='text-sm font-medium'>{label}</span>
+                      </div>
+                      <span className='text-muted-foreground text-sm'>
+                        {metric.used} / {renderLimit(metric.limit)}
+                      </span>
                     </div>
-                    <span className='text-muted-foreground text-sm'>
-                      {usageStats.projects.used} /{' '}
-                      {usageStats.projects.limit === -1
-                        ? '∞'
-                        : usageStats.projects.limit}
-                    </span>
+                    <Progress
+                      value={getUsagePercentage(metric.used, metric.limit)}
+                      className='h-2'
+                    />
                   </div>
-                  <Progress
-                    value={getUsagePercentage(
-                      usageStats.projects.used,
-                      usageStats.projects.limit
-                    )}
-                    className='h-2'
-                  />
-                </div>
-
-                <div className='space-y-2'>
-                  <div className='flex items-center justify-between'>
-                    <div className='flex items-center gap-2'>
-                      <Users className='h-4 w-4' />
-                      <span className='text-sm font-medium'>Пользователи</span>
-                    </div>
-                    <span className='text-muted-foreground text-sm'>
-                      {usageStats.users.used} /{' '}
-                      {usageStats.users.limit === -1
-                        ? '∞'
-                        : usageStats.users.limit}
-                    </span>
-                  </div>
-                  <Progress
-                    value={getUsagePercentage(
-                      usageStats.users.used,
-                      usageStats.users.limit
-                    )}
-                    className='h-2'
-                  />
-                </div>
-
-                <div className='space-y-2'>
-                  <div className='flex items-center justify-between'>
-                    <div className='flex items-center gap-2'>
-                      <Bot className='h-4 w-4' />
-                      <span className='text-sm font-medium'>Telegram боты</span>
-                    </div>
-                    <span className='text-muted-foreground text-sm'>
-                      {usageStats.bots.used} /{' '}
-                      {usageStats.bots.limit === -1
-                        ? '∞'
-                        : usageStats.bots.limit}
-                    </span>
-                  </div>
-                  <Progress
-                    value={getUsagePercentage(
-                      usageStats.bots.used,
-                      usageStats.bots.limit
-                    )}
-                    className='h-2'
-                  />
-                </div>
-
-                <div className='space-y-2'>
-                  <div className='flex items-center justify-between'>
-                    <div className='flex items-center gap-2'>
-                      <Zap className='h-4 w-4' />
-                      <span className='text-sm font-medium'>Уведомления</span>
-                    </div>
-                    <span className='text-muted-foreground text-sm'>
-                      {usageStats.notifications.used} /{' '}
-                      {usageStats.notifications.limit === -1
-                        ? '∞'
-                        : usageStats.notifications.limit}
-                    </span>
-                  </div>
-                  <Progress
-                    value={getUsagePercentage(
-                      usageStats.notifications.used,
-                      usageStats.notifications.limit
-                    )}
-                    className='h-2'
-                  />
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* Основной контент */}
           <Tabs defaultValue='plans' className='space-y-4'>
             <TabsList>
               <TabsTrigger value='plans'>
@@ -454,21 +316,21 @@ export default function BillingPage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Тарифные планы */}
             <TabsContent value='plans'>
-              <div className='grid gap-4 md:grid-cols-3'>
-                {PLANS.map((plan) => (
+              <div className='grid gap-6 md:grid-cols-3'>
+                {plansToRender.map((plan) => (
                   <Card
                     key={plan.id}
-                    className={plan.popular ? 'ring-primary ring-2' : ''}
+                    className={`relative border-2 ${plan.popular ? 'border-primary' : 'border-border'}`}
                   >
+                    {plan.popular && (
+                      <Badge className='bg-primary text-primary-foreground absolute top-4 right-4 flex items-center gap-1'>
+                        <Star className='h-3 w-3' />
+                        Популярный
+                      </Badge>
+                    )}
                     <CardHeader>
-                      <div className='flex items-center justify-between'>
-                        <CardTitle className='text-lg'>{plan.name}</CardTitle>
-                        {plan.popular && (
-                          <Badge className='bg-primary'>Популярный</Badge>
-                        )}
-                      </div>
+                      <CardTitle>{plan.name}</CardTitle>
                       <CardDescription>
                         <div className='text-2xl font-bold'>
                           {plan.price === 0
@@ -476,36 +338,64 @@ export default function BillingPage() {
                             : formatCurrency(plan.price, plan.currency)}
                         </div>
                         {plan.price > 0 && (
-                          <div className='text-muted-foreground text-sm'>
+                          <p className='text-muted-foreground text-sm'>
                             за {plan.interval === 'month' ? 'месяц' : 'год'}
-                          </div>
+                          </p>
                         )}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className='space-y-4'>
-                      <ul className='space-y-2'>
-                        {plan.features.map((feature, index) => (
-                          <li
-                            key={index}
-                            className='flex items-center gap-2 text-sm'
-                          >
+                      {plan.description && (
+                        <>
+                          <p className='text-muted-foreground text-sm'>
+                            {plan.description}
+                          </p>
+                          <Separator />
+                        </>
+                      )}
+                      <ul className='text-muted-foreground space-y-2 text-sm'>
+                        {plan.features.map((feature) => (
+                          <li key={feature} className='flex items-center gap-2'>
                             <CheckCircle className='h-4 w-4 text-green-500' />
                             {feature}
                           </li>
                         ))}
                       </ul>
-
+                      <Separator />
+                      <ul className='text-muted-foreground space-y-2 text-sm'>
+                        <li className='flex items-center justify-between'>
+                          <span>Проекты</span>
+                          <span>{renderLimit(plan.limits.projects)}</span>
+                        </li>
+                        <li className='flex items-center justify-between'>
+                          <span>Пользователи</span>
+                          <span>{renderLimit(plan.limits.users)}</span>
+                        </li>
+                        <li className='flex items-center justify-between'>
+                          <span>Telegram боты</span>
+                          <span>{renderLimit(plan.limits.bots)}</span>
+                        </li>
+                        <li className='flex items-center justify-between'>
+                          <span>Уведомления</span>
+                          <span>{renderLimit(plan.limits.notifications)}</span>
+                        </li>
+                      </ul>
                       <Button
-                        className='w-full'
+                        className='mt-2 w-full'
                         variant={
-                          plan.id === currentPlan.id ? 'outline' : 'default'
+                          plan.slug === currentPlan.slug ? 'outline' : 'default'
                         }
-                        disabled={plan.id === currentPlan.id}
-                        onClick={() => handleUpgradePlan(plan.id)}
+                        disabled={
+                          plan.slug === currentPlan.slug ||
+                          changingPlanId === plan.id
+                        }
+                        onClick={() => handleUpgradePlan(plan)}
                       >
-                        {plan.id === currentPlan.id
-                          ? 'Текущий план'
-                          : 'Выбрать план'}
+                        {changingPlanId === plan.id
+                          ? 'Обновление...'
+                          : plan.slug === currentPlan.slug
+                            ? 'Текущий план'
+                            : 'Выбрать план'}
                       </Button>
                     </CardContent>
                   </Card>
@@ -513,27 +403,28 @@ export default function BillingPage() {
               </div>
             </TabsContent>
 
-            {/* История платежей */}
             <TabsContent value='history'>
               <Card>
                 <CardHeader>
                   <CardTitle>История платежей</CardTitle>
-                  <CardDescription>Все ваши платежи и счета</CardDescription>
+                  <CardDescription>
+                    Последние операции по подписке
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className='space-y-4'>
-                    {paymentHistory.length === 0 ? (
-                      <div className='py-8 text-center'>
-                        <CreditCard className='text-muted-foreground mx-auto mb-4 h-12 w-12' />
-                        <p className='text-muted-foreground'>
-                          Платежи не найдены
-                        </p>
-                      </div>
-                    ) : (
-                      paymentHistory.map((payment) => (
+                  {paymentHistory.length === 0 ? (
+                    <div className='py-8 text-center'>
+                      <CreditCard className='text-muted-foreground mx-auto mb-4 h-12 w-12' />
+                      <p className='text-muted-foreground'>
+                        История платежей пока пуста
+                      </p>
+                    </div>
+                  ) : (
+                    <div className='space-y-4'>
+                      {paymentHistory.map((payment) => (
                         <div
                           key={payment.id}
-                          className='flex items-center justify-between rounded-lg border p-4'
+                          className='flex flex-col gap-4 rounded-lg border p-4 md:flex-row md:items-center md:justify-between'
                         >
                           <div className='space-y-1'>
                             <div className='flex items-center gap-2'>
@@ -561,33 +452,19 @@ export default function BillingPage() {
                               {formatDate(payment.date)}
                             </div>
                           </div>
-
                           <div className='flex items-center gap-4'>
-                            <div className='text-right'>
-                              <div className='font-medium'>
-                                {formatCurrency(
-                                  payment.amount,
-                                  payment.currency
-                                )}
-                              </div>
+                            <div className='text-right font-semibold'>
+                              {formatCurrency(payment.amount, payment.currency)}
                             </div>
-
-                            {payment.invoiceUrl && (
-                              <Button
-                                variant='outline'
-                                size='sm'
-                                onClick={() =>
-                                  handleDownloadInvoice(payment.id)
-                                }
-                              >
-                                <Download className='h-4 w-4' />
-                              </Button>
-                            )}
+                            <Button variant='ghost' size='sm' disabled>
+                              <Download className='mr-2 h-3 w-3' />
+                              Счет недоступен
+                            </Button>
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

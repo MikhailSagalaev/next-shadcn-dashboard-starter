@@ -8,9 +8,46 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { ReferralService } from '@/lib/services/referral.service';
+
+const ReferralLevelSchema = z.object({
+  level: z
+    .number()
+    .int()
+    .min(1, 'Минимальный уровень — 1')
+    .max(3, 'Максимум 3 уровня'),
+  percent: z
+    .number()
+    .min(0, 'Процент не может быть отрицательным')
+    .max(100, 'Процент не может быть больше 100'),
+  isActive: z.boolean().optional()
+});
+
+const ReferralProgramPayloadSchema = z.object({
+  isActive: z.boolean().optional(),
+  referrerBonus: z
+    .number()
+    .min(0, 'Процент реферера не может быть отрицательным')
+    .max(100, 'Максимум 100%'),
+  refereeBonus: z
+    .number()
+    .min(0, 'Процент новому пользователю не может быть отрицательным')
+    .max(100, 'Максимум 100%'),
+  minPurchaseAmount: z.number().min(0).optional(),
+  cookieLifetime: z.number().int().min(1).max(365).optional(),
+  welcomeBonus: z.number().min(0).optional(),
+  description: z.string().max(500).optional(),
+  levels: z
+    .array(ReferralLevelSchema)
+    .max(3, 'Можно создать максимум 3 уровня')
+    .optional()
+});
+
+type ReferralProgramPayload = z.infer<typeof ReferralProgramPayloadSchema>;
 
 export async function GET(
   request: NextRequest,
@@ -60,9 +97,10 @@ export async function PUT(
 ) {
   try {
     const { id: projectId } = await context.params;
-    const body = await request.json();
+    const payload: ReferralProgramPayload = ReferralProgramPayloadSchema.parse(
+      await request.json()
+    );
 
-    // Проверяем существование проекта
     const project = await db.project.findUnique({
       where: { id: projectId }
     });
@@ -71,54 +109,21 @@ export async function PUT(
       return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
     }
 
-    // Валидация данных
-    if (
-      body.bonusPercent !== undefined &&
-      (body.bonusPercent < 0 || body.bonusPercent > 100)
-    ) {
-      return NextResponse.json(
-        { error: 'Процент бонуса должен быть от 0 до 100' },
-        { status: 400 }
-      );
-    }
-
-    if (body.referrerBonus !== undefined && body.referrerBonus < 0) {
-      return NextResponse.json(
-        { error: 'Размер бонуса реферера не может быть отрицательным' },
-        { status: 400 }
-      );
-    }
-
-    // Обновляем или создаем настройки реферальной программы
     const updatedProgram = await ReferralService.createOrUpdateReferralProgram({
       projectId,
-      isActive: body.isActive !== undefined ? body.isActive : true,
-      referrerBonus: body.referrerBonus || 10,
-      refereeBonus: body.refereeBonus || 5,
-      minPurchaseAmount: body.minPurchaseAmount || 0,
-      cookieLifetime: body.cookieLifetime || 30,
-      description: body.description || null
+      isActive: payload.isActive ?? true,
+      referrerBonus: payload.referrerBonus,
+      refereeBonus: payload.refereeBonus,
+      minPurchaseAmount: payload.minPurchaseAmount ?? 0,
+      cookieLifetime: payload.cookieLifetime ?? 30,
+      welcomeBonus: payload.welcomeBonus ?? 0,
+      description: payload.description ?? null,
+      levels: payload.levels?.map((level) => ({
+        level: level.level,
+        percent: level.percent,
+        isActive: level.isActive
+      }))
     });
-
-    // Приветственный бонус (фикс): если передан и > 0, сохраняем в Project.description как JSON доп.параметр (временное хранилище)
-    if (
-      typeof (body as any).welcomeBonus === 'number' &&
-      (body as any).welcomeBonus > 0
-    ) {
-      try {
-        // Без миграции: временно кладём в ReferralProgram.description (JSON-строкой)
-        const currentDesc = updatedProgram.description || '';
-        const meta: any = {};
-        try {
-          Object.assign(meta, currentDesc ? JSON.parse(currentDesc) : {});
-        } catch {}
-        meta.welcomeBonus = Number((body as any).welcomeBonus);
-        await db.referralProgram.update({
-          where: { projectId },
-          data: { description: JSON.stringify(meta) }
-        });
-      } catch {}
-    }
 
     logger.info('Referral program settings updated', {
       projectId,
@@ -130,16 +135,16 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       message: 'Настройки реферальной программы обновлены',
-      data: {
-        ...updatedProgram,
-        referrerBonus: Number(updatedProgram.referrerBonus),
-        refereeBonus: Number(updatedProgram.refereeBonus),
-        minPurchaseAmount: Number(updatedProgram.minPurchaseAmount),
-        cookieLifetime: Number(updatedProgram.cookieLifetime)
-      }
+      data: updatedProgram
     });
   } catch (error: any) {
     const { id: projectId } = await context.params;
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.errors.map((e) => e.message).join(', ') },
+        { status: 400 }
+      );
+    }
     logger.error('Error updating referral program settings', {
       projectId,
       error: error.message

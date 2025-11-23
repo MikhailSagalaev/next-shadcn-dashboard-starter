@@ -9,11 +9,19 @@
 
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { Prisma } from '@prisma/client';
 import type { SegmentType, Segment, SegmentMember } from '@prisma/client';
 
 export interface SegmentRule {
   field: string;
-  operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than' | 'in' | 'not_in';
+  operator:
+    | 'equals'
+    | 'not_equals'
+    | 'contains'
+    | 'greater_than'
+    | 'less_than'
+    | 'in'
+    | 'not_in';
   value: any;
   logicalOperator?: 'AND' | 'OR';
   conditions?: SegmentRule[];
@@ -62,18 +70,18 @@ export class SegmentationService {
           projectId: data.projectId,
           name: data.name,
           description: data.description,
-          rules: Array.isArray(data.rules) ? data.rules : [data.rules],
+          rules: this.serializeRules(data.rules),
           type: data.type || 'MANUAL',
           isActive: data.isActive ?? true,
-          memberCount: 0,
-        },
+          memberCount: 0
+        }
       });
 
       logger.info('Создан новый сегмент', {
         segmentId: segment.id,
         projectId: data.projectId,
         type: segment.type,
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
 
       return segment;
@@ -81,7 +89,7 @@ export class SegmentationService {
       logger.error('Ошибка создания сегмента', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -100,12 +108,8 @@ export class SegmentationService {
         where: { id: segmentId },
         data: {
           ...data,
-          rules: data.rules
-            ? Array.isArray(data.rules)
-              ? data.rules
-              : [data.rules]
-            : undefined,
-        },
+          rules: data.rules ? this.serializeRules(data.rules) : undefined
+        }
       });
 
       // Если правила изменились, пересчитываем участников
@@ -116,7 +120,7 @@ export class SegmentationService {
       logger.info('Сегмент обновлен', {
         segmentId: segment.id,
         projectId,
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
 
       return segment;
@@ -126,7 +130,7 @@ export class SegmentationService {
         projectId,
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -143,7 +147,7 @@ export class SegmentationService {
       const segment = await db.segment.findFirst({
         where: {
           id: segmentId,
-          projectId,
+          projectId
         },
         include: {
           members: {
@@ -154,17 +158,17 @@ export class SegmentationService {
                   email: true,
                   phone: true,
                   firstName: true,
-                  lastName: true,
-                },
-              },
-            },
+                  lastName: true
+                }
+              }
+            }
           },
           _count: {
             select: {
-              members: true,
-            },
-          },
-        },
+              members: true
+            }
+          }
+        }
       });
 
       return segment as SegmentWithMembers | null;
@@ -173,7 +177,7 @@ export class SegmentationService {
         segmentId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -187,18 +191,18 @@ export class SegmentationService {
       const segments = await db.segment.findMany({
         where: {
           projectId,
-          ...(isActive !== undefined ? { isActive } : {}),
+          ...(isActive !== undefined ? { isActive } : {})
         },
         include: {
           _count: {
             select: {
-              members: true,
-            },
-          },
+              members: true
+            }
+          }
         },
         orderBy: {
-          createdAt: 'desc',
-        },
+          createdAt: 'desc'
+        }
       });
 
       return segments;
@@ -206,7 +210,7 @@ export class SegmentationService {
       logger.error('Ошибка получения списка сегментов', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -231,7 +235,7 @@ export class SegmentationService {
       const skip = (page - 1) * pageSize;
 
       const where: any = {
-        projectId,
+        projectId
       };
 
       if (filters?.type) {
@@ -245,7 +249,7 @@ export class SegmentationService {
       if (filters?.search) {
         where.OR = [
           { name: { contains: filters.search, mode: 'insensitive' } },
-          { description: { contains: filters.search, mode: 'insensitive' } },
+          { description: { contains: filters.search, mode: 'insensitive' } }
         ];
       }
 
@@ -255,17 +259,17 @@ export class SegmentationService {
           include: {
             _count: {
               select: {
-                members: true,
-              },
-            },
+                members: true
+              }
+            }
           },
           orderBy: {
-            createdAt: 'desc',
+            createdAt: 'desc'
           },
           skip,
-          take: pageSize,
+          take: pageSize
         }),
-        db.segment.count({ where }),
+        db.segment.count({ where })
       ]);
 
       return {
@@ -274,15 +278,15 @@ export class SegmentationService {
           page,
           pageSize,
           total,
-          totalPages: Math.ceil(total / pageSize),
-        },
+          totalPages: Math.ceil(total / pageSize)
+        }
       };
     } catch (error) {
       logger.error('Ошибка получения списка сегментов', {
         projectId,
         filters,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -306,29 +310,29 @@ export class SegmentationService {
         user = await db.user.findFirst({
           where: {
             id: userId,
-            projectId,
+            projectId
           },
           include: {
             orders: {
               select: {
                 totalAmount: true,
                 status: true,
-                createdAt: true,
-              },
+                createdAt: true
+              }
             },
             bonuses: {
               select: {
                 amount: true,
-                isUsed: true,
-              },
+                isUsed: true
+              }
             },
             transactions: {
               select: {
                 amount: true,
-                type: true,
-              },
-            },
-          },
+                type: true
+              }
+            }
+          }
         });
       }
 
@@ -342,7 +346,9 @@ export class SegmentationService {
       const transactions = user.transactions || [];
 
       const totalPurchases = orders
-        .filter((o) => ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'].includes(o.status))
+        .filter((o) =>
+          ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'].includes(o.status)
+        )
         .reduce((sum, o) => sum + Number(o.totalAmount), 0);
 
       const activeBonuses = bonuses
@@ -370,15 +376,15 @@ export class SegmentationService {
           totalEarned,
           totalSpent,
           registeredAt: user.registeredAt,
-          currentLevel: user.currentLevel,
+          currentLevel: user.currentLevel
         },
         orders: {
           count: orders.length,
-          totalAmount: totalPurchases,
+          totalAmount: totalPurchases
         },
         bonuses: {
-          active: activeBonuses,
-        },
+          active: activeBonuses
+        }
       };
 
       // Оцениваем правила
@@ -389,7 +395,7 @@ export class SegmentationService {
         projectId,
         userId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       return false;
     }
@@ -398,7 +404,11 @@ export class SegmentationService {
   /**
    * Рекурсивная оценка правил
    */
-  private static evaluateRules(rules: SegmentRule[], context: any, logicalOperator: 'AND' | 'OR' = 'AND'): boolean {
+  private static evaluateRules(
+    rules: SegmentRule[],
+    context: any,
+    logicalOperator: 'AND' | 'OR' = 'AND'
+  ): boolean {
     if (rules.length === 0) {
       return true;
     }
@@ -445,7 +455,9 @@ export class SegmentationService {
       case 'not_equals':
         return fieldValue !== value;
       case 'contains':
-        return String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
+        return String(fieldValue)
+          .toLowerCase()
+          .includes(String(value).toLowerCase());
       case 'greater_than':
         return Number(fieldValue) > Number(value);
       case 'less_than':
@@ -479,13 +491,16 @@ export class SegmentationService {
   /**
    * Пересчет участников сегмента
    */
-  static async recalculateSegment(projectId: string, segmentId: string): Promise<void> {
+  static async recalculateSegment(
+    projectId: string,
+    segmentId: string
+  ): Promise<void> {
     try {
       const segment = await db.segment.findFirst({
         where: {
           id: segmentId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!segment || segment.type === 'MANUAL') {
@@ -495,7 +510,7 @@ export class SegmentationService {
       // Оптимизированный запрос: получаем всех пользователей с нужными данными сразу (исправление N+1)
       const users = await db.user.findMany({
         where: {
-          projectId,
+          projectId
         },
         select: {
           id: true,
@@ -510,32 +525,34 @@ export class SegmentationService {
             select: {
               totalAmount: true,
               status: true,
-              createdAt: true,
-            },
+              createdAt: true
+            }
           },
           bonuses: {
             select: {
               amount: true,
-              isUsed: true,
-            },
+              isUsed: true
+            }
           },
           transactions: {
             select: {
               amount: true,
-              type: true,
-            },
-          },
-        },
+              type: true
+            }
+          }
+        }
       });
 
       // Оцениваем каждого пользователя (передаем уже загруженные данные для оптимизации)
       const matchingUserIds: string[] = [];
 
+      const segmentRules = this.parseSegmentRules(segment.rules);
+
       for (const user of users) {
         const matches = await this.evaluateUser(
           projectId,
           user.id,
-          segment.rules as SegmentRule | SegmentRule[],
+          segmentRules,
           user // Передаем уже загруженные данные для избежания N+1 проблем
         );
 
@@ -547,8 +564,8 @@ export class SegmentationService {
       // Удаляем старых участников
       await db.segmentMember.deleteMany({
         where: {
-          segmentId,
-        },
+          segmentId
+        }
       });
 
       // Добавляем новых участников
@@ -556,9 +573,9 @@ export class SegmentationService {
         await db.segmentMember.createMany({
           data: matchingUserIds.map((userId) => ({
             segmentId,
-            userId,
+            userId
           })),
-          skipDuplicates: true,
+          skipDuplicates: true
         });
       }
 
@@ -566,22 +583,22 @@ export class SegmentationService {
       await db.segment.update({
         where: { id: segmentId },
         data: {
-          memberCount: matchingUserIds.length,
-        },
+          memberCount: matchingUserIds.length
+        }
       });
 
       logger.info('Сегмент пересчитан', {
         segmentId,
         projectId,
         memberCount: matchingUserIds.length,
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
     } catch (error) {
       logger.error('Ошибка пересчета сегмента', {
         segmentId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -590,13 +607,16 @@ export class SegmentationService {
   /**
    * Добавление пользователя в сегмент вручную
    */
-  static async addMember(segmentId: string, userId: string): Promise<SegmentMember> {
+  static async addMember(
+    segmentId: string,
+    userId: string
+  ): Promise<SegmentMember> {
     try {
       const member = await db.segmentMember.create({
         data: {
           segmentId,
-          userId,
-        },
+          userId
+        }
       });
 
       // Обновляем счетчик участников
@@ -604,9 +624,9 @@ export class SegmentationService {
         where: { id: segmentId },
         data: {
           memberCount: {
-            increment: 1,
-          },
-        },
+            increment: 1
+          }
+        }
       });
 
       return member;
@@ -615,7 +635,7 @@ export class SegmentationService {
         segmentId,
         userId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -629,8 +649,8 @@ export class SegmentationService {
       await db.segmentMember.deleteMany({
         where: {
           segmentId,
-          userId,
-        },
+          userId
+        }
       });
 
       // Обновляем счетчик участников
@@ -638,16 +658,16 @@ export class SegmentationService {
         where: { id: segmentId },
         data: {
           memberCount: {
-            decrement: 1,
-          },
-        },
+            decrement: 1
+          }
+        }
       });
     } catch (error) {
       logger.error('Ошибка удаления участника из сегмента', {
         segmentId,
         userId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -656,26 +676,29 @@ export class SegmentationService {
   /**
    * Удаление сегмента
    */
-  static async deleteSegment(projectId: string, segmentId: string): Promise<void> {
+  static async deleteSegment(
+    projectId: string,
+    segmentId: string
+  ): Promise<void> {
     try {
       await db.segment.delete({
         where: {
           id: segmentId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       logger.info('Сегмент удален', {
         segmentId,
         projectId,
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
     } catch (error) {
       logger.error('Ошибка удаления сегмента', {
         segmentId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -690,8 +713,8 @@ export class SegmentationService {
       const segment = await db.segment.findFirst({
         where: {
           id: segmentId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!segment) {
@@ -700,7 +723,7 @@ export class SegmentationService {
 
       const members = await db.segmentMember.findMany({
         where: {
-          segmentId,
+          segmentId
         },
         include: {
           user: {
@@ -709,13 +732,13 @@ export class SegmentationService {
               email: true,
               phone: true,
               firstName: true,
-              lastName: true,
-            },
-          },
+              lastName: true
+            }
+          }
         },
         orderBy: {
-          addedAt: 'desc',
-        },
+          addedAt: 'desc'
+        }
       });
 
       return members;
@@ -724,7 +747,7 @@ export class SegmentationService {
         segmentId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -743,8 +766,8 @@ export class SegmentationService {
       const segment = await db.segment.findFirst({
         where: {
           id: segmentId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!segment) {
@@ -755,8 +778,8 @@ export class SegmentationService {
       const user = await db.user.findFirst({
         where: {
           id: userId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!user) {
@@ -770,7 +793,7 @@ export class SegmentationService {
         projectId,
         userId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -789,8 +812,8 @@ export class SegmentationService {
       const segment = await db.segment.findFirst({
         where: {
           id: segmentId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!segment) {
@@ -804,7 +827,7 @@ export class SegmentationService {
         projectId,
         userId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
@@ -813,13 +836,16 @@ export class SegmentationService {
   /**
    * Оценка сегмента (поиск всех пользователей, соответствующих условиям)
    */
-  static async evaluateSegment(projectId: string, segmentId: string): Promise<string[]> {
+  static async evaluateSegment(
+    projectId: string,
+    segmentId: string
+  ): Promise<string[]> {
     try {
       const segment = await db.segment.findFirst({
         where: {
           id: segmentId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!segment || segment.type === 'MANUAL') {
@@ -829,7 +855,7 @@ export class SegmentationService {
       // Оптимизированный запрос: получаем всех пользователей с нужными данными сразу (исправление N+1)
       const users = await db.user.findMany({
         where: {
-          projectId,
+          projectId
         },
         select: {
           id: true,
@@ -844,32 +870,34 @@ export class SegmentationService {
             select: {
               totalAmount: true,
               status: true,
-              createdAt: true,
-            },
+              createdAt: true
+            }
           },
           bonuses: {
             select: {
               amount: true,
-              isUsed: true,
-            },
+              isUsed: true
+            }
           },
           transactions: {
             select: {
               amount: true,
-              type: true,
-            },
-          },
-        },
+              type: true
+            }
+          }
+        }
       });
 
       // Оцениваем каждого пользователя (передаем уже загруженные данные для оптимизации)
       const matchingUserIds: string[] = [];
 
+      const segmentRules = this.parseSegmentRules(segment.rules);
+
       for (const user of users) {
         const matches = await this.evaluateUser(
           projectId,
           user.id,
-          segment.rules as SegmentRule | SegmentRule[],
+          segmentRules,
           user // Передаем уже загруженные данные для избежания N+1 проблем
         );
 
@@ -884,10 +912,31 @@ export class SegmentationService {
         segmentId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'segmentation-service',
+        component: 'segmentation-service'
       });
       throw error;
     }
   }
-}
 
+  private static serializeRules(
+    rules: SegmentRule | SegmentRule[]
+  ): Prisma.InputJsonValue {
+    return (Array.isArray(rules)
+      ? rules
+      : [rules]) as unknown as Prisma.InputJsonValue;
+  }
+
+  private static parseSegmentRules(
+    rules: Prisma.JsonValue | null
+  ): SegmentRule[] {
+    if (!rules) {
+      return [];
+    }
+
+    if (Array.isArray(rules)) {
+      return rules as unknown as SegmentRule[];
+    }
+
+    return [rules as unknown as SegmentRule];
+  }
+}

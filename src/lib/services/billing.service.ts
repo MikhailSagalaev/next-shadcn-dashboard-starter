@@ -43,10 +43,7 @@ export class BillingService {
       where: {
         adminAccountId: adminId,
         status: 'active',
-        OR: [
-          { endDate: null },
-          { endDate: { gte: new Date() } }
-        ]
+        OR: [{ endDate: null }, { endDate: { gte: new Date() } }]
       },
       include: {
         plan: true,
@@ -69,23 +66,34 @@ export class BillingService {
       // Дефолтный Free план
       return {
         maxProjects: 1,
-        maxUsersPerProject: 10
+        maxUsersPerProject: 10,
+        maxBots: undefined
       };
     }
+
+    const planFeatures =
+      (subscription.plan.features as unknown as Record<string, unknown>) || {};
+    const planMaxBots =
+      typeof planFeatures.maxBots === 'number'
+        ? (planFeatures.maxBots as number)
+        : undefined;
 
     // Кастомные лимиты переопределяют план
     if (subscription.customLimits) {
       const custom = subscription.customLimits as any;
       return {
         maxProjects: custom.maxProjects || subscription.plan.maxProjects,
-        maxUsersPerProject: custom.maxUsersPerProject || subscription.plan.maxUsersPerProject,
-        maxBots: custom.maxBots
+        maxUsersPerProject:
+          custom.maxUsersPerProject || subscription.plan.maxUsersPerProject,
+        maxBots:
+          typeof custom.maxBots === 'number' ? custom.maxBots : planMaxBots
       };
     }
 
     return {
       maxProjects: subscription.plan.maxProjects,
-      maxUsersPerProject: subscription.plan.maxUsersPerProject
+      maxUsersPerProject: subscription.plan.maxUsersPerProject,
+      maxBots: planMaxBots
     };
   }
 
@@ -94,7 +102,7 @@ export class BillingService {
    */
   static async checkLimit(
     adminId: string,
-    type: 'projects' | 'users'
+    type: 'projects' | 'users' | 'bots'
   ): Promise<{
     allowed: boolean;
     used: number;
@@ -128,6 +136,33 @@ export class BillingService {
         allowed: userCount < limits.maxUsersPerProject,
         used: userCount,
         limit: limits.maxUsersPerProject,
+        planId: subscription?.planId
+      };
+    }
+
+    if (type === 'bots') {
+      const maxBots =
+        typeof limits.maxBots === 'number' ? limits.maxBots : undefined;
+
+      if (!maxBots) {
+        return {
+          allowed: true,
+          used: 0,
+          limit: Number.MAX_SAFE_INTEGER,
+          planId: subscription?.planId
+        };
+      }
+
+      const botsCount = await db.botSettings.count({
+        where: {
+          project: { ownerId: adminId }
+        }
+      });
+
+      return {
+        allowed: botsCount < maxBots,
+        used: botsCount,
+        limit: maxBots,
         planId: subscription?.planId
       };
     }
@@ -409,10 +444,10 @@ export class BillingService {
     const [projectsCount, usersCount, botsCount] = await Promise.all([
       db.project.count({ where: { ownerId: adminId } }),
       db.user.count({
-        where: { projectId: { in: projects.map(p => p.id) } }
+        where: { projectId: { in: projects.map((p) => p.id) } }
       }),
       db.botSettings.count({
-        where: { projectId: { in: projects.map(p => p.id) } }
+        where: { projectId: { in: projects.map((p) => p.id) } }
       })
     ]);
 
@@ -431,8 +466,7 @@ export class BillingService {
       },
       notifications: {
         used: 0, // TODO: Подсчет уведомлений
-        limit:
-          plan.limits.notifications === -1 ? -1 : plan.limits.notifications
+        limit: plan.limits.notifications === -1 ? -1 : plan.limits.notifications
       }
     };
 
@@ -462,4 +496,3 @@ export class BillingService {
     return resourceUsage.used / resourceUsage.limit >= threshold;
   }
 }
-

@@ -204,6 +204,19 @@
   - ✅ Автоматическая прокрутка к новым сообщениям
   - ✅ Отображение статуса чата и непрочитанных сообщений
 
+### 4. Многоуровневая реферальная система ✅
+- **Статус**: ✅ Backend + UI + документация обновлены
+- **Файлы**:
+  - `prisma/schema.prisma` — модель `ReferralLevel`, поля `minPurchaseAmount`, `cookieLifetime`, `welcomeBonus`, `referralLevel`.
+  - `src/lib/services/referral.service.ts` — расчёт цепочки уровней, welcome-бонус, новая статистика.
+  - `src/app/api/projects/[id]/referral-program/route.ts`, `docs/openapi.yaml`, `src/lib/validation/api-schemas.ts` — новое API и валидация.
+  - `src/features/projects/components/referral-settings-form.tsx`, `referral-program-view.tsx`, `referral-stats-view.tsx` — UI-конфигуратор и аналитика уровней.
+  - `src/app/api/projects/[id]/route.ts`, `src/app/api/projects/[id]/users/route.ts`, `src/app/api/webhook/[webhookSecret]/route.ts` — единый источник welcome-бонуса.
+- **Функции**:
+  - ✅ Настройка до 3 уровней реферальных процентов в UI.
+  - ✅ Отображение welcome-бонуса, минимальной суммы заказа и срока cookie.
+  - ✅ Статистика по уровням (`levelBreakdown`) и обновлённый OpenAPI.
+
 ---
 
 ## ⏳ В ДОРАБОТКЕ (Опциональные улучшения)

@@ -19,7 +19,7 @@ const createSegmentSchema = z.object({
   description: z.string().optional(),
   rules: z.any(), // SegmentRule | SegmentRule[]
   type: z.enum(['MANUAL', 'AUTO', 'DYNAMIC']).optional(),
-  isActive: z.boolean().optional(),
+  isActive: z.boolean().optional()
 });
 
 const getSegmentsQuerySchema = z.object({
@@ -27,7 +27,7 @@ const getSegmentsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(20).optional(),
   type: z.enum(['MANUAL', 'AUTO', 'DYNAMIC']).optional(),
   isActive: z.coerce.boolean().optional(),
-  search: z.string().optional(),
+  search: z.string().optional()
 });
 
 // GET /api/projects/[id]/segments - Получение списка сегментов
@@ -53,7 +53,7 @@ export async function GET(
       pageSize: url.searchParams.get('pageSize') || '20',
       type: url.searchParams.get('type') || undefined,
       isActive: url.searchParams.get('isActive') || undefined,
-      search: url.searchParams.get('search') || undefined,
+      search: url.searchParams.get('search') || undefined
     };
 
     // Валидация
@@ -65,7 +65,7 @@ export async function GET(
       pageSize: validated.pageSize,
       type: validated.type as any,
       isActive: validated.isActive,
-      search: validated.search,
+      search: validated.search
     });
 
     return NextResponse.json(segments);
@@ -73,7 +73,7 @@ export async function GET(
     logger.error('Ошибка получения списка сегментов', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'segments-api',
-      action: 'GET',
+      action: 'GET'
     });
 
     if (error instanceof z.ZodError) {
@@ -115,7 +115,11 @@ export async function POST(
     // Создаем сегмент
     const segment = await SegmentationService.createSegment({
       projectId,
-      ...validatedData,
+      name: validatedData.name,
+      description: validatedData.description,
+      rules: validatedData.rules,
+      type: validatedData.type,
+      isActive: validatedData.isActive
     });
 
     return NextResponse.json(segment, { status: 201 });
@@ -123,7 +127,7 @@ export async function POST(
     logger.error('Ошибка создания сегмента', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'segments-api',
-      action: 'POST',
+      action: 'POST'
     });
 
     if (error instanceof z.ZodError) {
@@ -139,4 +143,3 @@ export async function POST(
     );
   }
 }
-

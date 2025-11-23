@@ -42,7 +42,7 @@ interface SegmentFormDialogProps {
     description?: string | null;
     type: 'MANUAL' | 'AUTO' | 'DYNAMIC';
     isActive: boolean;
-    rules: any;
+    rules?: any;
   } | null;
 }
 
@@ -95,8 +95,8 @@ export function SegmentFormDialog({
           description,
           type,
           isActive,
-          rules: Array.isArray(rules) && rules.length === 0 ? [] : rules,
-        }),
+          rules: Array.isArray(rules) && rules.length === 0 ? [] : rules
+        })
       });
 
       if (!response.ok) {
@@ -105,7 +105,7 @@ export function SegmentFormDialog({
 
       toast({
         title: 'Успешно',
-        description: segment ? 'Сегмент обновлен' : 'Сегмент создан',
+        description: segment ? 'Сегмент обновлен' : 'Сегмент создан'
       });
 
       onOpenChange(false);
@@ -114,7 +114,7 @@ export function SegmentFormDialog({
       toast({
         title: 'Ошибка',
         description: 'Не удалось сохранить сегмент',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -123,9 +123,11 @@ export function SegmentFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-4xl max-h-[90vh] overflow-y-auto'>
+      <DialogContent className='max-h-[90vh] max-w-4xl overflow-y-auto'>
         <DialogHeader>
-          <DialogTitle>{segment ? 'Редактировать сегмент' : 'Создать сегмент'}</DialogTitle>
+          <DialogTitle>
+            {segment ? 'Редактировать сегмент' : 'Создать сегмент'}
+          </DialogTitle>
           <DialogDescription>
             {segment
               ? 'Измените параметры сегмента'
@@ -146,7 +148,10 @@ export function SegmentFormDialog({
             </div>
             <div>
               <Label htmlFor='type'>Тип сегмента</Label>
-              <Select value={type} onValueChange={(value: any) => setType(value)}>
+              <Select
+                value={type}
+                onValueChange={(value: any) => setType(value)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -175,10 +180,18 @@ export function SegmentFormDialog({
           )}
           <div className='flex items-center justify-between'>
             <Label htmlFor='isActive'>Активен</Label>
-            <Switch id='isActive' checked={isActive} onCheckedChange={setIsActive} />
+            <Switch
+              id='isActive'
+              checked={isActive}
+              onCheckedChange={setIsActive}
+            />
           </div>
           <DialogFooter>
-            <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => onOpenChange(false)}
+            >
               Отмена
             </Button>
             <Button type='submit' disabled={loading || !name}>
@@ -190,4 +203,3 @@ export function SegmentFormDialog({
     </Dialog>
   );
 }
-

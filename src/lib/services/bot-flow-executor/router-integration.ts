@@ -23,7 +23,9 @@ type BotConstructorContext = Context & SessionFlavor<BotConstructorSession>;
 
 // Заглушка для router
 const router = (routes: Record<string, any>) => ({
-  route: (key: string | ((ctx: any) => string | number | symbol)) => (ctx: any) => {},
+  route:
+    (key: string | ((ctx: any) => string | number | symbol)) =>
+    (ctx: any) => {},
   otherwise: (handler: any) => (ctx: any) => {}
 });
 
@@ -85,16 +87,18 @@ export class RouterIntegration {
     });
 
     // Обработчики для разных типов обновлений
-    this.composer.use(route.route((ctx) => {
-      const update = ctx.update;
-      if (update.message?.contact) return 'contact';
-      if (update.message?.text?.startsWith('/')) return 'command';
-      if (update.message?.text) return 'text';
-      if (update.callback_query) return 'callback';
-      if (update.message) return 'other_message';
-      if (update.inline_query) return 'inline';
-      return 'unknown';
-    }));
+    this.composer.use(
+      route.route((ctx) => {
+        const update = ctx.update;
+        if (update.message?.contact) return 'contact';
+        if (update.message?.text?.startsWith('/')) return 'command';
+        if (update.message?.text) return 'text';
+        if (update.callback_query) return 'callback';
+        if (update.message) return 'other_message';
+        if (update.inline_query) return 'inline';
+        return 'unknown';
+      })
+    );
 
     // Обработка контактов
     this.composer.route((ctx) => 'contact', this.handleContact.bind(this));
@@ -109,7 +113,10 @@ export class RouterIntegration {
     this.composer.route((ctx) => 'callback', this.handleCallback.bind(this));
 
     // Обработка других типов
-    this.composer.route((ctx) => 'other_message', this.handleOtherMessage.bind(this));
+    this.composer.route(
+      (ctx) => 'other_message',
+      this.handleOtherMessage.bind(this)
+    );
     this.composer.route((ctx) => 'inline', this.handleInlineQuery.bind(this));
     this.composer.route((ctx) => 'unknown', this.handleUnknown.bind(this));
   }
@@ -186,7 +193,11 @@ export class RouterIntegration {
     // ✨ НОВОЕ: Проверяем, ждёт ли workflow ввод пользователя
     const telegramUserId = ctx.from?.id?.toString();
     if (telegramUserId) {
-      const resumed = await this.checkAndResumeWaitingWorkflow(ctx, 'input', text);
+      const resumed = await this.checkAndResumeWaitingWorkflow(
+        ctx,
+        'input',
+        text
+      );
       if (resumed) {
         return; // Workflow возобновлён, дальше не обрабатываем
       }
@@ -228,14 +239,21 @@ export class RouterIntegration {
         callbackData,
         chatId: ctx.chat?.id
       });
-      
-      const resumed = await this.checkAndResumeWaitingWorkflow(ctx, 'callback', callbackData);
-      
-      logger.info(resumed ? '✅ WORKFLOW RESUMED' : '❌ NO WAITING WORKFLOW FOUND', {
-        callbackData,
-        resumed
-      });
-      
+
+      const resumed = await this.checkAndResumeWaitingWorkflow(
+        ctx,
+        'callback',
+        callbackData
+      );
+
+      logger.info(
+        resumed ? '✅ WORKFLOW RESUMED' : '❌ NO WAITING WORKFLOW FOUND',
+        {
+          callbackData,
+          resumed
+        }
+      );
+
       if (resumed) {
         return; // Workflow возобновлён
       }
@@ -537,9 +555,9 @@ export class RouterIntegration {
     const telegramUserId = ctx.from?.id?.toString();
 
     if (!contact || !telegramUserId) {
-      logger.warn('Contact or user ID missing', { 
-        hasContact: !!contact, 
-        hasTelegramUserId: !!telegramUserId 
+      logger.warn('Contact or user ID missing', {
+        hasContact: !!contact,
+        hasTelegramUserId: !!telegramUserId
       });
       return;
     }
@@ -566,7 +584,7 @@ export class RouterIntegration {
     data: any
   ): Promise<boolean> {
     const telegramUserId = ctx.from?.id?.toString();
-    
+
     if (!telegramUserId) {
       return false;
     }
@@ -574,12 +592,16 @@ export class RouterIntegration {
     try {
       // Импортируем здесь чтобы избежать circular dependencies
       const { db } = await import('@/lib/db');
-      const { SimpleWorkflowProcessor } = await import('../simple-workflow-processor');
+      const { SimpleWorkflowProcessor } = await import(
+        '../simple-workflow-processor'
+      );
 
       // Ищем workflow execution в состоянии waiting
       // ✅ КРИТИЧНО: Для callback query chat находится в callbackQuery.message.chat
-      const chatId = (ctx.chat?.id || ctx.callbackQuery?.message?.chat?.id)?.toString();
-      
+      const chatId = (
+        ctx.chat?.id || ctx.callbackQuery?.message?.chat?.id
+      )?.toString();
+
       logger.info('🔎 SEARCHING FOR WAITING EXECUTION', {
         projectId: this.projectId,
         status: 'waiting',
@@ -589,18 +611,21 @@ export class RouterIntegration {
         hasCallbackChat: !!ctx.callbackQuery?.message?.chat,
         timestamp: new Date().toISOString()
       });
-      
-            const waitingExecution = await db.workflowExecution.findFirst({
-              where: {
-                projectId: this.projectId,
-                status: 'waiting',
-                telegramChatId: chatId,
-                waitType: waitType === 'input' ? ({ in: ['input', 'contact'] } as any) : waitType
-              },
-              include: {
-                workflow: true
-              }
-            });
+
+      const waitingExecution = await db.workflowExecution.findFirst({
+        where: {
+          projectId: this.projectId,
+          status: 'waiting',
+          telegramChatId: chatId,
+          waitType:
+            waitType === 'input'
+              ? ({ in: ['input', 'contact'] } as any)
+              : waitType
+        },
+        include: {
+          workflow: true
+        }
+      });
 
       if (!waitingExecution) {
         logger.warn('⚠️ NO WAITING EXECUTION FOUND', {
@@ -629,29 +654,29 @@ export class RouterIntegration {
       if (waitType === 'contact') {
         const contact = data;
         const raw = contact.phone_number;
-        
+
         // Используем функцию normalizePhone для получения нормализованного номера (как в БД)
         const { normalizePhone } = await import('@/lib/phone');
         const normalized = normalizePhone(raw);
-        
+
         // Создаем все возможные варианты для поиска
         const candidates = new Set<string>();
-        
+
         // Добавляем нормализованный вариант (основной, как сохранен в БД)
         if (normalized) {
           candidates.add(normalized);
         }
-        
+
         // Добавляем исходный номер (на случай, если он сохранен с пробелами)
         candidates.add(raw);
-        
+
         // Извлекаем только цифры
         const digits = raw.replace(/[^0-9]/g, '');
-        
+
         // Добавляем варианты с цифрами
         if (digits) {
           candidates.add(digits);
-          
+
           // Для РФ номеров добавляем все варианты
           if (digits.length === 11) {
             if (digits.startsWith('8')) {
@@ -671,7 +696,7 @@ export class RouterIntegration {
             candidates.add('7' + digits);
             candidates.add('8' + digits);
           }
-          
+
           // Варианты с пробелами (на случай, если в БД сохранен с форматированием)
           if (digits.length === 11 && digits.startsWith('7')) {
             const formatted = `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 9)} ${digits.slice(9)}`;
@@ -712,7 +737,7 @@ export class RouterIntegration {
             }
           });
         }
-        
+
         const existingUser = existing || userByTelegram;
 
         logger.info('🔍 User search result in router-integration', {
@@ -735,8 +760,8 @@ export class RouterIntegration {
               isActive: true
             }
           });
-          logger.info('✅ Matched and updated existing user', { 
-            userId: existingUser.id, 
+          logger.info('✅ Matched and updated existing user', {
+            userId: existingUser.id,
             phoneInDB: existingUser.phone,
             phoneNormalized: normalized,
             newTelegramId: telegramUserId
@@ -760,52 +785,62 @@ export class RouterIntegration {
           }
         };
       } else if (waitType === 'callback') {
-        userData = { callbackReceived: { data, receivedAt: new Date().toISOString() } };
+        userData = {
+          callbackReceived: { data, receivedAt: new Date().toISOString() }
+        };
       } else if (waitType === 'input') {
-        userData = { inputReceived: { text: data, receivedAt: new Date().toISOString() } };
+        userData = {
+          inputReceived: { text: data, receivedAt: new Date().toISOString() }
+        };
       }
 
       // Обновляем execution: устанавливаем status = 'running'
-            await db.workflowExecution.update({
-              where: { id: waitingExecution.id },
-              data: {
-                status: 'running',
-                waitType: null,
-                userId: userId || waitingExecution.userId || undefined
-              }
-            });
+      await db.workflowExecution.update({
+        where: { id: waitingExecution.id },
+        data: {
+          status: 'running',
+          waitType: null,
+          userId: userId || waitingExecution.userId || undefined
+        }
+      });
 
-            // ✅ ИНВАЛИДИРУЕМ КЕШ WAITING EXECUTION
-            try {
-              const { WorkflowRuntimeService } = await import('../workflow/workflow-runtime.service');
-              await WorkflowRuntimeService.invalidateWaitingExecutionCache(
-                projectId,
-                telegramChatId,
-                waitType
-              );
-            } catch (cacheError) {
-              console.warn('Failed to invalidate waiting execution cache:', cacheError);
-            }
+      // ✅ ИНВАЛИДИРУЕМ КЕШ WAITING EXECUTION
+      try {
+        const { WorkflowRuntimeService } = await import(
+          '../workflow-runtime.service'
+        );
+        await WorkflowRuntimeService.invalidateWaitingExecutionCache(
+          this.projectId,
+          chatId,
+          waitType
+        );
+      } catch (cacheError) {
+        console.warn(
+          'Failed to invalidate waiting execution cache:',
+          cacheError
+        );
+      }
 
       // ✨ ИСПРАВЛЕНО: Определяем nextNodeId в зависимости от типа ожидания
       let nextNodeId: string;
-      
+
       if (waitType === 'contact') {
         // Для контактов всегда переходим к check-contact-user
         nextNodeId = 'check-contact-user';
       } else if (waitType === 'callback') {
         // ✨ ДЛЯ CALLBACK: Ищем trigger.callback ноду с соответствующим callbackData
         const callbackData = data;
-        
+
         // Получаем все ноды workflow
         const workflowNodes = waitingExecution.workflow.nodes as any[];
-        
+
         // Ищем trigger.callback ноду с matching callbackData
-        const callbackTriggerNode = workflowNodes.find((node: any) => 
-          node.type === 'trigger.callback' && 
-          node.data?.config?.callbackData === callbackData
+        const callbackTriggerNode = workflowNodes.find(
+          (node: any) =>
+            node.type === 'trigger.callback' &&
+            node.data?.config?.callbackData === callbackData
         );
-        
+
         if (callbackTriggerNode) {
           nextNodeId = callbackTriggerNode.id;
           logger.info('✅ Found matching callback trigger node', {
@@ -814,12 +849,18 @@ export class RouterIntegration {
             triggerLabel: callbackTriggerNode.data?.label
           });
         } else {
-          logger.warn('⚠️ No matching callback trigger found, using current node', {
-            callbackData,
-            availableTriggers: workflowNodes
-              .filter((n: any) => n.type === 'trigger.callback')
-              .map((n: any) => ({ id: n.id, callbackData: n.data?.config?.callbackData }))
-          });
+          logger.warn(
+            '⚠️ No matching callback trigger found, using current node',
+            {
+              callbackData,
+              availableTriggers: workflowNodes
+                .filter((n: any) => n.type === 'trigger.callback')
+                .map((n: any) => ({
+                  id: n.id,
+                  callbackData: n.data?.config?.callbackData
+                }))
+            }
+          );
           // Fallback к текущей ноде
           nextNodeId = waitingExecution.currentNodeId || 'start-trigger';
         }
@@ -827,8 +868,8 @@ export class RouterIntegration {
         // Для input используем текущую ноду
         nextNodeId = waitingExecution.currentNodeId || 'start-trigger';
       }
-      
-      logger.info('🚀 RESUMING WORKFLOW', { 
+
+      logger.info('🚀 RESUMING WORKFLOW', {
         nextNodeId,
         currentNodeId: waitingExecution.currentNodeId,
         waitType,
@@ -838,9 +879,14 @@ export class RouterIntegration {
       });
 
       // Получаем нужную версию workflow для возобновления
-      const { ExecutionContextManager } = await import('../workflow/execution-context-manager');
+      const { ExecutionContextManager } = await import(
+        '../workflow/execution-context-manager'
+      );
       const workflowVersion = await db.workflowVersion.findFirst({
-        where: { workflowId: waitingExecution.workflowId, version: waitingExecution.version }
+        where: {
+          workflowId: waitingExecution.workflowId,
+          version: waitingExecution.version
+        }
       });
 
       if (!workflowVersion) {
@@ -851,7 +897,7 @@ export class RouterIntegration {
         await ctx.reply('❌ Ошибка сценария: версия workflow не найдена.');
         return false;
       }
-      
+
       const context = await ExecutionContextManager.resumeContext(
         waitingExecution.id,
         chatId,
@@ -870,23 +916,23 @@ export class RouterIntegration {
           userId: data.user_id
         };
 
-      // ✅ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Проверяем параметры
-      logger.info('🔍 checkAndResumeWaitingWorkflow parameters', {
-        waitType,
-        hasData: !!data,
-        dataType: typeof data,
-        dataKeys: data ? Object.keys(data) : 'no data',
-        executionId: waitingExecution.id
-      });
+        // ✅ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Проверяем параметры
+        logger.info('🔍 checkAndResumeWaitingWorkflow parameters', {
+          waitType,
+          hasData: !!data,
+          dataType: typeof data,
+          dataKeys: data ? Object.keys(data) : 'no data',
+          executionId: waitingExecution.id
+        });
 
-      // ✨ ВАЖНО: Сохраняем contactReceived как workflow-переменную для использования в {{contactReceived.phoneNumber}}
-      (context as any).contactReceived = {
-        phoneNumber: data.phone_number,
-        firstName: data.first_name,
-        lastName: data.last_name,
-        userId: userId,
-        receivedAt: new Date().toISOString()
-      };
+        // ✨ ВАЖНО: Сохраняем contactReceived как workflow-переменную для использования в {{contactReceived.phoneNumber}}
+        (context as any).contactReceived = {
+          phoneNumber: data.phone_number,
+          firstName: data.first_name,
+          lastName: data.last_name,
+          userId: userId,
+          receivedAt: new Date().toISOString()
+        };
 
         // ✨ КРИТИЧНО: Сохраняем contactReceived в workflow_variables для доступа в нодах
         const contactReceivedData = {
@@ -896,34 +942,47 @@ export class RouterIntegration {
           userId: userId,
           receivedAt: new Date().toISOString()
         };
-        
+
         logger.info('💾 Saving contactReceived to workflow variables', {
           executionId: waitingExecution.id,
           contactReceivedData,
           userId
         });
-        
+
         // ✅ КРИТИЧНО: Сохраняем contactReceived в workflow_variables с явным указанием scope 'session'
         // ВАЖНО: Сохраняем ДО запуска workflow, чтобы переменные были доступны
-        await context.variables.set('contactReceived', contactReceivedData, 'session');
-        
+        await context.variables.set(
+          'contactReceived',
+          contactReceivedData,
+          'session'
+        );
+
         // ✅ КРИТИЧНО: Сохраняем projectId в workflow_variables
         await context.variables.set('projectId', this.projectId, 'session');
-        
+
         // ✅ ДОПОЛНИТЕЛЬНОЕ ЛОГИРОВАНИЕ: Проверяем, что переменные действительно сохранились
-        const savedContactReceived = await context.variables.get('contactReceived', 'session');
-        const savedProjectId = await context.variables.get('projectId', 'session');
-        
-        logger.info('✅ contactReceived and projectId saved to workflow variables', {
-          executionId: waitingExecution.id,
-          projectId: this.projectId,
-          savedContactReceived: savedContactReceived ? 'SAVED' : 'NOT SAVED',
-          savedProjectId: savedProjectId ? 'SAVED' : 'NOT SAVED',
-          contactReceivedData,
-          savedContactReceivedData: savedContactReceived,
-          projectIdValue: this.projectId
-        });
-        
+        const savedContactReceived = await context.variables.get(
+          'contactReceived',
+          'session'
+        );
+        const savedProjectId = await context.variables.get(
+          'projectId',
+          'session'
+        );
+
+        logger.info(
+          '✅ contactReceived and projectId saved to workflow variables',
+          {
+            executionId: waitingExecution.id,
+            projectId: this.projectId,
+            savedContactReceived: savedContactReceived ? 'SAVED' : 'NOT SAVED',
+            savedProjectId: savedProjectId ? 'SAVED' : 'NOT SAVED',
+            contactReceivedData,
+            savedContactReceivedData: savedContactReceived,
+            projectIdValue: this.projectId
+          }
+        );
+
         // ✅ КРИТИЧНО: Проверяем, что переменная действительно доступна
         if (!savedContactReceived) {
           logger.error('❌ CRITICAL: contactReceived not saved to variables!', {
@@ -932,11 +991,18 @@ export class RouterIntegration {
             attempt: 'retry'
           });
           // Пробуем сохранить еще раз
-          await context.variables.set('contactReceived', contactReceivedData, 'session');
-          const retryCheck = await context.variables.get('contactReceived', 'session');
-          logger.info('🔄 Retry save result', { 
+          await context.variables.set(
+            'contactReceived',
+            contactReceivedData,
+            'session'
+          );
+          const retryCheck = await context.variables.get(
+            'contactReceived',
+            'session'
+          );
+          logger.info('🔄 Retry save result', {
             saved: !!retryCheck,
-            retryCheck 
+            retryCheck
           });
         }
       } else if (waitType === 'callback' && data) {
@@ -944,7 +1010,7 @@ export class RouterIntegration {
           data,
           receivedAt: new Date().toISOString()
         };
-        
+
         // ✨ КРИТИЧНО: Сохраняем callbackReceived в workflow_variables
         await context.variables.set('callbackReceived', {
           data,
@@ -955,7 +1021,7 @@ export class RouterIntegration {
           text: data,
           receivedAt: new Date().toISOString()
         };
-        
+
         // ✨ КРИТИЧНО: Сохраняем inputReceived в workflow_variables
         await context.variables.set('inputReceived', {
           text: data,
@@ -979,7 +1045,6 @@ export class RouterIntegration {
       });
 
       return true; // Workflow возобновлён
-
     } catch (error) {
       logger.error('Failed to resume waiting workflow', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -991,7 +1056,7 @@ export class RouterIntegration {
 
       await ctx.reply(
         '❌ Произошла ошибка при обработке вашего ответа.\n' +
-        'Пожалуйста, попробуйте позже или обратитесь к администратору.'
+          'Пожалуйста, попробуйте позже или обратитесь к администратору.'
       );
 
       return false;
@@ -1006,10 +1071,13 @@ export class RouterIntegration {
     currentNodeId: string | undefined | null
   ): string | null {
     if (!currentNodeId || !workflow.connections) {
-      logger.warn('getNextNodeAfterWaiting: missing currentNodeId or connections', {
-        currentNodeId,
-        hasConnections: !!workflow.connections
-      });
+      logger.warn(
+        'getNextNodeAfterWaiting: missing currentNodeId or connections',
+        {
+          currentNodeId,
+          hasConnections: !!workflow.connections
+        }
+      );
       return null;
     }
 
@@ -1017,7 +1085,10 @@ export class RouterIntegration {
     logger.info('getNextNodeAfterWaiting: searching for connections', {
       currentNodeId,
       totalConnections: connections.length,
-      allConnections: connections.map(c => ({ source: c.source, target: c.target }))
+      allConnections: connections.map((c) => ({
+        source: c.source,
+        target: c.target
+      }))
     });
 
     const nextConnection = connections.find(
@@ -1026,7 +1097,9 @@ export class RouterIntegration {
 
     logger.info('getNextNodeAfterWaiting: found connection', {
       currentNodeId,
-      nextConnection: nextConnection ? { source: nextConnection.source, target: nextConnection.target } : null,
+      nextConnection: nextConnection
+        ? { source: nextConnection.source, target: nextConnection.target }
+        : null,
       nextNodeId: nextConnection?.target || null
     });
 

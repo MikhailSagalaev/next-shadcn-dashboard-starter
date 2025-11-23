@@ -25,6 +25,7 @@ export interface Project {
   webhookLogs?: WebhookLog[];
   bonusLevels?: BonusLevel[];
   referralProgram?: ReferralProgram | null;
+  referralLevels?: ReferralLevel[];
   owner?: {
     id: string;
     email: string;
@@ -61,10 +62,30 @@ export interface ReferralProgram {
   refereeBonus: number; // % бонуса новому пользователю от покупки
   minPurchaseAmount: number; // минимальная сумма покупки для начисления бонусов
   cookieLifetime: number; // время жизни cookie в днях
+  welcomeBonus: number; // фиксированный бонус при регистрации по реферальной ссылке
   description?: string | null;
   createdAt: Date;
   updatedAt: Date;
   project?: Project;
+  levels?: ReferralLevel[];
+}
+
+export interface ReferralLevel {
+  id: string;
+  projectId: string;
+  referralProgramId: string;
+  level: number; // 1, 2, 3
+  percent: number; // % от покупки, начисляемый рефереру на уровне
+  isActive: boolean;
+  order: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ReferralLevelInput {
+  level: number;
+  percent: number;
+  isActive?: boolean;
 }
 
 export interface BotSettings {
@@ -125,6 +146,7 @@ export interface Bonus {
   expiresAt?: Date | null;
   isUsed: boolean;
   createdAt: Date;
+  referralLevel?: number | null;
   user?: User;
   transactions?: Transaction[];
 }
@@ -146,6 +168,7 @@ export interface Transaction {
   // Реферальная система
   isReferralBonus: boolean;
   referralUserId?: string | null; // Кому начислен реферальный бонус
+  referralLevel?: number | null; // Уровень (1-3)
 
   // Связи
   user?: User;
@@ -223,6 +246,9 @@ export interface CreateBonusInput {
   description?: string;
   expiresAt?: Date;
   metadata?: Record<string, any>;
+  referralLevel?: number;
+  isReferralBonus?: boolean;
+  referralUserId?: string;
 }
 
 export interface CreateTransactionInput {
@@ -236,6 +262,7 @@ export interface CreateTransactionInput {
   appliedPercent?: number;
   isReferralBonus?: boolean;
   referralUserId?: string;
+  referralLevel?: number;
 }
 
 // Bonus Level API
@@ -268,7 +295,9 @@ export interface CreateReferralProgramInput {
   refereeBonus: number;
   minPurchaseAmount?: number;
   cookieLifetime?: number;
+  welcomeBonus?: number;
   description?: string;
+  levels?: ReferralLevelInput[];
 }
 
 export interface UpdateReferralProgramInput {
@@ -277,7 +306,9 @@ export interface UpdateReferralProgramInput {
   refereeBonus?: number;
   minPurchaseAmount?: number;
   cookieLifetime?: number;
+  welcomeBonus?: number;
   description?: string;
+  levels?: ReferralLevelInput[];
 }
 
 // Bot Setup API
@@ -404,5 +435,10 @@ export interface ReferralStats {
     utm_medium?: string | null;
     utm_campaign?: string | null;
     count: number;
+  }>;
+  levelBreakdown: Array<{
+    level: number;
+    totalBonus: number;
+    payouts: number;
   }>;
 }

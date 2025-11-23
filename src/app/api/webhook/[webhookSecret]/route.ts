@@ -76,7 +76,12 @@ async function logWebhookRequest(
 
 // Обработчик заказа от Tilda - ПОЛНОСТЬЮ ПЕРЕПИСАН
 async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
-  const orderId = (orderData as any).payment?.orderid || 'unknown';
+  const { name, email, phone, payment, utm_ref } = orderData;
+  const orderId =
+    payment?.orderid ||
+    payment?.systranid ||
+    (orderData as any).orderid ||
+    'tilda_order';
 
   // КРИТИЧНОЕ ЛОГИРОВАНИЕ В САМОМ НАЧАЛЕ
   logger.info('🚀 НАЧАЛО ОБРАБОТКИ ЗАКАЗА TILDA', {
@@ -86,8 +91,6 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     orderDataKeys: Object.keys(orderData || {}),
     component: 'tilda-webhook-start'
   });
-
-  const { name, email, phone, payment, utm_ref } = orderData;
 
   if (!email && !phone) {
     throw new Error('Должен быть указан email или телефон пользователя');
@@ -108,7 +111,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     | 'SPEND_AND_EARN'
     | 'SPEND_ONLY'
     | 'EARN_ONLY';
-  
+
   logger.info('📋 НАСТРОЙКИ ПРОЕКТА ДЛЯ БОНУСОВ', {
     projectId,
     orderId,
@@ -134,7 +137,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
   // КРИТИЧНО: Парсинг appliedBonuses с детальным логированием
   // appliedBonuses уже нормализован в normalizeTildaOrder, но проверяем дополнительно
   const appliedBonusesRaw = (orderData as any).appliedBonuses;
-  
+
   logger.info('💰 ПАРСИНГ APPLIED BONUSES - ИСХОДНЫЕ ДАННЫЕ', {
     projectId,
     orderId,
@@ -147,13 +150,19 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
 
   // Нормализуем appliedBonuses - может быть уже числом после normalizeTildaOrder
   let appliedRequested = 0;
-  if (appliedBonusesRaw !== null && appliedBonusesRaw !== undefined && appliedBonusesRaw !== '') {
+  if (
+    appliedBonusesRaw !== null &&
+    appliedBonusesRaw !== undefined &&
+    appliedBonusesRaw !== ''
+  ) {
     if (typeof appliedBonusesRaw === 'string') {
       // Удаляем все нечисловые символы кроме точки и минуса
       const cleaned = appliedBonusesRaw.trim().replace(/[^0-9.\-]/g, '');
       appliedRequested = parseFloat(cleaned) || 0;
     } else if (typeof appliedBonusesRaw === 'number') {
-      appliedRequested = Number.isFinite(appliedBonusesRaw) ? appliedBonusesRaw : 0;
+      appliedRequested = Number.isFinite(appliedBonusesRaw)
+        ? appliedBonusesRaw
+        : 0;
     } else {
       // Попытка конвертации в число
       appliedRequested = Number(appliedBonusesRaw) || 0;
@@ -264,7 +273,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       });
 
       // Обновляем email пользователя
-      user = await db.user.update({
+      user = (await db.user.update({
         where: { id: user.id },
         data: { email: email.trim() },
         include: {
@@ -272,7 +281,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
           bonuses: true,
           transactions: true
         }
-      }) as any;
+      })) as any;
     }
 
     // Если пользователь не найден, создаем его
@@ -299,7 +308,6 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       typeof payment.amount === 'string'
         ? parseInt(payment.amount) || 0
         : payment.amount || 0;
-    const orderId = payment.orderid || payment.systranid || 'tilda_order';
 
     // Создаем описание заказа с товарами
     const productNames =
@@ -606,21 +614,26 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     // Workflow может обрабатывать события заказов и отправлять уведомления пользователям
     // Текущая реализация отправляет уведомления только о начислении бонусов через notificationQueue
     if (user.telegramId) {
-      logger.info('ℹ️ Пользователь связан с Telegram - уведомление может быть отправлено через workflow', {
-        projectId,
-        orderId,
-        userId: user.id,
-        telegramId: user.telegramId.toString(),
-        hasWorkflow: !!project.workflowId,
-        component: 'tilda-webhook-notification-info'
-      });
+      logger.info(
+        'ℹ️ Пользователь связан с Telegram - уведомление может быть отправлено через workflow',
+        {
+          projectId,
+          orderId,
+          userId: user.id,
+          telegramId: user.telegramId.toString(),
+          component: 'tilda-webhook-notification-info'
+        }
+      );
     } else {
-      logger.info('ℹ️ Пользователь не связан с Telegram - уведомления не могут быть отправлены', {
-        projectId,
-        orderId,
-        userId: user.id,
-        component: 'tilda-webhook-notification-info'
-      });
+      logger.info(
+        'ℹ️ Пользователь не связан с Telegram - уведомления не могут быть отправлены',
+        {
+          projectId,
+          orderId,
+          userId: user.id,
+          component: 'tilda-webhook-notification-info'
+        }
+      );
     }
   } catch (error) {
     logger.error('Ошибка обработки заказа Tilda', {
@@ -646,28 +659,29 @@ function normalizeTildaOrder(raw: any): any {
   if (out.Email && !out.email) out.email = String(out.Email).trim();
   if (out.Phone && !out.phone) out.phone = String(out.Phone).trim();
   if (out.Name && !out.name) out.name = String(out.Name).trim();
-  
+
   // Сохраняем appliedBonuses из разных возможных источников
   // Tilda может передать это поле в разных форматах
   if (!out.appliedBonuses) {
     // Пробуем разные варианты названия поля
-    out.appliedBonuses = 
-      out.applied_bonuses || 
-      out.AppliedBonuses || 
-      out.appliedBonuses || 
+    out.appliedBonuses =
+      out.applied_bonuses ||
+      out.AppliedBonuses ||
+      out.appliedBonuses ||
       out['appliedBonuses'] ||
       null;
   }
-  
+
   // Если appliedBonuses есть, нормализуем его (может быть строка или число)
   if (out.appliedBonuses !== null && out.appliedBonuses !== undefined) {
-    out.appliedBonuses = typeof out.appliedBonuses === 'string' 
-      ? parseFloat(out.appliedBonuses) || 0 
-      : Number(out.appliedBonuses) || 0;
+    out.appliedBonuses =
+      typeof out.appliedBonuses === 'string'
+        ? parseFloat(out.appliedBonuses) || 0
+        : Number(out.appliedBonuses) || 0;
   } else {
     out.appliedBonuses = 0;
   }
-  
+
   if (out.payment) {
     out.payment = { ...out.payment };
     if (typeof out.payment.amount !== 'undefined') {
@@ -836,16 +850,17 @@ async function handlePOST(
       // Нормализуем числа из строк, затем валидируем
       const normalized = normalizeTildaOrder(tildaPayload[0]);
       const validatedOrder = validateTildaOrder(normalized);
-      
+
       // ✅ КРИТИЧНО: Проверка на дубликаты по orderId для идемпотентности
       // НО: Пропускаем проверку для replay запросов (заголовок X-Webhook-Replay)
       const isReplay = request.headers.get('x-webhook-replay') === 'true';
-      const orderId = validatedOrder.payment?.orderid || validatedOrder.payment?.systranid;
-      
+      const orderId =
+        validatedOrder.payment?.orderid || validatedOrder.payment?.systranid;
+
       if (orderId && !isReplay) {
         // Проверяем, обрабатывался ли уже заказ с таким orderId за последние 24 часа
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        
+
         // Ищем транзакции этого проекта за последние 24 часа
         // Используем простой поиск по строкам в JSON (Prisma JSON фильтры ограничены)
         const recentTransactions = await db.transaction.findMany({
@@ -870,16 +885,19 @@ async function handlePOST(
           },
           take: 100 // Ограничиваем поиск последними 100 транзакциями
         });
-        
+
         // Проверяем вручную, есть ли orderId в метаданных
-        const existingTransaction = recentTransactions.find(t => {
+        const existingTransaction = recentTransactions.find((t) => {
           if (!t.metadata || typeof t.metadata !== 'object') return false;
           const metadata = t.metadata as any;
-          return metadata.orderId === orderId || 
-                 metadata.spendOrderId === orderId ||
-                 (metadata.spendBatchId && String(metadata.spendOrderId) === String(orderId));
+          return (
+            metadata.orderId === orderId ||
+            metadata.spendOrderId === orderId ||
+            (metadata.spendBatchId &&
+              String(metadata.spendOrderId) === String(orderId))
+          );
         });
-        
+
         if (existingTransaction) {
           logger.info('🔄 ДУБЛИКАТ WEBHOOK ЗАПРОСА - заказ уже обработан', {
             projectId: project.id,
@@ -888,7 +906,7 @@ async function handlePOST(
             existingTransactionCreatedAt: existingTransaction.createdAt,
             component: 'webhook-idempotency'
           });
-          
+
           // Возвращаем успешный ответ без повторной обработки
           response = {
             success: true,
@@ -1157,14 +1175,12 @@ async function handleRegisterUser(
     referralCode
   });
   try {
-    // Приветственный бонус: читаем из ReferralProgram.description
+    // Приветственный бонус: читаем из ReferralProgram
     const program = await db.referralProgram.findUnique({
-      where: { projectId }
+      where: { projectId },
+      select: { welcomeBonus: true }
     });
-    const meta = program?.description
-      ? JSON.parse(program.description as any)
-      : {};
-    const welcome = Number(meta?.welcomeBonus || 0);
+    const welcome = Number(program?.welcomeBonus || 0);
     if (welcome > 0) {
       const project = await db.project.findUnique({ where: { id: projectId } });
       const expiresAt = new Date();

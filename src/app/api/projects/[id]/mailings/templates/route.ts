@@ -9,14 +9,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { MailingService } from '@/lib/services/mailing.service';
+import type { CreateMailingTemplateInput } from '@/lib/services/mailing.service';
 import { z } from 'zod';
+import { MailingType } from '@prisma/client';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
   subject: z.string().min(1),
   body: z.string().min(1),
-  type: z.enum(['EMAIL', 'SMS', 'TELEGRAM', 'WHATSAPP', 'VIBER']),
-  isActive: z.boolean().optional(),
+  type: z.nativeEnum(MailingType),
+  isActive: z.boolean().optional()
 });
 
 const updateTemplateSchema = z.object({
@@ -24,8 +26,8 @@ const updateTemplateSchema = z.object({
   name: z.string().min(1).optional(),
   subject: z.string().min(1).optional(),
   body: z.string().min(1).optional(),
-  type: z.enum(['EMAIL', 'SMS', 'TELEGRAM', 'WHATSAPP', 'VIBER']).optional(),
-  isActive: z.boolean().optional(),
+  type: z.nativeEnum(MailingType).optional(),
+  isActive: z.boolean().optional()
 });
 
 export async function GET(
@@ -67,12 +69,19 @@ export async function POST(
     await ProjectService.verifyProjectAccess(projectId, admin.sub);
 
     const body = await request.json();
-    const data = createTemplateSchema.parse(body);
+    const data: z.infer<typeof createTemplateSchema> =
+      createTemplateSchema.parse(body);
 
-    const template = await MailingService.createTemplate({
+    const templatePayload: CreateMailingTemplateInput = {
       projectId,
-      ...data,
-    });
+      name: data.name,
+      subject: data.subject,
+      body: data.body,
+      type: data.type,
+      isActive: data.isActive
+    };
+
+    const template = await MailingService.createTemplate(templatePayload);
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
@@ -103,19 +112,16 @@ export async function PUT(
     await ProjectService.verifyProjectAccess(projectId, admin.sub);
 
     const body = await request.json();
-    const data = updateTemplateSchema.parse(body);
+    const data: z.infer<typeof updateTemplateSchema> =
+      updateTemplateSchema.parse(body);
 
-    const template = await MailingService.updateTemplate(
-      projectId,
-      data.id,
-      {
-        name: data.name,
-        subject: data.subject,
-        body: data.body,
-        type: data.type,
-        isActive: data.isActive,
-      }
-    );
+    const template = await MailingService.updateTemplate(projectId, data.id, {
+      name: data.name,
+      subject: data.subject,
+      body: data.body,
+      type: data.type,
+      isActive: data.isActive
+    });
 
     return NextResponse.json({ template });
   } catch (error) {
@@ -131,4 +137,3 @@ export async function PUT(
     );
   }
 }
-

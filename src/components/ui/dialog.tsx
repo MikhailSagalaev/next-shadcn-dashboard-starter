@@ -66,15 +66,6 @@ function DialogContent({
         : size === 'wide'
           ? 'sm:max-w-5xl'
           : 'sm:max-w-lg';
-  
-  // Обработка ESC для закрытия диалога (Radix UI уже поддерживает это)
-  const handleKeyDown = React.useCallback((event: React.KeyboardEvent) => {
-    if (event.key === 'Escape' && props.onOpenChange) {
-      // ESC уже обрабатывается Radix UI автоматически
-      // Но можем добавить дополнительную логику если нужно
-    }
-  }, [props.onOpenChange]);
-
   return (
     <DialogPortal data-slot='dialog-portal'>
       <DialogOverlay />
@@ -85,7 +76,6 @@ function DialogContent({
           sizeClassName,
           className
         )}
-        onKeyDown={handleKeyDown}
         {...props}
       >
         {children}

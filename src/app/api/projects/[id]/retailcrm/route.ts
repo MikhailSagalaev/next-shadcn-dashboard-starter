@@ -16,7 +16,7 @@ const updateIntegrationSchema = z.object({
   apiKey: z.string().min(1),
   isActive: z.boolean().optional(),
   syncOrders: z.boolean().optional(),
-  syncCustomers: z.boolean().optional(),
+  syncCustomers: z.boolean().optional()
 });
 
 export async function GET(
@@ -33,7 +33,7 @@ export async function GET(
     await ProjectService.verifyProjectAccess(projectId, admin.sub);
 
     const integration = await db.retailCrmIntegration.findUnique({
-      where: { projectId },
+      where: { projectId }
     });
 
     return NextResponse.json({ integration: integration || null });
@@ -64,13 +64,24 @@ export async function POST(
     const integration = await db.retailCrmIntegration.upsert({
       where: { projectId },
       create: {
-        projectId,
-        ...data,
+        project: { connect: { id: projectId } },
+        apiUrl: data.apiUrl,
+        apiKey: data.apiKey,
         isActive: data.isActive ?? false,
         syncOrders: data.syncOrders ?? true,
-        syncCustomers: data.syncCustomers ?? true,
+        syncCustomers: data.syncCustomers ?? true
       },
-      update: data,
+      update: {
+        apiUrl: data.apiUrl,
+        apiKey: data.apiKey,
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        ...(data.syncOrders !== undefined
+          ? { syncOrders: data.syncOrders }
+          : {}),
+        ...(data.syncCustomers !== undefined
+          ? { syncCustomers: data.syncCustomers }
+          : {})
+      }
     });
 
     return NextResponse.json({ integration }, { status: 201 });
@@ -87,4 +98,3 @@ export async function POST(
     );
   }
 }
-

@@ -965,12 +965,36 @@ components:
           type: string
         isActive:
           type: boolean
-        bonusPercent:
-          type: integer
+        refereeBonus:
+          type: number
+          description: 'Процент бонуса новому пользователю'
         referrerBonus:
+          type: number
+          description: 'Процент бонуса рефереру (по умолчанию для 1 уровня)'
+        minPurchaseAmount:
+          type: number
+        cookieLifetime:
+          type: integer
+        welcomeBonus:
           type: number
         description:
           type: string
+        levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferralLevel'
+
+    ReferralLevel:
+      type: object
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 3
+        percent:
+          type: number
+        isActive:
+          type: boolean
 
     # Requests
     CreateProjectRequest:
@@ -1032,18 +1056,39 @@ components:
 
     UpdateReferralProgramRequest:
       type: object
+      required:
+        - referrerBonus
+        - refereeBonus
       properties:
         isActive:
           type: boolean
-        bonusPercent:
-          type: integer
+        referrerBonus:
+          type: number
           minimum: 0
           maximum: 100
-        referrerBonus:
+          description: 'Процент бонуса рефереру на 1 уровне'
+        refereeBonus:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: 'Процент бонуса новому пользователю'
+        minPurchaseAmount:
+          type: number
+          minimum: 0
+        cookieLifetime:
+          type: integer
+          minimum: 1
+          maximum: 365
+        welcomeBonus:
           type: number
           minimum: 0
         description:
           type: string
+        levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferralLevel'
+          maxItems: 3
 
     # Responses
     WebhookResponse:

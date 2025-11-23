@@ -19,9 +19,11 @@ const getRedisConfig = () => {
   // Если Redis клиент создан с host/port, используем их
   if (process.env.REDIS_HOST) {
     return {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
+      redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD
+      },
       maxRetriesPerRequest: 3,
       retryStrategy: (times: number) => {
         const delay = Math.min(times * 50, 2000);
@@ -29,7 +31,7 @@ const getRedisConfig = () => {
       }
     };
   }
-  
+
   // Иначе используем REDIS_URL
   return {
     redis: process.env.REDIS_URL || 'redis://localhost:6379',
@@ -112,13 +114,16 @@ export class DelayJobService {
       });
     });
 
-    delayQueue.on('failed', (job: Bull.Job<DelayJobData> | undefined, error: Error) => {
-      logger.error('Delay job failed', {
-        jobId: job?.id,
-        executionId: job?.data.executionId,
-        error: error.message
-      });
-    });
+    delayQueue.on(
+      'failed',
+      (job: Bull.Job<DelayJobData> | undefined, error: Error) => {
+        logger.error('Delay job failed', {
+          jobId: job?.id,
+          executionId: job?.data.executionId,
+          error: error.message
+        });
+      }
+    );
 
     delayQueue.on('stalled', (job: Bull.Job<DelayJobData>) => {
       logger.warn('Delay job stalled', {
@@ -233,7 +238,13 @@ export class DelayJobService {
    */
   static async getDelayStatus(jobId: string): Promise<{
     id: string;
-    status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused';
+    status:
+      | 'waiting'
+      | 'active'
+      | 'completed'
+      | 'failed'
+      | 'delayed'
+      | 'paused';
     delayMs: number;
     scheduledFor: Date | null;
   } | null> {
@@ -256,7 +267,13 @@ export class DelayJobService {
 
     return {
       id: job.id!.toString(),
-      status: state as 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused',
+      status: state as
+        | 'waiting'
+        | 'active'
+        | 'completed'
+        | 'failed'
+        | 'delayed'
+        | 'paused',
       delayMs: delay,
       scheduledFor: delay > 0 ? new Date(Date.now() + delay) : null
     };

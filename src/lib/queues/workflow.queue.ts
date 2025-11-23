@@ -24,13 +24,17 @@ const redisConfig = {
 
 // Типы задач в workflow очереди
 export interface WorkflowJobData {
-  type: 'heavy_workflow_execution' | 'user_variables_update' | 'statistics_aggregation';
+  type:
+    | 'heavy_workflow_execution'
+    | 'user_variables_update'
+    | 'statistics_aggregation';
   projectId: string;
   executionId?: string;
   userId?: string;
   context?: any;
   trigger?: 'start' | 'message' | 'callback';
   retryCount?: number;
+  timestamp?: number;
 }
 
 // Создаем очередь для workflow операций
@@ -51,7 +55,11 @@ workflowQueue.process('heavy_workflow_execution', async (job) => {
 
   try {
     // Выполняем тяжелую workflow операцию асинхронно
-    const result = await WorkflowRuntimeService.executeWorkflow(projectId, trigger || 'message', context);
+    const result = await WorkflowRuntimeService.executeWorkflow(
+      projectId,
+      trigger || 'message',
+      context
+    );
 
     logger.info('Heavy workflow execution completed', {
       jobId: job.id,

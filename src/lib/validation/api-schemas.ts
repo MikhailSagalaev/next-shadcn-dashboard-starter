@@ -101,12 +101,22 @@ export const BonusLevelSchema = z.object({
   description: z.string().max(500).optional()
 });
 
+const ReferralLevelSettingsSchema = z.object({
+  level: z.number().int().min(1).max(3),
+  percent: z.number().min(0).max(100),
+  isActive: z.boolean().optional()
+});
+
 // Схема реферальной программы
 export const ReferralProgramSchema = z.object({
-  isActive: z.boolean(),
-  bonusPercent: z.number().min(0).max(100),
-  referrerBonus: z.number().min(0),
-  description: z.string().max(500).optional()
+  isActive: z.boolean().optional(),
+  referrerBonus: z.number().min(0).max(100),
+  refereeBonus: z.number().min(0).max(100),
+  minPurchaseAmount: z.number().min(0).optional(),
+  cookieLifetime: z.number().int().min(1).max(365).optional(),
+  welcomeBonus: z.number().min(0).optional(),
+  description: z.string().max(500).optional(),
+  levels: z.array(ReferralLevelSettingsSchema).max(3).optional()
 });
 
 // Схема массовой рассылки

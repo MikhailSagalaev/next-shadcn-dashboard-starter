@@ -61,6 +61,39 @@ CREATE INDEX idx_projects_active ON projects(is_active) WHERE is_active = true;
 
 ---
 
+### 👤 Admin Accounts (Администраторы)
+
+Хранят учетные записи админов панели управления, включая настройки профиля и двухфакторную аутентификацию.
+
+```sql
+CREATE TABLE admin_accounts (
+    id                       TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+    email                    TEXT NOT NULL UNIQUE,
+    password_hash            TEXT NOT NULL,
+    role                     TEXT NOT NULL DEFAULT 'ADMIN',
+    is_active                BOOLEAN NOT NULL DEFAULT true,
+    email_verified           BOOLEAN NOT NULL DEFAULT false,
+    email_verification_token TEXT,
+    email_verification_expires TIMESTAMP,
+    two_factor_secret        TEXT,
+    two_factor_temp_secret   TEXT,
+    two_factor_enabled       BOOLEAN NOT NULL DEFAULT false,
+    metadata                 JSONB,
+    created_at               TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at               TIMESTAMP NOT NULL DEFAULT now()
+);
+```
+
+#### Новые поля 2FA:
+- `two_factor_secret`: Зашифрованный TOTP секрет после включения 2FA (AES-256-GCM с ключом `TWO_FACTOR_ENCRYPTION_KEY`).
+- `two_factor_temp_secret`: Временный секрет, сохраняется до подтверждения кодом.
+- `two_factor_enabled`: Флаг активности 2FA, используется для отображения в UI и требования подтверждения.
+
+#### Метаданные профиля:
+Поле `metadata` хранит JSON объект с настройками профиля (`profileSettings`), включая персональные данные, уведомления, предпочтения UI и дополнительные атрибуты (например, `avatarUrl`).
+
+---
+
 ### 🤖 Bot Settings (Настройки ботов)
 
 Настройки Telegram ботов для каждого проекта. Связь 1:1 с проектами.
@@ -613,5 +646,5 @@ CREATE POLICY user_project_policy ON users
 ---
 
 **Версия схемы**: 1.0  
-**Последнее обновление**: 2024-12-31  
+**Последнее обновление**: 2025-11-16  
 **СУБД**: PostgreSQL 14+ 

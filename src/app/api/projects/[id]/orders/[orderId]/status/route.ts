@@ -13,13 +13,14 @@ import { OrderService } from '@/lib/services/order.service';
 import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { z } from 'zod';
-import type { OrderStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
+import type { ChangeOrderStatusInput } from '@/types/orders';
 
 const changeStatusSchema = z.object({
-  status: z.enum(['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED']),
+  status: z.nativeEnum(OrderStatus),
   comment: z.string().optional(),
   changedBy: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional()
 });
 
 // PUT /api/projects/[id]/orders/[orderId]/status - Изменение статуса заказа
@@ -42,20 +43,29 @@ export async function PUT(
     const body = await request.json();
 
     // Валидация данных
-    const validatedData = changeStatusSchema.parse(body);
+    const validatedData: z.infer<typeof changeStatusSchema> =
+      changeStatusSchema.parse(body);
 
     // Изменяем статус заказа
-    const order = await OrderService.changeOrderStatus(projectId, orderId, {
-      ...validatedData,
-      changedBy: validatedData.changedBy || admin.sub,
-    });
+    const payload: ChangeOrderStatusInput = {
+      status: validatedData.status,
+      comment: validatedData.comment,
+      metadata: validatedData.metadata,
+      changedBy: validatedData.changedBy || admin.sub
+    };
+
+    const order = await OrderService.changeOrderStatus(
+      projectId,
+      orderId,
+      payload
+    );
 
     return NextResponse.json(order);
   } catch (error) {
     logger.error('Ошибка изменения статуса заказа', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'orders-api',
-      action: 'PUT',
+      action: 'PUT'
     });
 
     if (error instanceof z.ZodError) {
@@ -79,4 +89,3 @@ export async function PUT(
     );
   }
 }
-

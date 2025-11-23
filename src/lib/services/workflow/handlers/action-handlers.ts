@@ -10,8 +10,16 @@
 
 import { BaseNodeHandler } from './base-handler';
 import { QueryExecutor } from '../query-executor';
-import { resolveTemplateString, resolveTemplateValue, getValueByPath, isEmail, isPhone, normalizePhone } from './utils';
+import {
+  resolveTemplateString,
+  resolveTemplateValue,
+  getValueByPath,
+  isEmail,
+  isPhone,
+  normalizePhone
+} from './utils';
 import type { PrismaClient } from '@prisma/client';
+import { logger } from '@/lib/logger';
 import type {
   WorkflowNode,
   WorkflowNodeType,
@@ -28,7 +36,10 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
     return nodeType === 'action.database_query';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data.config?.['action.database_query'];
 
@@ -45,12 +56,15 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
         const availableQueries = QueryExecutor.getAvailableQueries();
         throw new Error(
           `Unauthorized query type: ${config.query}. ` +
-          `Available queries: ${availableQueries.join(', ')}`
+            `Available queries: ${availableQueries.join(', ')}`
         );
       }
 
       // Разрешаем переменные в параметрах
-      const resolvedParams = await this.resolveParameters(config.parameters, context);
+      const resolvedParams = await this.resolveParameters(
+        config.parameters,
+        context
+      );
 
       this.logStep(context, node, 'Executing safe database query', 'info', {
         queryType: config.query,
@@ -67,7 +81,12 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
       // Сохраняем результат в переменную если указано
       if (config.assignTo) {
         await this.setVariable(config.assignTo, result, context, 'session');
-        this.logStep(context, node, `Query result assigned to variable: ${config.assignTo}`, 'debug');
+        this.logStep(
+          context,
+          node,
+          `Query result assigned to variable: ${config.assignTo}`,
+          'debug'
+        );
       }
 
       // Обрабатываем resultMapping если есть
@@ -75,18 +94,28 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
         for (const [key, varName] of Object.entries(config.resultMapping)) {
           const value = (result as any)[key];
           if (value !== undefined) {
-            await this.setVariable(varName as string, value, context, 'session');
+            await this.setVariable(
+              varName as string,
+              value,
+              context,
+              'session'
+            );
           }
         }
       }
 
-      this.logStep(context, node, 'Database query executed successfully', 'info', {
-        hasResult: !!result
-      });
+      this.logStep(
+        context,
+        node,
+        'Database query executed successfully',
+        'info',
+        {
+          hasResult: !!result
+        }
+      );
 
       // Следующий нод определяется по connections
       return null;
-
     } catch (error) {
       this.logStep(context, node, 'Database query failed', 'error', { error });
       throw error;
@@ -96,7 +125,10 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
   /**
    * Разрешает переменные в параметрах запроса
    */
-  private async resolveParameters(parameters: any, context: ExecutionContext): Promise<Record<string, any>> {
+  private async resolveParameters(
+    parameters: any,
+    context: ExecutionContext
+  ): Promise<Record<string, any>> {
     if (!parameters || typeof parameters !== 'object') {
       return {};
     }
@@ -118,7 +150,10 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
   /**
    * Асинхронное разрешение переменных с поддержкой workflow_variables
    */
-  private async resolveValueAsync(value: any, context: ExecutionContext): Promise<any> {
+  private async resolveValueAsync(
+    value: any,
+    context: ExecutionContext
+  ): Promise<any> {
     if (typeof value === 'string') {
       // Заменяем переменные в строке
       const matches = value.match(/\{\{([^}]+)\}\}/g);
@@ -129,25 +164,36 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
       let resolvedValue = value;
       for (const match of matches) {
         const varPath = match.slice(2, -2); // Убираем {{ и }}
-        
+
         // Проверяем, это telegram переменная или workflow переменная
         if (varPath.startsWith('telegram.')) {
           // Синхронное разрешение для telegram переменных
           const resolved = this.getVariableValueSync(varPath, context);
-          resolvedValue = resolvedValue.replace(match, resolved !== undefined ? String(resolved) : match);
+          resolvedValue = resolvedValue.replace(
+            match,
+            resolved !== undefined ? String(resolved) : match
+          );
         } else {
           // Асинхронное разрешение для workflow переменных
           try {
             console.log(`🔍 Resolving workflow variable: ${varPath}`);
             const resolved = await this.resolveVariablePath(varPath, context);
-            console.log(`✅ Resolved ${varPath}:`, resolved, 'type:', typeof resolved);
-            
+            console.log(
+              `✅ Resolved ${varPath}:`,
+              resolved,
+              'type:',
+              typeof resolved
+            );
+
             if (resolved !== undefined && resolved !== null) {
               // Заменяем переменную на значение
               resolvedValue = resolvedValue.replace(match, String(resolved));
             } else {
               // Если переменная не разрешена, оставляем оригинал и логируем предупреждение
-              console.warn(`⚠️ Variable ${varPath} not resolved, keeping original:`, match);
+              console.warn(
+                `⚠️ Variable ${varPath} not resolved, keeping original:`,
+                match
+              );
             }
           } catch (error) {
             console.warn(`❌ Failed to resolve variable ${varPath}:`, error);
@@ -155,7 +201,7 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
           }
         }
       }
-      
+
       return resolvedValue;
     }
 
@@ -176,45 +222,68 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
   /**
    * Разрешает переменную с поддержкой вложенных свойств (например, contactReceived.phoneNumber)
    */
-  private async resolveVariablePath(varPath: string, context: ExecutionContext): Promise<any> {
+  private async resolveVariablePath(
+    varPath: string,
+    context: ExecutionContext
+  ): Promise<any> {
     const parts = varPath.split('.');
-    
+
     // Если это простая переменная без точек
     if (parts.length === 1) {
       // ✅ КРИТИЧНО: Сначала проверяем, есть ли это свойство в контексте напрямую
       if ((context as any)[varPath] !== undefined) {
-        console.log(`✅ Resolved ${varPath} from context:`, (context as any)[varPath]);
+        console.log(
+          `✅ Resolved ${varPath} from context:`,
+          (context as any)[varPath]
+        );
         return (context as any)[varPath];
       }
-      
+
       // Если нет в контексте, ищем в session-scope переменных
       return await context.variables.get(varPath, 'session');
     }
-    
+
     // Если это вложенная переменная (например, contactReceived.phoneNumber)
     const baseVarName = parts[0];
     const propertyPath = parts.slice(1);
-    
-    console.log(`🔍 Resolving nested variable: base=${baseVarName}, path=${propertyPath.join('.')}`);
+
+    console.log(
+      `🔍 Resolving nested variable: base=${baseVarName}, path=${propertyPath.join('.')}`
+    );
     console.log(`🔍 Context keys:`, Object.keys(context));
-    console.log(`🔍 Context.contactReceived:`, (context as any).contactReceived);
-    
+    console.log(
+      `🔍 Context.contactReceived:`,
+      (context as any).contactReceived
+    );
+
     // ✅ КРИТИЧНО: Сначала проверяем, есть ли base в контексте напрямую
     let baseValue: any;
     if ((context as any)[baseVarName] !== undefined) {
       baseValue = (context as any)[baseVarName];
-      console.log(`✅ Base variable ${baseVarName} from context:`, baseValue, 'type:', typeof baseValue);
+      console.log(
+        `✅ Base variable ${baseVarName} from context:`,
+        baseValue,
+        'type:',
+        typeof baseValue
+      );
     } else {
-      console.log(`🔍 Base variable ${baseVarName} not in context, checking session variables...`);
+      console.log(
+        `🔍 Base variable ${baseVarName} not in context, checking session variables...`
+      );
       console.log(`🔍 Session ID:`, context.sessionId);
       baseValue = await context.variables.get(baseVarName, 'session');
-      console.log(`🔍 Base variable ${baseVarName} from session:`, baseValue, 'type:', typeof baseValue);
+      console.log(
+        `🔍 Base variable ${baseVarName} from session:`,
+        baseValue,
+        'type:',
+        typeof baseValue
+      );
     }
-    
+
     if (baseValue === undefined || baseValue === null) {
       console.log(`❌ Base variable ${baseVarName} not found`);
       console.log(`❌ Available variables in context:`, Object.keys(context));
-      
+
       // Попробуем получить все переменные сессии для диагностики
       try {
         const allSessionVars = await context.variables.list('session');
@@ -223,10 +292,10 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
       } catch (e) {
         console.log(`❌ Failed to list session variables:`, e);
       }
-      
+
       return undefined;
     }
-    
+
     // Получаем вложенное свойство
     let result = baseValue;
     for (const prop of propertyPath) {
@@ -237,7 +306,7 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
         return undefined;
       }
     }
-    
+
     console.log(`✅ Resolved nested variable ${varPath}:`, result);
     return result;
   }
@@ -256,7 +325,7 @@ export class DatabaseQueryHandler extends BaseNodeHandler {
       const availableQueries = QueryExecutor.getAvailableQueries();
       errors.push(
         `Invalid query type: ${config.query}. ` +
-        `Available: ${availableQueries.join(', ')}`
+          `Available: ${availableQueries.join(', ')}`
       );
     }
 
@@ -283,7 +352,10 @@ export class SetVariableHandler extends BaseNodeHandler {
     return nodeType === 'action.set_variable';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data.config?.['action.set_variable'];
 
@@ -313,11 +385,15 @@ export class SetVariableHandler extends BaseNodeHandler {
         config.ttl
       );
 
-      this.logStep(context, node, `Variable ${config.variableName} set successfully`, 'info');
+      this.logStep(
+        context,
+        node,
+        `Variable ${config.variableName} set successfully`,
+        'info'
+      );
 
       // Следующий нод определяется по connections
       return null;
-
     } catch (error) {
       this.logStep(context, node, 'Failed to set variable', 'error', { error });
       throw error;
@@ -336,7 +412,10 @@ export class SetVariableHandler extends BaseNodeHandler {
       errors.push('Variable name is required and must be a string');
     }
 
-    if (config.scope && !['global', 'project', 'user', 'session'].includes(config.scope)) {
+    if (
+      config.scope &&
+      !['global', 'project', 'user', 'session'].includes(config.scope)
+    ) {
       errors.push('Scope must be one of: global, project, user, session');
     }
 
@@ -359,7 +438,10 @@ export class GetVariableHandler extends BaseNodeHandler {
     return nodeType === 'action.get_variable';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data.config?.['action.get_variable'];
 
@@ -378,18 +460,26 @@ export class GetVariableHandler extends BaseNodeHandler {
       });
 
       // Получаем переменную
-      const value = await this.getVariable(config.variableName, context, 'session');
+      const value = await this.getVariable(
+        config.variableName,
+        context,
+        'session'
+      );
 
       // Если указано assignTo, сохраняем в другую переменную
       if (config.assignTo) {
         const finalValue = value !== undefined ? value : config.defaultValue;
         await this.setVariable(config.assignTo, finalValue, context, 'session');
-        this.logStep(context, node, `Variable ${config.variableName} assigned to ${config.assignTo}`, 'info');
+        this.logStep(
+          context,
+          node,
+          `Variable ${config.variableName} assigned to ${config.assignTo}`,
+          'info'
+        );
       }
 
       // Следующий нод определяется по connections
       return null;
-
     } catch (error) {
       this.logStep(context, node, 'Failed to get variable', 'error', { error });
       throw error;
@@ -428,7 +518,10 @@ export class RequestContactHandler extends BaseNodeHandler {
     return nodeType === 'action.request_contact';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['action.request_contact'];
 
     this.logStep(context, node, 'Requesting contact from user', 'info');
@@ -453,7 +546,9 @@ export class RequestContactHandler extends BaseNodeHandler {
       });
 
       // ✅ КЕШИРУЕМ WAITING EXECUTION В REDIS
-      const { WorkflowRuntimeService } = await import('../../workflow-runtime.service');
+      const { WorkflowRuntimeService } = await import(
+        '../../workflow-runtime.service'
+      );
       await WorkflowRuntimeService.cacheWaitingExecution(
         context.executionId,
         context.projectId,
@@ -468,9 +563,10 @@ export class RequestContactHandler extends BaseNodeHandler {
 
       // Возвращаем специальный результат, который означает "остановиться и ждать"
       return '__WAITING_FOR_CONTACT__';
-
     } catch (error) {
-      this.logStep(context, node, 'Failed to set waiting state', 'error', { error });
+      this.logStep(context, node, 'Failed to set waiting state', 'error', {
+        error
+      });
       throw error;
     }
   }
@@ -492,7 +588,10 @@ export class ApiRequestHandler extends BaseNodeHandler {
     return nodeType === 'action.api_request';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['action.api_request'];
 
     if (!config) {
@@ -527,10 +626,16 @@ export class ApiRequestHandler extends BaseNodeHandler {
     const urlValidation = UrlValidator.validate(url);
 
     if (!urlValidation.isValid) {
-      this.logStep(context, node, 'URL validation failed (SSRF protection)', 'error', {
-        url,
-        error: urlValidation.error
-      });
+      this.logStep(
+        context,
+        node,
+        'URL validation failed (SSRF protection)',
+        'error',
+        {
+          url,
+          error: urlValidation.error
+        }
+      );
       logger.warn('SSRF attempt blocked', {
         projectId: context.projectId,
         url,
@@ -543,26 +648,27 @@ export class ApiRequestHandler extends BaseNodeHandler {
     const safeUrl = urlValidation.sanitizedUrl || url;
 
     const method = (config.method || 'GET').toUpperCase();
-    const headers = await resolveTemplateValue<Record<string, string | number | boolean>>(
-      config.headers || {},
-      context
-    );
+    const headers = await resolveTemplateValue<
+      Record<string, string | number | boolean>
+    >(config.headers || {}, context);
     const body = await resolveTemplateValue(config.body, context);
     const timeout = config.timeout ?? 30000;
 
-          this.logStep(context, node, 'Executing API request', 'info', {
-        method,
-        url: safeUrl, // Логируем безопасный URL
-        originalUrl: url !== safeUrl ? url : undefined,
-        hasBody: body !== undefined && body !== null,
-        timeout
-      });
+    this.logStep(context, node, 'Executing API request', 'info', {
+      method,
+      url: safeUrl, // Логируем безопасный URL
+      originalUrl: url !== safeUrl ? url : undefined,
+      hasBody: body !== undefined && body !== null,
+      timeout
+    });
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const normalizedHeaders: Record<string, string> = Object.entries(headers || {}).reduce(
+      const normalizedHeaders: Record<string, string> = Object.entries(
+        headers || {}
+      ).reduce(
         (acc, [key, value]) => {
           if (value !== undefined && value !== null) {
             acc[key] = String(value);
@@ -615,7 +721,9 @@ export class ApiRequestHandler extends BaseNodeHandler {
       });
 
       if (config.responseMapping && responseData) {
-        for (const [variableName, path] of Object.entries(config.responseMapping)) {
+        for (const [variableName, path] of Object.entries(
+          config.responseMapping
+        )) {
           const value = getValueByPath(responseData, path);
           await context.variables.set(variableName, value, 'session');
         }
@@ -623,7 +731,11 @@ export class ApiRequestHandler extends BaseNodeHandler {
 
       // Неформальное поле assignTo (если будет добавлено в конфиг)
       if ((config as any).assignTo) {
-        await context.variables.set((config as any).assignTo, responseData, 'session');
+        await context.variables.set(
+          (config as any).assignTo,
+          responseData,
+          'session'
+        );
       }
 
       return null;
@@ -671,7 +783,10 @@ export class SendNotificationHandler extends BaseNodeHandler {
     return nodeType === 'action.send_notification';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['action.send_notification'];
 
     if (!config) {
@@ -679,9 +794,17 @@ export class SendNotificationHandler extends BaseNodeHandler {
     }
 
     const notificationType = config.notificationType || 'telegram';
-    const recipient = (await resolveTemplateString(config.recipient, context)).trim();
-    const messageText = await resolveTemplateString(config.template || '', context);
-    const templateData = await resolveTemplateValue(config.templateData || {}, context);
+    const recipient = (
+      await resolveTemplateString(config.recipient, context)
+    ).trim();
+    const messageText = await resolveTemplateString(
+      config.template || '',
+      context
+    );
+    const templateData = await resolveTemplateValue(
+      config.templateData || {},
+      context
+    );
     const title = (templateData?.title as string) || 'Уведомление';
 
     this.logStep(context, node, 'Sending notification', 'info', {
@@ -693,10 +816,24 @@ export class SendNotificationHandler extends BaseNodeHandler {
 
     switch (notificationType) {
       case 'telegram':
-        await this.sendTelegramNotification(recipient || context.telegram.chatId, messageText || title, context, templateData);
+        await this.sendTelegramNotification(
+          recipient || context.telegram.chatId,
+          messageText || title,
+          context,
+          templateData
+        );
         break;
       case 'email':
-        await this.sendProjectNotification(node, 'email', recipient, title, messageText || title, templateData, config.priority, context);
+        await this.sendProjectNotification(
+          node,
+          'email',
+          recipient,
+          title,
+          messageText || title,
+          templateData,
+          config.priority,
+          context
+        );
         break;
       case 'webhook':
         await this.sendWebhookNotification(recipient, {
@@ -745,7 +882,9 @@ export class SendNotificationHandler extends BaseNodeHandler {
     priority: string | undefined,
     context: ExecutionContext
   ): Promise<void> {
-    const { ProjectNotificationService } = await import('@/lib/services/project-notification.service');
+    const { ProjectNotificationService } = await import(
+      '@/lib/services/project-notification.service'
+    );
     const db: PrismaClient = context.services.db as PrismaClient;
 
     let userId = context.userId || undefined;
@@ -761,7 +900,10 @@ export class SendNotificationHandler extends BaseNodeHandler {
           select: { id: true }
         });
         userId = user?.id;
-      } else if ((channel === 'sms' || channel === 'telegram') && isPhone(recipient)) {
+      } else if (
+        (channel === 'sms' || channel === 'telegram') &&
+        isPhone(recipient)
+      ) {
         const user = await db.user.findFirst({
           where: {
             projectId: context.projectId,
@@ -774,10 +916,16 @@ export class SendNotificationHandler extends BaseNodeHandler {
     }
 
     if (!userId) {
-      this.logStep(context, node, 'Notification skipped: user not found', 'warn', {
-        channel,
-        recipient
-      });
+      this.logStep(
+        context,
+        node,
+        'Notification skipped: user not found',
+        'warn',
+        {
+          channel,
+          recipient
+        }
+      );
       return;
     }
 
@@ -796,7 +944,10 @@ export class SendNotificationHandler extends BaseNodeHandler {
     });
   }
 
-  private async sendWebhookNotification(url: string, payload: Record<string, any>): Promise<void> {
+  private async sendWebhookNotification(
+    url: string,
+    payload: Record<string, any>
+  ): Promise<void> {
     if (!url) {
       throw new Error('Webhook URL is required');
     }
@@ -823,14 +974,19 @@ export class CheckUserLinkedHandler extends BaseNodeHandler {
     return nodeType === 'action.check_user_linked';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['action.check_user_linked'];
 
     if (!config) {
       throw new Error('Check user linked configuration is missing');
     }
 
-    const identifier = (await resolveTemplateString(config.userIdentifier, context)).trim();
+    const identifier = (
+      await resolveTemplateString(config.userIdentifier, context)
+    ).trim();
     if (!identifier) {
       throw new Error('userIdentifier is required');
     }
@@ -893,14 +1049,19 @@ export class FindUserByContactHandler extends BaseNodeHandler {
     return nodeType === 'action.find_user_by_contact';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['action.find_user_by_contact'];
 
     if (!config) {
       throw new Error('Find user by contact configuration is missing');
     }
 
-    const contactValue = (await resolveTemplateString(config.contactValue, context)).trim();
+    const contactValue = (
+      await resolveTemplateString(config.contactValue, context)
+    ).trim();
     if (!contactValue) {
       throw new Error('contactValue is required');
     }
@@ -924,7 +1085,11 @@ export class FindUserByContactHandler extends BaseNodeHandler {
       params
     );
 
-    await context.variables.set(config.assignTo || 'foundUser', user || null, 'session');
+    await context.variables.set(
+      config.assignTo || 'foundUser',
+      user || null,
+      'session'
+    );
 
     this.logStep(context, node, 'User lookup finished', 'info', {
       contactType: config.contactType,
@@ -958,15 +1123,25 @@ export class LinkTelegramAccountHandler extends BaseNodeHandler {
     return nodeType === 'action.link_telegram_account';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['action.link_telegram_account'];
 
     if (!config) {
       throw new Error('Link Telegram account configuration is missing');
     }
 
-    const telegramIdValue = (await resolveTemplateString(config.telegramId || '{{telegram.userId}}', context)).trim();
-    const contactValue = (await resolveTemplateString(config.contactValue, context)).trim();
+    const telegramIdValue = (
+      await resolveTemplateString(
+        config.telegramId || '{{telegram.userId}}',
+        context
+      )
+    ).trim();
+    const contactValue = (
+      await resolveTemplateString(config.contactValue, context)
+    ).trim();
 
     if (!telegramIdValue) {
       throw new Error('telegramId is required');
@@ -1000,10 +1175,14 @@ export class LinkTelegramAccountHandler extends BaseNodeHandler {
       }
     });
 
-    await context.variables.set('linkedUser', {
-      ...updatedUser,
-      telegramId: updatedUser.telegramId?.toString()
-    }, 'session');
+    await context.variables.set(
+      'linkedUser',
+      {
+        ...updatedUser,
+        telegramId: updatedUser.telegramId?.toString()
+      },
+      'session'
+    );
 
     this.logStep(context, node, 'Telegram account linked', 'info', {
       userId: updatedUser.id,
@@ -1032,16 +1211,21 @@ export class GetUserBalanceHandler extends BaseNodeHandler {
     return nodeType === 'action.get_user_balance';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['action.get_user_balance'];
 
     if (!config) {
       throw new Error('Get user balance configuration is missing');
     }
 
-    const userId = (config.userId
-      ? (await resolveTemplateString(config.userId, context)).trim()
-      : context.userId) as string | undefined;
+    const userId = (
+      config.userId
+        ? (await resolveTemplateString(config.userId, context)).trim()
+        : context.userId
+    ) as string | undefined;
 
     if (!userId) {
       throw new Error('userId is required to get balance');
@@ -1053,8 +1237,16 @@ export class GetUserBalanceHandler extends BaseNodeHandler {
       { userId }
     );
 
-    await context.variables.set(config.assignTo || 'userBalance', result?.balance ?? 0, 'session');
-    await context.variables.set((config.assignTo || 'userBalance') + '_details', result ?? null, 'session');
+    await context.variables.set(
+      config.assignTo || 'userBalance',
+      result?.balance ?? 0,
+      'session'
+    );
+    await context.variables.set(
+      (config.assignTo || 'userBalance') + '_details',
+      result ?? null,
+      'session'
+    );
 
     this.logStep(context, node, 'User balance retrieved', 'info', {
       userId,
@@ -1084,7 +1276,10 @@ export class MenuCommandHandler extends BaseNodeHandler {
     return nodeType === 'action.menu_command';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data.config?.['action.menu_command'];
 
@@ -1097,7 +1292,9 @@ export class MenuCommandHandler extends BaseNodeHandler {
         throw new Error('Menu command is required');
       }
 
-      this.logStep(context, node, 'Executing menu command', 'info', { command });
+      this.logStep(context, node, 'Executing menu command', 'info', {
+        command
+      });
 
       // Определяем userId - пытаемся найти по Telegram ID
       let userId = context.userId;
@@ -1106,19 +1303,40 @@ export class MenuCommandHandler extends BaseNodeHandler {
           const found = await QueryExecutor.execute(
             context.services.db,
             'check_user_by_telegram',
-            { telegramId: context.telegram.userId, projectId: context.projectId }
+            {
+              telegramId: context.telegram.userId,
+              projectId: context.projectId
+            }
           );
           if (found?.id) {
             userId = found.id;
-            this.logStep(context, node, 'Resolved userId from telegramId', 'debug', { userId });
+            this.logStep(
+              context,
+              node,
+              'Resolved userId from telegramId',
+              'debug',
+              { userId }
+            );
           }
         } catch (e) {
-          this.logStep(context, node, 'Failed resolve userId from telegramId', 'warn', { error: e });
+          this.logStep(
+            context,
+            node,
+            'Failed resolve userId from telegramId',
+            'warn',
+            { error: e }
+          );
         }
       }
 
       if (!userId) {
-        this.logStep(context, node, 'No userId available, cannot execute menu command', 'warn', { command });
+        this.logStep(
+          context,
+          node,
+          'No userId available, cannot execute menu command',
+          'warn',
+          { command }
+        );
         // Отправляем сообщение об ошибке
         const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
         await context.services.http.post(telegramApiUrl, {
@@ -1130,8 +1348,13 @@ export class MenuCommandHandler extends BaseNodeHandler {
       }
 
       // Получаем переменные пользователя
-      const { UserVariablesService } = await import('../user-variables.service');
-      console.log('🔍 MENU COMMAND: Getting user variables for', { userId, projectId: context.projectId });
+      const { UserVariablesService } = await import(
+        '../user-variables.service'
+      );
+      console.log('🔍 MENU COMMAND: Getting user variables for', {
+        userId,
+        projectId: context.projectId
+      });
       const userVariables = await UserVariablesService.getUserVariables(
         context.services.db,
         userId,
@@ -1245,9 +1468,9 @@ ${userVariables['user.referralLink']}
       // Добавляем кнопку "Назад в меню" для всех команд кроме help
       if (command !== 'menu_help') {
         keyboard = {
-          inline_keyboard: [[
-            { text: '⬅️ Назад в меню', callback_data: 'back_to_menu' }
-          ]]
+          inline_keyboard: [
+            [{ text: '⬅️ Назад в меню', callback_data: 'back_to_menu' }]
+          ]
         };
       }
 
@@ -1265,16 +1488,23 @@ ${userVariables['user.referralLink']}
 
       await context.services.http.post(telegramApiUrl, payload);
 
-      this.logStep(context, node, 'Menu command executed successfully', 'info', {
-        command,
-        userId,
-        hasKeyboard: !!keyboard
-      });
+      this.logStep(
+        context,
+        node,
+        'Menu command executed successfully',
+        'info',
+        {
+          command,
+          userId,
+          hasKeyboard: !!keyboard
+        }
+      );
 
       return null;
-
     } catch (error) {
-      this.logStep(context, node, 'Failed to execute menu command', 'error', { error });
+      this.logStep(context, node, 'Failed to execute menu command', 'error', {
+        error
+      });
       throw error;
     }
   }

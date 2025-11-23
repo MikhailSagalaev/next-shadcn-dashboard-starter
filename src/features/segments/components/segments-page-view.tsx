@@ -45,6 +45,7 @@ interface Segment {
   type: 'MANUAL' | 'AUTO' | 'DYNAMIC';
   isActive: boolean;
   memberCount: number;
+  rules?: any;
   createdAt: Date;
   _count?: {
     members: number;
@@ -70,7 +71,7 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
       setLoading(true);
       const params = new URLSearchParams({
         page: page.toString(),
-        pageSize: pageSize.toString(),
+        pageSize: pageSize.toString()
       });
 
       if (search) {
@@ -101,7 +102,7 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
       toast({
         title: 'Ошибка',
         description: 'Не удалось загрузить сегменты',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -121,7 +122,7 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
       const response = await fetch(
         `/api/projects/${projectId}/segments/${segmentId}`,
         {
-          method: 'DELETE',
+          method: 'DELETE'
         }
       );
 
@@ -131,7 +132,7 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
 
       toast({
         title: 'Успешно',
-        description: 'Сегмент удален',
+        description: 'Сегмент удален'
       });
 
       fetchSegments();
@@ -140,7 +141,7 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
       toast({
         title: 'Ошибка',
         description: 'Не удалось удалить сегмент',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     }
   };
@@ -190,9 +191,9 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
         </CardHeader>
         <CardContent>
           <div className='flex flex-wrap gap-4'>
-            <div className='flex-1 min-w-[200px]'>
+            <div className='min-w-[200px] flex-1'>
               <div className='relative'>
-                <Search className='absolute left-2 top-2.5 h-4 w-4 text-muted-foreground' />
+                <Search className='text-muted-foreground absolute top-2.5 left-2 h-4 w-4' />
                 <Input
                   placeholder='Поиск по названию...'
                   value={search}
@@ -259,4 +260,3 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
     </div>
   );
 }
-

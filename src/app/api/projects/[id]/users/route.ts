@@ -35,7 +35,7 @@ async function getHandler(
     }
 
     const { id } = await context.params;
-    
+
     // Проверяем доступ к проекту
     await ProjectService.verifyProjectAccess(id, admin.sub);
 
@@ -74,9 +74,8 @@ async function getHandler(
       const roundedBalance = Number(currentBalance.toFixed(2));
       const isLinkedToBot = Boolean(user.telegramId);
       // Пользователь активен, если isActive === true ИЛИ активирован через Telegram
-      const computedActive =
-        Boolean(user.isActive) || Boolean(user.telegramId);
-      
+      const computedActive = Boolean(user.isActive) || Boolean(user.telegramId);
+
       // Логируем для отладки статуса пользователя
       if (index === 0) {
         logger.debug('User status check (first user)', {
@@ -88,7 +87,7 @@ async function getHandler(
           email: user.email
         });
       }
-      
+
       return {
         id: user.id,
         name:
@@ -168,14 +167,14 @@ async function getHandler(
     });
   } catch (error) {
     const { id } = await context.params;
-    
+
     // Обработка ошибок доступа
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    
-    logger.error('Ошибка получения пользователей', { 
-      projectId: id, 
+
+    logger.error('Ошибка получения пользователей', {
+      projectId: id,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
     });
     return NextResponse.json(
@@ -192,7 +191,7 @@ async function postHandler(
   let id: string | undefined;
   try {
     logger.info('Начало создания пользователя', {});
-    
+
     const admin = await getCurrentAdmin();
     if (!admin) {
       logger.warn('Попытка создания пользователя без авторизации');
@@ -201,7 +200,7 @@ async function postHandler(
 
     id = (await context.params).id;
     logger.info('Параметры получены', { projectId: id, adminId: admin.sub });
-    
+
     // Проверяем доступ к проекту
     await ProjectService.verifyProjectAccess(id, admin.sub);
     logger.info('Доступ к проекту подтвержден', { projectId: id });
@@ -212,7 +211,8 @@ async function postHandler(
     } catch (parseError) {
       logger.error('Ошибка парсинга тела запроса', {
         projectId: id,
-        error: parseError instanceof Error ? parseError.message : String(parseError)
+        error:
+          parseError instanceof Error ? parseError.message : String(parseError)
       });
       return NextResponse.json(
         { error: 'Неверный формат данных запроса' },
@@ -236,10 +236,10 @@ async function postHandler(
     try {
       const { BillingService } = await import('@/lib/services/billing.service');
       const limitCheck = await BillingService.checkLimit(admin.sub, 'users');
-      
+
       if (!limitCheck.allowed) {
         return NextResponse.json(
-          { 
+          {
             error: `Лимит пользователей исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
             limitReached: true,
             currentUsage: limitCheck.used,
@@ -253,7 +253,10 @@ async function postHandler(
       logger.warn('Ошибка при проверке лимита пользователей', {
         projectId: id,
         adminId: admin.sub,
-        error: billingError instanceof Error ? billingError.message : String(billingError),
+        error:
+          billingError instanceof Error
+            ? billingError.message
+            : String(billingError),
         stack: billingError instanceof Error ? billingError.stack : undefined
       });
       // Продолжаем выполнение, если проверка лимита не удалась
@@ -262,26 +265,38 @@ async function postHandler(
     // Очищаем пустые строки и null значения
     // Преобразуем пустые строки в undefined для корректной валидации опциональных полей
     const cleanedBody = {
-      firstName: body.firstName && body.firstName.trim() ? body.firstName.trim() : undefined,
-      lastName: body.lastName && body.lastName.trim() ? body.lastName.trim() : undefined,
+      firstName:
+        body.firstName && body.firstName.trim()
+          ? body.firstName.trim()
+          : undefined,
+      lastName:
+        body.lastName && body.lastName.trim()
+          ? body.lastName.trim()
+          : undefined,
       email: body.email && body.email.trim() ? body.email.trim() : undefined,
       phone: body.phone && body.phone.trim() ? body.phone.trim() : undefined,
-      birthDate: body.birthDate && body.birthDate.trim() ? body.birthDate.trim() : undefined
+      birthDate:
+        body.birthDate && body.birthDate.trim()
+          ? body.birthDate.trim()
+          : undefined
     };
 
     // Валидация входных данных (с нормализацией телефона)
     let normalizedPhone: string | undefined = undefined;
     try {
-      normalizedPhone = cleanedBody.phone ? normalizePhone(cleanedBody.phone) : undefined;
+      normalizedPhone = cleanedBody.phone
+        ? normalizePhone(cleanedBody.phone)
+        : undefined;
     } catch (phoneError) {
       logger.warn('Ошибка нормализации телефона', {
         projectId: id,
         phone: cleanedBody.phone,
-        error: phoneError instanceof Error ? phoneError.message : String(phoneError)
+        error:
+          phoneError instanceof Error ? phoneError.message : String(phoneError)
       });
       // Продолжаем без нормализации, валидация схемы покажет ошибку
     }
-    
+
     // Валидируем дату рождения
     // Поддерживаем форматы: YYYY-MM-DD, ISO datetime, Date объект
     let validatedBirthDate: Date | undefined = undefined;
@@ -289,10 +304,10 @@ async function postHandler(
       try {
         // Если это строка в формате YYYY-MM-DD, добавляем время для валидации
         const dateStr = cleanedBody.birthDate;
-        const date = dateStr.includes('T') 
-          ? new Date(dateStr) 
+        const date = dateStr.includes('T')
+          ? new Date(dateStr)
           : new Date(dateStr + 'T00:00:00.000Z');
-        
+
         if (isNaN(date.getTime())) {
           return NextResponse.json(
             { error: 'Неверный формат даты рождения' },
@@ -320,8 +335,12 @@ async function postHandler(
       logger.error('Ошибка валидации данных пользователя', {
         projectId: id,
         cleanedBody,
-        error: validationError instanceof Error ? validationError.message : String(validationError),
-        stack: validationError instanceof Error ? validationError.stack : undefined
+        error:
+          validationError instanceof Error
+            ? validationError.message
+            : String(validationError),
+        stack:
+          validationError instanceof Error ? validationError.stack : undefined
       });
       throw validationError;
     }
@@ -386,15 +405,26 @@ async function postHandler(
         isActive: false
       }
     });
-    logger.info('Пользователь создан в БД', { projectId: id, userId: newUser.id });
+    logger.info('Пользователь создан в БД', {
+      projectId: id,
+      userId: newUser.id
+    });
 
     // Приветственный бонус (фиксированная сумма), срок действия — как у проекта
     try {
-      const settings = await db.botSettings.findUnique({
-        where: { projectId: id }
-      });
+      const [settings, referralProgram] = await Promise.all([
+        db.botSettings.findUnique({
+          where: { projectId: id }
+        }),
+        db.referralProgram.findUnique({
+          where: { projectId: id },
+          select: { welcomeBonus: true }
+        })
+      ]);
       const meta = (settings?.functionalSettings as any) || {};
-      const welcomeAmount = Number(meta.welcomeBonusAmount || 0);
+      const welcomeAmount = Number(
+        meta.welcomeBonusAmount ?? referralProgram?.welcomeBonus ?? 0
+      );
       if (welcomeAmount > 0) {
         const expiresAt = new Date();
         expiresAt.setDate(
@@ -469,24 +499,21 @@ async function postHandler(
         projectId = 'unknown';
       }
     }
-    
+
     // Обрабатываем ошибки валидации отдельно
     if (error instanceof Error && error.message.includes('Ошибка валидации')) {
       logger.warn('Ошибка валидации при создании пользователя', {
         projectId,
         error: error.message
       });
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    
+
     // Обрабатываем ошибки доступа
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    
+
     logger.error('Ошибка создания пользователя', {
       projectId,
       error:

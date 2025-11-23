@@ -13,12 +13,13 @@ import { OrderService } from '@/lib/services/order.service';
 import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { z } from 'zod';
-import type { OrderStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
+import type { CreateOrderInput } from '@/types/orders';
 
 const createOrderSchema = z.object({
   userId: z.string().optional(),
-  orderNumber: z.string().optional(),
-  status: z.enum(['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED']).optional(),
+  orderNumber: z.string().min(1),
+  status: z.nativeEnum(OrderStatus).optional(),
   totalAmount: z.number().positive(),
   paidAmount: z.number().min(0).optional(),
   bonusAmount: z.number().min(0).optional(),
@@ -26,26 +27,33 @@ const createOrderSchema = z.object({
   paymentMethod: z.string().optional(),
   deliveryMethod: z.string().optional(),
   metadata: z.record(z.any()).optional(),
-  items: z.array(z.object({
-    productId: z.string().optional(),
-    name: z.string().min(1),
-    quantity: z.number().int().positive(),
-    price: z.number().positive(),
-    total: z.number().positive(),
-    metadata: z.record(z.any()).optional(),
-  })).min(1),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().optional(),
+        name: z.string().min(1),
+        quantity: z.number().int().positive(),
+        price: z.number().positive(),
+        total: z.number().positive(),
+        metadata: z.record(z.any()).optional()
+      })
+    )
+    .min(1)
 });
 
 const getOrdersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(200).default(20).optional(),
   userId: z.string().optional(),
-  status: z.string().optional(),
+  status: z.nativeEnum(OrderStatus).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   search: z.string().optional(),
-  sortBy: z.enum(['createdAt', 'totalAmount', 'status']).default('createdAt').optional(),
-  sortOrder: z.enum(['asc', 'desc']).default('desc').optional(),
+  sortBy: z
+    .enum(['createdAt', 'totalAmount', 'status'])
+    .default('createdAt')
+    .optional(),
+  sortOrder: z.enum(['asc', 'desc']).default('desc').optional()
 });
 
 // GET /api/projects/[id]/orders - Получение списка заказов
@@ -75,7 +83,7 @@ export async function GET(
       endDate: url.searchParams.get('endDate') || undefined,
       search: url.searchParams.get('search') || undefined,
       sortBy: url.searchParams.get('sortBy') || 'createdAt',
-      sortOrder: url.searchParams.get('sortOrder') || 'desc',
+      sortOrder: url.searchParams.get('sortOrder') || 'desc'
     };
 
     // Валидация и преобразование параметров
@@ -85,13 +93,16 @@ export async function GET(
     let status: OrderStatus | OrderStatus[] | undefined;
     if (validated.status) {
       const statuses = validated.status.split(',');
-      status = statuses.length === 1 
-        ? (statuses[0] as OrderStatus)
-        : (statuses as OrderStatus[]);
+      status =
+        statuses.length === 1
+          ? (statuses[0] as OrderStatus)
+          : (statuses as OrderStatus[]);
     }
 
     // Преобразуем даты
-    const startDate = validated.startDate ? new Date(validated.startDate) : undefined;
+    const startDate = validated.startDate
+      ? new Date(validated.startDate)
+      : undefined;
     const endDate = validated.endDate ? new Date(validated.endDate) : undefined;
 
     const filters = {
@@ -104,7 +115,7 @@ export async function GET(
       page: validated.page,
       pageSize: validated.pageSize,
       sortBy: validated.sortBy,
-      sortOrder: validated.sortOrder,
+      sortOrder: validated.sortOrder
     };
 
     const result = await OrderService.getOrders(filters);
@@ -114,7 +125,7 @@ export async function GET(
     logger.error('Ошибка получения списка заказов', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'orders-api',
-      action: 'GET',
+      action: 'GET'
     });
 
     if (error instanceof z.ZodError) {
@@ -151,20 +162,40 @@ export async function POST(
     const body = await request.json();
 
     // Валидация данных
-    const validatedData = createOrderSchema.parse(body);
+    const validatedData: z.infer<typeof createOrderSchema> =
+      createOrderSchema.parse(body);
 
     // Создаем заказ
-    const order = await OrderService.createOrder({
+    const orderPayload: CreateOrderInput = {
       projectId,
-      ...validatedData,
-    });
+      orderNumber: validatedData.orderNumber,
+      userId: validatedData.userId,
+      status: validatedData.status,
+      totalAmount: validatedData.totalAmount,
+      paidAmount: validatedData.paidAmount,
+      bonusAmount: validatedData.bonusAmount,
+      deliveryAddress: validatedData.deliveryAddress,
+      paymentMethod: validatedData.paymentMethod,
+      deliveryMethod: validatedData.deliveryMethod,
+      metadata: validatedData.metadata,
+      items: validatedData.items.map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+        metadata: item.metadata
+      }))
+    };
+
+    const order = await OrderService.createOrder(orderPayload);
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
     logger.error('Ошибка создания заказа', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'orders-api',
-      action: 'POST',
+      action: 'POST'
     });
 
     if (error instanceof z.ZodError) {
@@ -175,10 +206,7 @@ export async function POST(
     }
 
     if (error instanceof Error && error.message.includes('уже существует')) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     return NextResponse.json(
@@ -187,4 +215,3 @@ export async function POST(
     );
   }
 }
-

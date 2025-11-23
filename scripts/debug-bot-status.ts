@@ -13,19 +13,26 @@ import { logger } from '../src/lib/logger';
 
 async function debugBotStatus() {
   console.log('🔍 ОТЛАДКА СОСТОЯНИЯ БОТОВ');
-  console.log('=' .repeat(50));
+  console.log('='.repeat(50));
 
   try {
     // 1. Состояние BotManager
     console.log('\n📊 СОСТОЯНИЕ BOT MANAGER:');
-    console.log(`Всего ботов в менеджере: ${botManager.bots.size}`);
-    
-    Array.from(botManager.bots.entries()).forEach(([projectId, botInstance]) => {
+    const botEntries = botManager.getAllBots();
+    console.log(`Всего ботов в менеджере: ${botEntries.length}`);
+
+    botEntries.forEach(([projectId, botInstance]) => {
+      const grammyBot = botInstance.bot as any;
+      const botInfo = grammyBot?.botInfo as { username?: string } | undefined;
+      const tokenPreview =
+        typeof grammyBot?.token === 'string'
+          ? grammyBot.token.slice(-4)
+          : 'N/A';
       console.log(`  - Проект: ${projectId}`);
-      console.log(`    Токен: ***${botInstance.bot.token.slice(-4)}`);
+      console.log(`    Токен: ***${tokenPreview}`);
       console.log(`    Активен: ${botInstance.isActive}`);
       console.log(`    Polling: ${botInstance.isPolling}`);
-      console.log(`    Username: ${botInstance.bot.botInfo?.username || 'N/A'}`);
+      console.log(`    Username: ${botInfo?.username || 'N/A'}`);
       console.log(`    Последнее обновление: ${botInstance.lastUpdated}`);
       console.log('');
     });
@@ -52,10 +59,14 @@ async function debugBotStatus() {
       }
     });
 
-    projects.forEach(project => {
+    projects.forEach((project) => {
       console.log(`  - Проект: ${project.name} (${project.id})`);
-      console.log(`    Токен в проекте: ***${project.botToken?.slice(-4) || 'N/A'}***`);
-      console.log(`    Токен в настройках: ***${project.botSettings?.botToken?.slice(-4) || 'N/A'}***`);
+      console.log(
+        `    Токен в проекте: ***${project.botToken?.slice(-4) || 'N/A'}***`
+      );
+      console.log(
+        `    Токен в настройках: ***${project.botSettings?.botToken?.slice(-4) || 'N/A'}***`
+      );
       console.log(`    Username: ${project.botUsername || 'N/A'}`);
       console.log(`    Статус: ${project.botStatus}`);
       console.log(`    Активен в настройках: ${project.botSettings?.isActive}`);
@@ -65,9 +76,10 @@ async function debugBotStatus() {
     // 3. Поиск дублирующихся токенов
     console.log('\n🔍 ПОИСК ДУБЛИРУЮЩИХСЯ ТОКЕНОВ:');
     const tokenMap = new Map<string, string[]>();
-    
-    Array.from(botManager.bots.entries()).forEach(([projectId, botInstance]) => {
-      const token = botInstance.bot.token;
+
+    botEntries.forEach(([projectId, botInstance]) => {
+      const token = (botInstance.bot as any)?.token;
+      if (!token) return;
       if (!tokenMap.has(token)) {
         tokenMap.set(token, []);
       }
@@ -76,7 +88,9 @@ async function debugBotStatus() {
 
     tokenMap.forEach((projectIds, token) => {
       if (projectIds.length > 1) {
-        console.log(`  ⚠️ Токен ***${token.slice(-4)} используется в проектах: ${projectIds.join(', ')}`);
+        console.log(
+          `  ⚠️ Токен ***${token.slice(-4)} используется в проектах: ${projectIds.join(', ')}`
+        );
       }
     });
 
@@ -86,15 +100,18 @@ async function debugBotStatus() {
 
     // 4. Проверка состояния Telegram API
     console.log('\n🌐 ПРОВЕРКА TELEGRAM API:');
-    for (const [projectId, botInstance] of botManager.bots.entries()) {
+    for (const [projectId, botInstance] of botEntries) {
       try {
         const botInfo = await botInstance.bot.api.getMe();
-        console.log(`  ✅ Проект ${projectId}: @${botInfo.username} (ID: ${botInfo.id})`);
+        console.log(
+          `  ✅ Проект ${projectId}: @${botInfo.username} (ID: ${botInfo.id})`
+        );
       } catch (error) {
-        console.log(`  ❌ Проект ${projectId}: Ошибка API - ${error instanceof Error ? error.message : 'Unknown'}`);
+        console.log(
+          `  ❌ Проект ${projectId}: Ошибка API - ${error instanceof Error ? error.message : 'Unknown'}`
+        );
       }
     }
-
   } catch (error) {
     console.error('❌ Ошибка отладки:', error);
   }

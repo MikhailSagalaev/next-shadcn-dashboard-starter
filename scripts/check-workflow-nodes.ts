@@ -31,20 +31,38 @@ async function checkWorkflowNodes() {
       return;
     }
 
+    const nodes =
+      (workflowVersion.nodes as unknown as Record<
+        string,
+        { type?: string; data?: { label?: string } }
+      >) || {};
+    const connections =
+      (
+        workflowVersion as typeof workflowVersion & {
+          connections?: Array<{
+            source: string;
+            target: string;
+            type?: string;
+          }>;
+        }
+      ).connections || [];
+
     console.log(`✅ Найдена версия workflow: ${workflowVersion.version}`);
     console.log(`  Workflow ID: ${workflowVersion.workflowId}`);
     console.log(`  Entry Node ID: ${workflowVersion.entryNodeId}`);
-    console.log(`  Количество нод: ${Object.keys(workflowVersion.nodes).length}\n`);
+    console.log(`  Количество нод: ${Object.keys(nodes).length}\n`);
 
     // Показываем все ноды
     console.log('📋 Список нод:');
-    Object.entries(workflowVersion.nodes).forEach(([id, node], index) => {
-      console.log(`  ${index + 1}. ${id} (${node.type}) - ${node.data?.label || 'Без названия'}`);
+    Object.entries(nodes).forEach(([id, node], index) => {
+      console.log(
+        `  ${index + 1}. ${id} (${node.type}) - ${node.data?.label || 'Без названия'}`
+      );
     });
 
     // Проверяем entry node
     console.log(`\n🎯 Entry Node: ${workflowVersion.entryNodeId}`);
-    const entryNode = workflowVersion.nodes[workflowVersion.entryNodeId];
+    const entryNode = nodes[workflowVersion.entryNodeId];
     if (entryNode) {
       console.log(`  ✅ Entry node найден: ${entryNode.type}`);
       console.log(`  Label: ${entryNode.data?.label || 'Без названия'}`);
@@ -53,13 +71,14 @@ async function checkWorkflowNodes() {
     }
 
     // Проверяем connections
-    console.log(`\n🔗 Connections: ${workflowVersion.connections?.length || 0}`);
-    if (workflowVersion.connections && workflowVersion.connections.length > 0) {
-      workflowVersion.connections.forEach((conn, index) => {
-        console.log(`  ${index + 1}. ${conn.source} → ${conn.target} (${conn.type})`);
+    console.log(`\n🔗 Connections: ${connections.length}`);
+    if (connections.length > 0) {
+      connections.forEach((conn, index) => {
+        console.log(
+          `  ${index + 1}. ${conn.source} → ${conn.target} (${conn.type})`
+        );
       });
     }
-
   } catch (error) {
     console.error('❌ Ошибка при проверке нод:', error);
   } finally {
@@ -68,4 +87,3 @@ async function checkWorkflowNodes() {
 }
 
 checkWorkflowNodes();
-

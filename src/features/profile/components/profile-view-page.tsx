@@ -233,54 +233,6 @@ export default function ProfileViewPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Системная информация */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Системная информация</CardTitle>
-          <CardDescription>
-            Информация о версии и состоянии системы
-          </CardDescription>
-        </CardHeader>
-        <CardContent className='space-y-4'>
-          <div className='grid gap-4 md:grid-cols-2'>
-            <div className='space-y-2'>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>Версия системы:</span>
-                <span>{stats.version}</span>
-              </div>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>Статус:</span>
-                <Badge variant='default' className='bg-green-500'>
-                  Активна
-                </Badge>
-              </div>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>Обновления:</span>
-                <Badge variant='outline'>Доступны</Badge>
-              </div>
-            </div>
-            <div className='space-y-2'>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>База данных:</span>
-                <Badge variant='default' className='bg-green-500'>
-                  {stats.status.database}
-                </Badge>
-              </div>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>Redis:</span>
-                <Badge variant='outline'>{stats.status.redis}</Badge>
-              </div>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>Telegram API:</span>
-                <Badge variant='default' className='bg-green-500'>
-                  {stats.status.telegram}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

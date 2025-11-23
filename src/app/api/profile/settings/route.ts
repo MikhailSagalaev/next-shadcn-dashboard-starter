@@ -8,9 +8,84 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { verifyJwt } from '@/lib/jwt';
 import { logger } from '@/lib/logger';
+
+type ProfileSettings = {
+  personal: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    avatar: string;
+  };
+  security: {
+    enableTwoFactor: boolean;
+    sessionTimeout: number;
+    changePassword: boolean;
+  };
+  notifications: {
+    enableEmailNotifications: boolean;
+    enableSystemNotifications: boolean;
+    enableSecurityAlerts: boolean;
+    notificationEmail: string;
+  };
+  preferences: {
+    language: string;
+    timezone: string;
+    theme: string;
+    dateFormat: string;
+  };
+};
+
+const defaultSettings = (): ProfileSettings => ({
+  personal: {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    avatar: ''
+  },
+  security: {
+    enableTwoFactor: false,
+    sessionTimeout: 24,
+    changePassword: false
+  },
+  notifications: {
+    enableEmailNotifications: true,
+    enableSystemNotifications: true,
+    enableSecurityAlerts: true,
+    notificationEmail: ''
+  },
+  preferences: {
+    language: 'ru',
+    timezone: 'Europe/Moscow',
+    theme: 'system',
+    dateFormat: 'DD.MM.YYYY'
+  }
+});
+
+const mergeSettings = (stored?: Partial<ProfileSettings>): ProfileSettings => {
+  const defaults = defaultSettings();
+  if (!stored) {
+    return defaults;
+  }
+
+  return {
+    personal: { ...defaults.personal, ...(stored.personal || {}) },
+    security: { ...defaults.security, ...(stored.security || {}) },
+    notifications: {
+      ...defaults.notifications,
+      ...(stored.notifications || {})
+    },
+    preferences: {
+      ...defaults.preferences,
+      ...(stored.preferences || {})
+    }
+  };
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +99,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // Получаем данные администратора
     const admin = await db.adminAccount.findUnique({
       where: { id: payload.sub },
       select: {
@@ -33,7 +107,9 @@ export async function GET(request: NextRequest) {
         role: true,
         isActive: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        metadata: true,
+        twoFactorEnabled: true
       }
     });
 
@@ -41,22 +117,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin not found' }, { status: 404 });
     }
 
-    // Формируем настройки профиля (только с существующими полями)
-    const settings = {
-      personal: {
-        email: admin.email
-      },
-      security: {
-        changePassword: false
-      },
-      notifications: {
-        notificationEmail: admin.email
-      },
-      preferences: {
-        theme: 'system',
-        dateFormat: 'DD.MM.YYYY'
-      }
-    };
+    const storedSettings = (admin.metadata as Prisma.JsonObject | null)
+      ?.profileSettings as ProfileSettings | undefined;
+
+    const settings = mergeSettings(storedSettings);
+    settings.personal.email = settings.personal.email || admin.email;
+    settings.notifications.notificationEmail =
+      settings.notifications.notificationEmail || admin.email;
+    settings.security.enableTwoFactor = !!admin.twoFactorEnabled;
 
     return NextResponse.json({
       settings,
@@ -67,7 +135,8 @@ export async function GET(request: NextRequest) {
         isActive: admin.isActive,
         createdAt: admin.createdAt,
         updatedAt: admin.updatedAt
-      }
+      },
+      twoFactorEnabled: !!admin.twoFactorEnabled
     });
   } catch (error) {
     logger.error('Error fetching profile settings:', { error: String(error) });
@@ -90,15 +159,38 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { settings } = body;
+    const existingAdmin = await db.adminAccount.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        metadata: true,
+        twoFactorEnabled: true
+      }
+    });
 
-    // Обновляем только существующие поля профиля администратора
+    if (!existingAdmin) {
+      return NextResponse.json({ error: 'Admin not found' }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const nextSettings = mergeSettings(body.settings);
+    nextSettings.security.enableTwoFactor = !!existingAdmin.twoFactorEnabled;
+
+    const metadata: Prisma.JsonObject = {
+      ...(existingAdmin.metadata as Prisma.JsonObject | null),
+      profileSettings: nextSettings
+    };
+
     const updatedAdmin = await db.adminAccount.update({
       where: { id: payload.sub },
       data: {
-        email: settings.personal?.email
-        // Добавляем только существующие поля
+        email: nextSettings.personal.email || existingAdmin.email,
+        metadata
       },
       select: {
         id: true,
@@ -110,15 +202,13 @@ export async function PUT(request: NextRequest) {
       }
     });
 
-    logger.info('Profile settings updated:', {
-      adminId: payload.sub,
-      updatedFields: Object.keys(settings.personal || {})
-    });
+    logger.info('Profile settings updated', { adminId: payload.sub });
 
     return NextResponse.json({
       success: true,
       message: 'Настройки профиля обновлены',
-      admin: updatedAdmin
+      admin: updatedAdmin,
+      settings: nextSettings
     });
   } catch (error) {
     logger.error('Error updating profile settings:', { error: String(error) });

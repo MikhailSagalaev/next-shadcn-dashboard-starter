@@ -7,6 +7,8 @@
  * @author: AI Assistant + User
  */
 
+import { Prisma } from '@prisma/client';
+
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import type {
@@ -14,10 +16,33 @@ import type {
   CreateReferralProgramInput,
   UpdateReferralProgramInput,
   User,
-  ReferralStats
+  ReferralStats,
+  ReferralLevel,
+  ReferralLevelInput
 } from '@/types/bonus';
 import { BonusService } from './user.service';
 // Crypto импорт только для server-side
+
+type ReferralProgramEntity = Prisma.ReferralProgramGetPayload<{
+  include: { project: true; levels: true };
+}>;
+
+type ReferrerNode = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  referredBy?: string | null;
+};
+
+type ReferralBonusPayout = {
+  level: number;
+  amount: number;
+  referrerId: string;
+  referrer?: Omit<ReferrerNode, 'referredBy'>;
+  bonusId: string;
+};
 
 export class ReferralService {
   /**
@@ -29,24 +54,15 @@ export class ReferralService {
     try {
       const program = await db.referralProgram.findUnique({
         where: { projectId },
-        include: { project: true }
+        include: {
+          project: true,
+          levels: {
+            orderBy: { level: 'asc' }
+          }
+        }
       });
 
-      if (!program) return null;
-
-      return {
-        ...program,
-        referrerBonus: Number(program.referrerBonus), // правильное поле
-        refereeBonus: Number(program.bonusPercent), // правильное поле для покупателя
-        minPurchaseAmount: 0, // TODO: добавить в схему БД
-        cookieLifetime: 30, // временное значение до добавления в схему
-        project: program.project
-          ? {
-              ...program.project,
-              bonusPercentage: Number(program.project.bonusPercentage)
-            }
-          : undefined
-      };
+      return this.mapReferralProgram(program);
     } catch (error) {
       logger.error('Ошибка получения реферальной программы', {
         projectId,
@@ -64,64 +80,63 @@ export class ReferralService {
     input: CreateReferralProgramInput
   ): Promise<ReferralProgram> {
     try {
-      // Проверяем, существует ли уже программа
-      const existingProgram = await db.referralProgram.findUnique({
-        where: { projectId: input.projectId }
+      const program = await db.$transaction(async (tx) => {
+        const existingProgram = await tx.referralProgram.findUnique({
+          where: { projectId: input.projectId },
+          include: {
+            project: true,
+            levels: true
+          }
+        });
+
+        const data = this.buildProgramData(input, existingProgram ?? undefined);
+
+        let savedProgram: ReferralProgramEntity;
+
+        if (existingProgram) {
+          savedProgram = await tx.referralProgram.update({
+            where: { projectId: input.projectId },
+            data,
+            include: {
+              project: true,
+              levels: true
+            }
+          });
+        } else {
+          savedProgram = await tx.referralProgram.create({
+            data: {
+              ...data,
+              projectId: input.projectId
+            },
+            include: {
+              project: true,
+              levels: true
+            }
+          });
+        }
+
+        await this.syncReferralLevels(
+          tx,
+          savedProgram,
+          input.levels,
+          input.referrerBonus
+        );
+
+        return tx.referralProgram.findUnique({
+          where: { projectId: input.projectId },
+          include: {
+            project: true,
+            levels: { orderBy: { level: 'asc' } }
+          }
+        });
       });
 
-      let program;
+      logger.info('Реферальная программа сохранена', {
+        projectId: input.projectId,
+        component: 'referral-service'
+      });
 
-      if (existingProgram) {
-        // Обновляем существующую программу
-        program = await db.referralProgram.update({
-          where: { projectId: input.projectId },
-          data: {
-            isActive: input.isActive ?? existingProgram.isActive,
-            bonusPercent: input.referrerBonus, // используем referrerBonus как bonusPercent в БД
-            referrerBonus: input.refereeBonus, // используем refereeBonus как referrerBonus в БД
-            description: input.description ?? existingProgram.description
-          },
-          include: { project: true }
-        });
-
-        logger.info('Обновлена реферальная программа', {
-          projectId: input.projectId,
-          programId: program.id,
-          component: 'referral-service'
-        });
-      } else {
-        // Создаём новую программу
-        program = await db.referralProgram.create({
-          data: {
-            projectId: input.projectId,
-            isActive: input.isActive ?? true,
-            bonusPercent: input.referrerBonus,
-            referrerBonus: input.refereeBonus ?? 0,
-            description: input.description
-          },
-          include: { project: true }
-        });
-
-        logger.info('Создана реферальная программа', {
-          projectId: input.projectId,
-          programId: program.id,
-          component: 'referral-service'
-        });
-      }
-
-      return {
-        ...program,
-        referrerBonus: Number(program.bonusPercent),
-        refereeBonus: Number(program.referrerBonus),
-        minPurchaseAmount: 0, // временно захардкожено
-        cookieLifetime: 30, // временно захардкожено
-        project: program.project
-          ? {
-              ...program.project,
-              bonusPercentage: Number(program.project.bonusPercentage)
-            }
-          : undefined
-      };
+      return this.mapReferralProgram(program)!;
     } catch (error) {
       logger.error('Ошибка создания/обновления реферальной программы', {
         input,
@@ -140,21 +155,38 @@ export class ReferralService {
     input: UpdateReferralProgramInput
   ): Promise<ReferralProgram> {
     try {
-      const program = await db.referralProgram.update({
-        where: { projectId },
-        data: {
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
-          ...(input.referrerBonus !== undefined && {
-            bonusPercent: input.referrerBonus
-          }),
-          ...(input.refereeBonus !== undefined && {
-            referrerBonus: input.refereeBonus
-          }),
-          ...(input.description !== undefined && {
-            description: input.description
-          })
-        },
-        include: { project: true }
+      const program = await db.$transaction(async (tx) => {
+        const existingProgram = await tx.referralProgram.findUnique({
+          where: { projectId },
+          include: { project: true, levels: true }
+        });
+
+        if (!existingProgram) {
+          throw new Error('Реферальная программа не найдена');
+        }
+
+        const data = this.buildProgramData(input, existingProgram);
+
+        const updatedProgram = await tx.referralProgram.update({
+          where: { projectId },
+          data,
+          include: { project: true, levels: true }
+        });
+
+        await this.syncReferralLevels(
+          tx,
+          updatedProgram,
+          input.levels,
+          input.referrerBonus
+        );
+
+        return tx.referralProgram.findUnique({
+          where: { projectId },
+          include: {
+            project: true,
+            levels: { orderBy: { level: 'asc' } }
+          }
+        });
       });
 
       logger.info('Обновлена реферальная программа', {
@@ -163,19 +195,7 @@ export class ReferralService {
         component: 'referral-service'
       });
 
-      return {
-        ...program,
-        referrerBonus: Number(program.bonusPercent),
-        refereeBonus: Number(program.referrerBonus),
-        minPurchaseAmount: 0, // временно захардкожено
-        cookieLifetime: 30, // временно захардкожено
-        project: program.project
-          ? {
-              ...program.project,
-              bonusPercentage: Number(program.project.bonusPercentage)
-            }
-          : undefined
-      };
+      return this.mapReferralProgram(program)!;
     } catch (error) {
       logger.error('Ошибка обновления реферальной программы', {
         projectId,
@@ -289,8 +309,8 @@ export class ReferralService {
     purchaseAmount: number
   ): Promise<{
     bonusAwarded: boolean;
-    referrerBonus?: number;
-    referrerUser?: User;
+    totalBonus?: number;
+    payouts?: ReferralBonusPayout[];
   }> {
     try {
       // Получаем пользователя и проект
@@ -310,61 +330,116 @@ export class ReferralService {
         return { bonusAwarded: false };
       }
 
-      // Ищем рефера
-      let referrer: User | null = null;
-
-      // Если у пользователя уже есть рефер в БД, используем его
-      if (user.referredBy) {
-        const existingReferrer = await db.user.findUnique({
-          where: { id: user.referredBy }
-        });
-        if (existingReferrer) {
-          referrer = {
-            ...existingReferrer,
-            totalPurchases: Number(existingReferrer.totalPurchases)
-          };
+      if (referralProgram.minPurchaseAmount > 0) {
+        const minAmount = Number(referralProgram.minPurchaseAmount);
+        if (purchaseAmount < minAmount) {
+          return { bonusAwarded: false };
         }
-      } else {
-        // При покупках больше НЕ ищем по utm_* – связь должна быть установлена при регистрации
-        // Оставляем referrer как null, никаких дополнительных действий здесь не требуется
-        referrer = null;
       }
 
-      if (!referrer || referrer.id === userId) {
+      if (!user.referredBy) {
         return { bonusAwarded: false };
       }
 
-      // Рассчитываем бонус
-      const bonusAmount =
-        (purchaseAmount * referralProgram.referrerBonus) / 100;
+      const levelMap = new Map<number, number>();
+      (referralProgram.levels || [])
+        .filter(
+          (level) =>
+            level.level >= 1 &&
+            level.level <= 3 &&
+            level.isActive &&
+            Number(level.percent) > 0
+        )
+        .forEach((level) => {
+          levelMap.set(level.level, Number(level.percent));
+        });
 
-      if (bonusAmount <= 0) {
+      if (!levelMap.size && referralProgram.referrerBonus > 0) {
+        levelMap.set(1, referralProgram.referrerBonus);
+      }
+
+      if (!levelMap.size) {
         return { bonusAwarded: false };
       }
 
-      // Начисляем бонус рефереру (awardBonus уже создаёт транзакцию EARN)
-      const bonus = await BonusService.awardBonus({
-        userId: referrer.id,
-        amount: bonusAmount,
-        type: 'REFERRAL',
-        description: `Реферальный бонус за покупку ${user.firstName || 'пользователя'} (${bonusAmount}₽)`
-      });
+      const chain = await this.resolveReferrerChain(
+        user.referredBy,
+        user.projectId,
+        Math.min(3, levelMap.size || 3)
+      );
 
-      // Дополнительная транзакция EARN не создаётся, чтобы избежать дублирования
+      if (!chain.length) {
+        return { bonusAwarded: false };
+      }
 
-      logger.info('Начислен реферальный бонус', {
-        referrerId: referrer.id,
+      const payouts: ReferralBonusPayout[] = [];
+
+      for (let index = 0; index < chain.length; index++) {
+        const referrer = chain[index];
+        const level = index + 1;
+        const percent =
+          levelMap.get(level) ??
+          (level === 1 ? referralProgram.referrerBonus : 0);
+
+        if (!percent || percent <= 0) continue;
+
+        const bonusAmount = (purchaseAmount * percent) / 100;
+
+        if (bonusAmount <= 0) continue;
+
+        const bonus = await BonusService.awardBonus({
+          userId: referrer.id,
+          amount: bonusAmount,
+          type: 'REFERRAL',
+          description: `Реферальный бонус ${level}-го уровня за покупку пользователя ${
+            user.firstName || user.lastName
+              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+              : user.email || user.phone || user.id
+          }`,
+          metadata: {
+            source: 'referral_bonus',
+            referredUserId: userId,
+            referralLevel: level,
+            purchaseAmount
+          },
+          referralLevel: level,
+          isReferralBonus: true,
+          referralUserId: userId
+        });
+
+        const { referredBy, ...referrerDetails } = referrer;
+
+        payouts.push({
+          level,
+          amount: bonusAmount,
+          referrerId: referrer.id,
+          referrer: referrerDetails,
+          bonusId: bonus.id
+        });
+      }
+
+      if (!payouts.length) {
+        return { bonusAwarded: false };
+      }
+
+      const totalBonus = payouts.reduce((sum, entry) => sum + entry.amount, 0);
+
+      logger.info('Начислены многоуровневые реферальные бонусы', {
         userId,
-        bonusAmount,
         purchaseAmount,
-        referralPercent: referralProgram.referrerBonus,
+        totalBonus,
+        payouts: payouts.map((p) => ({
+          level: p.level,
+          amount: p.amount,
+          referrerId: p.referrerId
+        })),
         component: 'referral-service'
       });
 
       return {
         bonusAwarded: true,
-        referrerBonus: bonusAmount,
-        referrerUser: referrer
+        totalBonus,
+        payouts
       };
     } catch (error) {
       logger.error('Ошибка обработки реферального бонуса', {
@@ -382,7 +457,10 @@ export class ReferralService {
    * Получить реферальную статистику конкретного пользователя
    * ✅ НОВОЕ: Возвращает статистику пользователя, а не всего проекта
    */
-  static async getUserReferralStats(userId: string, projectId: string): Promise<{
+  static async getUserReferralStats(
+    userId: string,
+    projectId: string
+  ): Promise<{
     referralCount: number;
     referralBonusTotal: number;
   }> {
@@ -547,6 +625,30 @@ export class ReferralService {
         )
       }));
 
+      const levelBreakdownRaw = await db.transaction.groupBy({
+        by: ['referralLevel'],
+        where: {
+          user: { projectId },
+          isReferralBonus: true,
+          type: 'EARN',
+          referralLevel: { not: null }
+        },
+        _sum: { amount: true },
+        _count: { _all: true }
+      });
+
+      const levelBreakdown = levelBreakdownRaw
+        .filter(
+          (row) =>
+            typeof row.referralLevel === 'number' && row.referralLevel !== null
+        )
+        .map((row) => ({
+          level: Number(row.referralLevel),
+          totalBonus: Number(row._sum.amount || 0),
+          payouts: Number(row._count._all || 0)
+        }))
+        .sort((a, b) => a.level - b.level);
+
       // UTM источники (по пользователям с referredBy)
       const utmGrouped = await db.user.groupBy({
         by: ['utmSource', 'utmMedium', 'utmCampaign'],
@@ -569,7 +671,8 @@ export class ReferralService {
         periodBonusPaid,
         averageOrderValue,
         topReferrers,
-        utmSources
+        utmSources,
+        levelBreakdown
       };
     } catch (error) {
       logger.error('Ошибка получения статистики реферальной программы', {
@@ -616,5 +719,200 @@ export class ReferralService {
       });
       throw error;
     }
+  }
+
+  private static async resolveReferrerChain(
+    startReferrerId: string | null,
+    projectId: string,
+    depth: number
+  ): Promise<ReferrerNode[]> {
+    const chain: ReferrerNode[] = [];
+    const visited = new Set<string>();
+    let currentId = startReferrerId;
+
+    while (currentId && chain.length < depth && !visited.has(currentId)) {
+      const referrer = await db.user.findFirst({
+        where: { id: currentId, projectId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          referredBy: true
+        }
+      });
+
+      if (!referrer) {
+        break;
+      }
+
+      chain.push(referrer);
+      visited.add(currentId);
+      currentId = referrer.referredBy || null;
+    }
+
+    return chain;
+  }
+
+  private static buildProgramData(
+    input: Partial<CreateReferralProgramInput & UpdateReferralProgramInput> & {
+      projectId?: string;
+    },
+    existing?: ReferralProgramEntity
+  ) {
+    const toDecimal = (
+      value: number | undefined,
+      fallback?: Prisma.Decimal | number,
+      defaultValue = 0
+    ) =>
+      new Prisma.Decimal(
+        value !== undefined
+          ? value
+          : fallback !== undefined
+            ? Number(fallback)
+            : defaultValue
+      );
+
+    return {
+      isActive: input.isActive ?? existing?.isActive ?? true,
+      bonusPercent:
+        input.refereeBonus !== undefined
+          ? Number(input.refereeBonus)
+          : (existing?.bonusPercent ?? 0),
+      referrerBonus: toDecimal(input.referrerBonus, existing?.referrerBonus, 0),
+      minPurchaseAmount: toDecimal(
+        input.minPurchaseAmount,
+        existing?.minPurchaseAmount,
+        0
+      ),
+      cookieLifetime:
+        input.cookieLifetime !== undefined
+          ? input.cookieLifetime
+          : (existing?.cookieLifetime ?? 30),
+      welcomeBonus: toDecimal(input.welcomeBonus, existing?.welcomeBonus, 0),
+      description:
+        input.description !== undefined
+          ? input.description
+          : (existing?.description ?? null)
+    };
+  }
+
+  private static async syncReferralLevels(
+    tx: Prisma.TransactionClient,
+    program: ReferralProgramEntity,
+    levels?: ReferralLevelInput[],
+    fallbackPercent = 0
+  ) {
+    let preparedLevels =
+      levels && levels.length ? this.prepareLevels(levels) : null;
+
+    if (!preparedLevels) {
+      const existingCount = await tx.referralLevel.count({
+        where: { projectId: program.projectId }
+      });
+
+      if (existingCount > 0) {
+        return;
+      }
+
+      preparedLevels = this.prepareLevels(
+        this.getDefaultLevels(
+          fallbackPercent || Number(program.referrerBonus) || 0
+        )
+      );
+    }
+
+    await tx.referralLevel.deleteMany({
+      where: { projectId: program.projectId }
+    });
+
+    if (!preparedLevels.length) {
+      return;
+    }
+
+    await tx.referralLevel.createMany({
+      data: preparedLevels.map((level, index) => ({
+        projectId: program.projectId,
+        referralProgramId: program.id,
+        level: level.level,
+        percent: new Prisma.Decimal(level.percent),
+        isActive: level.isActive ?? level.percent > 0,
+        order: index
+      }))
+    });
+  }
+
+  private static prepareLevels(
+    levels: ReferralLevelInput[]
+  ): ReferralLevelInput[] {
+    const byLevel = new Map<number, ReferralLevelInput>();
+
+    levels.forEach((lvl) => {
+      const level = Math.min(Math.max(Math.trunc(lvl.level), 1), 3);
+      byLevel.set(level, {
+        level,
+        percent: Math.max(0, Number(lvl.percent ?? 0)),
+        isActive:
+          lvl.isActive !== undefined
+            ? lvl.isActive
+            : Number(lvl.percent ?? 0) > 0
+      });
+    });
+
+    const ordered = Array.from(byLevel.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([, value]) => value);
+
+    return ordered.slice(0, 3);
+  }
+
+  private static getDefaultLevels(basePercent: number): ReferralLevelInput[] {
+    return [
+      { level: 1, percent: basePercent, isActive: basePercent > 0 },
+      { level: 2, percent: 0, isActive: false },
+      { level: 3, percent: 0, isActive: false }
+    ];
+  }
+
+  private static mapReferralProgram(
+    program: ReferralProgramEntity | null
+  ): ReferralProgram | null {
+    if (!program) return null;
+
+    const levels: ReferralLevel[] = (program.levels || [])
+      .map((level) => ({
+        id: level.id,
+        projectId: level.projectId,
+        referralProgramId: level.referralProgramId,
+        level: level.level,
+        percent: Number(level.percent),
+        isActive: level.isActive,
+        order: level.order,
+        createdAt: level.createdAt,
+        updatedAt: level.updatedAt
+      }))
+      .sort((a, b) => a.level - b.level);
+
+    return {
+      id: program.id,
+      projectId: program.projectId,
+      isActive: program.isActive,
+      referrerBonus: Number(program.referrerBonus),
+      refereeBonus: Number(program.bonusPercent),
+      minPurchaseAmount: Number(program.minPurchaseAmount),
+      cookieLifetime: program.cookieLifetime,
+      welcomeBonus: Number(program.welcomeBonus),
+      description: program.description,
+      createdAt: program.createdAt,
+      updatedAt: program.updatedAt,
+      project: program.project
+        ? {
+            ...program.project,
+            bonusPercentage: Number(program.project.bonusPercentage)
+          }
+        : undefined,
+      levels
+    };
   }
 }

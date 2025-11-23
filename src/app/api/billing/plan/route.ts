@@ -8,14 +8,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { verifyJwt } from '@/lib/jwt';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
+import { formatPlan, toNumber } from '@/lib/services/billing-plan.utils';
 
 const changePlanSchema = z.object({
-  planId: z.string().min(1, 'Plan ID is required')
+  planId: z.string().min(1, 'planId is required')
 });
+
+const addMonths = (date: Date, months = 1) => {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
+};
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trial', 'paused'];
 
 export async function PUT(request: NextRequest) {
   try {
@@ -41,111 +50,114 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { planId } = changePlanSchema.parse(body);
 
-    // Определяем новый план на основе planId
-    let newPlan;
-    switch (planId) {
-      case 'starter':
-        newPlan = {
-          id: 'starter',
-          name: 'Стартовый',
-          price: 0,
-          currency: 'RUB',
-          interval: 'month' as const,
-          features: [
-            'До 1 проекта',
-            'До 100 пользователей',
-            '1 Telegram бот',
-            'Базовые уведомления',
-            'Email поддержка'
-          ],
-          limits: {
-            projects: 1,
-            users: 100,
-            bots: 1,
-            notifications: 100
-          }
-        };
-        break;
-      case 'professional':
-        newPlan = {
-          id: 'professional',
-          name: 'Профессиональный',
-          price: 2990,
-          currency: 'RUB',
-          interval: 'month' as const,
-          features: [
-            'До 5 проектов',
-            'До 1000 пользователей',
-            '5 Telegram ботов',
-            'Расширенные уведомления',
-            'Приоритетная поддержка',
-            'Аналитика и отчеты'
-          ],
-          limits: {
-            projects: 5,
-            users: 1000,
-            bots: 5,
-            notifications: 1000
-          },
-          popular: true
-        };
-        break;
-      case 'enterprise':
-        newPlan = {
-          id: 'enterprise',
-          name: 'Корпоративный',
-          price: 9990,
-          currency: 'RUB',
-          interval: 'month' as const,
-          features: [
-            'Неограниченные проекты',
-            'Неограниченные пользователи',
-            'Неограниченные боты',
-            'Все уведомления',
-            'Персональный менеджер',
-            'API доступ',
-            'Кастомные интеграции'
-          ],
-          limits: {
-            projects: -1,
-            users: -1,
-            bots: -1,
-            notifications: -1
-          }
-        };
-        break;
-      default:
-        return NextResponse.json({ error: 'Invalid plan ID' }, { status: 400 });
-    }
-
-    // В реальном приложении здесь была бы интеграция с платежной системой
-    // Пока что просто логируем смену плана
-    logger.info('Plan change requested', {
-      adminId: admin.id,
-      adminEmail: admin.email,
-      oldRole: admin.role,
-      newPlanId: planId,
-      newPlanName: newPlan.name
+    const plan = await db.subscriptionPlan.findFirst({
+      where: {
+        OR: [{ id: planId }, { slug: planId }]
+      }
     });
 
-    // Обновляем роль администратора в зависимости от плана
-    let newRole = admin.role;
-    if (planId === 'professional' || planId === 'enterprise') {
-      newRole = 'ADMIN';
-    } else if (planId === 'starter') {
-      newRole = 'MANAGER';
+    if (!plan || !plan.isActive) {
+      return NextResponse.json(
+        { error: 'Plan not found or inactive' },
+        { status: 404 }
+      );
     }
 
-    await db.adminAccount.update({
-      where: { id: admin.id },
-      data: { role: newRole }
+    const subscription = await db.subscription.findFirst({
+      where: {
+        adminAccountId: admin.id,
+        status: { in: ACTIVE_SUBSCRIPTION_STATUSES }
+      },
+      orderBy: { startDate: 'desc' },
+      include: { plan: true }
+    });
+
+    if (subscription && subscription.planId === plan.id) {
+      return NextResponse.json({ error: 'План уже активен' }, { status: 400 });
+    }
+
+    const now = new Date();
+    const nextPaymentDate = toNumber(plan.price) > 0 ? addMonths(now, 1) : null;
+
+    let updatedSubscription;
+    let action: string = 'created';
+
+    if (subscription) {
+      action =
+        toNumber(plan.price) > toNumber(subscription.plan?.price ?? 0)
+          ? 'upgraded'
+          : 'downgraded';
+
+      updatedSubscription = await db.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          planId: plan.id,
+          status: 'active',
+          nextPaymentDate,
+          history: {
+            create: {
+              action,
+              fromPlanId: subscription.planId,
+              toPlanId: plan.id,
+              performedBy: admin.id
+            }
+          }
+        },
+        include: {
+          plan: true
+        }
+      });
+    } else {
+      updatedSubscription = await db.subscription.create({
+        data: {
+          adminAccountId: admin.id,
+          planId: plan.id,
+          status: 'active',
+          startDate: now,
+          nextPaymentDate,
+          history: {
+            create: {
+              action: 'created',
+              toPlanId: plan.id,
+              performedBy: admin.id
+            }
+          }
+        },
+        include: {
+          plan: true
+        }
+      });
+    }
+
+    if (admin.role !== 'SUPERADMIN') {
+      const nextRole = plan.slug === 'free' ? 'MANAGER' : 'ADMIN';
+      if (nextRole !== admin.role) {
+        await db.adminAccount.update({
+          where: { id: admin.id },
+          data: { role: nextRole }
+        });
+      }
+    }
+
+    logger.info('Plan change completed', {
+      adminId: admin.id,
+      subscriptionId: updatedSubscription.id,
+      planId: plan.id,
+      action
     });
 
     return NextResponse.json({
       success: true,
-      message: `Тарифный план успешно изменен на "${newPlan.name}"`,
-      plan: newPlan,
-      newRole
+      message:
+        action === 'created'
+          ? `Подписка на план «${plan.name}» активирована`
+          : `Тарифный план изменен на «${plan.name}»`,
+      plan: formatPlan(updatedSubscription.plan, {
+        status: updatedSubscription.status,
+        startDate: updatedSubscription.startDate,
+        endDate: updatedSubscription.endDate,
+        nextPaymentDate: updatedSubscription.nextPaymentDate
+      })
     });
   } catch (error) {
     logger.error('Error changing plan:', { error: String(error) });

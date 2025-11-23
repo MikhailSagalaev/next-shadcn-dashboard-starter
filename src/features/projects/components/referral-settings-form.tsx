@@ -28,6 +28,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Save, AlertCircle, Users, Gift, DollarSign } from 'lucide-react';
 import type { ReferralProgram, Project } from '@/types/bonus';
+import { getReferralLinkExample } from '@/lib/utils/referral-link';
+
+const referralLevelSchema = z.object({
+  level: z.number().int().min(1).max(3),
+  percent: z
+    .number()
+    .min(0, 'Процент не может быть отрицательным')
+    .max(100, 'Процент не может быть больше 100'),
+  isActive: z.boolean().optional()
+});
 
 const referralProgramSchema = z.object({
   isActive: z.boolean(),
@@ -51,6 +61,10 @@ const referralProgramSchema = z.object({
     .number()
     .min(1, 'Время жизни cookie должно быть больше 0')
     .max(365, 'Время жизни cookie не может быть больше года')
+    .max(365, 'Время жизни cookie не может быть больше года'),
+  levels: z
+    .array(referralLevelSchema)
+    .length(3, 'Нужно задать параметры для трёх уровней')
 });
 
 type ReferralProgramFormData = z.infer<typeof referralProgramSchema>;
@@ -71,6 +85,19 @@ export function ReferralSettingsForm({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
+  const initialLevels = [1, 2, 3].map((level) => {
+    const existing = referralProgram?.levels?.find(
+      (lvl) => lvl.level === level
+    );
+    return {
+      level,
+      percent:
+        existing?.percent ??
+        (level === 1 ? (referralProgram?.referrerBonus ?? 0) : 0),
+      isActive: existing ? existing.isActive : level === 1
+    };
+  });
+
   const {
     register,
     handleSubmit,
@@ -85,6 +112,9 @@ export function ReferralSettingsForm({
       refereeBonus: referralProgram?.refereeBonus ?? 5,
       welcomeBonus: (() => {
         try {
+          if (typeof referralProgram?.welcomeBonus === 'number') {
+            return referralProgram.welcomeBonus;
+          }
           const meta = referralProgram?.description
             ? JSON.parse(referralProgram.description)
             : {};
@@ -94,13 +124,22 @@ export function ReferralSettingsForm({
         }
       })(),
       minPurchaseAmount: referralProgram?.minPurchaseAmount ?? 0,
-      cookieLifetime: referralProgram?.cookieLifetime ?? 30
+      cookieLifetime: referralProgram?.cookieLifetime ?? 30,
+      levels: initialLevels
     }
   });
 
   const onSubmit = async (data: ReferralProgramFormData) => {
     try {
       setLoading(true);
+
+      const levelOnePercent =
+        data.levels?.find((lvl) => lvl.level === 1)?.percent ??
+        data.referrerBonus;
+      const payload = {
+        ...data,
+        referrerBonus: levelOnePercent
+      };
 
       const response = await fetch(
         `/api/projects/${projectId}/referral-program`,
@@ -109,7 +148,7 @@ export function ReferralSettingsForm({
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(data)
+          body: JSON.stringify(payload)
         }
       );
 
@@ -139,6 +178,8 @@ export function ReferralSettingsForm({
   };
 
   const isActive = watch('isActive');
+  const levels = watch('levels');
+  const levelOnePercent = levels?.find((lvl) => lvl.level === 1)?.percent || 0;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className='space-y-6'>
@@ -172,34 +213,6 @@ export function ReferralSettingsForm({
           {isActive && (
             <>
               <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                {/* Referrer Bonus */}
-                <div className='space-y-2'>
-                  <Label
-                    htmlFor='referrerBonus'
-                    className='flex items-center space-x-2'
-                  >
-                    <Users className='h-4 w-4 text-blue-600' />
-                    <span>Бонус рефереру (%)</span>
-                  </Label>
-                  <Input
-                    id='referrerBonus'
-                    type='number'
-                    step='0.1'
-                    min='0'
-                    max='50'
-                    placeholder='10'
-                    {...register('referrerBonus', { valueAsNumber: true })}
-                  />
-                  {errors.referrerBonus && (
-                    <p className='text-sm text-red-600'>
-                      {errors.referrerBonus.message}
-                    </p>
-                  )}
-                  <p className='text-xs text-gray-600'>
-                    Процент от первой покупки реферала, который получает рефер
-                  </p>
-                </div>
-
                 {/* Referee Bonus */}
                 <div className='space-y-2'>
                   <Label
@@ -312,6 +325,73 @@ export function ReferralSettingsForm({
                   </p>
                 </div>
               </div>
+
+              <div className='space-y-3 rounded-lg border p-4'>
+                <div>
+                  <Label className='text-base'>Многоуровневая программа</Label>
+                  <p className='text-sm text-gray-600'>
+                    Настройте проценты начислений для каждого уровня рефералов
+                  </p>
+                </div>
+                <div className='grid gap-4 md:grid-cols-3'>
+                  {levels?.map((levelField, index) => {
+                    const fieldBase = `levels.${index}` as const;
+                    const isLevelActive = levelField?.isActive ?? false;
+                    const levelDescriptions = [
+                      'Прямые приглашения',
+                      'Рефералы ваших рефералов',
+                      'Третий уровень сети'
+                    ];
+                    return (
+                      <div
+                        key={levelField.level}
+                        className='space-y-3 rounded-lg border p-4'
+                      >
+                        <input
+                          type='hidden'
+                          {...register(`${fieldBase}.level`, {
+                            valueAsNumber: true
+                          })}
+                        />
+                        <div className='flex items-center justify-between'>
+                          <div>
+                            <p className='font-semibold'>
+                              Уровень {levelField.level}
+                            </p>
+                            <p className='text-muted-foreground text-xs'>
+                              {levelDescriptions[index]}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={isLevelActive}
+                            onCheckedChange={(checked) =>
+                              setValue(`${fieldBase}.isActive`, checked, {
+                                shouldDirty: true
+                              })
+                            }
+                          />
+                        </div>
+                        <Input
+                          type='number'
+                          step='0.1'
+                          min='0'
+                          max='100'
+                          disabled={!isLevelActive}
+                          placeholder='0'
+                          {...register(`${fieldBase}.percent`, {
+                            valueAsNumber: true
+                          })}
+                        />
+                        {errors.levels?.[index]?.percent && (
+                          <p className='text-sm text-red-600'>
+                            {errors.levels[index]?.percent?.message}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </>
           )}
         </CardContent>
@@ -326,9 +406,7 @@ export function ReferralSettingsForm({
             <ul className='ml-4 space-y-1 text-sm'>
               <li>
                 • Пользователь переходит по ссылке вида{' '}
-                <code>
-                  {project?.domain || 'ваш-домен.ru'}/?utm_ref=&lt;userId&gt;
-                </code>
+                <code>{getReferralLinkExample(project?.domain)}</code>
               </li>
               <li>
                 • При регистрации новый пользователь автоматически привязывается
@@ -362,8 +440,7 @@ export function ReferralSettingsForm({
                 <div className='space-y-1 text-gray-600'>
                   <p>
                     Рефер получит:{' '}
-                    {(((watch('referrerBonus') || 0) * 5000) / 100).toFixed(0)}{' '}
-                    ₽
+                    {(((levelOnePercent || 0) * 5000) / 100).toFixed(0)} ₽
                   </p>
                   <p>
                     Новый пользователь:{' '}
@@ -376,8 +453,7 @@ export function ReferralSettingsForm({
                 <div className='space-y-1 text-gray-600'>
                   <p>
                     Рефер получит:{' '}
-                    {(((watch('referrerBonus') || 0) * 10000) / 100).toFixed(0)}{' '}
-                    ₽
+                    {(((levelOnePercent || 0) * 10000) / 100).toFixed(0)} ₽
                   </p>
                   <p>
                     Новый пользователь:{' '}

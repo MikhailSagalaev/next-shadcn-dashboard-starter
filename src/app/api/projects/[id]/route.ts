@@ -32,7 +32,11 @@ export async function GET(
     const project = await db.project.findUnique({
       where: { id },
       include: {
-        referralProgram: true
+        referralProgram: {
+          include: {
+            levels: true
+          }
+        }
       }
     });
 
@@ -56,7 +60,7 @@ export async function GET(
     return NextResponse.json(response);
   } catch (error) {
     const { id } = await context.params;
-    
+
     // Обработка ошибок доступа
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -84,7 +88,7 @@ export async function PUT(
     }
 
     const { id } = await context.params;
-    
+
     // Проверяем доступ к проекту
     await ProjectService.verifyProjectAccess(id, admin.sub);
 
@@ -103,33 +107,22 @@ export async function PUT(
       }
     });
 
-    // Синхронизируем welcomeBonus с ReferralProgram.description, если передан
     if (body.welcomeBonusAmount !== undefined) {
       const amount = Number(body.welcomeBonusAmount);
       try {
-        const existing = await db.referralProgram.findUnique({
-          where: { projectId: id }
+        await db.referralProgram.upsert({
+          where: { projectId: id },
+          update: { welcomeBonus: amount },
+          create: {
+            projectId: id,
+            isActive: true,
+            bonusPercent: body.bonusPercentage ?? 5,
+            referrerBonus: 0,
+            minPurchaseAmount: 0,
+            cookieLifetime: 30,
+            welcomeBonus: amount
+          }
         });
-        if (!existing) {
-          await db.referralProgram.create({
-            data: {
-              projectId: id,
-              isActive: true,
-              referrerBonus: 0,
-              description: JSON.stringify({ welcomeBonus: amount })
-            }
-          });
-        } else {
-          let meta: any = {};
-          try {
-            meta = existing.description ? JSON.parse(existing.description) : {};
-          } catch {}
-          meta.welcomeBonus = amount;
-          await db.referralProgram.update({
-            where: { id: existing.id },
-            data: { description: JSON.stringify(meta) }
-          });
-        }
       } catch (e) {
         logger.warn('Не удалось синхронизировать welcomeBonus', {
           projectId: id,
@@ -141,7 +134,7 @@ export async function PUT(
     return NextResponse.json(updatedProject);
   } catch (error) {
     const { id } = await context.params;
-    
+
     // Обработка ошибок доступа
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -192,7 +185,7 @@ export async function DELETE(
     );
   } catch (error) {
     const { id } = await context.params;
-    
+
     // Обработка ошибок доступа
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

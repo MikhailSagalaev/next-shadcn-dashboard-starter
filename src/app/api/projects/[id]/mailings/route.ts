@@ -10,25 +10,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { MailingService } from '@/lib/services/mailing.service';
+import type { CreateMailingInput } from '@/lib/services/mailing.service';
 import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { db } from '@/lib/db';
 import { z } from 'zod';
+import { MailingStatus, MailingType } from '@prisma/client';
 
 const createMailingSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(['EMAIL', 'SMS', 'TELEGRAM', 'WHATSAPP', 'VIBER']),
+  type: z.nativeEnum(MailingType),
   segmentId: z.string().optional(),
   templateId: z.string().optional(),
-  scheduledAt: z.string().optional(),
+  scheduledAt: z.string().optional()
 });
 
 const getMailingsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(200).default(20).optional(),
-  type: z.enum(['EMAIL', 'SMS', 'TELEGRAM', 'WHATSAPP', 'VIBER']).optional(),
-  status: z.string().optional(),
-  search: z.string().optional(),
+  type: z.nativeEnum(MailingType).optional(),
+  status: z.nativeEnum(MailingStatus).optional(),
+  search: z.string().optional()
 });
 
 // GET /api/projects/[id]/mailings - Получение списка рассылок
@@ -51,7 +53,7 @@ export async function GET(
       pageSize: url.searchParams.get('pageSize') || '20',
       type: url.searchParams.get('type') || undefined,
       status: url.searchParams.get('status') || undefined,
-      search: url.searchParams.get('search') || undefined,
+      search: url.searchParams.get('search') || undefined
     };
 
     const validated = getMailingsQuerySchema.parse(queryParams);
@@ -62,24 +64,26 @@ export async function GET(
         projectId,
         ...(validated.type ? { type: validated.type } : {}),
         ...(validated.status ? { status: validated.status } : {}),
-        ...(validated.search ? {
-          name: { contains: validated.search, mode: 'insensitive' }
-        } : {}),
+        ...(validated.search
+          ? {
+              name: { contains: validated.search, mode: 'insensitive' }
+            }
+          : {})
       },
       include: {
         segment: true,
         template: true,
         _count: {
           select: {
-            recipients: true,
-          },
-        },
+            recipients: true
+          }
+        }
       },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: 'desc'
       },
       skip: (validated.page - 1) * validated.pageSize,
-      take: validated.pageSize,
+      take: validated.pageSize
     });
 
     const total = await db.mailing.count({
@@ -87,10 +91,12 @@ export async function GET(
         projectId,
         ...(validated.type ? { type: validated.type } : {}),
         ...(validated.status ? { status: validated.status } : {}),
-        ...(validated.search ? {
-          name: { contains: validated.search, mode: 'insensitive' }
-        } : {}),
-      },
+        ...(validated.search
+          ? {
+              name: { contains: validated.search, mode: 'insensitive' }
+            }
+          : {})
+      }
     });
 
     return NextResponse.json({
@@ -99,14 +105,14 @@ export async function GET(
         page: validated.page,
         pageSize: validated.pageSize,
         total,
-        totalPages: Math.ceil(total / validated.pageSize),
-      },
+        totalPages: Math.ceil(total / validated.pageSize)
+      }
     });
   } catch (error) {
     logger.error('Ошибка получения списка рассылок', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'mailings-api',
-      action: 'GET',
+      action: 'GET'
     });
 
     if (error instanceof z.ZodError) {
@@ -138,20 +144,28 @@ export async function POST(
     await ProjectService.verifyProjectAccess(projectId, admin.sub);
 
     const body = await request.json();
-    const validatedData = createMailingSchema.parse(body);
+    const validatedData: z.infer<typeof createMailingSchema> =
+      createMailingSchema.parse(body);
 
-    const mailing = await MailingService.createMailing({
+    const mailingPayload: CreateMailingInput = {
       projectId,
-      ...validatedData,
-      scheduledAt: validatedData.scheduledAt ? new Date(validatedData.scheduledAt) : undefined,
-    });
+      name: validatedData.name,
+      type: validatedData.type,
+      segmentId: validatedData.segmentId,
+      templateId: validatedData.templateId,
+      scheduledAt: validatedData.scheduledAt
+        ? new Date(validatedData.scheduledAt)
+        : undefined
+    };
+
+    const mailing = await MailingService.createMailing(mailingPayload);
 
     return NextResponse.json(mailing, { status: 201 });
   } catch (error) {
     logger.error('Ошибка создания рассылки', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'mailings-api',
-      action: 'POST',
+      action: 'POST'
     });
 
     if (error instanceof z.ZodError) {
@@ -167,4 +181,3 @@ export async function POST(
     );
   }
 }
-

@@ -8,9 +8,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { botTemplates } from '@/lib/services/bot-templates/bot-templates.service';
+import {
+  botTemplates,
+  type BotTemplateCategory,
+  type TemplateFilter
+} from '@/lib/services/bot-templates/bot-templates.service';
 const logger: any = { info: console.log, error: console.error };
-type BotTemplateCategory = string;
 
 // GET /api/templates - Получение списка шаблонов
 export async function GET(request: NextRequest) {
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
       difficulty = difficultyParam as 'beginner' | 'intermediate' | 'advanced';
     }
 
-    const filters = {
+    const filters: TemplateFilter = {
       category,
       difficulty,
       search: searchParams.get('search') || undefined,

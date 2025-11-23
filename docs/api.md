@@ -268,6 +268,90 @@ Authorization: Bearer <jwt_token>
 
 ## 👨‍💼 Admin API
 
+### Профиль администратора
+
+#### GET /api/profile/settings
+Возвращает объединённые настройки профиля (личные данные, безопасность, уведомления, предпочтения) и статическую информацию об аккаунте.
+
+#### PUT /api/profile/settings
+Сохраняет настройки профиля.
+
+Тело запроса:
+```json
+{
+  "settings": {
+    "personal": { "firstName": "Иван", "lastName": "Петров", "phone": "+79991234567" },
+    "security": { "sessionTimeout": 24 },
+    "notifications": {
+      "enableEmailNotifications": true,
+      "notificationEmail": "alerts@example.com"
+    },
+    "preferences": {
+      "language": "ru",
+      "timezone": "Europe/Moscow",
+      "theme": "dark"
+    }
+  }
+}
+```
+
+#### POST /api/profile/avatar
+Загрузка аватара администратора.
+- **Метод**: `multipart/form-data`
+- **Поле файла**: `avatar`
+- **Ограничения**: PNG/JPEG/WebP, ≤ 2 МБ
+
+Ответ:
+```json
+{ "success": true, "avatarUrl": "/uploads/avatars/admin-123.png" }
+```
+
+#### POST /api/profile/change-password
+Меняет пароль после проверки текущего значения.
+
+```json
+{
+  "currentPassword": "oldPass123",
+  "newPassword": "NewPass456",
+  "confirmPassword": "NewPass456"
+}
+```
+
+#### POST /api/profile/2fa/setup
+Генерирует QR-код и временный секрет для подключения приложения-аутентификатора. Возвращает:
+```json
+{
+  "success": true,
+  "qrCodeDataUrl": "data:image/png;base64,...",
+  "otpauthUrl": "otpauth://totp/...",
+  "secret": "JBSWY3DPEHPK3PXP"
+}
+```
+
+#### POST /api/profile/2fa/enable
+Подтверждает включение 2FA кодом из приложения.
+```json
+{ "code": "123456" }
+```
+
+#### POST /api/profile/2fa/disable
+Отключает 2FA после подтверждения текущим кодом.
+
+#### POST /api/profile/notifications/test
+Отправляет тестовое email-уведомление на указанный адрес, учитывая пользовательские предпочтения.
+```json
+{
+  "notificationEmail": "alerts@example.com",
+  "language": "ru",
+  "timezone": "Europe/Moscow",
+  "dateFormat": "DD.MM.YYYY"
+}
+```
+Ответ:
+```json
+{ "success": true }
+```
+
 ## 🌐 Публичные интеграции
 
 ### GET /widget/{projectId}
@@ -564,4 +648,4 @@ curl -X POST https://your-domain.com/api/webhook/YOUR_SECRET \
 ---
 
 **Версия API**: 1.0  
-**Последнее обновление**: 2024-12-31 
+**Последнее обновление**: 2025-11-16

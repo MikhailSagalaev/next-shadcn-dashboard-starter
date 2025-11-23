@@ -15,7 +15,11 @@ import { MenuCommandHandler } from './workflow/handlers/action-handlers';
 import { nodeHandlersRegistry } from './workflow/node-handlers-registry';
 import { ExecutionContextManager } from './workflow/execution-context-manager';
 import { CacheService } from '@/lib/redis';
-import type { WorkflowVersion, WorkflowNode, WorkflowConnection } from '@/types/workflow';
+import type {
+  WorkflowVersion,
+  WorkflowNode,
+  WorkflowConnection
+} from '@/types/workflow';
 
 const ACTIVE_VERSION_CACHE_TTL_SECONDS = 60 * 60; // 1 час
 const ACTIVE_VERSION_MEMORY_TTL_MS = ACTIVE_VERSION_CACHE_TTL_SECONDS * 1000;
@@ -40,8 +44,10 @@ interface CachedWorkflowProcessorEntry {
 }
 
 export class WorkflowRuntimeService {
-  private static activeVersionsCache: Map<string, CachedWorkflowVersionEntry> = new Map();
-  private static activeFlowsCache: Map<string, CachedWorkflowProcessorEntry> = new Map();
+  private static activeVersionsCache: Map<string, CachedWorkflowVersionEntry> =
+    new Map();
+  private static activeFlowsCache: Map<string, CachedWorkflowProcessorEntry> =
+    new Map();
   private static compiledFlowsCache: Map<string, any> = new Map();
 
   // Кеш для waiting executions (TTL: 5 минут)
@@ -51,14 +57,21 @@ export class WorkflowRuntimeService {
     return `project:${projectId}:workflow:active-version`;
   }
 
-  private static serializeWorkflowVersion(version: WorkflowVersion): SerializedWorkflowVersion {
+  private static serializeWorkflowVersion(
+    version: WorkflowVersion
+  ): SerializedWorkflowVersion {
     return {
       ...version,
-      createdAt: version.createdAt instanceof Date ? version.createdAt.toISOString() : version.createdAt
+      createdAt:
+        version.createdAt instanceof Date
+          ? version.createdAt.toISOString()
+          : version.createdAt
     };
   }
 
-  private static deserializeWorkflowVersion(serialized: SerializedWorkflowVersion): WorkflowVersion {
+  private static deserializeWorkflowVersion(
+    serialized: SerializedWorkflowVersion
+  ): WorkflowVersion {
     return {
       ...serialized,
       createdAt: new Date(serialized.createdAt)
@@ -69,16 +82,26 @@ export class WorkflowRuntimeService {
     return projectId;
   }
 
-  private static setMemoryCache(projectId: string, version: WorkflowVersion): void {
+  private static setMemoryCache(
+    projectId: string,
+    version: WorkflowVersion
+  ): void {
     this.activeVersionsCache.set(projectId, {
       version,
       expiresAt: Date.now() + ACTIVE_VERSION_MEMORY_TTL_MS
     });
   }
 
-  private static async cacheActiveVersion(projectId: string, version: WorkflowVersion): Promise<void> {
+  private static async cacheActiveVersion(
+    projectId: string,
+    version: WorkflowVersion
+  ): Promise<void> {
     this.setMemoryCache(projectId, version);
-    await CacheService.set(this.getActiveVersionCacheKey(projectId), this.serializeWorkflowVersion(version), ACTIVE_VERSION_CACHE_TTL_SECONDS);
+    await CacheService.set(
+      this.getActiveVersionCacheKey(projectId),
+      this.serializeWorkflowVersion(version),
+      ACTIVE_VERSION_CACHE_TTL_SECONDS
+    );
   }
 
   private static getCachedVersion(projectId: string): WorkflowVersion | null {
@@ -95,7 +118,10 @@ export class WorkflowRuntimeService {
     return cachedEntry.version;
   }
 
-  private static getCachedProcessor(projectId: string, workflowVersion: WorkflowVersion): SimpleWorkflowProcessor | null {
+  private static getCachedProcessor(
+    projectId: string,
+    workflowVersion: WorkflowVersion
+  ): SimpleWorkflowProcessor | null {
     const key = this.getProcessorCacheKey(projectId);
     const cachedEntry = this.activeFlowsCache.get(key);
 
@@ -103,7 +129,9 @@ export class WorkflowRuntimeService {
       return null;
     }
 
-    const isSameWorkflow = cachedEntry.workflowId === workflowVersion.workflowId && cachedEntry.version === workflowVersion.version;
+    const isSameWorkflow =
+      cachedEntry.workflowId === workflowVersion.workflowId &&
+      cachedEntry.version === workflowVersion.version;
     const isExpired = cachedEntry.expiresAt < Date.now();
 
     if (!isSameWorkflow || isExpired) {
@@ -115,7 +143,11 @@ export class WorkflowRuntimeService {
     return cachedEntry.processor;
   }
 
-  private static storeProcessor(projectId: string, workflowVersion: WorkflowVersion, processor: SimpleWorkflowProcessor): void {
+  private static storeProcessor(
+    projectId: string,
+    workflowVersion: WorkflowVersion,
+    processor: SimpleWorkflowProcessor
+  ): void {
     const key = this.getProcessorCacheKey(projectId);
     this.activeFlowsCache.set(key, {
       processor,
@@ -127,7 +159,10 @@ export class WorkflowRuntimeService {
     });
   }
 
-  private static getWorkflowProcessor(projectId: string, workflowVersion: WorkflowVersion): SimpleWorkflowProcessor {
+  private static getWorkflowProcessor(
+    projectId: string,
+    workflowVersion: WorkflowVersion
+  ): SimpleWorkflowProcessor {
     const cached = this.getCachedProcessor(projectId, workflowVersion);
     if (cached) {
       return cached;
@@ -222,7 +257,9 @@ export class WorkflowRuntimeService {
   /**
    * Получить активную версию workflow для проекта
    */
-  static async getActiveWorkflowVersion(projectId: string): Promise<WorkflowVersion | null> {
+  static async getActiveWorkflowVersion(
+    projectId: string
+  ): Promise<WorkflowVersion | null> {
     try {
       // Инициализируем handlers
       this.initializeHandlers();
@@ -276,7 +313,9 @@ export class WorkflowRuntimeService {
       });
 
       if (!activeVersion) {
-        logger.debug('No active workflow version found for project', { projectId });
+        logger.debug('No active workflow version found for project', {
+          projectId
+        });
         return null;
       }
 
@@ -303,13 +342,16 @@ export class WorkflowRuntimeService {
         connections: activeVersion.workflow.connections as any
       };
 
-      logger.info('✅ Загружена активная версия workflow из БД и закэширована', {
-        projectId,
-        workflowId: workflowVersion.workflowId,
-        version: workflowVersion.version,
-        versionId: workflowVersion.id,
-        nodesCount: Object.keys(workflowVersion.nodes || {}).length
-      });
+      logger.info(
+        '✅ Загружена активная версия workflow из БД и закэширована',
+        {
+          projectId,
+          workflowId: workflowVersion.workflowId,
+          version: workflowVersion.version,
+          versionId: workflowVersion.id,
+          nodesCount: Object.keys(workflowVersion.nodes || {}).length
+        }
+      );
 
       // Кэшируем в памяти и Redis
       await this.cacheActiveVersion(projectId, workflowVersion);
@@ -327,27 +369,45 @@ export class WorkflowRuntimeService {
   /**
    * Выполнить workflow для проекта
    */
-  static async executeWorkflow(projectId: string, trigger: 'start' | 'message' | 'callback', context: any): Promise<boolean> {
+  static async executeWorkflow(
+    projectId: string,
+    trigger: 'start' | 'message' | 'callback',
+    context: any
+  ): Promise<boolean> {
     const startTime = Date.now();
     let cacheHits = 0;
     let cacheMisses = 0;
 
     try {
-      console.log('🔧 executeWorkflow STARTED', { projectId, trigger, hasCallback: !!context.callbackQuery, callbackData: context.callbackQuery?.data });
+      console.log('🔧 executeWorkflow STARTED', {
+        projectId,
+        trigger,
+        hasCallback: !!context.callbackQuery,
+        callbackData: context.callbackQuery?.data
+      });
       // ✅ КРИТИЧНО: Инициализируем handlers в начале
       this.initializeHandlers();
       console.log('🔧 Handlers initialized successfully');
-      
+
       // 1) Сначала пробуем возобновить ожидающий execution
-      const chatId: string | undefined = context.chat?.id?.toString();
-      const telegramUserId: string | undefined = context.from?.id?.toString();
+      const chatId: string | undefined =
+        context.chat?.id?.toString() ??
+        context.message?.chat?.id?.toString() ??
+        context.callbackQuery?.message?.chat?.id?.toString();
+      const telegramUserId: string | undefined =
+        context.from?.id?.toString() ??
+        context.callbackQuery?.from?.id?.toString();
 
       let waitType: 'contact' | 'callback' | 'input' | null = null;
       if (context.message?.contact) waitType = 'contact';
       else if (context.callbackQuery) waitType = 'callback';
       else if (context.message?.text) waitType = 'input';
 
-      console.log('🔧 Checking for waiting execution', { chatId, waitType, trigger });
+      console.log('🔧 Checking for waiting execution', {
+        chatId,
+        waitType,
+        trigger
+      });
 
       // ✅ КРИТИЧНО: Для /start также проверяем waiting execution, чтобы не создавать новый, если есть ожидающий
       // Для /start команды waitType будет null, но мы всё равно проверяем наличие waiting execution
@@ -392,12 +452,19 @@ export class WorkflowRuntimeService {
           });
 
           if (!waitingExecution || waitingExecution.status !== 'waiting') {
-            logger.warn('⚠️ Cached execution больше не в waiting состоянии, инвалидируем кеш', {
-              executionId: cachedExecution.executionId,
-              currentStatus: waitingExecution?.status
-            });
+            logger.warn(
+              '⚠️ Cached execution больше не в waiting состоянии, инвалидируем кеш',
+              {
+                executionId: cachedExecution.executionId,
+                currentStatus: waitingExecution?.status
+              }
+            );
             // Инвалидируем неактуальный кеш
-            await this.invalidateWaitingExecutionCache(projectId, chatId, waitType === 'input' ? 'contact' : waitType);
+            await this.invalidateWaitingExecutionCache(
+              projectId,
+              chatId,
+              waitType === 'input' ? 'contact' : waitType
+            );
             waitingExecution = null;
           }
         }
@@ -418,9 +485,13 @@ export class WorkflowRuntimeService {
               telegramChatId: chatId,
               // ✅ КРИТИЧНО: Для /start команды ищем любой waiting execution (contact, input, callback)
               // Для других триггеров ищем по конкретному waitType
-              waitType: waitType === 'input' 
-                ? ({ in: ['input', 'contact'] } as any)
-                : waitType || (trigger === 'start' ? ({ in: ['contact', 'input', 'callback'] } as any) : null)
+              waitType:
+                waitType === 'input'
+                  ? ({ in: ['input', 'contact'] } as any)
+                  : waitType ||
+                    (trigger === 'start'
+                      ? ({ in: ['contact', 'input', 'callback'] } as any)
+                      : null)
             },
             orderBy: {
               startedAt: 'desc' // Берем самый последний waiting execution
@@ -442,7 +513,7 @@ export class WorkflowRuntimeService {
             });
           }
         }
-        
+
         console.log('🔧 Waiting execution search result', {
           found: !!waitingExecution,
           executionId: waitingExecution?.id,
@@ -468,12 +539,20 @@ export class WorkflowRuntimeService {
         if (waitingExecution) {
           // ✅ КРИТИЧНО: Если это /start команда, а не ожидание контакта/email, отменяем waiting execution
           // и создаём новый, так как пользователь хочет начать заново
-          if (trigger === 'start' && waitingExecution.waitType && !context.message?.contact && !context.message?.text?.includes('@')) {
-            console.log('🔄 /start received while waiting for contact/email - canceling waiting execution and starting fresh', {
-              executionId: waitingExecution.id,
-              waitType: waitingExecution.waitType
-            });
-            
+          if (
+            trigger === 'start' &&
+            waitingExecution.waitType &&
+            !context.message?.contact &&
+            !context.message?.text?.includes('@')
+          ) {
+            console.log(
+              '🔄 /start received while waiting for contact/email - canceling waiting execution and starting fresh',
+              {
+                executionId: waitingExecution.id,
+                waitType: waitingExecution.waitType
+              }
+            );
+
             // Отменяем waiting execution
             await db.workflowExecution.update({
               where: { id: waitingExecution.id },
@@ -482,21 +561,23 @@ export class WorkflowRuntimeService {
                 finishedAt: new Date()
               }
             });
-            
+
             // Инвалидируем кеш
             await this.invalidateWaitingExecutionCache(
               projectId,
               chatId!,
               waitingExecution.waitType as 'contact' | 'input' | 'callback'
             );
-            
+
             // Продолжаем с созданием нового execution
             waitingExecution = null;
           }
         }
-        
+
         if (waitingExecution) {
-          console.log('✅ ENTERING WAITING EXECUTION BLOCK', { executionId: waitingExecution.id });
+          console.log('✅ ENTERING WAITING EXECUTION BLOCK', {
+            executionId: waitingExecution.id
+          });
           console.log('🔧 About to resume workflow', {
             waitingExecutionId: waitingExecution.id,
             waitingExecutionStatus: waitingExecution.status,
@@ -512,7 +593,10 @@ export class WorkflowRuntimeService {
             });
 
             const versionRecord = await db.workflowVersion.findFirst({
-              where: { workflowId: waitingExecution.workflowId, version: waitingExecution.version },
+              where: {
+                workflowId: waitingExecution.workflowId,
+                version: waitingExecution.version
+              },
               include: { workflow: true }
             });
 
@@ -525,16 +609,30 @@ export class WorkflowRuntimeService {
             });
 
             if (!versionRecord) {
-              console.error('❌ Workflow version not found for waiting execution', {
-                workflowId: waitingExecution.workflowId,
-                version: waitingExecution.version
-              });
+              console.error(
+                '❌ Workflow version not found for waiting execution',
+                {
+                  workflowId: waitingExecution.workflowId,
+                  version: waitingExecution.version
+                }
+              );
               return false;
             }
 
-            console.log('🔧 versionRecord.nodes type:', typeof versionRecord.nodes);
-            console.log('🔧 versionRecord.nodes isArray:', Array.isArray(versionRecord.nodes));
-            console.log('🔧 versionRecord.nodes length/keys:', Array.isArray(versionRecord.nodes) ? versionRecord.nodes.length : Object.keys(versionRecord.nodes || {}).length);
+            console.log(
+              '🔧 versionRecord.nodes type:',
+              typeof versionRecord.nodes
+            );
+            console.log(
+              '🔧 versionRecord.nodes isArray:',
+              Array.isArray(versionRecord.nodes)
+            );
+            console.log(
+              '🔧 versionRecord.nodes length/keys:',
+              Array.isArray(versionRecord.nodes)
+                ? versionRecord.nodes.length
+                : Object.keys(versionRecord.nodes || {}).length
+            );
 
             // Convert nodes array to object if needed
             let nodesObject: Record<string, any>;
@@ -543,10 +641,16 @@ export class WorkflowRuntimeService {
               (versionRecord.nodes as any[]).forEach((node: any) => {
                 nodesObject[node.id] = node;
               });
-              console.log('🔧 Converted array to object, node count:', Object.keys(nodesObject).length);
+              console.log(
+                '🔧 Converted array to object, node count:',
+                Object.keys(nodesObject).length
+              );
             } else {
               nodesObject = (versionRecord.nodes as Record<string, any>) || {};
-              console.log('🔧 Nodes already object, node count:', Object.keys(nodesObject).length);
+              console.log(
+                '🔧 Nodes already object, node count:',
+                Object.keys(nodesObject).length
+              );
             }
 
             const versionToUse: WorkflowVersion = {
@@ -559,17 +663,21 @@ export class WorkflowRuntimeService {
               settings: versionRecord.settings as any,
               isActive: versionRecord.isActive,
               createdAt: versionRecord.createdAt,
-              connections: ((versionRecord.workflow as any)?.connections || []) as WorkflowConnection[]
+              connections: ((versionRecord.workflow as any)?.connections ||
+                []) as WorkflowConnection[]
             };
 
             // Create processor
-            const processor = this.getWorkflowProcessor(projectId, versionToUse);
+            const processor = this.getWorkflowProcessor(
+              projectId,
+              versionToUse
+            );
 
             // ✅ КРИТИЧНО: Извлекаем контакт или email из входящего сообщения
             let contactPhone: string | undefined;
             let contactEmail: string | undefined;
             let messageText: string | undefined;
-            
+
             if (trigger === 'message' && context.message) {
               // Проверяем, есть ли контакт в сообщении
               if (context.message.contact) {
@@ -591,7 +699,7 @@ export class WorkflowRuntimeService {
                 messageText = text;
               }
             }
-            
+
             // Resume execution context
             const resumedContext = await ExecutionContextManager.resumeContext(
               waitingExecution.id,
@@ -601,7 +709,7 @@ export class WorkflowRuntimeService {
               messageText,
               trigger === 'callback' ? context.callbackQuery?.data : undefined
             );
-            
+
             // ✅ КРИТИЧНО: Сохраняем контакт/email в переменные для использования в workflow
             // ВАЖНО: Сохраняем объект contactReceived, а не отдельные переменные с точкой в ключе
             if (contactPhone) {
@@ -610,7 +718,11 @@ export class WorkflowRuntimeService {
                 type: 'phone',
                 receivedAt: new Date().toISOString()
               };
-              await resumedContext.variables.set('contactReceived', contactReceivedData, 'session');
+              await resumedContext.variables.set(
+                'contactReceived',
+                contactReceivedData,
+                'session'
+              );
               logger.info('💾 Contact phone saved to variables', {
                 phoneNumber: contactPhone,
                 executionId: waitingExecution.id,
@@ -622,7 +734,11 @@ export class WorkflowRuntimeService {
                 type: 'email',
                 receivedAt: new Date().toISOString()
               };
-              await resumedContext.variables.set('contactReceived', contactReceivedData, 'session');
+              await resumedContext.variables.set(
+                'contactReceived',
+                contactReceivedData,
+                'session'
+              );
               logger.info('💾 Contact email saved to variables', {
                 email: contactEmail,
                 executionId: waitingExecution.id,
@@ -635,55 +751,96 @@ export class WorkflowRuntimeService {
             const callbackData = context.callbackQuery?.data;
             if (callbackData) {
               console.log('🔧 Processing callback trigger', { callbackData });
-              console.log('🔧 Available nodes in versionToUse:', Object.keys(versionToUse.nodes));
-              console.log('🔧 Node types in versionToUse:', Object.values(versionToUse.nodes).map((n: any) => ({ id: n.id, type: n.type })));
+              console.log(
+                '🔧 Available nodes in versionToUse:',
+                Object.keys(versionToUse.nodes)
+              );
+              console.log(
+                '🔧 Node types in versionToUse:',
+                Object.values(versionToUse.nodes).map((n: any) => ({
+                  id: n.id,
+                  type: n.type
+                }))
+              );
 
               // Find the callback trigger node
-              const callbackTriggerNode = Object.values(versionToUse.nodes).find((node: WorkflowNode) => {
-                console.log('🔧 Checking node:', { id: node.id, type: node.type, config: node.data?.config });
-                return node.type === 'trigger.callback' &&
-                       node.data?.config?.['trigger.callback']?.callbackData === callbackData;
+              const callbackTriggerNode = Object.values(
+                versionToUse.nodes
+              ).find((node: WorkflowNode) => {
+                console.log('🔧 Checking node:', {
+                  id: node.id,
+                  type: node.type,
+                  config: node.data?.config
+                });
+                return (
+                  node.type === 'trigger.callback' &&
+                  node.data?.config?.['trigger.callback']?.callbackData ===
+                    callbackData
+                );
               });
 
               if (callbackTriggerNode) {
-                console.log('🔧 Found callback trigger node', { nodeId: callbackTriggerNode.id });
-                await (processor as any).executeWorkflow(resumedContext, callbackTriggerNode.id);
+                console.log('🔧 Found callback trigger node', {
+                  nodeId: callbackTriggerNode.id
+                });
+                await (processor as any).executeWorkflow(
+                  resumedContext,
+                  callbackTriggerNode.id
+                );
                 console.log('🔧 Callback trigger processed successfully');
                 return true;
               } else {
-                console.error('❌ No callback trigger node found for', callbackData);
+                console.error(
+                  '❌ No callback trigger node found for',
+                  callbackData
+                );
                 return false;
               }
             } else {
               // ✅ КРИТИЧНО: Для waiting execution с waitType 'contact' или 'input'
               // НЕ выполняем currentNodeId снова (это была нода, которая установила waiting)
               // Вместо этого переходим к следующей ноде по connections
-              if (waitingExecution.waitType === 'contact' || waitingExecution.waitType === 'input') {
+              if (
+                waitingExecution.waitType === 'contact' ||
+                waitingExecution.waitType === 'input'
+              ) {
                 const currentNodeId = waitingExecution.currentNodeId;
                 if (currentNodeId) {
-                  console.log('🔧 Determining next node for contact/input resume', {
-                    currentNodeId,
-                    waitType: waitingExecution.waitType,
-                    contactReceived: contactPhone || contactEmail
-                  });
-                  
+                  console.log(
+                    '🔧 Determining next node for contact/input resume',
+                    {
+                      currentNodeId,
+                      waitType: waitingExecution.waitType,
+                      contactReceived: contactPhone || contactEmail
+                    }
+                  );
+
                   // Получаем следующую ноду по connections
-                  const nextNodeId = await (processor as any).getNextNodeId(currentNodeId);
-                  
+                  const nextNodeId = await (processor as any).getNextNodeId(
+                    currentNodeId
+                  );
+
                   console.log('🔧 Next node determined from connections', {
                     currentNodeId,
                     nextNodeId,
-                    nextNodeType: nextNodeId ? versionToUse.nodes[nextNodeId]?.type : null,
-                    nextNodeLabel: nextNodeId ? versionToUse.nodes[nextNodeId]?.data?.label : null
+                    nextNodeType: nextNodeId
+                      ? versionToUse.nodes[nextNodeId]?.type
+                      : null,
+                    nextNodeLabel: nextNodeId
+                      ? versionToUse.nodes[nextNodeId]?.data?.label
+                      : null
                   });
-                  
+
                   if (nextNodeId) {
-                    console.log('🔧 Resuming workflow from next node after contact/input', {
-                      currentNodeId,
-                      nextNodeId,
-                      waitType: waitingExecution.waitType
-                    });
-                    
+                    console.log(
+                      '🔧 Resuming workflow from next node after contact/input',
+                      {
+                        currentNodeId,
+                        nextNodeId,
+                        waitType: waitingExecution.waitType
+                      }
+                    );
+
                     // Сбрасываем waiting состояние перед возобновлением
                     await db.workflowExecution.update({
                       where: { id: waitingExecution.id },
@@ -694,16 +851,21 @@ export class WorkflowRuntimeService {
                         currentNodeId: nextNodeId
                       }
                     });
-                    
+
                     await processor.resumeWorkflow(resumedContext, nextNodeId);
-                    console.log('🔧 Workflow resumed successfully after contact/input');
+                    console.log(
+                      '🔧 Workflow resumed successfully after contact/input'
+                    );
                     return true;
                   } else {
-                    console.error('❌ No next node found for waiting execution', {
-                      currentNodeId,
-                      waitType: waitingExecution.waitType,
-                      availableNodes: Object.keys(versionToUse.nodes)
-                    });
+                    console.error(
+                      '❌ No next node found for waiting execution',
+                      {
+                        currentNodeId,
+                        waitType: waitingExecution.waitType,
+                        availableNodes: Object.keys(versionToUse.nodes)
+                      }
+                    );
                     return false;
                   }
                 } else {
@@ -734,48 +896,84 @@ export class WorkflowRuntimeService {
           }
         }
         // 2) Если waiting execution не найден — создаём новый workflow execution
-        console.log('🔧 Proceeding to create new workflow execution', { trigger, chatId });
+        console.log('🔧 Proceeding to create new workflow execution', {
+          trigger,
+          chatId
+        });
 
         console.log('🔧 About to get active workflow version', { projectId });
         const workflowVersion = await this.getActiveWorkflowVersion(projectId);
-        console.log('🔧 getActiveWorkflowVersion returned', { hasVersion: !!workflowVersion, versionId: workflowVersion?.id });
+        console.log('🔧 getActiveWorkflowVersion returned', {
+          hasVersion: !!workflowVersion,
+          versionId: workflowVersion?.id
+        });
         if (!workflowVersion) {
-          console.log('❌ CRITICAL: No active workflow version found - this causes "workflow not configured" error');
-          logger.debug('No active workflow version found for execution', { projectId });
+          console.log(
+            '❌ CRITICAL: No active workflow version found - this causes "workflow not configured" error'
+          );
+          logger.debug('No active workflow version found for execution', {
+            projectId
+          });
           return false;
         }
 
         const processor = this.getWorkflowProcessor(projectId, workflowVersion);
-      console.log('🔧 About to call processor.process', { projectId, trigger });
-      const result = await processor.process(context, trigger);
-      console.log('🔧 processor.process returned', { result, resultType: typeof result });
+        console.log('🔧 About to call processor.process', {
+          projectId,
+          trigger
+        });
+        const result = await processor.process(context, trigger);
+        console.log('🔧 processor.process returned', {
+          result,
+          resultType: typeof result
+        });
 
-      const processingTime = Date.now() - startTime;
-      console.log('🔧 executeWorkflow FINISHED', {
-        projectId,
-        trigger,
-        result,
-        processingTimeMs: processingTime,
-        cacheHits,
-        cacheMisses,
-        cacheHitRate: cacheHits + cacheMisses > 0 ? (cacheHits / (cacheHits + cacheMisses) * 100).toFixed(1) + '%' : 'N/A'
-      });
-      return result;
+        const processingTime = Date.now() - startTime;
+        console.log('🔧 executeWorkflow FINISHED', {
+          projectId,
+          trigger,
+          result,
+          processingTimeMs: processingTime,
+          cacheHits,
+          cacheMisses,
+          cacheHitRate:
+            cacheHits + cacheMisses > 0
+              ? ((cacheHits / (cacheHits + cacheMisses)) * 100).toFixed(1) + '%'
+              : 'N/A'
+        });
+        return result;
       }
 
       // Для /start команд (без chatId/waitType) сразу создаём новый workflow
-      console.log('🔧 Creating new workflow execution for start command', { trigger, chatId });
-      const startWorkflowVersion = await this.getActiveWorkflowVersion(projectId);
+      console.log('🔧 Creating new workflow execution for start command', {
+        trigger,
+        chatId
+      });
+      const startWorkflowVersion =
+        await this.getActiveWorkflowVersion(projectId);
       if (!startWorkflowVersion) {
-        console.log('❌ CRITICAL: No active workflow version found - this causes "workflow not configured" error');
-        logger.debug('No active workflow version found for execution', { projectId });
+        console.log(
+          '❌ CRITICAL: No active workflow version found - this causes "workflow not configured" error'
+        );
+        logger.debug('No active workflow version found for execution', {
+          projectId
+        });
         return false;
       }
 
-        const startProcessor = this.getWorkflowProcessor(projectId, startWorkflowVersion);
-      console.log('🔧 About to call processor.process for start', { projectId, trigger });
+      const startProcessor = this.getWorkflowProcessor(
+        projectId,
+        startWorkflowVersion
+      );
+      console.log('🔧 About to call processor.process for start', {
+        projectId,
+        trigger
+      });
       const startResult = await startProcessor.process(context, trigger);
-      console.log('🔧 processor.process returned for start', { result: startResult, resultType: typeof startResult });
+      console.log('🔧 processor.process returned for start', {
+        result: startResult,
+        resultType: typeof startResult
+      });
 
       const processingTime = Date.now() - startTime;
       console.log('🔧 executeWorkflow FINISHED', {
@@ -785,7 +983,10 @@ export class WorkflowRuntimeService {
         processingTimeMs: processingTime,
         cacheHits,
         cacheMisses,
-        cacheHitRate: cacheHits + cacheMisses > 0 ? (cacheHits / (cacheHits + cacheMisses) * 100).toFixed(1) + '%' : 'N/A'
+        cacheHitRate:
+          cacheHits + cacheMisses > 0
+            ? ((cacheHits / (cacheHits + cacheMisses)) * 100).toFixed(1) + '%'
+            : 'N/A'
       });
 
       return startResult;
@@ -800,7 +1001,11 @@ export class WorkflowRuntimeService {
         cacheHits,
         cacheMisses
       });
-      console.log('🔧 executeWorkflow FINISHED WITH ERROR', { projectId, trigger, result: false });
+      console.log('🔧 executeWorkflow FINISHED WITH ERROR', {
+        projectId,
+        trigger,
+        result: false
+      });
       return false;
     }
   }
@@ -812,16 +1017,29 @@ export class WorkflowRuntimeService {
   /**
    * Ключ кеша для waiting execution
    */
-  private static getWaitingExecutionCacheKey(projectId: string, chatId: string, waitType: string): string {
+  private static getWaitingExecutionCacheKey(
+    projectId: string,
+    chatId: string,
+    waitType: string
+  ): string {
     return `workflow:execution:waiting:${projectId}:${chatId}:${waitType}`;
   }
 
   /**
    * Кешировать waiting execution в Redis
    */
-  static async cacheWaitingExecution(executionId: string, projectId: string, chatId: string, waitType: string): Promise<void> {
+  static async cacheWaitingExecution(
+    executionId: string,
+    projectId: string,
+    chatId: string,
+    waitType: string
+  ): Promise<void> {
     try {
-      const cacheKey = this.getWaitingExecutionCacheKey(projectId, chatId, waitType);
+      const cacheKey = this.getWaitingExecutionCacheKey(
+        projectId,
+        chatId,
+        waitType
+      );
       const cacheData = {
         executionId,
         projectId,
@@ -830,7 +1048,11 @@ export class WorkflowRuntimeService {
         cachedAt: new Date().toISOString()
       };
 
-      await CacheService.set(cacheKey, cacheData, this.WAITING_EXECUTION_TTL_SECONDS);
+      await CacheService.set(
+        cacheKey,
+        cacheData,
+        this.WAITING_EXECUTION_TTL_SECONDS
+      );
 
       logger.debug('✅ Cached waiting execution', {
         executionId,
@@ -855,14 +1077,22 @@ export class WorkflowRuntimeService {
   /**
    * Получить cached waiting execution из Redis
    */
-  static async getCachedWaitingExecution(projectId: string, chatId: string, waitType: string): Promise<{
+  static async getCachedWaitingExecution(
+    projectId: string,
+    chatId: string,
+    waitType: string
+  ): Promise<{
     executionId: string;
     projectId: string;
     chatId: string;
     waitType: string;
   } | null> {
     try {
-      const cacheKey = this.getWaitingExecutionCacheKey(projectId, chatId, waitType);
+      const cacheKey = this.getWaitingExecutionCacheKey(
+        projectId,
+        chatId,
+        waitType
+      );
       const cachedData = await CacheService.get(cacheKey);
 
       if (!cachedData) {
@@ -871,13 +1101,25 @@ export class WorkflowRuntimeService {
 
       logger.debug('✅ Found cached waiting execution', {
         cacheKey,
-        executionId: (cachedData as { executionId: string; projectId: string; chatId: string; waitType: string }).executionId,
+        executionId: (
+          cachedData as {
+            executionId: string;
+            projectId: string;
+            chatId: string;
+            waitType: string;
+          }
+        ).executionId,
         projectId,
         chatId,
         waitType
       });
 
-      return cachedData as { executionId: string; projectId: string; chatId: string; waitType: string };
+      return cachedData as {
+        executionId: string;
+        projectId: string;
+        chatId: string;
+        waitType: string;
+      };
     } catch (error) {
       logger.error('❌ Failed to get cached waiting execution', {
         projectId,
@@ -892,9 +1134,17 @@ export class WorkflowRuntimeService {
   /**
    * Удалить cached waiting execution из Redis
    */
-  static async invalidateWaitingExecutionCache(projectId: string, chatId: string, waitType: string): Promise<void> {
+  static async invalidateWaitingExecutionCache(
+    projectId: string,
+    chatId: string,
+    waitType: string
+  ): Promise<void> {
     try {
-      const cacheKey = this.getWaitingExecutionCacheKey(projectId, chatId, waitType);
+      const cacheKey = this.getWaitingExecutionCacheKey(
+        projectId,
+        chatId,
+        waitType
+      );
       await CacheService.delete(cacheKey);
 
       logger.debug('🗑️ Invalidated waiting execution cache', {
@@ -920,7 +1170,10 @@ export class WorkflowRuntimeService {
   /**
    * Ключ кеша для user variables
    */
-  private static getUserVariablesCacheKey(projectId: string, userId: string): string {
+  private static getUserVariablesCacheKey(
+    projectId: string,
+    userId: string
+  ): string {
     return `workflow:user-variables:${projectId}:${userId}`;
   }
 
@@ -934,7 +1187,11 @@ export class WorkflowRuntimeService {
   /**
    * Кешировать user variables в Redis
    */
-  static async cacheUserVariables(projectId: string, userId: string, variables: Record<string, any>): Promise<void> {
+  static async cacheUserVariables(
+    projectId: string,
+    userId: string,
+    variables: Record<string, any>
+  ): Promise<void> {
     try {
       const cacheKey = this.getUserVariablesCacheKey(projectId, userId);
       const cacheData = {
@@ -965,7 +1222,10 @@ export class WorkflowRuntimeService {
   /**
    * Получить cached user variables из Redis
    */
-  static async getCachedUserVariables(projectId: string, userId: string): Promise<Record<string, any> | null> {
+  static async getCachedUserVariables(
+    projectId: string,
+    userId: string
+  ): Promise<Record<string, any> | null> {
     try {
       const cacheKey = this.getUserVariablesCacheKey(projectId, userId);
       const cachedData = await CacheService.get(cacheKey);
@@ -978,7 +1238,9 @@ export class WorkflowRuntimeService {
         userId,
         projectId,
         cacheKey,
-        variablesCount: Object.keys((cachedData as { variables: Record<string, any> }).variables).length,
+        variablesCount: Object.keys(
+          (cachedData as { variables: Record<string, any> }).variables
+        ).length,
         cacheHit: true
       });
 
@@ -1051,7 +1313,10 @@ export class WorkflowRuntimeService {
   /**
    * Инвалидировать кеш user variables при обновлении данных пользователя
    */
-  static async invalidateUserVariablesCache(projectId: string, userId: string): Promise<void> {
+  static async invalidateUserVariablesCache(
+    projectId: string,
+    userId: string
+  ): Promise<void> {
     try {
       const cacheKey = this.getUserVariablesCacheKey(projectId, userId);
       await CacheService.delete(cacheKey);
@@ -1119,7 +1384,9 @@ export class WorkflowRuntimeService {
 
       // Проверяем, что execution еще активен
       if (execution.status === 'finished') {
-        logger.warn('Cannot resume finished workflow execution', { executionId });
+        logger.warn('Cannot resume finished workflow execution', {
+          executionId
+        });
         return;
       }
 
@@ -1132,7 +1399,9 @@ export class WorkflowRuntimeService {
       });
 
       if (!versionRecord) {
-        throw new Error(`Workflow version not found: workflowId=${workflowId}, version=${execution.version}`);
+        throw new Error(
+          `Workflow version not found: workflowId=${workflowId}, version=${execution.version}`
+        );
       }
 
       // Преобразуем nodes в нужный формат
@@ -1150,8 +1419,16 @@ export class WorkflowRuntimeService {
         id: versionRecord.id,
         workflowId: versionRecord.workflowId,
         version: versionRecord.version,
-        nodes: nodesObject as unknown as Record<string, WorkflowNode>,
-        entryNodeId: versionRecord.entryNodeId
+        nodes: nodesObject as Record<string, WorkflowNode>,
+        entryNodeId: versionRecord.entryNodeId,
+        variables:
+          (versionRecord.variables as unknown as WorkflowVersion['variables']) ||
+          [],
+        settings:
+          (versionRecord.settings as unknown as WorkflowVersion['settings']) ||
+          undefined,
+        isActive: versionRecord.isActive,
+        createdAt: versionRecord.createdAt
       };
 
       // Создаем processor для выполнения workflow
@@ -1196,7 +1473,10 @@ export class WorkflowRuntimeService {
       } catch (updateError) {
         logger.error('Failed to update execution status to error', {
           executionId,
-          updateError: updateError instanceof Error ? updateError.message : String(updateError)
+          updateError:
+            updateError instanceof Error
+              ? updateError.message
+              : String(updateError)
         });
       }
 

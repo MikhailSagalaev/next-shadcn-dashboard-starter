@@ -51,14 +51,17 @@ interface OrderDetailViewProps {
   orderId: string;
 }
 
-const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const statusColors: Record<
+  string,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
   PENDING: 'secondary',
   CONFIRMED: 'default',
   PROCESSING: 'default',
   SHIPPED: 'default',
   DELIVERED: 'default',
   CANCELLED: 'destructive',
-  REFUNDED: 'outline',
+  REFUNDED: 'outline'
 };
 
 const statusLabels: Record<string, string> = {
@@ -68,7 +71,7 @@ const statusLabels: Record<string, string> = {
   SHIPPED: 'Отправлен',
   DELIVERED: 'Доставлен',
   CANCELLED: 'Отменен',
-  REFUNDED: 'Возврат',
+  REFUNDED: 'Возврат'
 };
 
 export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
@@ -86,7 +89,9 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
   const fetchOrder = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/projects/${projectId}/orders/${orderId}`);
+      const response = await fetch(
+        `/api/projects/${projectId}/orders/${orderId}`
+      );
       if (!response.ok) {
         throw new Error('Ошибка загрузки заказа');
       }
@@ -97,7 +102,8 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
     } catch (error) {
       toast({
         title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Не удалось загрузить заказ',
+        description:
+          error instanceof Error ? error.message : 'Не удалось загрузить заказ',
         variant: 'destructive'
       });
     } finally {
@@ -111,16 +117,19 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
     }
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: newStatus,
-          comment: comment || 'Изменение статуса',
-        }),
-      });
+      const response = await fetch(
+        `/api/projects/${projectId}/orders/${orderId}/status`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: newStatus,
+            comment: comment || 'Изменение статуса'
+          })
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Ошибка изменения статуса');
@@ -128,7 +137,7 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
 
       toast({
         title: 'Успешно',
-        description: 'Статус заказа изменен',
+        description: 'Статус заказа изменен'
       });
 
       fetchOrder();
@@ -136,7 +145,8 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
     } catch (error) {
       toast({
         title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Не удалось изменить статус',
+        description:
+          error instanceof Error ? error.message : 'Не удалось изменить статус',
         variant: 'destructive'
       });
     }
@@ -156,7 +166,9 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
         <div className='flex items-center gap-4'>
           <Button
             variant='ghost'
-            onClick={() => router.push(`/dashboard/projects/${projectId}/orders`)}
+            onClick={() =>
+              router.push(`/dashboard/projects/${projectId}/orders`)
+            }
           >
             <ArrowLeft className='mr-2 h-4 w-4' />
             Назад
@@ -170,7 +182,10 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
             </p>
           </div>
         </div>
-        <Badge variant={statusColors[order.status] || 'secondary'} className='text-lg px-4 py-2'>
+        <Badge
+          variant={statusColors[order.status] || 'secondary'}
+          className='px-4 py-2 text-lg'
+        >
           {statusLabels[order.status] || order.status}
         </Badge>
       </div>
@@ -206,9 +221,11 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
                 }).format(Number(order.totalAmount))}
               </div>
             </div>
-            {order.bonusAmount > 0 && (
+            {Number(order.bonusAmount ?? 0) > 0 && (
               <div>
-                <Label className='text-muted-foreground'>Бонусы использованы</Label>
+                <Label className='text-muted-foreground'>
+                  Бонусы использованы
+                </Label>
                 <div className='font-medium'>
                   {new Intl.NumberFormat('ru-RU', {
                     style: 'currency',
@@ -266,7 +283,9 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
               </div>
               {order.deliveryMethod && (
                 <div className='mt-4'>
-                  <Label className='text-muted-foreground'>Способ доставки</Label>
+                  <Label className='text-muted-foreground'>
+                    Способ доставки
+                  </Label>
                   <div>{order.deliveryMethod}</div>
                 </div>
               )}
@@ -296,11 +315,15 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
         <CardContent>
           <div className='space-y-4'>
             {order.items.map((item) => (
-              <div key={item.id} className='flex items-center justify-between border-b pb-4'>
+              <div
+                key={item.id}
+                className='flex items-center justify-between border-b pb-4'
+              >
                 <div>
                   <div className='font-medium'>{item.name}</div>
                   <div className='text-muted-foreground text-sm'>
-                    Количество: {item.quantity} × {new Intl.NumberFormat('ru-RU', {
+                    Количество: {item.quantity} ×{' '}
+                    {new Intl.NumberFormat('ru-RU', {
                       style: 'currency',
                       currency: 'RUB'
                     }).format(Number(item.price))}
@@ -378,10 +401,17 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
           <div className='space-y-4'>
             {order.history && order.history.length > 0 ? (
               order.history.map((historyItem) => (
-                <div key={historyItem.id} className='flex items-start gap-4 border-b pb-4'>
+                <div
+                  key={historyItem.id}
+                  className='flex items-start gap-4 border-b pb-4'
+                >
                   <div className='flex-1'>
                     <div className='flex items-center gap-2'>
-                      <Badge variant={statusColors[historyItem.status] || 'secondary'}>
+                      <Badge
+                        variant={
+                          statusColors[historyItem.status] || 'secondary'
+                        }
+                      >
                         {statusLabels[historyItem.status] || historyItem.status}
                       </Badge>
                       <span className='text-muted-foreground text-sm'>
@@ -401,7 +431,7 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
                 </div>
               ))
             ) : (
-              <div className='text-muted-foreground text-center py-8'>
+              <div className='text-muted-foreground py-8 text-center'>
                 История изменений отсутствует
               </div>
             )}
@@ -411,4 +441,3 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
     </div>
   );
 }
-

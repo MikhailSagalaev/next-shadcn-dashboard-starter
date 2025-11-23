@@ -17,7 +17,7 @@ const createProductSchema = z.object({
   price: z.number().positive(),
   categoryId: z.string().optional(),
   description: z.string().optional(),
-  isActive: z.boolean().optional(),
+  isActive: z.boolean().optional()
 });
 
 export async function GET(
@@ -35,9 +35,13 @@ export async function GET(
 
     const url = new URL(request.url);
     const categoryId = url.searchParams.get('categoryId') || undefined;
-    const isActive = url.searchParams.get('isActive') === 'true' ? true : undefined;
+    const isActive =
+      url.searchParams.get('isActive') === 'true' ? true : undefined;
 
-    const products = await ProductService.getProducts(projectId, { categoryId, isActive });
+    const products = await ProductService.getProducts(projectId, {
+      categoryId,
+      isActive
+    });
 
     return NextResponse.json({ products });
   } catch (error) {
@@ -64,7 +68,17 @@ export async function POST(
     const body = await request.json();
     const data = createProductSchema.parse(body);
 
-    const product = await ProductService.createProduct({ projectId, ...data });
+    const productPayload = {
+      projectId,
+      name: data.name,
+      sku: data.sku,
+      price: data.price,
+      categoryId: data.categoryId,
+      description: data.description,
+      isActive: data.isActive ?? true
+    };
+
+    const product = await ProductService.createProduct(productPayload);
 
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
@@ -80,4 +94,3 @@ export async function POST(
     );
   }
 }
-

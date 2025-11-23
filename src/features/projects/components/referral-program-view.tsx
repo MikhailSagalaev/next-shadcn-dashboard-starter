@@ -41,6 +41,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ReferralSettingsForm } from './referral-settings-form';
 import { ReferralStatsView } from './referral-stats-view';
 import type { Project, ReferralProgram } from '@/types/bonus';
+import { getReferralLinkExample } from '@/lib/utils/referral-link';
 
 interface ReferralProgramViewProps {
   projectId: string;
@@ -224,16 +225,61 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                 </p>
               </div>
               <div>
-                <label className='text-sm font-medium'>Бонус рефереру</label>
-                <p className='text-muted-foreground text-sm'>
-                  {referralProgram?.referrerBonus || 0}%
-                </p>
-              </div>
-              <div>
                 <label className='text-sm font-medium'>Бонус новому</label>
                 <p className='text-muted-foreground text-sm'>
                   {referralProgram?.refereeBonus || 0}%
                 </p>
+              </div>
+              <div>
+                <label className='text-sm font-medium'>
+                  Приветственный бонус
+                </label>
+                <p className='text-muted-foreground text-sm'>
+                  {Number(referralProgram?.welcomeBonus || 0).toLocaleString(
+                    'ru-RU'
+                  )}{' '}
+                  ₽
+                </p>
+              </div>
+              <div>
+                <label className='text-sm font-medium'>Мин. сумма заказа</label>
+                <p className='text-muted-foreground text-sm'>
+                  {Number(
+                    referralProgram?.minPurchaseAmount || 0
+                  ).toLocaleString('ru-RU')}{' '}
+                  ₽
+                </p>
+              </div>
+              <div>
+                <label className='text-sm font-medium'>Отслеживание</label>
+                <p className='text-muted-foreground text-sm'>
+                  {referralProgram?.cookieLifetime || 0} дней
+                </p>
+              </div>
+              <div>
+                <label className='text-sm font-medium'>Уровни</label>
+                <div className='mt-2 space-y-2'>
+                  {(referralProgram?.levels || []).length > 0 ? (
+                    referralProgram?.levels
+                      ?.slice()
+                      .sort((a, b) => a.level - b.level)
+                      .map((level) => (
+                        <div
+                          key={level.id}
+                          className='flex items-center justify-between rounded border px-2 py-1 text-sm'
+                        >
+                          <span>Уровень {level.level}</span>
+                          <span className='font-semibold'>
+                            {Number(level.percent)}%
+                          </span>
+                        </div>
+                      ))
+                  ) : (
+                    <p className='text-muted-foreground text-sm'>
+                      Уровни не настроены
+                    </p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -285,7 +331,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
               <p className='text-muted-foreground text-sm'>
                 Ссылка формируется в формате:{' '}
                 <code className='text-xs'>
-                  {project?.domain || 'ваш-домен.ru'}/?utm_ref=&lt;userId&gt;
+                  {getReferralLinkExample(project?.domain)}
                 </code>
                 . Параметры utm_source/utm_medium/utm_campaign больше не
                 используются.

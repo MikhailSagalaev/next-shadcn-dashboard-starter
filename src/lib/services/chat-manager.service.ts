@@ -52,15 +52,15 @@ export class ChatManagerService {
           name: data.name,
           credentials: data.credentials, // В реальности нужно зашифровать
           isActive: data.isActive ?? true,
-          metadata: data.metadata,
-        },
+          metadata: data.metadata
+        }
       });
 
       logger.info('Канал чата создан', {
         channelId: channel.id,
         projectId: data.projectId,
         type: data.type,
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
 
       return channel;
@@ -68,7 +68,7 @@ export class ChatManagerService {
       logger.error('Ошибка создания канала чата', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
@@ -84,7 +84,7 @@ export class ChatManagerService {
         where: {
           projectId: data.projectId,
           channelId: data.channelId,
-          externalId: data.externalId,
+          externalId: data.externalId
         },
         include: {
           channel: true,
@@ -92,10 +92,10 @@ export class ChatManagerService {
           messages: {
             take: 50,
             orderBy: {
-              createdAt: 'desc',
-            },
-          },
-        },
+              createdAt: 'desc'
+            }
+          }
+        }
       });
 
       if (!chat) {
@@ -107,13 +107,18 @@ export class ChatManagerService {
             externalId: data.externalId,
             userId: data.userId,
             status: data.status || 'OPEN',
-            metadata: data.metadata,
+            metadata: data.metadata
           },
           include: {
             channel: true,
             user: true,
-            messages: [],
-          },
+            messages: {
+              take: 50,
+              orderBy: {
+                createdAt: 'desc'
+              }
+            }
+          }
         });
       }
 
@@ -122,7 +127,7 @@ export class ChatManagerService {
       logger.error('Ошибка создания/получения чата', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
@@ -147,11 +152,11 @@ export class ChatManagerService {
         status,
         userId,
         page = 1,
-        pageSize = 20,
+        pageSize = 20
       } = filters || {};
 
       const where: any = {
-        projectId,
+        projectId
       };
 
       if (channelId) {
@@ -177,22 +182,22 @@ export class ChatManagerService {
                 email: true,
                 phone: true,
                 firstName: true,
-                lastName: true,
-              },
+                lastName: true
+              }
             },
             _count: {
               select: {
-                messages: true,
-              },
-            },
+                messages: true
+              }
+            }
           },
           orderBy: {
-            lastMessageAt: 'desc',
+            lastMessageAt: 'desc'
           },
           skip: (page - 1) * pageSize,
-          take: pageSize,
+          take: pageSize
         }),
-        db.chat.count({ where }),
+        db.chat.count({ where })
       ]);
 
       return {
@@ -200,14 +205,14 @@ export class ChatManagerService {
         total,
         page,
         pageSize,
-        totalPages: Math.ceil(total / pageSize),
+        totalPages: Math.ceil(total / pageSize)
       };
     } catch (error) {
       logger.error('Ошибка получения списка чатов', {
         projectId,
         filters,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
@@ -226,8 +231,8 @@ export class ChatManagerService {
       const chat = await db.chat.findFirst({
         where: {
           id: chatId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!chat) {
@@ -240,10 +245,10 @@ export class ChatManagerService {
       const messages = await db.chatMessage.findMany({
         where: { chatId },
         orderBy: {
-          createdAt: 'asc',
+          createdAt: 'asc'
         },
         skip: offset,
-        take: limit,
+        take: limit
       });
 
       return messages;
@@ -252,7 +257,7 @@ export class ChatManagerService {
         chatId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
@@ -271,8 +276,8 @@ export class ChatManagerService {
       const chat = await db.chat.findFirst({
         where: {
           id: chatId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!chat) {
@@ -287,8 +292,8 @@ export class ChatManagerService {
           direction: data.direction,
           senderName: data.senderName,
           senderId: data.senderId,
-          metadata: data.metadata,
-        },
+          metadata: data.metadata
+        }
       });
 
       // Обновляем информацию о последнем сообщении в чате
@@ -297,15 +302,16 @@ export class ChatManagerService {
         data: {
           lastMessage: data.message,
           lastMessageAt: new Date(),
-          unreadCount: data.direction === 'INCOMING' ? { increment: 1 } : undefined,
-        },
+          unreadCount:
+            data.direction === 'INCOMING' ? { increment: 1 } : undefined
+        }
       });
 
       logger.info('Сообщение добавлено в чат', {
         chatId,
         messageId: message.id,
         direction: data.direction,
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
 
       return message;
@@ -314,7 +320,7 @@ export class ChatManagerService {
         chatId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
@@ -330,20 +336,20 @@ export class ChatManagerService {
     try {
       await db.chat.update({
         where: { id: chatId },
-        data: { status },
+        data: { status }
       });
 
       logger.info('Статус чата обновлен', {
         chatId,
         status,
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
     } catch (error) {
       logger.error('Ошибка обновления статуса чата', {
         chatId,
         status,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
@@ -357,14 +363,14 @@ export class ChatManagerService {
       await db.chat.update({
         where: { id: chatId },
         data: {
-          unreadCount: 0,
-        },
+          unreadCount: 0
+        }
       });
     } catch (error) {
       logger.error('Ошибка отметки чата как прочитанного', {
         chatId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
@@ -383,11 +389,11 @@ export class ChatManagerService {
       const chat = await db.chat.findFirst({
         where: {
           id: chatId,
-          projectId,
+          projectId
         },
         include: {
-          channel: true,
-        },
+          channel: true
+        }
       });
 
       if (!chat) {
@@ -396,9 +402,10 @@ export class ChatManagerService {
 
       // Добавляем сообщение в БД
       await this.addMessageToChat(projectId, chatId, {
+        chatId,
         message,
         direction: 'OUTGOING',
-        metadata,
+        metadata
       });
 
       // Отправляем сообщение через соответствующий канал
@@ -427,16 +434,15 @@ export class ChatManagerService {
       logger.info('Сообщение отправлено', {
         chatId,
         channelType: chat.channel.type,
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
     } catch (error) {
       logger.error('Ошибка отправки сообщения', {
         chatId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'chat-manager-service',
+        component: 'chat-manager-service'
       });
       throw error;
     }
   }
 }
-

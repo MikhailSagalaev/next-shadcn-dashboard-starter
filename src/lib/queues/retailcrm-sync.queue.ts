@@ -13,14 +13,17 @@ import { RetailCrmClientService } from '@/lib/services/retailcrm-client.service'
 import { OrderService } from '@/lib/services/order.service';
 import { UserService } from '@/lib/services/user.service';
 import { db } from '@/lib/db';
+import { OrderStatus } from '@prisma/client';
 
 // Конфигурация Redis для очереди синхронизации
 const getRedisConfig = () => {
   if (process.env.REDIS_HOST) {
     return {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
+      redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD
+      },
       maxRetriesPerRequest: 3,
       retryStrategy: (times: number) => {
         const delay = Math.min(times * 50, 2000);
@@ -28,7 +31,7 @@ const getRedisConfig = () => {
       }
     };
   }
-  
+
   return {
     redis: process.env.REDIS_URL || 'redis://localhost:6379',
     maxRetriesPerRequest: 3,
@@ -51,11 +54,22 @@ export interface RetailCrmSyncJobData {
 }
 
 // Создаем очередь для синхронизации
-export const retailCrmSyncQueue = new Bull<RetailCrmSyncJobData>('retailcrm-sync', getRedisConfig());
+export const retailCrmSyncQueue = new Bull<RetailCrmSyncJobData>(
+  'retailcrm-sync',
+  getRedisConfig()
+);
 
 // Обработчик задач синхронизации
 retailCrmSyncQueue.process(async (job: Bull.Job<RetailCrmSyncJobData>) => {
-  const { type, projectId, orderId, customerId, retailCrmOrderId, retailCrmCustomerId, sinceId } = job.data;
+  const {
+    type,
+    projectId,
+    orderId,
+    customerId,
+    retailCrmOrderId,
+    retailCrmCustomerId,
+    sinceId
+  } = job.data;
 
   try {
     logger.info('Processing RetailCRM sync job', {
@@ -96,8 +110,8 @@ retailCrmSyncQueue.process(async (job: Bull.Job<RetailCrmSyncJobData>) => {
     await db.retailCrmIntegration.update({
       where: { projectId },
       data: {
-        lastSyncAt: new Date(),
-      },
+        lastSyncAt: new Date()
+      }
     });
 
     logger.info('RetailCRM sync job completed', {
@@ -119,7 +133,11 @@ retailCrmSyncQueue.process(async (job: Bull.Job<RetailCrmSyncJobData>) => {
 });
 
 // Синхронизация заказов
-async function syncOrders(client: RetailCrmClientService, projectId: string, sinceId?: number) {
+async function syncOrders(
+  client: RetailCrmClientService,
+  projectId: string,
+  sinceId?: number
+) {
   const orders = await client.getOrders({ sinceId, limit: 100 });
 
   for (const retailCrmOrder of orders) {
@@ -141,15 +159,15 @@ async function syncOrders(client: RetailCrmClientService, projectId: string, sin
       const existingOrder = await db.order.findFirst({
         where: {
           projectId,
-          orderNumber: retailCrmOrder.number,
-        },
+          orderNumber: retailCrmOrder.number
+        }
       });
 
       if (existingOrder) {
         // Обновляем существующий заказ
         await OrderService.updateOrder(projectId, existingOrder.id, {
           status: mapRetailCrmStatusToOrderStatus(retailCrmOrder.status),
-          totalAmount: retailCrmOrder.totalSumm,
+          totalAmount: retailCrmOrder.totalSumm
         });
       } else {
         // Создаем новый заказ
@@ -163,12 +181,12 @@ async function syncOrders(client: RetailCrmClientService, projectId: string, sin
             name: item.productName,
             quantity: item.quantity,
             price: item.price,
-            total: item.price * item.quantity,
+            total: item.price * item.quantity
           })),
           metadata: {
             retailCrmOrderId: retailCrmOrder.id,
-            retailCrmData: retailCrmOrder,
-          },
+            retailCrmData: retailCrmOrder
+          }
         });
       }
     } catch (error) {
@@ -183,7 +201,11 @@ async function syncOrders(client: RetailCrmClientService, projectId: string, sin
 }
 
 // Синхронизация клиентов
-async function syncCustomers(client: RetailCrmClientService, projectId: string, sinceId?: number) {
+async function syncCustomers(
+  client: RetailCrmClientService,
+  projectId: string,
+  sinceId?: number
+) {
   const customers = await client.getCustomers({ sinceId, limit: 100 });
 
   for (const retailCrmCustomer of customers) {
@@ -202,7 +224,7 @@ async function syncCustomers(client: RetailCrmClientService, projectId: string, 
           email: retailCrmCustomer.email,
           phone: retailCrmCustomer.phone,
           firstName: retailCrmCustomer.firstName,
-          lastName: retailCrmCustomer.lastName,
+          lastName: retailCrmCustomer.lastName
         });
       } else {
         // Обновляем существующего пользователя
@@ -212,8 +234,8 @@ async function syncCustomers(client: RetailCrmClientService, projectId: string, 
             email: retailCrmCustomer.email || existingUser.email,
             phone: retailCrmCustomer.phone || existingUser.phone,
             firstName: retailCrmCustomer.firstName || existingUser.firstName,
-            lastName: retailCrmCustomer.lastName || existingUser.lastName,
-          },
+            lastName: retailCrmCustomer.lastName || existingUser.lastName
+          }
         });
       }
     } catch (error) {
@@ -228,7 +250,11 @@ async function syncCustomers(client: RetailCrmClientService, projectId: string, 
 }
 
 // Синхронизация одного заказа
-async function syncSingleOrder(client: RetailCrmClientService, projectId: string, retailCrmOrderId: number) {
+async function syncSingleOrder(
+  client: RetailCrmClientService,
+  projectId: string,
+  retailCrmOrderId: number
+) {
   const orders = await client.getOrders({ limit: 1 });
   const order = orders.find((o) => o.id === retailCrmOrderId);
 
@@ -238,7 +264,11 @@ async function syncSingleOrder(client: RetailCrmClientService, projectId: string
 }
 
 // Синхронизация одного клиента
-async function syncSingleCustomer(client: RetailCrmClientService, projectId: string, retailCrmCustomerId: number) {
+async function syncSingleCustomer(
+  client: RetailCrmClientService,
+  projectId: string,
+  retailCrmCustomerId: number
+) {
   const customers = await client.getCustomers({ limit: 1 });
   const customer = customers.find((c) => c.id === retailCrmCustomerId);
 
@@ -248,18 +278,19 @@ async function syncSingleCustomer(client: RetailCrmClientService, projectId: str
 }
 
 // Маппинг статусов RetailCRM в статусы заказов системы
-function mapRetailCrmStatusToOrderStatus(retailCrmStatus: string): string {
-  const statusMap: Record<string, string> = {
-    'new': 'PENDING',
-    'acceptance': 'CONFIRMED',
-    'assembling': 'PROCESSING',
-    'delivery': 'SHIPPED',
-    'complete': 'DELIVERED',
-    'cancel': 'CANCELLED',
-    'refund': 'REFUNDED',
+function mapRetailCrmStatusToOrderStatus(retailCrmStatus: string): OrderStatus {
+  const statusMap: Record<string, OrderStatus> = {
+    new: OrderStatus.PENDING,
+    acceptance: OrderStatus.CONFIRMED,
+    assembling: OrderStatus.PROCESSING,
+    delivery: OrderStatus.SHIPPED,
+    complete: OrderStatus.DELIVERED,
+    cancel: OrderStatus.CANCELLED,
+    refund: OrderStatus.REFUNDED
   };
 
-  return statusMap[retailCrmStatus.toLowerCase()] || 'PENDING';
+  const normalized = retailCrmStatus?.toLowerCase();
+  return statusMap[normalized] ?? OrderStatus.PENDING;
 }
 
 // Обработка ошибок
@@ -278,4 +309,3 @@ retailCrmSyncQueue.on('completed', (job) => {
     component: 'retailcrm-sync-queue'
   });
 });
-

@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 const sendMessageSchema = z.object({
   message: z.string().min(1),
-  senderName: z.string().optional(),
+  senderName: z.string().optional()
 });
 
 export async function GET(
@@ -33,10 +33,14 @@ export async function GET(
     const limit = parseInt(url.searchParams.get('limit') || '50');
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
-    const messages = await ChatManagerService.getChatMessages(projectId, chatId, {
-      limit,
-      offset,
-    });
+    const messages = await ChatManagerService.getChatMessages(
+      projectId,
+      chatId,
+      {
+        limit,
+        offset
+      }
+    );
 
     return NextResponse.json({ messages });
   } catch (error) {
@@ -63,12 +67,17 @@ export async function POST(
     const body = await request.json();
     const data = sendMessageSchema.parse(body);
 
-    const message = await ChatManagerService.addMessageToChat(projectId, chatId, {
-      message: data.message,
-      direction: 'OUTGOING',
-      senderName: data.senderName || admin.email || 'Администратор',
-      senderId: admin.sub,
-    });
+    const message = await ChatManagerService.addMessageToChat(
+      projectId,
+      chatId,
+      {
+        chatId,
+        message: data.message,
+        direction: 'OUTGOING',
+        senderName: data.senderName || admin.email || 'Администратор',
+        senderId: admin.sub
+      }
+    );
 
     return NextResponse.json({ message }, { status: 201 });
   } catch (error) {
@@ -84,4 +93,3 @@ export async function POST(
     );
   }
 }
-
