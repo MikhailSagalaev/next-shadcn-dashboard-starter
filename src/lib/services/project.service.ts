@@ -273,7 +273,8 @@ export class ProjectService {
           take: limit,
           include: {
             botSettings: true,
-            referralProgram: true,
+            // Временно исключаем referralProgram из-за отсутствия столбца min_purchase_amount в БД
+            // referralProgram: true,
             _count: {
               select: {
                 users: true
