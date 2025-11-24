@@ -3,3 +3,4 @@ ALTER TABLE "referral_programs" ADD COLUMN IF NOT EXISTS "min_purchase_amount" D
 ADD COLUMN IF NOT EXISTS "cookie_lifetime" INTEGER NOT NULL DEFAULT 30,
 ADD COLUMN IF NOT EXISTS "welcome_bonus" DECIMAL(10,2) NOT NULL DEFAULT 0;
 
+
