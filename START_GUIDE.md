@@ -87,8 +87,7 @@ Password: 12345678
 **Основные переменные:**
 ```env
 DATABASE_URL="postgresql://..."
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_..."
-CLERK_SECRET_KEY="sk_..."
+JWT_SECRET="your-secret-key-here"
 ```
 
 ### 🐛 Решение проблем

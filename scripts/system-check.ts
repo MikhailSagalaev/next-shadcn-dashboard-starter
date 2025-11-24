@@ -175,11 +175,7 @@ class SystemChecker {
   }
 
   async checkEnvironment() {
-    const requiredEnvVars = [
-      'DATABASE_URL',
-      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-      'CLERK_SECRET_KEY'
-    ];
+    const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
 
     const optionalEnvVars = ['NEXT_PUBLIC_APP_URL', 'NEXT_PUBLIC_SENTRY_DSN'];
 

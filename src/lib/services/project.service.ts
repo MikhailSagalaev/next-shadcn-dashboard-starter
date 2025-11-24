@@ -44,19 +44,20 @@ export class ProjectService {
 
     // Убираем протокол если есть
     normalized = normalized.replace(/^https?:\/\//, '');
-    
+
     // Убираем www если есть
     normalized = normalized.replace(/^www\./, '');
-    
+
     // Убираем завершающий слеш
     normalized = normalized.replace(/\/$/, '');
-    
+
     // Убираем путь если есть (оставляем только домен)
     normalized = normalized.split('/')[0];
-    
+
     // Проверяем, что это валидный домен
-    const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
-    
+    const domainRegex =
+      /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+
     if (!domainRegex.test(normalized)) {
       logger.warn('Некорректный формат домена', {
         original: domain,
@@ -81,7 +82,7 @@ export class ProjectService {
     ownerId: string
   ): Promise<Project> {
     const normalizedDomain = this.normalizeDomain(data.domain);
-    
+
     const project = await db.project.create({
       data: {
         name: data.name,
@@ -252,32 +253,61 @@ export class ProjectService {
     limit = 10,
     ownerId?: string
   ): Promise<{ projects: Project[]; total: number }> {
-    const skip = (page - 1) * limit;
+    try {
+      const skip = (page - 1) * limit;
 
-    const whereClause = ownerId ? { ownerId } : {};
+      const whereClause = ownerId ? { ownerId } : {};
 
-    const [projects, total] = await Promise.all([
-      db.project.findMany({
-        where: whereClause,
-        skip,
-        take: limit,
-        include: {
-          botSettings: true,
-          referralProgram: true,
-          _count: {
-            select: {
-              users: true
+      logger.info('ProjectService.getProjects: начало запроса', {
+        page,
+        limit,
+        ownerId,
+        whereClause,
+        component: 'project-service'
+      });
+
+      const [projects, total] = await Promise.all([
+        db.project.findMany({
+          where: whereClause,
+          skip,
+          take: limit,
+          include: {
+            botSettings: true,
+            referralProgram: true,
+            _count: {
+              select: {
+                users: true
+              }
             }
+          },
+          orderBy: {
+            createdAt: 'desc'
           }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      }),
-      db.project.count({ where: whereClause })
-    ]);
+        }),
+        db.project.count({ where: whereClause })
+      ]);
 
-    return { projects: projects as any, total };
+      logger.info('ProjectService.getProjects: запрос выполнен', {
+        page,
+        limit,
+        ownerId,
+        projectsCount: projects.length,
+        total,
+        component: 'project-service'
+      });
+
+      return { projects: projects as any, total };
+    } catch (error) {
+      logger.error('ProjectService.getProjects: ошибка', {
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        stack: error instanceof Error ? error.stack : undefined,
+        page,
+        limit,
+        ownerId,
+        component: 'project-service'
+      });
+      throw error;
+    }
   }
 
   // Обновление проекта (с проверкой владельца)
@@ -307,7 +337,10 @@ export class ProjectService {
   }
 
   // Деактивация проекта (с проверкой владельца)
-  static async deactivateProject(id: string, adminId: string): Promise<Project> {
+  static async deactivateProject(
+    id: string,
+    adminId: string
+  ): Promise<Project> {
     // Проверяем доступ
     await this.verifyProjectAccess(id, adminId);
 

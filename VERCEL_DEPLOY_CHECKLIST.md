@@ -40,8 +40,6 @@ CRON_SECRET
 
 #### ОПЦИОНАЛЬНЫЕ (можно добавить позже):
 ```
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-CLERK_SECRET_KEY
 NEXT_PUBLIC_SENTRY_DSN
 ```
 
@@ -86,9 +84,6 @@ webhook-secret найдете в админке проекта после соз
 - ☐ Очистите Vercel cache: Settings > Functions > Clear Cache
 - ☐ Перезапустите деплой
 
-### Clerk ошибки:
-- ☐ Можно временно работать без Clerk (keyless mode)
-- ☐ Добавьте домен в Clerk Dashboard если используете
 
 ## ✅ ГОТОВО!
 

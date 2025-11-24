@@ -80,14 +80,6 @@ REDIS_URL="redis://redis:6379"
 REDIS_HOST="redis"
 REDIS_PORT="6379"
 
-# Clerk (получите production ключи)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
-CLERK_SECRET_KEY=""
-NEXT_PUBLIC_CLERK_SIGN_IN_URL="/auth/sign-in"
-NEXT_PUBLIC_CLERK_SIGN_UP_URL="/auth/sign-up"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/dashboard"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/dashboard"
-
 # Security
 JWT_SECRET="$(openssl rand -base64 32)"
 CRON_SECRET="$(openssl rand -base64 32)"
@@ -625,7 +617,6 @@ systemctl restart postgresql
 - [ ] Мониторинг работает
 - [ ] Логирование настроено
 - [ ] Переменные окружения production
-- [ ] Clerk production ключи
 - [ ] Sentry подключен
 - [ ] Redis пароль установлен
 - [ ] PostgreSQL пароль сильный

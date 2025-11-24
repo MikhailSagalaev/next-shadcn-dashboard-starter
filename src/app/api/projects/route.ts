@@ -22,28 +22,69 @@ import { z } from 'zod';
 
 // GET /api/projects - Получение списка проектов
 export async function GET(request: NextRequest) {
+  let admin: Awaited<ReturnType<typeof getCurrentAdmin>> = null;
+
   try {
-    const admin = await getCurrentAdmin();
+    admin = await getCurrentAdmin();
     if (!admin) {
+      logger.warn('GET /api/projects: Unauthorized - admin not found', {
+        component: 'projects-api',
+        action: 'GET'
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    logger.info('GET /api/projects: начало запроса', {
+      adminId: admin.sub,
+      adminEmail: admin.email,
+      component: 'projects-api',
+      action: 'GET'
+    });
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    // Фильтруем проекты по владельцу
-    const result = await ProjectService.getProjects(page, limit, admin.sub);
-
-    return NextResponse.json(result);
-  } catch (error) {
-    logger.error('Ошибка получения списка проектов', {
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+    logger.info('GET /api/projects: параметры запроса', {
+      adminId: admin.sub,
+      page,
+      limit,
       component: 'projects-api',
       action: 'GET'
     });
+
+    // Фильтруем проекты по владельцу
+    const result = await ProjectService.getProjects(page, limit, admin.sub);
+
+    logger.info('GET /api/projects: успешно получены проекты', {
+      adminId: admin.sub,
+      projectsCount: result.projects.length,
+      total: result.total,
+      component: 'projects-api',
+      action: 'GET'
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Неизвестная ошибка';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    logger.error('Ошибка получения списка проектов', {
+      error: errorMessage,
+      stack: errorStack,
+      adminId: admin?.sub,
+      component: 'projects-api',
+      action: 'GET'
+    });
+
+    // В development режиме возвращаем детали ошибки
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { error: 'Ошибка получения проектов' },
+      {
+        error: 'Ошибка получения проектов',
+        ...(isDev && { details: errorMessage, stack: errorStack })
+      },
       { status: 500 }
     );
   }
@@ -66,7 +107,7 @@ export async function POST(request: NextRequest) {
     // Проверка лимита проектов
     const { BillingService } = await import('@/lib/services/billing.service');
     const limitCheck = await BillingService.checkLimit(admin.sub, 'projects');
-    
+
     logger.info('Project limit check result', {
       adminId: admin.sub,
       allowed: limitCheck.allowed,
@@ -74,7 +115,7 @@ export async function POST(request: NextRequest) {
       limit: limitCheck.limit,
       planId: limitCheck.planId
     });
-    
+
     if (!limitCheck.allowed) {
       logger.warn('Project limit reached', {
         adminId: admin.sub,
@@ -82,7 +123,7 @@ export async function POST(request: NextRequest) {
         limit: limitCheck.limit
       });
       return NextResponse.json(
-        { 
+        {
           error: `Лимит проектов исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
           limitReached: true,
           currentUsage: limitCheck.used,
@@ -95,7 +136,7 @@ export async function POST(request: NextRequest) {
 
     // Валидация входных данных с Zod
     const validatedData = await validateRequest(request, createProjectSchema);
-    
+
     logger.info('Creating project with data', {
       adminId: admin.sub,
       projectName: validatedData.name,
@@ -103,7 +144,10 @@ export async function POST(request: NextRequest) {
     });
 
     // Создаем проект
-    const project = await ProjectService.createProject(validatedData as any, admin.sub);
+    const project = await ProjectService.createProject(
+      validatedData as any,
+      admin.sub
+    );
 
     logger.info('Project created successfully', {
       adminId: admin.sub,
@@ -126,7 +170,7 @@ export async function POST(request: NextRequest) {
       if (error.message.startsWith('Validation error:')) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
-      
+
       if (error.message.includes('Unique constraint')) {
         return NextResponse.json(
           { error: 'Проект с таким доменом уже существует' },
@@ -138,7 +182,7 @@ export async function POST(request: NextRequest) {
     // В development режиме возвращаем детали ошибки
     const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { 
+      {
         error: 'Ошибка создания проекта',
         ...(isDev && error instanceof Error && { details: error.message })
       },

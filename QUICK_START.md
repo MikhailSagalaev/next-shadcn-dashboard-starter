@@ -87,9 +87,8 @@ DATABASE_URL="postgresql://bonus_user:bonus_password@localhost:5432/bonus_system
 # Redis (если используете Docker)
 REDIS_URL="redis://localhost:6379"
 
-# Clerk Auth (можно оставить пустым для keyless mode)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
-CLERK_SECRET_KEY=""
+# JWT Secret для аутентификации
+JWT_SECRET="your-secret-key-here"
 
 # Остальное - по умолчанию
 NEXT_PUBLIC_APP_URL="http://localhost:5006"
@@ -154,11 +153,6 @@ psql -U postgres -c "SELECT 1"
 "dev": "next dev -p 3000"
 ```
 
-### Ошибка: "Clerk keys not configured"
-```bash
-# Приложение работает в keyless mode
-# Или получите ключи на https://clerk.com
-```
 
 ### Ошибка: "Redis connection failed"
 ```bash
