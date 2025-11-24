@@ -70,13 +70,23 @@ export async function GET(request: NextRequest) {
       error instanceof Error ? error.message : 'Неизвестная ошибка';
     const errorStack = error instanceof Error ? error.stack : undefined;
 
-    logger.error('Ошибка получения списка проектов', {
-      error: errorMessage,
-      stack: errorStack,
-      adminId: admin?.sub,
-      component: 'projects-api',
-      action: 'GET'
-    });
+    // Безопасное логирование - если logger падает, не прерываем обработку
+    try {
+      logger.error('Ошибка получения списка проектов', {
+        error: errorMessage,
+        stack: errorStack,
+        adminId: admin?.sub,
+        component: 'projects-api',
+        action: 'GET'
+      });
+    } catch (logError) {
+      // Если логирование не работает, просто продолжаем
+      console.error(
+        'Ошибка получения списка проектов:',
+        errorMessage,
+        errorStack
+      );
+    }
 
     // В development режиме возвращаем детали ошибки
     const isDev = process.env.NODE_ENV === 'development';

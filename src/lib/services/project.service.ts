@@ -298,14 +298,19 @@ export class ProjectService {
 
       return { projects: projects as any, total };
     } catch (error) {
-      logger.error('ProjectService.getProjects: ошибка', {
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        stack: error instanceof Error ? error.stack : undefined,
-        page,
-        limit,
-        ownerId,
-        component: 'project-service'
-      });
+      // Безопасное логирование
+      try {
+        logger.error('ProjectService.getProjects: ошибка', {
+          error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+          stack: error instanceof Error ? error.stack : undefined,
+          page,
+          limit,
+          ownerId,
+          component: 'project-service'
+        });
+      } catch (logError) {
+        console.error('ProjectService.getProjects: ошибка', error);
+      }
       throw error;
     }
   }
