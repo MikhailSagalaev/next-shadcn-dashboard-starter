@@ -3,7 +3,9 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs' || !process.env.NEXT_RUNTIME) {
     // Инициализация DelayJobService для workflow delays через Bull queue
     try {
-      const { DelayJobService } = await import('@/lib/services/workflow/delay-job.service');
+      const { DelayJobService } = await import(
+        '@/lib/services/workflow/delay-job.service'
+      );
       DelayJobService.initialize();
       console.log('✅ DelayJobService initialized');
     } catch (error) {
@@ -15,7 +17,9 @@ export async function register() {
       const shutdown = async (signal: string) => {
         console.log(`Received ${signal}, shutting down gracefully...`);
         try {
-          const { DelayJobService } = await import('@/lib/services/workflow/delay-job.service');
+          const { DelayJobService } = await import(
+            '@/lib/services/workflow/delay-job.service'
+          );
           await DelayJobService.shutdown();
           console.log('✅ DelayJobService shutdown complete');
         } catch (error) {
@@ -28,8 +32,6 @@ export async function register() {
       process.on('SIGINT', () => shutdown('SIGINT'));
     }
 
-    // Временно отключаем инициализацию Telegram ботов для быстрого запуска
-    /*
     // Динамический импорт для избежания проблем с crypto
     try {
       const { startupBots } = await import('@/lib/telegram/startup');
@@ -37,6 +39,5 @@ export async function register() {
     } catch (error) {
       console.error('Failed to initialize bots:', error);
     }
-    */
   }
 }

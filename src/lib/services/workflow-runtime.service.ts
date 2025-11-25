@@ -610,11 +610,50 @@ export class WorkflowRuntimeService {
               found: !!activeVersion,
               activeVersionWorkflowId: activeVersion?.workflowId,
               activeVersionVersion: activeVersion?.version,
-              waitingExecutionWorkflowId: waitingExecution.workflowId
+              waitingExecutionWorkflowId: waitingExecution.workflowId,
+              waitingExecutionVersion: waitingExecution.version
             });
 
             let versionRecord;
-            if (
+
+            // ✅ КРИТИЧНО: Если workflowId или version undefined, всегда используем активную версию
+            if (!waitingExecution.workflowId || !waitingExecution.version) {
+              logger.warn(
+                '⚠️ waitingExecution не содержит workflowId или version, используем активную версию',
+                {
+                  waitingExecutionId: waitingExecution.id,
+                  hasWorkflowId: !!waitingExecution.workflowId,
+                  hasVersion: !!waitingExecution.version,
+                  activeVersionFound: !!activeVersion
+                }
+              );
+
+              if (activeVersion) {
+                // Загружаем полную запись из БД для получения connections
+                versionRecord = await db.workflowVersion.findFirst({
+                  where: {
+                    id: activeVersion.id
+                  },
+                  include: { workflow: true }
+                });
+                logger.info(
+                  '✅ Используем активную версию (workflowId/version отсутствуют)',
+                  {
+                    versionId: activeVersion.id,
+                    version: activeVersion.version,
+                    isActive: activeVersion.isActive
+                  }
+                );
+              } else {
+                logger.error(
+                  '❌ Активная версия не найдена, и waitingExecution не содержит workflowId/version',
+                  {
+                    projectId,
+                    waitingExecutionId: waitingExecution.id
+                  }
+                );
+              }
+            } else if (
               activeVersion &&
               activeVersion.workflowId === waitingExecution.workflowId
             ) {
@@ -641,7 +680,8 @@ export class WorkflowRuntimeService {
                 '⚠️ Активная версия не найдена или для другого workflow, используем версию из execution',
                 {
                   workflowId: waitingExecution.workflowId,
-                  executionVersion: waitingExecution.version
+                  executionVersion: waitingExecution.version,
+                  activeVersionWorkflowId: activeVersion?.workflowId
                 }
               );
 
