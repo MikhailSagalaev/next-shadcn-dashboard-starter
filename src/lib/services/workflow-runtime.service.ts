@@ -877,6 +877,23 @@ export class WorkflowRuntimeService {
                 console.log('🔧 Found callback trigger node', {
                   nodeId: callbackTriggerNode.id
                 });
+
+                // ✅ Проверяем connections для этого триггера
+                const connections = versionToUse.connections || [];
+                const triggerConnections = connections.filter(
+                  (conn: any) => conn.source === callbackTriggerNode.id
+                );
+                logger.info('🔧 Connections for callback trigger', {
+                  triggerNodeId: callbackTriggerNode.id,
+                  connectionsCount: triggerConnections.length,
+                  connections: triggerConnections.map((c: any) => ({
+                    source: c.source,
+                    target: c.target
+                  }))
+                });
+
+                // Выполняем workflow начиная с callback trigger
+                // executeWorkflow автоматически продолжит к следующему узлу по connections
                 await (processor as any).executeWorkflow(
                   resumedContext,
                   callbackTriggerNode.id

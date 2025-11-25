@@ -160,8 +160,8 @@ export async function initializeAllBots() {
  * Выполняет инициализацию с задержкой для развертывания
  */
 export async function startupBots() {
-  // Задержка для полной загрузки приложения
+  // Уменьшаем задержку для быстрого запуска ботов
   setTimeout(async () => {
     await initializeAllBots();
-  }, 3000); // 3 секунды после запуска
+  }, 500); // 500ms после запуска (изменено с 3000ms)
 }

@@ -43,16 +43,30 @@ export class SimpleWorkflowProcessor {
       this.nodesMap.set(id, node);
       logger.debug(`📋 Добавлена нода в nodesMap: ${id} (${node.type})`);
     });
-    
+
     logger.debug(`📋 Всего нод в nodesMap: ${this.nodesMap.size}`);
     logger.debug(`📋 Ключи nodesMap:`, Array.from(this.nodesMap.keys()));
 
     // Индексируем connections для быстрого доступа
     this.connectionsMap = new Map();
     if (workflowVersion.connections) {
-      workflowVersion.connections.forEach(connection => {
+      workflowVersion.connections.forEach((connection) => {
         const key = `${connection.source}->${connection.target}`;
         this.connectionsMap.set(key, connection);
+      });
+      logger.debug(
+        `📋 Всего connections в connectionsMap: ${this.connectionsMap.size}`
+      );
+      logger.debug(
+        `📋 Connections для menu-invite-trigger:`,
+        Array.from(this.connectionsMap.values())
+          .filter((c) => c.source === 'menu-invite-trigger')
+          .map((c) => ({ source: c.source, target: c.target }))
+      );
+    } else {
+      logger.warn('⚠️ workflowVersion.connections is null or undefined', {
+        hasConnections: !!workflowVersion.connections,
+        connectionsType: typeof workflowVersion.connections
       });
     }
   }
@@ -60,90 +74,102 @@ export class SimpleWorkflowProcessor {
   /**
    * Обработка входящего сообщения/команды
    */
-  async process(ctx: Context, trigger: 'start' | 'message' | 'callback'): Promise<boolean> {
+  async process(
+    ctx: Context,
+    trigger: 'start' | 'message' | 'callback'
+  ): Promise<boolean> {
     let context: ExecutionContext | null = null;
 
+    try {
+      logger.info('🎯 Начало обработки workflow', {
+        projectId: this.projectId,
+        workflowId: this.workflowVersion.workflowId,
+        version: this.workflowVersion.version,
+        trigger,
+        userId: ctx.from?.id,
+        username: ctx.from?.username,
+        totalNodes: this.nodesMap.size
+      });
+
+      // Создаем контекст выполнения
+      const telegramUserId = ctx.from?.id?.toString();
+      const chatId = ctx.chat?.id?.toString();
+
+      // ✅ Rate limiting: проверка лимита для Telegram сообщений
+      if (telegramUserId) {
+        const messageLimit = await RateLimiterService.checkLimit(
+          'TELEGRAM_MESSAGE',
+          telegramUserId
+        );
+
+        if (!messageLimit.allowed) {
+          logger.warn('Telegram message rate limit exceeded', {
+            telegramUserId,
+            projectId: this.projectId,
+            remaining: messageLimit.remaining,
+            retryAfter: messageLimit.retryAfter
+          });
+
+          // Отправляем пользователю сообщение о превышении лимита
           try {
-        logger.info('🎯 Начало обработки workflow', {
-          projectId: this.projectId,
-          workflowId: this.workflowVersion.workflowId,
-          version: this.workflowVersion.version,
-          trigger,
-          userId: ctx.from?.id,
-          username: ctx.from?.username,
-          totalNodes: this.nodesMap.size
-        });
-
-        // Создаем контекст выполнения
-        const telegramUserId = ctx.from?.id?.toString();
-        const chatId = ctx.chat?.id?.toString();
-
-        // ✅ Rate limiting: проверка лимита для Telegram сообщений
-        if (telegramUserId) {
-          const messageLimit = await RateLimiterService.checkLimit(
-            'TELEGRAM_MESSAGE',
-            telegramUserId
-          );
-
-          if (!messageLimit.allowed) {
-            logger.warn('Telegram message rate limit exceeded', {
-              telegramUserId,
-              projectId: this.projectId,
-              remaining: messageLimit.remaining,
-              retryAfter: messageLimit.retryAfter
+            await ctx.reply(
+              '⚠️ Слишком много запросов. Пожалуйста, подождите немного перед следующим запросом.'
+            );
+          } catch (replyError) {
+            logger.error('Failed to send rate limit message', {
+              error:
+                replyError instanceof Error
+                  ? replyError.message
+                  : String(replyError)
             });
-
-            // Отправляем пользователю сообщение о превышении лимита
-            try {
-              await ctx.reply(
-                '⚠️ Слишком много запросов. Пожалуйста, подождите немного перед следующим запросом.'
-              );
-            } catch (replyError) {
-              logger.error('Failed to send rate limit message', {
-                error: replyError instanceof Error ? replyError.message : String(replyError)
-              });
-            }
-
-            return false;
           }
+
+          return false;
         }
+      }
 
-        // ✅ Rate limiting: проверка лимита для workflow execution (per user)
-        if (telegramUserId) {
-          const workflowLimit = await RateLimiterService.checkLimit(
-            'WORKFLOW_EXECUTION',
-            `${this.projectId}:${telegramUserId}`
-          );
+      // ✅ Rate limiting: проверка лимита для workflow execution (per user)
+      if (telegramUserId) {
+        const workflowLimit = await RateLimiterService.checkLimit(
+          'WORKFLOW_EXECUTION',
+          `${this.projectId}:${telegramUserId}`
+        );
 
-          if (!workflowLimit.allowed) {
-            logger.warn('Workflow execution rate limit exceeded', {
-              telegramUserId,
-              projectId: this.projectId,
-              remaining: workflowLimit.remaining,
-              retryAfter: workflowLimit.retryAfter
+        if (!workflowLimit.allowed) {
+          logger.warn('Workflow execution rate limit exceeded', {
+            telegramUserId,
+            projectId: this.projectId,
+            remaining: workflowLimit.remaining,
+            retryAfter: workflowLimit.retryAfter
+          });
+
+          // Отправляем пользователю сообщение
+          try {
+            await ctx.reply(
+              '⚠️ Превышен лимит выполнения сценариев. Попробуйте позже.'
+            );
+          } catch (replyError) {
+            logger.error('Failed to send workflow rate limit message', {
+              error:
+                replyError instanceof Error
+                  ? replyError.message
+                  : String(replyError)
             });
-
-            // Отправляем пользователю сообщение
-            try {
-              await ctx.reply(
-                '⚠️ Превышен лимит выполнения сценариев. Попробуйте позже.'
-              );
-            } catch (replyError) {
-              logger.error('Failed to send workflow rate limit message', {
-                error: replyError instanceof Error ? replyError.message : String(replyError)
-              });
-            }
-
-            return false;
           }
+
+          return false;
         }
+      }
 
       // Находим пользователя в базе данных по Telegram ID
       let userId: string | undefined;
       if (telegramUserId) {
         try {
-          logger.debug('Looking for user by telegram ID', { telegramUserId, projectId: this.projectId });
-          
+          logger.debug('Looking for user by telegram ID', {
+            telegramUserId,
+            projectId: this.projectId
+          });
+
           const user = await db.user.findFirst({
             where: {
               telegramId: BigInt(telegramUserId),
@@ -151,11 +177,18 @@ export class SimpleWorkflowProcessor {
             },
             select: { id: true }
           });
-          
+
           userId = user?.id;
-          logger.debug('User lookup result', { telegramUserId, userId, found: !!user });
+          logger.debug('User lookup result', {
+            telegramUserId,
+            userId,
+            found: !!user
+          });
         } catch (error) {
-          logger.warn('Failed to find user by telegram ID', { telegramUserId, error });
+          logger.warn('Failed to find user by telegram ID', {
+            telegramUserId,
+            error
+          });
         }
       } else {
         logger.debug('No telegramUserId provided, skipping user lookup');
@@ -180,9 +213,16 @@ export class SimpleWorkflowProcessor {
       }
 
       // Находим стартовую ноду по триггеру
-      logger.debug('Finding trigger node', { trigger, hasCallback: !!ctx.callbackQuery, callbackData: ctx.callbackQuery?.data });
+      logger.debug('Finding trigger node', {
+        trigger,
+        hasCallback: !!ctx.callbackQuery,
+        callbackData: ctx.callbackQuery?.data
+      });
       const startNode = this.findTriggerNode(trigger, ctx);
-      logger.debug('findTriggerNode result', { startNodeId: startNode?.id, startNodeType: startNode?.type });
+      logger.debug('findTriggerNode result', {
+        startNodeId: startNode?.id,
+        startNodeType: startNode?.type
+      });
 
       if (!startNode) {
         logger.debug('CRITICAL: No start node found', {});
@@ -193,7 +233,9 @@ export class SimpleWorkflowProcessor {
           hasContact: !!ctx.message?.contact,
           hasCallback: !!ctx.callbackQuery,
           callbackData: ctx.callbackQuery?.data,
-          availableNodeTypes: Array.from(this.nodesMap.values()).map((n: any) => n.type)
+          availableNodeTypes: Array.from(this.nodesMap.values()).map(
+            (n: any) => n.type
+          )
         });
         return false;
       }
@@ -205,7 +247,9 @@ export class SimpleWorkflowProcessor {
         startNodeLabel: startNode.data?.label
       });
 
-      logger.debug('Starting workflow execution with node', { nodeId: startNode.id });
+      logger.debug('Starting workflow execution with node', {
+        nodeId: startNode.id
+      });
 
       // Выполняем workflow начиная со стартовой ноды
       try {
@@ -213,7 +257,10 @@ export class SimpleWorkflowProcessor {
         logger.debug('Workflow execution loop completed successfully', {});
       } catch (executionError) {
         console.error('Workflow execution failed:', {
-          error: executionError instanceof Error ? executionError.message : 'Unknown execution error',
+          error:
+            executionError instanceof Error
+              ? executionError.message
+              : 'Unknown execution error',
           nodeId: startNode.id
         });
         throw executionError;
@@ -242,10 +289,18 @@ export class SimpleWorkflowProcessor {
 
       // Завершаем выполнение как completed, если не waiting
       try {
-        await ExecutionContextManager.completeExecution(context, 'completed', undefined, context.step);
+        await ExecutionContextManager.completeExecution(
+          context,
+          'completed',
+          undefined,
+          context.step
+        );
         logger.debug('Execution completed successfully', {});
       } catch (completeError) {
-        console.error('Failed to complete execution, but workflow was successful:', completeError);
+        console.error(
+          'Failed to complete execution, but workflow was successful:',
+          completeError
+        );
         // Не бросаем ошибку, так как workflow выполнился успешно
       }
 
@@ -289,8 +344,8 @@ export class SimpleWorkflowProcessor {
     const userId = ctx.from?.id || 'unknown';
 
     // ✅ Для callback НЕ добавляем timestamp, чтобы использовать ту же сессию
-    const isCallback = !!(ctx.callbackQuery);
-    const sessionId = isCallback 
+    const isCallback = !!ctx.callbackQuery;
+    const sessionId = isCallback
       ? `${chatId}_${userId}` // Стабильный ID для callback
       : `${chatId}_${userId}_${Date.now()}`; // Уникальный ID для новых команд/сообщений
 
@@ -308,7 +363,10 @@ export class SimpleWorkflowProcessor {
    * Продолжает выполнение workflow начиная с указанной ноды
    * Используется для возобновления workflow после waiting состояния
    */
-  async resumeWorkflow(context: ExecutionContext, startNodeId: string): Promise<void> {
+  async resumeWorkflow(
+    context: ExecutionContext,
+    startNodeId: string
+  ): Promise<void> {
     return this.executeWorkflow(context, startNodeId);
   }
 
@@ -316,21 +374,26 @@ export class SimpleWorkflowProcessor {
    * Выполняет workflow начиная с указанной ноды
    * ✅ Защита от бесконечных циклов через visitedNodes и maxIterations
    */
-  private async executeWorkflow(context: ExecutionContext, startNodeId: string): Promise<void> {
+  private async executeWorkflow(
+    context: ExecutionContext,
+    startNodeId: string
+  ): Promise<void> {
     logger.debug('EXECUTING WORKFLOW FROM NODE', { nodeId: startNodeId });
-    logger.debug('Available nodes', { nodes: Array.from(this.nodesMap.keys()) });
-    
+    logger.debug('Available nodes', {
+      nodes: Array.from(this.nodesMap.keys())
+    });
+
     this.currentContext = context;
     let currentNodeId: string | null = startNodeId;
     let step = 0;
-    
+
     // ✅ Защита от циклов: отслеживаем посещенные ноды
     const visitedNodes = new Map<string, number>(); // nodeId -> количество посещений
     const MAX_NODE_VISITS = 100; // Максимум 100 посещений одной ноды (для циклов)
 
     while (currentNodeId && step < context.maxSteps) {
       step++;
-      
+
       logger.debug('Executing workflow step', { step, nodeId: currentNodeId });
 
       // ✅ Проверяем количество посещений текущей ноды
@@ -338,7 +401,7 @@ export class SimpleWorkflowProcessor {
       if (visitCount >= MAX_NODE_VISITS) {
         throw new Error(
           `Infinite loop detected: Node ${currentNodeId} visited ${visitCount} times. ` +
-          `Maximum allowed: ${MAX_NODE_VISITS}`
+            `Maximum allowed: ${MAX_NODE_VISITS}`
         );
       }
       visitedNodes.set(currentNodeId, visitCount + 1);
@@ -363,13 +426,19 @@ export class SimpleWorkflowProcessor {
       }
 
       // Выполняем ноду через handler
-      logger.debug('Executing node handler', { nodeType: node.type, nodeId: currentNodeId });
+      logger.debug('Executing node handler', {
+        nodeType: node.type,
+        nodeId: currentNodeId
+      });
       const nextNodeId = await handler.execute(node, updatedContext);
       logger.debug('Node executed', { nodeId: currentNodeId, nextNodeId });
       context.step = step;
 
       // ✅ Проверяем на специальный результат ожидания ввода пользователя
-      if (nextNodeId === '__WAITING_FOR_USER_INPUT__' || nextNodeId === '__WAITING_FOR_CONTACT__') {
+      if (
+        nextNodeId === '__WAITING_FOR_USER_INPUT__' ||
+        nextNodeId === '__WAITING_FOR_CONTACT__'
+      ) {
         logger.info('⏸️ Workflow paused waiting for user input', {
           executionId: context.executionId,
           nodeId: currentNodeId,
@@ -396,10 +465,10 @@ export class SimpleWorkflowProcessor {
     if (step >= context.maxSteps) {
       throw new Error(
         `Maximum steps (${context.maxSteps}) exceeded. ` +
-        `This might indicate an infinite loop or overly complex workflow.`
+          `This might indicate an infinite loop or overly complex workflow.`
       );
     }
-    
+
     logger.debug('Workflow completed successfully', { steps: step });
   }
 
@@ -409,28 +478,51 @@ export class SimpleWorkflowProcessor {
    */
   async getNextNodeId(currentNodeId: string): Promise<string | null> {
     // Ищем connection где source - текущий нод
-    const relevantConnections = Array.from(this.connectionsMap.values())
-      .filter(connection => connection.source === currentNodeId);
+    const relevantConnections = Array.from(this.connectionsMap.values()).filter(
+      (connection) => connection.source === currentNodeId
+    );
+
+    logger.debug('🔍 getNextNodeId called', {
+      currentNodeId,
+      connectionsMapSize: this.connectionsMap.size,
+      relevantConnectionsCount: relevantConnections.length,
+      relevantConnections: relevantConnections.map((c) => ({
+        source: c.source,
+        target: c.target
+      }))
+    });
 
     if (relevantConnections.length === 0) {
+      logger.warn('⚠️ No connections found for node', {
+        currentNodeId,
+        allConnections: Array.from(this.connectionsMap.values()).map((c) => ({
+          source: c.source,
+          target: c.target
+        }))
+      });
       return null;
     }
 
     // Если только одна connection, возвращаем её target
     if (relevantConnections.length === 1) {
-      return relevantConnections[0].target;
+      const nextNodeId = relevantConnections[0].target;
+      logger.debug('✅ Found next node via connection', {
+        currentNodeId,
+        nextNodeId
+      });
+      return nextNodeId;
     }
 
     // Для condition нод проверяем sourceHandle и результат условия
     const currentNode = this.nodesMap.get(currentNodeId);
     if (currentNode?.type === 'condition') {
       logger.debug('Processing condition node', { nodeId: currentNodeId });
-      logger.debug('Available connections', { 
-        connections: relevantConnections.map(c => ({
-        source: c.source,
-        target: c.target,
-        sourceHandle: (c as any).sourceHandle,
-        type: c.type
+      logger.debug('Available connections', {
+        connections: relevantConnections.map((c) => ({
+          source: c.source,
+          target: c.target,
+          sourceHandle: (c as any).sourceHandle,
+          type: c.type
         }))
       });
 
@@ -441,36 +533,43 @@ export class SimpleWorkflowProcessor {
       const expectedHandle = conditionResult ? 'true' : 'false';
       logger.debug('Looking for sourceHandle', { expectedHandle });
 
-      const matchingConnection = relevantConnections.find(conn => {
+      const matchingConnection = relevantConnections.find((conn) => {
         const connSourceHandle = (conn as any).sourceHandle;
         const matches = connSourceHandle === expectedHandle;
-        logger.debug('Checking connection', { 
-          source: conn.source, 
-          target: conn.target, 
-          sourceHandle: connSourceHandle, 
-          matches 
+        logger.debug('Checking connection', {
+          source: conn.source,
+          target: conn.target,
+          sourceHandle: connSourceHandle,
+          matches
         });
         return matches;
       });
 
       if (matchingConnection) {
-        logger.debug('Condition matched', { 
-          nodeId: currentNodeId, 
-          result: conditionResult, 
-          expectedHandle, 
-          target: matchingConnection.target 
+        logger.debug('Condition matched', {
+          nodeId: currentNodeId,
+          result: conditionResult,
+          expectedHandle,
+          target: matchingConnection.target
         });
         return matchingConnection.target;
       }
 
       // Если нет подходящей connection, берем default
-      const defaultConnection = relevantConnections.find(conn => conn.type === 'default');
+      const defaultConnection = relevantConnections.find(
+        (conn) => conn.type === 'default'
+      );
       if (defaultConnection) {
-        logger.debug('No matching sourceHandle, using default', { target: defaultConnection.target });
+        logger.debug('No matching sourceHandle, using default', {
+          target: defaultConnection.target
+        });
         return defaultConnection.target;
       }
 
-      logger.warn('No matching connection found for condition', { nodeId: currentNodeId, result: conditionResult });
+      logger.warn('No matching connection found for condition', {
+        nodeId: currentNodeId,
+        result: conditionResult
+      });
     }
 
     // Для остальных случаев возвращаем первый target (для обратной совместимости)
@@ -487,12 +586,21 @@ export class SimpleWorkflowProcessor {
     }
 
     try {
-      const result = await this.currentContext.variables.get('condition_result', 'session');
-      logger.debug('getConditionResultFromContext: condition_result', { result, resultType: typeof result });
-      
+      const result = await this.currentContext.variables.get(
+        'condition_result',
+        'session'
+      );
+      logger.debug('getConditionResultFromContext: condition_result', {
+        result,
+        resultType: typeof result
+      });
+
       return Boolean(result);
     } catch (error) {
-      logger.debug('getConditionResultFromContext: error getting condition_result', { error: String(error) });
+      logger.debug(
+        'getConditionResultFromContext: error getting condition_result',
+        { error: String(error) }
+      );
       // Если переменная не найдена, возвращаем false
       return false;
     }
@@ -502,14 +610,17 @@ export class SimpleWorkflowProcessor {
    * Находим триггерную ноду на основе входящего обновления
    * Поддерживает множественные триггеры в одном workflow (как в ManyChat/n8n)
    */
-  private findTriggerNode(trigger: string, ctx?: any): WorkflowNode | undefined {
+  private findTriggerNode(
+    trigger: string,
+    ctx?: any
+  ): WorkflowNode | undefined {
     // 1️⃣ ПРИОРИТЕТ 1: Проверяем наличие контакта (trigger.contact)
     if (ctx?.message?.contact) {
       const contactTrigger = this.findTriggerByType('trigger.contact');
       if (contactTrigger) {
-        logger.info('✅ Найден trigger.contact (контакт получен)', { 
+        logger.info('✅ Найден trigger.contact (контакт получен)', {
           nodeId: contactTrigger.id,
-          phone: ctx.message.contact.phone_number 
+          phone: ctx.message.contact.phone_number
         });
         return contactTrigger;
       }
@@ -518,7 +629,10 @@ export class SimpleWorkflowProcessor {
     // 2️⃣ ПРИОРИТЕТ 2: Проверяем callback query (trigger.callback)
     if (ctx?.callbackQuery) {
       const callbackData = ctx.callbackQuery.data;
-      logger.debug('Looking for callback trigger', { callbackData, availableNodes: Array.from(this.nodesMap.keys()) });
+      logger.debug('Looking for callback trigger', {
+        callbackData,
+        availableNodes: Array.from(this.nodesMap.keys())
+      });
       const callbackTrigger = this.findCallbackTrigger(callbackData);
       if (callbackTrigger) {
         logger.info('Найден trigger.callback', {
@@ -531,7 +645,9 @@ export class SimpleWorkflowProcessor {
         // Возвращаем fallback для неизвестных callback
         const fallbackTrigger = this.findCommandTrigger('/start');
         if (fallbackTrigger) {
-          logger.warn('Using /start trigger as fallback for unknown callback', { callbackData });
+          logger.warn('Using /start trigger as fallback for unknown callback', {
+            callbackData
+          });
           return fallbackTrigger;
         }
       }
@@ -541,7 +657,9 @@ export class SimpleWorkflowProcessor {
     if (trigger === 'start') {
       const commandTrigger = this.findCommandTrigger('/start');
       if (commandTrigger) {
-        logger.info('✅ Найден trigger.command для /start', { nodeId: commandTrigger.id });
+        logger.info('✅ Найден trigger.command для /start', {
+          nodeId: commandTrigger.id
+        });
         return commandTrigger;
       }
     }
@@ -559,7 +677,7 @@ export class SimpleWorkflowProcessor {
     if (this.workflowVersion.entryNodeId) {
       const entryNode = this.nodesMap.get(this.workflowVersion.entryNodeId);
       if (entryNode) {
-        logger.info('✅ Используем entry node как fallback', { 
+        logger.info('✅ Используем entry node как fallback', {
           nodeId: entryNode.id,
           nodeType: entryNode.type
         });
@@ -567,9 +685,9 @@ export class SimpleWorkflowProcessor {
       }
     }
 
-    logger.warn('❌ Trigger нода не найдена', { 
-      trigger, 
-      hasContact: !!ctx?.message?.contact, 
+    logger.warn('❌ Trigger нода не найдена', {
+      trigger,
+      hasContact: !!ctx?.message?.contact,
       hasCallback: !!ctx?.callbackQuery,
       entryNodeId: this.workflowVersion.entryNodeId,
       availableNodes: Array.from(this.nodesMap.values()).map((n: any) => ({
@@ -599,14 +717,16 @@ export class SimpleWorkflowProcessor {
    */
   private findCommandTrigger(command: string): WorkflowNode | undefined {
     logger.debug('findCommandTrigger searching', { command });
-    
+
     for (const [nodeId, node] of Array.from(this.nodesMap.entries())) {
       logger.debug('Checking node', { nodeId, nodeType: node.type });
-      
+
       if (node.type === 'trigger.command') {
         const config = node.data?.config?.['trigger.command'];
-        logger.debug('Config check', { config: config ? JSON.stringify(config) : null });
-        
+        logger.debug('Config check', {
+          config: config ? JSON.stringify(config) : null
+        });
+
         if (config?.command === command) {
           logger.debug('Command found', { command, nodeId: node.id });
           // Возвращаем ноду с правильным ID для nodesMap
@@ -614,7 +734,7 @@ export class SimpleWorkflowProcessor {
         }
       }
     }
-    
+
     logger.debug('Command not found', { command });
     return undefined;
   }
@@ -623,7 +743,10 @@ export class SimpleWorkflowProcessor {
    * Поиск trigger.callback по callback_data
    */
   private findCallbackTrigger(callbackData: string): WorkflowNode | undefined {
-    logger.debug('findCallbackTrigger searching', { callbackData, nodeCount: this.nodesMap.size });
+    logger.debug('findCallbackTrigger searching', {
+      callbackData,
+      nodeCount: this.nodesMap.size
+    });
 
     for (const node of Array.from(this.nodesMap.values())) {
       logger.debug('Checking node', {
@@ -648,4 +771,3 @@ export class SimpleWorkflowProcessor {
     return undefined;
   }
 }
-

@@ -330,17 +330,20 @@ class BotManager {
       return;
     }
 
-    logger.warn(`🚨 ЭКСТРЕННАЯ ОСТАНОВКА БОТОВ С ТОКЕНОМ ***${token.slice(-4)}`, {
-      botCount: botsWithToken.length,
-      projectIds: botsWithToken.map(([id]) => id),
-      botsDetails: botsWithToken.map(([id, bot]) => ({
-        projectId: id,
-        isActive: bot.isActive,
-        isPolling: bot.isPolling,
-        token: '***' + bot.bot.token.slice(-4)
-      })),
-      component: 'bot-manager'
-    });
+    logger.warn(
+      `🚨 ЭКСТРЕННАЯ ОСТАНОВКА БОТОВ С ТОКЕНОМ ***${token.slice(-4)}`,
+      {
+        botCount: botsWithToken.length,
+        projectIds: botsWithToken.map(([id]) => id),
+        botsDetails: botsWithToken.map(([id, bot]) => ({
+          projectId: id,
+          isActive: bot.isActive,
+          isPolling: bot.isPolling,
+          token: '***' + bot.bot.token.slice(-4)
+        })),
+        component: 'bot-manager'
+      }
+    );
 
     const promises = botsWithToken.map(async ([projectId, botInstance]) => {
       try {
@@ -431,7 +434,7 @@ class BotManager {
     this.bots.clear();
 
     // Дополнительная задержка для полной очистки Telegram API
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 5000));
 
     logger.warn(`🚨 Экстренная остановка завершена`, {
       component: 'bot-manager'
@@ -485,7 +488,9 @@ class BotManager {
         token: '***' + botSettings.botToken.slice(-4),
         username: botSettings.botUsername,
         existingBots: Array.from(this.bots.keys()),
-        existingTokens: Array.from(this.bots.values()).map(b => '***' + b.bot.token.slice(-4)),
+        existingTokens: Array.from(this.bots.values()).map(
+          (b) => '***' + b.bot.token.slice(-4)
+        ),
         component: 'bot-manager'
       });
 
@@ -514,15 +519,18 @@ class BotManager {
       // Если HTTPS нет (IP/HTTP), принудительно используем polling.
       const isWebhookCapable = this.WEBHOOK_BASE_URL.startsWith('https://');
       const isLocalDevelopment = process.env.NODE_ENV === 'development';
-      
+
       // В локальной разработке принудительно используем polling
       if (isLocalDevelopment) {
-        logger.info('🏠 ЛОКАЛЬНАЯ РАЗРАБОТКА - принудительно используем polling', {
-          projectId,
-          webhookBaseUrl: this.WEBHOOK_BASE_URL,
-          component: 'bot-manager'
-        });
-        
+        logger.info(
+          '🏠 ЛОКАЛЬНАЯ РАЗРАБОТКА - принудительно используем polling',
+          {
+            projectId,
+            webhookBaseUrl: this.WEBHOOK_BASE_URL,
+            component: 'bot-manager'
+          }
+        );
+
         // Удаляем webhook если он установлен
         try {
           await bot.api.deleteWebhook({ drop_pending_updates: true });
@@ -533,15 +541,19 @@ class BotManager {
         } catch (webhookError) {
           logger.warn('⚠️ Ошибка удаления webhook (возможно не установлен)', {
             projectId,
-            error: webhookError instanceof Error ? webhookError.message : 'Unknown',
+            error:
+              webhookError instanceof Error ? webhookError.message : 'Unknown',
             component: 'bot-manager'
           });
         }
       }
 
-      const finalMode = isLocalDevelopment ? 'Local Development (polling)' : 
-                       isWebhookCapable ? 'Production (webhook)' : 'Polling (no-https)';
-      
+      const finalMode = isLocalDevelopment
+        ? 'Local Development (polling)'
+        : isWebhookCapable
+          ? 'Production (webhook)'
+          : 'Polling (no-https)';
+
       logger.info(`Режим работы: ${finalMode}`, {
         projectId,
         isDev: !isWebhookCapable,
@@ -562,17 +574,19 @@ class BotManager {
           projectId,
           component: 'bot-manager'
         });
-        
+
         // Запускаем grammY runner (long polling, параллельная обработка)
         try {
           logger.info(`🚀 ЗАПУСК GRAMMY RUNNER (ЛОКАЛЬНАЯ РАЗРАБОТКА)`, {
             projectId,
             token: '***' + bot.token.slice(-4),
-            botInfo: bot.botInfo ? {
-              id: bot.botInfo.id,
-              username: bot.botInfo.username,
-              firstName: bot.botInfo.first_name
-            } : null,
+            botInfo: bot.botInfo
+              ? {
+                  id: bot.botInfo.id,
+                  username: bot.botInfo.username,
+                  firstName: bot.botInfo.first_name
+                }
+              : null,
             component: 'bot-manager'
           });
 
@@ -586,9 +600,13 @@ class BotManager {
             component: 'bot-manager'
           });
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
+          const errorMessage =
+            error instanceof Error ? error.message : 'Неизвестная ошибка';
 
-          if (errorMessage.includes('409') || errorMessage.includes('terminated by other getUpdates')) {
+          if (
+            errorMessage.includes('409') ||
+            errorMessage.includes('terminated by other getUpdates')
+          ) {
             logger.error('❌ 409 КОНФЛИКТ ПРИ ЛОКАЛЬНОМ ЗАПУСКЕ', {
               projectId,
               token: '***' + bot.token.slice(-4),
@@ -596,7 +614,7 @@ class BotManager {
               allBotsInManager: this.getAllBotsStatus(),
               component: 'bot-manager'
             });
-            
+
             // Создаем BotInstance даже при конфликте, но без запуска
             const botInstance: BotInstance = {
               bot,
@@ -607,11 +625,11 @@ class BotManager {
               lastUpdated: new Date(),
               projectId
             };
-            
+
             this.bots.set(projectId, botInstance);
             return botInstance;
           }
-          
+
           logger.error('Ошибка в запросе:', {
             projectId,
             description: errorMessage,
@@ -664,19 +682,21 @@ class BotManager {
                 token: '***' + bot.token.slice(-4),
                 description: e.description,
                 error_code: e.error_code,
-                allBotsInManager: Array.from(this.bots.entries()).map(([pid, botInstance]) => ({
-                  projectId: pid,
-                  token: '***' + botInstance.bot.token.slice(-4),
-                  isActive: botInstance.isActive,
-                  isPolling: botInstance.isPolling
-                })),
+                allBotsInManager: Array.from(this.bots.entries()).map(
+                  ([pid, botInstance]) => ({
+                    projectId: pid,
+                    token: '***' + botInstance.bot.token.slice(-4),
+                    isActive: botInstance.isActive,
+                    isPolling: botInstance.isPolling
+                  })
+                ),
                 component: 'bot-manager'
               });
-              
+
               // Не перезапускаем бота автоматически, просто логируем
               return;
             }
-            
+
             logger.error('Ошибка в запросе:', {
               projectId,
               description: e.description,
@@ -715,7 +735,7 @@ class BotManager {
               component: 'bot-manager'
             }
           );
-          
+
           // Останавливаем предыдущий бот
           try {
             await this.stopBot(existingBot.projectId);
@@ -747,9 +767,9 @@ class BotManager {
               projectId,
               component: 'bot-manager'
             });
-            
+
             // Дополнительная задержка для очистки Telegram API
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           } catch (error) {
             logger.warn(`Не удалось удалить webhook перед polling`, {
               projectId,
@@ -763,11 +783,13 @@ class BotManager {
             logger.info(`🚀 ЗАПУСК GRAMMY RUNNER`, {
               projectId,
               token: '***' + bot.token.slice(-4),
-              botInfo: bot.botInfo ? {
-                id: bot.botInfo.id,
-                username: bot.botInfo.username,
-                firstName: bot.botInfo.first_name
-              } : null,
+              botInfo: bot.botInfo
+                ? {
+                    id: bot.botInfo.id,
+                    username: bot.botInfo.username,
+                    firstName: bot.botInfo.first_name
+                  }
+                : null,
               component: 'bot-manager'
             });
 
@@ -795,7 +817,7 @@ class BotManager {
                 allBotsInManager: this.getAllBotsStatus(),
                 component: 'bot-manager'
               });
-              
+
               // Создаем BotInstance даже при конфликте, но без запуска
               const botInstance: BotInstance = {
                 bot,
@@ -806,7 +828,7 @@ class BotManager {
                 lastUpdated: new Date(),
                 projectId
               };
-              
+
               this.bots.set(projectId, botInstance);
               return botInstance;
             } else {
@@ -846,7 +868,7 @@ class BotManager {
                 component: 'bot-manager'
               }
             );
-            
+
             // Останавливаем предыдущий бот
             try {
               await this.stopBot(existingWebhookBot.projectId);
@@ -910,7 +932,21 @@ class BotManager {
       };
 
       this.bots.set(projectId, botInstance);
-      
+
+      // ✅ Логирование для проверки сохранения бота в менеджере
+      logger.info('✅ Бот создан и сохранен в менеджере', {
+        projectId,
+        botCount: this.bots.size,
+        allProjectIds: Array.from(this.bots.keys()),
+        botInstance: {
+          isActive: botInstance.isActive,
+          isPolling: botInstance.isPolling,
+          hasWebhook: !!botInstance.webhook,
+          hasRunner: !!botInstance.runner
+        },
+        component: 'bot-manager'
+      });
+
       // Синхронизируем isActive в БД при успешном запуске
       try {
         await db.botSettings.update({
@@ -928,7 +964,7 @@ class BotManager {
           component: 'bot-manager'
         });
       }
-      
+
       logger.info(`Бот для проекта ${projectId} создан и активирован`, {
         projectId,
         mode: isPolling ? 'polling' : 'webhook',
@@ -980,11 +1016,13 @@ class BotManager {
 
     logger.info('🔄 UPDATE BOT ВЫЗВАН', {
       projectId,
-      existingBot: existingBot ? {
-        token: '***' + existingBot.bot.token.slice(-4),
-        isActive: existingBot.isActive,
-        isPolling: existingBot.isPolling
-      } : null,
+      existingBot: existingBot
+        ? {
+            token: '***' + existingBot.bot.token.slice(-4),
+            isActive: existingBot.isActive,
+            isPolling: existingBot.isPolling
+          }
+        : null,
       newToken: '***' + botSettings.botToken.slice(-4),
       allBotsInManager: this.getAllBotsStatus(),
       component: 'bot-manager'
@@ -994,7 +1032,9 @@ class BotManager {
     if (!existingBot || existingBot.bot.token !== botSettings.botToken) {
       logger.info('🔄 ТОКЕН БОТА ИЗМЕНИЛСЯ, ПЕРЕСОЗДАЕМ БОТА', {
         projectId,
-        oldToken: existingBot?.bot.token ? '***' + existingBot.bot.token.slice(-4) : 'none',
+        oldToken: existingBot?.bot.token
+          ? '***' + existingBot.bot.token.slice(-4)
+          : 'none',
         newToken: '***' + botSettings.botToken.slice(-4),
         component: 'bot-manager'
       });
@@ -1008,11 +1048,15 @@ class BotManager {
             component: 'bot-manager'
           });
         } catch (error) {
-          logger.warn('Ошибка остановки старого бота, продолжаем создание нового', {
-            projectId,
-            error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-            component: 'bot-manager'
-          });
+          logger.warn(
+            'Ошибка остановки старого бота, продолжаем создание нового',
+            {
+              projectId,
+              error:
+                error instanceof Error ? error.message : 'Неизвестная ошибка',
+              component: 'bot-manager'
+            }
+          );
         }
       }
 
@@ -1020,7 +1064,7 @@ class BotManager {
       this.bots.delete(projectId);
 
       // Ждем дольше, чтобы избежать конфликтов
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       // Создаем новый бот
       return this.createBot(projectId, botSettings);
@@ -1078,9 +1122,9 @@ class BotManager {
               projectId,
               component: 'bot-manager'
             });
-            
+
             await botInstance.runner.stop();
-            
+
             logger.info(`✅ Runner остановлен для бота ${projectId}`, {
               projectId,
               component: 'bot-manager'
@@ -1088,7 +1132,10 @@ class BotManager {
           } catch (runnerError) {
             logger.warn(`⚠️ Ошибка остановки runner для бота ${projectId}`, {
               projectId,
-              error: runnerError instanceof Error ? runnerError.message : 'Неизвестная ошибка',
+              error:
+                runnerError instanceof Error
+                  ? runnerError.message
+                  : 'Неизвестная ошибка',
               component: 'bot-manager'
             });
           }
@@ -1106,7 +1153,10 @@ class BotManager {
         } catch (webhookError) {
           logger.warn(`⚠️ Ошибка удаления webhook для бота ${projectId}`, {
             projectId,
-            error: webhookError instanceof Error ? webhookError.message : 'Неизвестная ошибка',
+            error:
+              webhookError instanceof Error
+                ? webhookError.message
+                : 'Неизвестная ошибка',
             component: 'bot-manager'
           });
         }
@@ -1124,16 +1174,18 @@ class BotManager {
             component: 'bot-manager'
           });
         } catch (stopError) {
-          logger.warn(`⚠️ Ошибка остановки бота ${projectId} (может быть уже остановлен)`, {
-            projectId,
-            error: stopError instanceof Error ? stopError.message : 'Timeout',
-            component: 'bot-manager'
-          });
+          logger.warn(
+            `⚠️ Ошибка остановки бота ${projectId} (может быть уже остановлен)`,
+            {
+              projectId,
+              error: stopError instanceof Error ? stopError.message : 'Timeout',
+              component: 'bot-manager'
+            }
+          );
         }
 
         // Дополнительная задержка для полной очистки Telegram API
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (error) {
         logger.error(`❌ Критическая ошибка остановки бота ${projectId}`, {
           projectId,
@@ -1144,7 +1196,7 @@ class BotManager {
 
       // КРИТИЧНО: Удаляем из map в любом случае
       this.bots.delete(projectId);
-      
+
       // Синхронизируем isActive в БД при остановке
       try {
         await db.botSettings.update({
@@ -1162,7 +1214,7 @@ class BotManager {
           component: 'bot-manager'
         });
       }
-      
+
       logger.info(`🗑️ Бот ${projectId} удален из менеджера`, {
         projectId,
         component: 'bot-manager'
@@ -1335,4 +1387,3 @@ if (process.env.NODE_ENV !== 'production') {
 //     component: 'bot-manager'
 //   });
 // });
-
