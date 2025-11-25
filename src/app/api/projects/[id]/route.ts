@@ -17,30 +17,71 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  let admin: Awaited<ReturnType<typeof getCurrentAdmin>> = null;
+  let projectId: string = '';
+
   try {
-    const admin = await getCurrentAdmin();
+    admin = await getCurrentAdmin();
     if (!admin) {
+      logger.warn('GET /api/projects/[id]: Unauthorized - admin not found', {
+        component: 'projects-api',
+        action: 'GET'
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = await context.params;
+    projectId = id;
+
+    logger.info('GET /api/projects/[id]: начало запроса', {
+      projectId: id,
+      adminId: admin.sub,
+      component: 'projects-api'
+    });
 
     // Проверяем доступ к проекту
     await ProjectService.verifyProjectAccess(id, admin.sub);
 
     // Получаем проект со связанными данными
-    const project = await db.project.findUnique({
-      where: { id },
-      include: {
-        referralProgram: {
-          include: {
-            levels: true
+    // Безопасная загрузка referralProgram - если его нет или есть ошибка, просто не включаем
+    let project;
+    try {
+      project = await db.project.findUnique({
+        where: { id },
+        include: {
+          referralProgram: {
+            include: {
+              levels: true
+            }
           }
         }
+      });
+    } catch (dbError) {
+      // Если ошибка при загрузке referralProgram, пробуем загрузить без него
+      logger.warn(
+        'Ошибка при загрузке referralProgram, загружаем проект без него',
+        {
+          projectId: id,
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          component: 'projects-api'
+        }
+      );
+
+      project = await db.project.findUnique({
+        where: { id }
+      });
+
+      if (project) {
+        (project as any).referralProgram = null;
       }
-    });
+    }
 
     if (!project) {
+      logger.warn('GET /api/projects/[id]: проект не найден', {
+        projectId: id,
+        adminId: admin.sub,
+        component: 'projects-api'
+      });
       return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
     }
 
@@ -57,21 +98,54 @@ export async function GET(
       }
     };
 
+    logger.info('GET /api/projects/[id]: успешно', {
+      projectId: id,
+      adminId: admin.sub,
+      component: 'projects-api'
+    });
+
     return NextResponse.json(response);
   } catch (error) {
-    const { id } = await context.params;
+    const errorMessage =
+      error instanceof Error ? error.message : 'Неизвестная ошибка';
+    const errorStack = error instanceof Error ? error.stack : undefined;
 
     // Обработка ошибок доступа
     if (error instanceof Error && error.message === 'FORBIDDEN') {
+      logger.warn('GET /api/projects/[id]: Forbidden', {
+        projectId: projectId,
+        adminId: admin?.sub,
+        component: 'projects-api'
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    logger.error('Ошибка получения проекта', {
-      projectId: id,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
-    });
+    // Безопасное логирование
+    try {
+      logger.error('Ошибка получения проекта', {
+        projectId: projectId,
+        adminId: admin?.sub,
+        error: errorMessage,
+        stack: errorStack,
+        component: 'projects-api',
+        action: 'GET'
+      });
+    } catch (logError) {
+      console.error('Ошибка получения проекта', {
+        projectId: projectId,
+        adminId: admin?.sub,
+        error: errorMessage,
+        stack: errorStack
+      });
+    }
+
+    // В development режиме возвращаем детали ошибки
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера' },
+      {
+        error: 'Внутренняя ошибка сервера',
+        ...(isDev && { details: errorMessage, stack: errorStack })
+      },
       { status: 500 }
     );
   }
