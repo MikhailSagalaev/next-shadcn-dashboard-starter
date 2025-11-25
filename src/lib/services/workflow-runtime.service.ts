@@ -586,19 +586,61 @@ export class WorkflowRuntimeService {
           });
 
           try {
-            // Get the workflow version for the waiting execution
-            console.log('🔧 Loading workflow version for resume:', {
-              workflowId: waitingExecution.workflowId,
-              executionVersion: waitingExecution.version
-            });
-
-            const versionRecord = await db.workflowVersion.findFirst({
-              where: {
+            // ✅ КРИТИЧНО: Используем активную версию workflow вместо версии из execution
+            // Это гарантирует, что при возобновлении используется актуальная версия с правильными узлами
+            logger.info(
+              '🔧 Загружаем активную версию workflow для возобновления',
+              {
+                projectId,
                 workflowId: waitingExecution.workflowId,
-                version: waitingExecution.version
-              },
-              include: { workflow: true }
-            });
+                executionVersion: waitingExecution.version
+              }
+            );
+
+            // Сначала пробуем загрузить активную версию
+            const activeVersion =
+              await this.getActiveWorkflowVersion(projectId);
+
+            let versionRecord;
+            if (
+              activeVersion &&
+              activeVersion.workflowId === waitingExecution.workflowId
+            ) {
+              // Используем активную версию, если она для того же workflow
+              logger.info(
+                '✅ Используем активную версию workflow для возобновления',
+                {
+                  versionId: activeVersion.id,
+                  version: activeVersion.version,
+                  isActive: activeVersion.isActive
+                }
+              );
+
+              // Загружаем полную запись из БД для получения connections
+              versionRecord = await db.workflowVersion.findFirst({
+                where: {
+                  id: activeVersion.id
+                },
+                include: { workflow: true }
+              });
+            } else {
+              // Fallback: используем версию из execution, если активная версия не найдена или для другого workflow
+              logger.warn(
+                '⚠️ Активная версия не найдена или для другого workflow, используем версию из execution',
+                {
+                  workflowId: waitingExecution.workflowId,
+                  executionVersion: waitingExecution.version
+                }
+              );
+
+              versionRecord = await db.workflowVersion.findFirst({
+                where: {
+                  workflowId: waitingExecution.workflowId,
+                  version: waitingExecution.version
+                },
+                include: { workflow: true }
+              });
+            }
 
             console.log('🔧 Version record loaded:', {
               found: !!versionRecord,
