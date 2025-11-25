@@ -447,7 +447,9 @@ export class WorkflowRuntimeService {
               waitType: true,
               currentNodeId: true,
               projectId: true,
-              telegramChatId: true
+              telegramChatId: true,
+              workflowId: true,
+              version: true
             }
           });
 
