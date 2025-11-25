@@ -747,6 +747,26 @@ export class WorkflowRuntimeService {
               );
             }
 
+            const connections = ((versionRecord.workflow as any)?.connections ||
+              []) as WorkflowConnection[];
+
+            logger.info('🔧 Loading workflow version for resume', {
+              versionId: versionRecord.id,
+              workflowId: versionRecord.workflowId,
+              version: versionRecord.version,
+              nodesCount: Object.keys(nodesObject).length,
+              connectionsCount: connections.length,
+              connections: connections.map((c: any) => ({
+                id: c.id,
+                source: c.source,
+                target: c.target,
+                type: c.type
+              })),
+              menuInviteConnections: connections.filter(
+                (c: any) => c.source === 'menu-invite-trigger'
+              )
+            });
+
             const versionToUse: WorkflowVersion = {
               id: versionRecord.id,
               workflowId: versionRecord.workflowId,
@@ -757,8 +777,7 @@ export class WorkflowRuntimeService {
               settings: versionRecord.settings as any,
               isActive: versionRecord.isActive,
               createdAt: versionRecord.createdAt,
-              connections: ((versionRecord.workflow as any)?.connections ||
-                []) as WorkflowConnection[]
+              connections: connections
             };
 
             // Create processor
@@ -894,11 +913,23 @@ export class WorkflowRuntimeService {
 
                 // Выполняем workflow начиная с callback trigger
                 // executeWorkflow автоматически продолжит к следующему узлу по connections
+                logger.info(
+                  '🔧 About to execute workflow from callback trigger',
+                  {
+                    triggerNodeId: callbackTriggerNode.id,
+                    executionId: resumedContext.executionId,
+                    connectionsCount: triggerConnections.length,
+                    connections: triggerConnections
+                  }
+                );
                 await (processor as any).executeWorkflow(
                   resumedContext,
                   callbackTriggerNode.id
                 );
-                console.log('🔧 Callback trigger processed successfully');
+                logger.info('🔧 Callback trigger processed successfully', {
+                  triggerNodeId: callbackTriggerNode.id,
+                  executionId: resumedContext.executionId
+                });
                 return true;
               } else {
                 console.error(

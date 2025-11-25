@@ -451,13 +451,37 @@ export class SimpleWorkflowProcessor {
       // Определяем следующий нод: сначала используем результат handler'а,
       // если null - ищем по connections
       if (nextNodeId !== null) {
+        logger.debug('🔧 Using nextNodeId from handler', {
+          currentNodeId,
+          nextNodeId
+        });
         currentNodeId = nextNodeId;
       } else {
+        logger.debug(
+          '🔧 Handler returned null, searching for next node via connections',
+          {
+            currentNodeId,
+            connectionsMapSize: this.connectionsMap.size
+          }
+        );
         currentNodeId = await this.getNextNodeId(currentNodeId);
+        logger.debug('🔧 getNextNodeId result', {
+          previousNodeId: currentNodeId === null ? 'N/A' : 'found',
+          nextNodeId: currentNodeId
+        });
       }
 
       // Если следующий нод не найден, завершаем выполнение
       if (currentNodeId === null) {
+        logger.warn('⚠️ No next node found, ending workflow execution', {
+          lastNodeId: currentNodeId,
+          step,
+          connectionsMapSize: this.connectionsMap.size,
+          allConnections: Array.from(this.connectionsMap.values()).map((c) => ({
+            source: c.source,
+            target: c.target
+          }))
+        });
         break;
       }
     }
