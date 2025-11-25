@@ -594,14 +594,24 @@ export class WorkflowRuntimeService {
               '🔧 Загружаем активную версию workflow для возобновления',
               {
                 projectId,
+                waitingExecutionId: waitingExecution.id,
                 workflowId: waitingExecution.workflowId,
-                executionVersion: waitingExecution.version
+                executionVersion: waitingExecution.version,
+                hasWorkflowId: !!waitingExecution.workflowId,
+                hasVersion: !!waitingExecution.version
               }
             );
 
             // Сначала пробуем загрузить активную версию
             const activeVersion =
               await this.getActiveWorkflowVersion(projectId);
+
+            logger.info('🔧 Результат getActiveWorkflowVersion', {
+              found: !!activeVersion,
+              activeVersionWorkflowId: activeVersion?.workflowId,
+              activeVersionVersion: activeVersion?.version,
+              waitingExecutionWorkflowId: waitingExecution.workflowId
+            });
 
             let versionRecord;
             if (
