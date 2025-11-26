@@ -6,13 +6,20 @@
  * @author: AI Assistant + User
  */
 
-import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from '@xyflow/react';
+import type {
+  Node as ReactFlowNode,
+  Edge as ReactFlowEdge
+} from '@xyflow/react';
 
 // ========== ОСНОВНЫЕ ТИПЫ НОД ==========
 
 export type WorkflowNodeType =
   // Триггеры
-  | 'trigger.command' | 'trigger.message' | 'trigger.callback' | 'trigger.webhook' | 'trigger.email'
+  | 'trigger.command'
+  | 'trigger.message'
+  | 'trigger.callback'
+  | 'trigger.webhook'
+  | 'trigger.email'
   // Сообщения
   | 'message'
   | 'message.keyboard.inline'
@@ -23,14 +30,30 @@ export type WorkflowNodeType =
   | 'message.edit'
   | 'message.delete'
   // Действия
-  | 'action.api_request' | 'action.database_query' | 'action.set_variable' | 'action.get_variable' | 'action.request_contact'
-  | 'action.send_notification' | 'action.check_user_linked' | 'action.find_user_by_contact' | 'action.link_telegram_account' | 'action.get_user_balance' | 'action.menu_command'
+  | 'action.api_request'
+  | 'action.database_query'
+  | 'action.set_variable'
+  | 'action.get_variable'
+  | 'action.request_contact'
+  | 'action.send_notification'
+  | 'action.check_user_linked'
+  | 'action.find_user_by_contact'
+  | 'action.link_telegram_account'
+  | 'action.get_user_balance'
+  | 'action.menu_command'
+  | 'action.check_channel_subscription'
   // Условия
   | 'condition'
   // Поток управления
-  | 'flow.delay' | 'flow.loop' | 'flow.sub_workflow' | 'flow.jump' | 'flow.switch' | 'flow.end'
+  | 'flow.delay'
+  | 'flow.loop'
+  | 'flow.sub_workflow'
+  | 'flow.jump'
+  | 'flow.switch'
+  | 'flow.end'
   // Интеграции
-  | 'integration.webhook' | 'integration.analytics';
+  | 'integration.webhook'
+  | 'integration.analytics';
 
 export type WorkflowConnectionType = 'default' | 'true' | 'false' | 'timeout';
 
@@ -92,6 +115,7 @@ export interface WorkflowNodeConfig {
   'action.find_user_by_contact'?: FindUserByContactActionConfig;
   'action.link_telegram_account'?: LinkTelegramAccountActionConfig;
   'action.get_user_balance'?: GetUserBalanceActionConfig;
+  'action.check_channel_subscription'?: CheckChannelSubscriptionActionConfig;
 
   // Условия
   condition?: ConditionConfig;
@@ -176,14 +200,26 @@ export interface InlineKeyboardConfig {
 
 export interface ReplyKeyboardButtonActionConfig {
   id?: string;
-  type: 'database_query' | 'send_message' | 'condition' | 'set_variable' | 'get_variable' | 'delay';
+  type:
+    | 'database_query'
+    | 'send_message'
+    | 'condition'
+    | 'set_variable'
+    | 'get_variable'
+    | 'delay';
   query?: string;
   parameters?: Record<string, any>;
   assignTo?: string;
   text?: string;
   parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
   variable?: string;
-  operator?: 'is_empty' | 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains';
+  operator?:
+    | 'is_empty'
+    | 'equals'
+    | 'not_equals'
+    | 'greater_than'
+    | 'less_than'
+    | 'contains';
   value?: any;
   true_actions?: ReplyKeyboardButtonActionConfig[];
   false_actions?: ReplyKeyboardButtonActionConfig[];
@@ -265,7 +301,23 @@ export interface ConditionConfig {
 
   // Старые поля для обратной совместимости (делаем опциональными)
   variable?: string;
-  operator?: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater' | 'less' | 'is_empty' | 'is_not_empty' | '==' | '!=' | '===' | '!==' | '>' | '<' | '>=' | '<=';
+  operator?:
+    | 'equals'
+    | 'not_equals'
+    | 'contains'
+    | 'not_contains'
+    | 'greater'
+    | 'less'
+    | 'is_empty'
+    | 'is_not_empty'
+    | '=='
+    | '!='
+    | '==='
+    | '!=='
+    | '>'
+    | '<'
+    | '>='
+    | '<=';
   value?: any;
   caseSensitive?: boolean;
 }
@@ -334,6 +386,13 @@ export interface GetUserBalanceActionConfig {
   assignTo: string; // Имя переменной для баланса
 }
 
+export interface CheckChannelSubscriptionActionConfig {
+  channelId: string; // ID канала (например, @channel_name или -100123456789)
+  userId?: string; // ID пользователя Telegram (если не указан, берется из контекста)
+  assignTo?: string; // Имя переменной для результата (true/false)
+  requiredStatus?: ('member' | 'administrator' | 'creator')[]; // Требуемые статусы
+}
+
 // Поток управления
 export interface DelayFlowConfig {
   delayMs: number;
@@ -375,7 +434,6 @@ export interface SwitchFlowConfig {
   cases: SwitchCaseConfig[];
   hasDefault?: boolean;
 }
-
 
 export interface EndFlowConfig {
   success?: boolean; // Успешное завершение или ошибка
@@ -523,7 +581,12 @@ export interface WaitingState {
 export interface VariableManager {
   get: (name: string, scope?: VariableScope) => Promise<any>;
   getSync: (name: string, scope?: VariableScope) => any; // Синхронная версия для выражений
-  set: (name: string, value: any, scope?: VariableScope, ttl?: number) => Promise<void>;
+  set: (
+    name: string,
+    value: any,
+    scope?: VariableScope,
+    ttl?: number
+  ) => Promise<void>;
   has: (name: string, scope?: VariableScope) => Promise<boolean>;
   delete: (name: string, scope?: VariableScope) => Promise<void>;
   list: (scope?: VariableScope) => Promise<Record<string, any>>;
@@ -536,7 +599,10 @@ export type HandlerResult = string | null;
 
 export interface NodeHandler<TConfig = any> {
   canHandle: (nodeType: WorkflowNodeType) => boolean;
-  execute: (node: WorkflowNode, context: ExecutionContext) => Promise<HandlerResult>;
+  execute: (
+    node: WorkflowNode,
+    context: ExecutionContext
+  ) => Promise<HandlerResult>;
   validate?: (config: TConfig) => Promise<ValidationResult>;
 }
 

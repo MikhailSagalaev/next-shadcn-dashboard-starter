@@ -30,6 +30,10 @@ export const DEFAULT_RATE_LIMITS = {
   DATABASE_QUERY: {
     windowMs: 60 * 1000, // 1 минута
     maxRequests: 200 // per project
+  },
+  TELEGRAM_CHANNEL_CHECK: {
+    windowMs: 1000, // 1 секунда
+    maxRequests: 30 // Telegram API limit ~30 req/sec
   }
 } as const;
 
@@ -68,7 +72,9 @@ export class RateLimiterService {
         error: error instanceof Error ? error.message : String(error)
       });
       // Fallback на in-memory store (для development без Redis)
-      logger.warn('Rate limiting will use in-memory store (not production-ready)');
+      logger.warn(
+        'Rate limiting will use in-memory store (not production-ready)'
+      );
     }
   }
 
@@ -134,10 +140,17 @@ export class RateLimiterService {
       let retryAfter: number | undefined;
       if (!allowed && requestCount > 0) {
         // Находим самый старый запрос в окне
-        const oldestRequest = await this.redisClient.zrange(key, 0, 0, 'WITHSCORES');
+        const oldestRequest = await this.redisClient.zrange(
+          key,
+          0,
+          0,
+          'WITHSCORES'
+        );
         if (oldestRequest && oldestRequest.length >= 2) {
           const oldestTimestamp = parseInt(oldestRequest[1] as string);
-          retryAfter = Math.ceil((oldestTimestamp + limit.windowMs - now) / 1000);
+          retryAfter = Math.ceil(
+            (oldestTimestamp + limit.windowMs - now) / 1000
+          );
         }
       }
 
@@ -194,7 +207,9 @@ export class RateLimiterService {
     }
 
     // Удаляем старые запросы
-    store.requests = store.requests.filter(timestamp => timestamp > windowStart);
+    store.requests = store.requests.filter(
+      (timestamp) => timestamp > windowStart
+    );
 
     // Проверяем лимит
     const allowed = store.requests.length < limit.maxRequests;
@@ -214,7 +229,7 @@ export class RateLimiterService {
           keysToDelete.push(k);
         }
       }
-      keysToDelete.forEach(k => this.inMemoryStore.delete(k));
+      keysToDelete.forEach((k) => this.inMemoryStore.delete(k));
     }
 
     return {
@@ -229,7 +244,10 @@ export class RateLimiterService {
    * @param type Тип лимита
    * @param identifier Уникальный идентификатор
    */
-  static async resetLimit(type: RateLimitType, identifier: string): Promise<void> {
+  static async resetLimit(
+    type: RateLimitType,
+    identifier: string
+  ): Promise<void> {
     this.initialize();
 
     const key = `rate_limit:${type}:${identifier}`;
@@ -298,7 +316,9 @@ export class RateLimiterService {
         };
       }
 
-      store.requests = store.requests.filter(timestamp => timestamp > windowStart);
+      store.requests = store.requests.filter(
+        (timestamp) => timestamp > windowStart
+      );
 
       return {
         count: store.requests.length,

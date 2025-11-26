@@ -8506,7 +8506,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dotenv@npm:^16.6.1":
+"dotenv@npm:^16.4.7, dotenv@npm:^16.6.1":
   version: 16.6.1
   resolution: "dotenv@npm:16.6.1"
   checksum: 10c0/15ce56608326ea0d1d9414a5c8ee6dcf0fffc79d2c16422b4ac2268e7e2d76ff5a572d37ffe747c377de12005f14b3cc22361e79fc7f1061cce81f77d2c973dc
@@ -9925,6 +9925,7 @@ __metadata:
     csv-parser: "npm:^3.2.0"
     dagre: "npm:^0.8.5"
     date-fns: "npm:^4.1.0"
+    dotenv: "npm:^16.4.7"
     eslint: "npm:8.48.0"
     eslint-config-next: "npm:15.1.0"
     framer-motion: "npm:^12.23.19"

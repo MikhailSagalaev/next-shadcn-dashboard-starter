@@ -1269,6 +1269,203 @@ export class GetUserBalanceHandler extends BaseNodeHandler {
 }
 
 /**
+ * ✅ Проверка подписки пользователя на канал Telegram
+ * Использует Telegram Bot API getChatMember
+ */
+export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'action.check_channel_subscription';
+  }
+
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
+    try {
+      const config = node.data.config?.['action.check_channel_subscription'];
+
+      if (!config) {
+        throw new Error('Check channel subscription configuration is missing');
+      }
+
+      if (!config.channelId) {
+        throw new Error('Channel ID is required');
+      }
+
+      // Получаем userId (из конфига или контекста)
+      let userId = config.userId;
+      if (!userId) {
+        userId = context.telegram?.userId;
+      }
+
+      if (!userId) {
+        throw new Error('User ID is required to check channel subscription');
+      }
+
+      this.logStep(context, node, 'Checking channel subscription', 'info', {
+        channelId: config.channelId,
+        userId
+      });
+
+      // ✅ Rate limiting: проверка лимита для Telegram API
+      const { RateLimiterService } = await import('../../rate-limiter.service');
+      const rateLimit = await RateLimiterService.checkLimit(
+        'TELEGRAM_CHANNEL_CHECK',
+        context.projectId
+      );
+
+      if (!rateLimit.allowed) {
+        this.logStep(
+          context,
+          node,
+          'Rate limit exceeded for channel check',
+          'warn',
+          {
+            projectId: context.projectId,
+            remaining: rateLimit.remaining,
+            retryAfter: rateLimit.retryAfter
+          }
+        );
+        throw new Error(
+          `Rate limit exceeded for channel subscription check. Retry after ${rateLimit.retryAfter || 1} seconds.`
+        );
+      }
+
+      // Вызываем Telegram API getChatMember
+      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/getChatMember`;
+
+      const response = await context.services.http.post(telegramApiUrl, {
+        chat_id: config.channelId,
+        user_id: userId
+      });
+
+      let isSubscribed = false;
+      let memberStatus = 'left';
+
+      if (response?.ok && response?.result) {
+        memberStatus = response.result.status;
+
+        // Определяем требуемые статусы (по умолчанию: member, administrator, creator)
+        const requiredStatuses = config.requiredStatus || [
+          'member',
+          'administrator',
+          'creator'
+        ];
+
+        isSubscribed = requiredStatuses.includes(memberStatus);
+
+        this.logStep(context, node, 'Channel subscription checked', 'info', {
+          channelId: config.channelId,
+          userId,
+          memberStatus,
+          isSubscribed
+        });
+      } else {
+        // Обработка ошибок Telegram API
+        const errorCode = response?.error_code;
+        const errorDescription = response?.description || 'Unknown error';
+
+        this.logStep(context, node, 'Telegram API error', 'warn', {
+          channelId: config.channelId,
+          userId,
+          errorCode,
+          errorDescription
+        });
+
+        // Типичные ошибки:
+        // 400: Bad Request (неверный chat_id или user_id)
+        // 403: Forbidden (бот не является участником канала)
+        if (errorCode === 400 || errorCode === 403) {
+          logger.warn('Channel subscription check failed', {
+            projectId: context.projectId,
+            channelId: config.channelId,
+            errorCode,
+            errorDescription
+          });
+        }
+
+        isSubscribed = false;
+      }
+
+      // Сохраняем результат в переменную
+      const assignVariable = config.assignTo || 'isChannelSubscribed';
+      await this.setVariable(assignVariable, isSubscribed, context, 'session');
+      await this.setVariable(
+        `${assignVariable}_status`,
+        memberStatus,
+        context,
+        'session'
+      );
+
+      this.logStep(
+        context,
+        node,
+        'Channel subscription result saved',
+        'debug',
+        {
+          variable: assignVariable,
+          isSubscribed,
+          memberStatus
+        }
+      );
+
+      return null;
+    } catch (error) {
+      this.logStep(
+        context,
+        node,
+        'Failed to check channel subscription',
+        'error',
+        {
+          error
+        }
+      );
+      throw error;
+    }
+  }
+
+  async validate(config: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    if (!config) {
+      errors.push('Check channel subscription configuration is required');
+      return { isValid: false, errors };
+    }
+
+    if (!config.channelId || typeof config.channelId !== 'string') {
+      errors.push('Channel ID is required and must be a string');
+    }
+
+    if (config.requiredStatus && !Array.isArray(config.requiredStatus)) {
+      errors.push('requiredStatus must be an array');
+    }
+
+    if (config.requiredStatus && Array.isArray(config.requiredStatus)) {
+      const validStatuses = [
+        'member',
+        'administrator',
+        'creator',
+        'restricted',
+        'left',
+        'kicked'
+      ];
+      for (const status of config.requiredStatus) {
+        if (!validStatuses.includes(status)) {
+          errors.push(
+            `Invalid status: ${status}. Valid statuses: ${validStatuses.join(', ')}`
+          );
+        }
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+}
+
+/**
  * ✨ НОВОЕ: Обработчик для встроенных команд меню (menu_balance, menu_history и т.д.)
  */
 export class MenuCommandHandler extends BaseNodeHandler {

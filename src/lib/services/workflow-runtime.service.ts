@@ -267,11 +267,19 @@ export class WorkflowRuntimeService {
       // Проверяем кэш в памяти
       const memoryCached = this.getCachedVersion(projectId);
       if (memoryCached) {
-        logger.info('📦 Возвращаем workflow из кэша в памяти', {
+        const memoryConnections = memoryCached.connections || [];
+        console.log('📦 Возвращаем workflow из кэша в памяти', {
           projectId,
           workflowId: memoryCached.workflowId,
           version: memoryCached.version,
-          versionId: memoryCached.id
+          versionId: memoryCached.id,
+          connectionsCount: memoryConnections.length,
+          menuInviteConnections: memoryConnections
+            .filter((c: any) => c.source === 'menu-invite-trigger')
+            .map((c: any) => ({
+              source: c.source,
+              target: c.target
+            }))
         });
         return memoryCached;
       }
@@ -284,11 +292,19 @@ export class WorkflowRuntimeService {
       if (redisCached) {
         const hydrated = this.deserializeWorkflowVersion(redisCached);
         this.setMemoryCache(projectId, hydrated);
-        logger.info('📦 Возвращаем workflow из Redis кэша', {
+        const redisConnections = hydrated.connections || [];
+        console.log('📦 Возвращаем workflow из Redis кэша', {
           projectId,
           workflowId: hydrated.workflowId,
           version: hydrated.version,
-          versionId: hydrated.id
+          versionId: hydrated.id,
+          connectionsCount: redisConnections.length,
+          menuInviteConnections: redisConnections
+            .filter((c: any) => c.source === 'menu-invite-trigger')
+            .map((c: any) => ({
+              source: c.source,
+              target: c.target
+            }))
         });
         return hydrated;
       }
@@ -342,16 +358,21 @@ export class WorkflowRuntimeService {
         connections: activeVersion.workflow.connections as any
       };
 
-      logger.info(
-        '✅ Загружена активная версия workflow из БД и закэширована',
-        {
-          projectId,
-          workflowId: workflowVersion.workflowId,
-          version: workflowVersion.version,
-          versionId: workflowVersion.id,
-          nodesCount: Object.keys(workflowVersion.nodes || {}).length
-        }
-      );
+      const connectionsList = workflowVersion.connections || [];
+      console.log('✅ Загружена активная версия workflow из БД', {
+        projectId,
+        workflowId: workflowVersion.workflowId,
+        version: workflowVersion.version,
+        versionId: workflowVersion.id,
+        nodesCount: Object.keys(workflowVersion.nodes || {}).length,
+        connectionsCount: connectionsList.length,
+        menuInviteConnections: connectionsList
+          .filter((c: any) => c.source === 'menu-invite-trigger')
+          .map((c: any) => ({
+            source: c.source,
+            target: c.target
+          }))
+      });
 
       // Кэшируем в памяти и Redis
       await this.cacheActiveVersion(projectId, workflowVersion);

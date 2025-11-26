@@ -362,7 +362,9 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   </div>
 
                   <div className='space-y-2'>
-                    <Label htmlFor='bonusBehavior'>Поведение бонусов</Label>
+                    <Label htmlFor='bonusBehavior'>
+                      Когда начислять бонусы?
+                    </Label>
                     <Select
                       value={formData.bonusBehavior}
                       onValueChange={(
@@ -370,23 +372,30 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                       ) => setFormData({ ...formData, bonusBehavior: value })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder='Выберите поведение бонусов' />
+                        <SelectValue placeholder='Выберите логику начисления' />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value='SPEND_AND_EARN'>
-                          💰 Списание и начисление (SPEND_AND_EARN)
+                          💰 При оплате бонусами — начислять новые
                         </SelectItem>
                         <SelectItem value='SPEND_ONLY'>
-                          💸 Только списание (SPEND_ONLY)
+                          💸 Бонусы можно тратить, но новые не начисляются
                         </SelectItem>
                         <SelectItem value='EARN_ONLY'>
-                          🎁 Только начисление (EARN_ONLY)
+                          🎁 Всегда начислять бонусы (стандартная накопительная
+                          система)
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <p className='text-muted-foreground text-xs'>
-                      Определяет, можно ли списывать бонусы при покупке и
-                      начислять ли новые бонусы
+                      <strong>При оплате бонусами:</strong> бонусы начисляются,
+                      только если клиент использовал бонусы при оплате.
+                      <br />
+                      <strong>Только тратить:</strong> клиенты могут тратить
+                      бонусы, но новые не получают.
+                      <br />
+                      <strong>Всегда начислять:</strong> классическая система —
+                      бонусы за каждую покупку.
                     </p>
                   </div>
                 </div>

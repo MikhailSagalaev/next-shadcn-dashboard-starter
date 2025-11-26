@@ -30,9 +30,9 @@ import {
   FindUserByContactHandler,
   LinkTelegramAccountHandler,
   GetUserBalanceHandler,
-  MenuCommandHandler
+  MenuCommandHandler,
+  CheckChannelSubscriptionHandler
 } from './action-handlers';
-
 
 import { ConditionHandler } from './condition-handler';
 
@@ -58,7 +58,10 @@ import {
 } from './media-handler';
 
 import { SwitchHandler } from './switch-handler';
-import { WebhookIntegrationHandler, AnalyticsIntegrationHandler } from './integration-handlers';
+import {
+  WebhookIntegrationHandler,
+  AnalyticsIntegrationHandler
+} from './integration-handlers';
 
 /**
  * Инициализирует и регистрирует все обработчики нод
@@ -91,9 +94,12 @@ export function initializeNodeHandlers(): void {
   nodeHandlersRegistry.register(new FindUserByContactHandler());
   nodeHandlersRegistry.register(new LinkTelegramAccountHandler());
   nodeHandlersRegistry.register(new GetUserBalanceHandler());
+  nodeHandlersRegistry.register(new CheckChannelSubscriptionHandler());
   const menuHandler = new MenuCommandHandler();
   nodeHandlersRegistry.register(menuHandler);
-  console.log(`✅ Registered MenuCommandHandler: ${menuHandler.constructor.name}`);
+  console.log(
+    `✅ Registered MenuCommandHandler: ${menuHandler.constructor.name}`
+  );
 
   // Condition handlers
   nodeHandlersRegistry.register(new ConditionHandler());
@@ -129,6 +135,7 @@ export {
   LinkTelegramAccountHandler,
   GetUserBalanceHandler,
   MenuCommandHandler,
+  CheckChannelSubscriptionHandler,
   ConditionHandler,
   DelayFlowHandler,
   EndFlowHandler,

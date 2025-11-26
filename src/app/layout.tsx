@@ -24,9 +24,31 @@ const META_THEME_COLORS = {
 };
 
 export const metadata: Metadata = {
-  title: 'Gupil.ru - Система бонусных программ',
+  title: 'GUPIL.RU - Система лояльности для Tilda | Все в одном за 4 клика',
   description:
-    'Gupil.ru - Платформа для управления бонусными программами и лояльностью клиентов'
+    'Первое и единственное полноценное решение для Tilda с интеграцией личного кабинета. Система лояльности, Telegram боты и маркетинг в одной платформе. Подключение за 4 клика.',
+  keywords: [
+    'система лояльности',
+    'Tilda',
+    'бонусная программа',
+    'Telegram бот',
+    'webhook API',
+    'лояльность клиентов',
+    'GUPIL'
+  ],
+  openGraph: {
+    title: 'GUPIL.RU - Система лояльности для Tilda',
+    description:
+      'Все в одном за 4 клика. Первое решение для Tilda с интеграцией личного кабинета.',
+    type: 'website',
+    siteName: 'GUPIL.RU'
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'GUPIL.RU - Система лояльности для Tilda',
+    description:
+      'Все в одном за 4 клика. Первое решение для Tilda с интеграцией личного кабинета.'
+  }
 };
 
 export const viewport: Viewport = {

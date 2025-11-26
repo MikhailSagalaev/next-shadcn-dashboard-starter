@@ -156,3 +156,18 @@
   /* Apply the reveal animation */
   animation: reveal 0.4s ease-in-out forwards;
 }
+
+/* Smooth scroll for anchor links */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Landing page scroll fix */
+body.landing-page {
+  overflow: auto !important;
+  overscroll-behavior: auto !important;
+}
+
+html.landing-page {
+  overflow: auto !important;
+}

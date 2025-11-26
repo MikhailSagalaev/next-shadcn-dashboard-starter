@@ -232,9 +232,14 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     component: 'tilda-webhook-spend-decision'
   });
 
-  // Проверяем, нужно ли начислять бонусы
-  const shouldEarnBonuses =
-    bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'EARN_ONLY';
+  // Определяем потенциальную возможность начисления бонусов
+  // Финальное решение будет принято после обработки списания
+  // НОВАЯ ЛОГИКА:
+  // - EARN_ONLY: всегда начислять
+  // - SPEND_AND_EARN: начислять ТОЛЬКО если использовали бонусы
+  // - SPEND_ONLY: никогда не начислять
+  const canEarnBonuses =
+    bonusBehavior === 'EARN_ONLY' || bonusBehavior === 'SPEND_AND_EARN';
 
   logger.info('🎯 ФИНАЛЬНЫЕ ПАРАМЕТРЫ ЗАКАЗА', {
     projectId,
@@ -244,14 +249,17 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     isGupilPromo,
     bonusBehavior,
     shouldSpendBonuses,
-    shouldEarnBonuses,
+    canEarnBonuses,
     DECISION_SUMMARY: {
       SPEND_DECISION: shouldSpendBonuses
         ? '✅ БУДУТ СПИСАНЫ'
         : '❌ НЕ БУДУТ СПИСАНЫ',
-      EARN_DECISION: shouldEarnBonuses
-        ? '✅ БУДУТ НАЧИСЛЕНЫ'
-        : '❌ НЕ БУДУТ НАЧИСЛЕНЫ'
+      EARN_DECISION:
+        bonusBehavior === 'EARN_ONLY'
+          ? '✅ ВСЕГДА НАЧИСЛЯЮТСЯ'
+          : bonusBehavior === 'SPEND_AND_EARN'
+            ? '⚠️ НАЧИСЛЯТСЯ ТОЛЬКО ПРИ ОПЛАТЕ БОНУСАМИ'
+            : '❌ НЕ НАЧИСЛЯЮТСЯ'
     },
     component: 'tilda-webhook-final-params'
   });
@@ -453,13 +461,25 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       }
 
       // Проверяем, нужно ли начислять бонусы
+      // НОВАЯ ЛОГИКА:
+      // - EARN_ONLY: всегда начислять бонусы за покупку
+      // - SPEND_AND_EARN: начислять ТОЛЬКО если были использованы бонусы при оплате
+      // - SPEND_ONLY: никогда не начислять новые бонусы
       const shouldEarnBonuses =
-        bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'EARN_ONLY';
+        bonusBehavior === 'EARN_ONLY' ||
+        (bonusBehavior === 'SPEND_AND_EARN' && actuallySpentBonuses);
 
       if (!shouldEarnBonuses) {
-        logger.info('🚫 Начисление бонусов отключено для проекта', {
+        const noEarnReason =
+          bonusBehavior === 'SPEND_AND_EARN' && !actuallySpentBonuses
+            ? 'Бонусы не были использованы при оплате (режим SPEND_AND_EARN)'
+            : 'Начисление бонусов отключено (режим SPEND_ONLY)';
+
+        logger.info('🚫 Начисление бонусов не выполнено', {
           projectId,
           bonusBehavior,
+          actuallySpentBonuses,
+          reason: noEarnReason,
           component: 'tilda-webhook'
         });
         // Возвращаем результат без начисления бонусов

@@ -840,25 +840,33 @@ enum MailingStatus {
 }
 
 model Mailing {
-  id          String             @id @default(cuid())
-  projectId   String             @map("project_id")
-  name        String
-  type        MailingType
-  segmentId   String?            @map("segment_id")
-  templateId  String?            @map("template_id")
-  status      MailingStatus      @default(DRAFT)
-  scheduledAt DateTime?          @map("scheduled_at")
-  sentAt      DateTime?          @map("sent_at")
-  recipients  MailingRecipient[]
-  statistics  Json?
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  segment     Segment?           @relation(fields: [segmentId], references: [id], onDelete: SetNull)
-  template    MailingTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id            String             @id @default(cuid())
+  projectId     String             @map("project_id")
+  name          String
+  type          MailingType
+  segmentId     String?            @map("segment_id")
+  templateId    String?            @map("template_id")
+  status        MailingStatus      @default(DRAFT)
+  scheduledAt   DateTime?          @map("scheduled_at")
+  sentAt        DateTime?          @map("sent_at")
+  completedAt   DateTime?          @map("completed_at")
+  clonedFromId  String?            @map("cloned_from_id")
+  messageText   String?            @map("message_text") @db.Text
+  messageHtml   String?            @map("message_html") @db.Text
+  recipients    MailingRecipient[]
+  statistics    Json?
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  segment       Segment?           @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  template      MailingTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clonedFrom    Mailing?           @relation("MailingClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
+  clones        Mailing[]          @relation("MailingClones")
+  linkClicks    MailingLinkClick[]
 
   @@index([projectId, status])
   @@index([segmentId])
+  @@index([clonedFromId])
   @@map("mailings")
 }
 
@@ -880,21 +888,47 @@ model MailingTemplate {
 }
 
 model MailingRecipient {
-  id        String    @id @default(cuid())
-  mailingId String    @map("mailing_id")
-  userId    String?   @map("user_id")
-  email     String?
-  phone     String?
-  status    String    @default("PENDING") // PENDING, SENT, FAILED, BOUNCED
-  sentAt    DateTime? @map("sent_at")
-  error     String?   @db.Text
-  metadata  Json?
-  mailing   Mailing   @relation(fields: [mailingId], references: [id], onDelete: Cascade)
-  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id           String    @id @default(cuid())
+  mailingId    String    @map("mailing_id")
+  userId       String?   @map("user_id")
+  email        String?
+  phone        String?
+  telegramId   String?   @map("telegram_id")
+  status       String    @default("PENDING") // PENDING, SENT, FAILED, BOUNCED, DELIVERED
+  sentAt       DateTime? @map("sent_at")
+  deliveredAt  DateTime? @map("delivered_at")
+  openedAt     DateTime? @map("opened_at")
+  clickedAt    DateTime? @map("clicked_at")
+  openCount    Int       @default(0) @map("open_count")
+  clickCount   Int       @default(0) @map("click_count")
+  error        String?   @db.Text
+  metadata     Json?
+  mailing      Mailing   @relation(fields: [mailingId], references: [id], onDelete: Cascade)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  linkClicks   MailingLinkClick[]
 
   @@index([mailingId, status])
   @@index([userId])
+  @@index([telegramId])
   @@map("mailing_recipients")
+}
+
+model MailingLinkClick {
+  id          String           @id @default(cuid())
+  mailingId   String           @map("mailing_id")
+  recipientId String           @map("recipient_id")
+  url         String           @db.Text
+  clickedAt   DateTime         @default(now()) @map("clicked_at")
+  userAgent   String?          @map("user_agent")
+  ipAddress   String?          @map("ip_address")
+  metadata    Json?
+  mailing     Mailing          @relation(fields: [mailingId], references: [id], onDelete: Cascade)
+  recipient   MailingRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([mailingId])
+  @@index([recipientId])
+  @@index([clickedAt])
+  @@map("mailing_link_clicks")
 }
 
 model RetailCrmIntegration {

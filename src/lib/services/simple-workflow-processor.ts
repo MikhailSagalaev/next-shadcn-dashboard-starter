@@ -54,20 +54,28 @@ export class SimpleWorkflowProcessor {
         const key = `${connection.source}->${connection.target}`;
         this.connectionsMap.set(key, connection);
       });
-      logger.debug(
-        `📋 Всего connections в connectionsMap: ${this.connectionsMap.size}`
-      );
-      logger.debug(
-        `📋 Connections для menu-invite-trigger:`,
-        Array.from(this.connectionsMap.values())
-          .filter((c) => c.source === 'menu-invite-trigger')
-          .map((c) => ({ source: c.source, target: c.target }))
+      console.log(
+        `📋 SimpleWorkflowProcessor создан: ${this.connectionsMap.size} connections`,
+        {
+          projectId: this.projectId,
+          workflowId: workflowVersion.workflowId,
+          nodesCount: this.nodesMap.size,
+          connectionsCount: this.connectionsMap.size,
+          menuInviteConnections: Array.from(this.connectionsMap.values())
+            .filter((c) => c.source === 'menu-invite-trigger')
+            .map((c) => ({ source: c.source, target: c.target }))
+        }
       );
     } else {
-      logger.warn('⚠️ workflowVersion.connections is null or undefined', {
-        hasConnections: !!workflowVersion.connections,
-        connectionsType: typeof workflowVersion.connections
-      });
+      console.error(
+        '⚠️ CRITICAL: workflowVersion.connections is null or undefined',
+        {
+          projectId: this.projectId,
+          workflowId: workflowVersion.workflowId,
+          hasConnections: !!workflowVersion.connections,
+          connectionsType: typeof workflowVersion.connections
+        }
+      );
     }
   }
 
@@ -506,7 +514,7 @@ export class SimpleWorkflowProcessor {
       (connection) => connection.source === currentNodeId
     );
 
-    logger.debug('🔍 getNextNodeId called', {
+    console.log('🔍 getNextNodeId called', {
       currentNodeId,
       connectionsMapSize: this.connectionsMap.size,
       relevantConnectionsCount: relevantConnections.length,
@@ -517,12 +525,18 @@ export class SimpleWorkflowProcessor {
     });
 
     if (relevantConnections.length === 0) {
-      logger.warn('⚠️ No connections found for node', {
+      console.error('⚠️ CRITICAL: No connections found for node', {
         currentNodeId,
         allConnections: Array.from(this.connectionsMap.values()).map((c) => ({
           source: c.source,
           target: c.target
-        }))
+        })),
+        allConnectionsRaw:
+          this.connectionsMap.size > 0
+            ? JSON.stringify(
+                Array.from(this.connectionsMap.values()).slice(0, 10)
+              )
+            : 'EMPTY'
       });
       return null;
     }
