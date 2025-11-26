@@ -1340,13 +1340,13 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
       });
 
       let isSubscribed = false;
-      let memberStatus = 'left';
+      let memberStatus: string = 'left';
 
       if (response?.ok && response?.result) {
         memberStatus = response.result.status;
 
         // Определяем требуемые статусы (по умолчанию: member, administrator, creator)
-        const requiredStatuses = config.requiredStatus || [
+        const requiredStatuses: string[] = config.requiredStatus || [
           'member',
           'administrator',
           'creator'

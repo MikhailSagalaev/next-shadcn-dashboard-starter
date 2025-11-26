@@ -241,6 +241,11 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
   const canEarnBonuses =
     bonusBehavior === 'EARN_ONLY' || bonusBehavior === 'SPEND_AND_EARN';
 
+  // shouldEarnBonuses будет вычислена после обработки списания
+  // Изначально: для EARN_ONLY начисляем всегда
+  // Для SPEND_AND_EARN: начисляем только если actuallySpentBonuses = true (определится позже)
+  let shouldEarnBonuses = bonusBehavior === 'EARN_ONLY';
+
   logger.info('🎯 ФИНАЛЬНЫЕ ПАРАМЕТРЫ ЗАКАЗА', {
     projectId,
     orderId,
@@ -465,7 +470,7 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
       // - EARN_ONLY: всегда начислять бонусы за покупку
       // - SPEND_AND_EARN: начислять ТОЛЬКО если были использованы бонусы при оплате
       // - SPEND_ONLY: никогда не начислять новые бонусы
-      const shouldEarnBonuses =
+      shouldEarnBonuses =
         bonusBehavior === 'EARN_ONLY' ||
         (bonusBehavior === 'SPEND_AND_EARN' && actuallySpentBonuses);
 
