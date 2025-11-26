@@ -7,6 +7,21 @@
 
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function BillingPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace('/dashboard/settings?tab=billing');
+  }, [router]);
+
+  return null;
+}
+
+// Старый код ниже - больше не используется, но оставлен для справки
+/*
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -474,3 +489,4 @@ export default function BillingPage() {
     </div>
   );
 }
+*/

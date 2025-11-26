@@ -119,9 +119,19 @@ export async function GET(
       try {
         const functionalSettings = botSettings.functionalSettings as any;
         widgetSettings = functionalSettings.widgetSettings || null;
+        logger.info('Widget settings extracted', {
+          projectId: id,
+          hasWidgetSettings: !!widgetSettings,
+          widgetSettingsKeys: widgetSettings ? Object.keys(widgetSettings) : []
+        });
       } catch (e) {
         logger.warn('Ошибка извлечения widgetSettings', { error: e });
       }
+    } else {
+      logger.info('No functionalSettings found', {
+        projectId: id,
+        hasBotSettings: !!botSettings
+      });
     }
 
     // Получаем botToken из проекта (если он там есть)

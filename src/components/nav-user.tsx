@@ -82,19 +82,19 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem
-                onClick={() => router.push('/dashboard/profile')}
+                onClick={() => router.push('/dashboard/settings?tab=profile')}
               >
                 <IconUser className='mr-2 h-4 w-4' />
                 Профиль
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => router.push('/dashboard/settings')}
+                onClick={() => router.push('/dashboard/settings?tab=settings')}
               >
                 <IconSettings className='mr-2 h-4 w-4' />
                 Настройки
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => router.push('/dashboard/billing')}
+                onClick={() => router.push('/dashboard/settings?tab=billing')}
               >
                 <IconCreditCard className='mr-2 h-4 w-4' />
                 Биллинг

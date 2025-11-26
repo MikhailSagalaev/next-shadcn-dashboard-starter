@@ -55,11 +55,11 @@ const routeMapping: Record<string, BreadcrumbItem[]> = {
   ],
   '/dashboard/billing': [
     { title: 'Панель управления', link: '/dashboard' },
-    { title: 'Биллинг', link: '/dashboard/billing' }
+    { title: 'Биллинг', link: '/dashboard/settings?tab=billing' }
   ],
   '/dashboard/profile': [
     { title: 'Панель управления', link: '/dashboard' },
-    { title: 'Профиль', link: '/dashboard/profile' }
+    { title: 'Профиль', link: '/dashboard/settings?tab=profile' }
   ]
   // Add more custom mappings as needed
 };
@@ -79,19 +79,19 @@ export function useBreadcrumbs() {
       if (response.ok) {
         const project = await response.json();
         const name = project.name || 'Проект';
-        setProjectNames(prev => ({ ...prev, [projectId]: name }));
+        setProjectNames((prev) => ({ ...prev, [projectId]: name }));
         return name;
       } else if (response.status === 403) {
         // При ошибке доступа показываем просто "Проект" без ID
         const name = 'Проект';
-        setProjectNames(prev => ({ ...prev, [projectId]: name }));
+        setProjectNames((prev) => ({ ...prev, [projectId]: name }));
         return name;
       }
     } catch (error) {
       // Не логируем ошибки для breadcrumbs - это не критично
       // При сетевой ошибке показываем просто "Проект"
       const name = 'Проект';
-      setProjectNames(prev => ({ ...prev, [projectId]: name }));
+      setProjectNames((prev) => ({ ...prev, [projectId]: name }));
       return name;
     }
 
@@ -109,7 +109,7 @@ export function useBreadcrumbs() {
     const segments = pathname.split('/').filter(Boolean);
     return segments.map((segment, index) => {
       const path = `/${segments.slice(0, index + 1).join('/')}`;
-      
+
       // Специальная обработка для ID проекта
       if (segment === 'projects' && index + 1 < segments.length) {
         const projectId = segments[index + 1];
@@ -118,15 +118,19 @@ export function useBreadcrumbs() {
           link: '/dashboard/projects'
         };
       }
-      
+
       // Если это ID проекта (UUID или cuid), получаем название
-      if (index > 0 && segments[index - 1] === 'projects' && segment.length > 10) {
+      if (
+        index > 0 &&
+        segments[index - 1] === 'projects' &&
+        segment.length > 10
+      ) {
         return {
           title: projectNames[segment] || 'Проект',
           link: path
         };
       }
-      
+
       // Используем перевод если есть, иначе делаем первую букву заглавной
       const title =
         segmentTranslations[segment] ||
@@ -142,7 +146,7 @@ export function useBreadcrumbs() {
   useEffect(() => {
     const segments = pathname.split('/').filter(Boolean);
     const projectsIndex = segments.indexOf('projects');
-    
+
     if (projectsIndex !== -1 && projectsIndex + 1 < segments.length) {
       const projectId = segments[projectsIndex + 1];
       if (projectId.length > 10 && !projectNames[projectId]) {

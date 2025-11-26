@@ -1,9 +1,9 @@
-import ProfileViewPage from '@/features/profile/components/profile-view-page';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Dashboard : Profile'
 };
 
 export default async function Page() {
-  return <ProfileViewPage />;
+  redirect('/dashboard/settings?tab=profile');
 }

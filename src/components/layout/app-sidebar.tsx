@@ -175,7 +175,9 @@ export default function AppSidebar() {
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuItem
-                    onClick={() => router.push('/dashboard/profile')}
+                    onClick={() =>
+                      router.push('/dashboard/settings?tab=profile')
+                    }
                   >
                     <IconUserCircle />
                     Профиль

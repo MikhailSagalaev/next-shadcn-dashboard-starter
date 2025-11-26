@@ -90,7 +90,9 @@
       // Если ранее в стиле был display:none, удаляем его
       const inlineStyle = wrapper.getAttribute('style');
       if (inlineStyle && /display\s*:\s*none/gi.test(inlineStyle)) {
-        const sanitized = inlineStyle.replace(/display\s*:\s*none\s*!?[^;]*;?/gi, '').trim();
+        const sanitized = inlineStyle
+          .replace(/display\s*:\s*none\s*!?[^;]*;?/gi, '')
+          .trim();
         if (sanitized) {
           wrapper.setAttribute('style', sanitized);
         } else {
@@ -182,6 +184,9 @@
       // Перехватываем отправку формы для гарантированного добавления appliedBonuses
       this.interceptFormSubmission();
       this.setupTildaDataProxy();
+
+      // Загружаем настройки виджета при инициализации (принудительно, без кэша)
+      this.loadWidgetSettingsOnInit();
 
       // Если apiUrl не указан, определяем по src текущего скрипта
       try {
@@ -855,6 +860,48 @@
     },
 
     // Создание UI элементов
+    // Загрузка настроек виджета при инициализации (принудительно из БД)
+    loadWidgetSettingsOnInit: function () {
+      try {
+        this.log('🔄 Загружаем настройки виджета при инициализации...');
+
+        // Принудительно загружаем настройки из API (игнорируя кэш)
+        this.loadProjectSettingsSimple()
+          .then((settings) => {
+            this.log(
+              '✅ Настройки виджета загружены при инициализации:',
+              settings
+            );
+
+            // Сохраняем настройки в state
+            this.state.widgetSettings = settings.widgetSettings || {};
+
+            // Применяем стили виджета
+            if (settings.widgetSettings) {
+              this.applyWidgetStyles(settings.widgetSettings);
+            }
+
+            // Обновляем кэш с новыми настройками
+            this.cacheProjectSettings(settings, 5 * 60 * 1000); // 5 минут
+          })
+          .catch((error) => {
+            this.log(
+              '⚠️ Ошибка загрузки настроек виджета при инициализации:',
+              error
+            );
+            // Пытаемся загрузить из кэша как fallback
+            const cachedSettings = this.getCachedProjectSettings();
+            if (cachedSettings && cachedSettings.widgetSettings) {
+              this.log('📋 Используем настройки из кэша как fallback');
+              this.state.widgetSettings = cachedSettings.widgetSettings || {};
+              this.applyWidgetStyles(cachedSettings.widgetSettings);
+            }
+          });
+      } catch (error) {
+        this.log('❌ Критическая ошибка при загрузке настроек виджета:', error);
+      }
+    },
+
     initUI: function () {
       // Подключаем Google Fonts для кастомных шрифтов
       if (!document.querySelector('link[href*="fonts.googleapis.com"]')) {
@@ -1395,7 +1442,7 @@
 
       // Получаем root element для установки CSS переменных
       const root = document.documentElement;
-      
+
       // Также получаем контейнер виджета для прямого применения стилей
       const widgetContainer = document.querySelector('.bonus-widget-container');
 
@@ -1556,33 +1603,57 @@
           widgetSettings.widgetBoxShadow
         );
       }
-      
+
       // Также применяем стили напрямую к контейнеру виджета
       // для гарантированного применения даже если CSS переменные не работают
       if (widgetContainer) {
         if (widgetSettings.widgetBackgroundColor) {
-          widgetContainer.style.setProperty('background', widgetSettings.widgetBackgroundColor);
+          widgetContainer.style.setProperty(
+            'background',
+            widgetSettings.widgetBackgroundColor
+          );
         }
         if (widgetSettings.widgetBorderColor) {
-          widgetContainer.style.setProperty('border-color', widgetSettings.widgetBorderColor);
+          widgetContainer.style.setProperty(
+            'border-color',
+            widgetSettings.widgetBorderColor
+          );
         }
         if (widgetSettings.widgetTextColor) {
-          widgetContainer.style.setProperty('color', widgetSettings.widgetTextColor);
+          widgetContainer.style.setProperty(
+            'color',
+            widgetSettings.widgetTextColor
+          );
         }
         if (widgetSettings.widgetBorderRadius) {
-          widgetContainer.style.setProperty('border-radius', widgetSettings.widgetBorderRadius);
+          widgetContainer.style.setProperty(
+            'border-radius',
+            widgetSettings.widgetBorderRadius
+          );
         }
         if (widgetSettings.widgetPadding) {
-          widgetContainer.style.setProperty('padding', widgetSettings.widgetPadding);
+          widgetContainer.style.setProperty(
+            'padding',
+            widgetSettings.widgetPadding
+          );
         }
         if (widgetSettings.widgetBoxShadow) {
-          widgetContainer.style.setProperty('box-shadow', widgetSettings.widgetBoxShadow);
+          widgetContainer.style.setProperty(
+            'box-shadow',
+            widgetSettings.widgetBoxShadow
+          );
         }
         if (widgetSettings.widgetFontFamily) {
-          widgetContainer.style.setProperty('font-family', widgetSettings.widgetFontFamily);
+          widgetContainer.style.setProperty(
+            'font-family',
+            widgetSettings.widgetFontFamily
+          );
         }
         if (widgetSettings.widgetFontSize) {
-          widgetContainer.style.setProperty('font-size', widgetSettings.widgetFontSize);
+          widgetContainer.style.setProperty(
+            'font-size',
+            widgetSettings.widgetFontSize
+          );
         }
       }
 
@@ -1611,7 +1682,9 @@
         }
 
         // Ищем контейнер поля промокода
-        const promocodeWrapper = document.querySelector('.t-inputpromocode__wrapper');
+        const promocodeWrapper = document.querySelector(
+          '.t-inputpromocode__wrapper'
+        );
         if (!promocodeWrapper) {
           this.log('Контейнер поля промокода не найден');
           return;
@@ -1649,7 +1722,6 @@
             errorDiv.remove();
           }
         }, 5000);
-
       } catch (error) {
         this.log('Ошибка при показе сообщения об ошибке:', error);
       }
@@ -1754,9 +1826,10 @@
         const now = Date.now();
         const timeSinceLastLoad = now - (cacheData.lastLoad || 0);
 
-        // Форсируем обновление если прошло больше 10 секунд с момента последней загрузки из API
+        // Форсируем обновление если прошло больше 30 секунд с момента последней загрузки из API
         // Это позволяет быстро увидеть изменения стилей после их обновления в админке
-        return timeSinceLastLoad > 10 * 1000;
+        // Увеличено до 30 секунд для снижения нагрузки на API
+        return timeSinceLastLoad > 30 * 1000;
       } catch (error) {
         this.log('Ошибка проверки необходимости обновления настроек:', error);
         return true; // В случае ошибки - обновляем
@@ -2358,14 +2431,19 @@
           if (profileFromStorage) {
             try {
               profile = JSON.parse(profileFromStorage);
-              this.log('📦 Профиль загружен из localStorage в updateWidgetState:', localStorageKey);
+              this.log(
+                '📦 Профиль загружен из localStorage в updateWidgetState:',
+                localStorageKey
+              );
             } catch (parseError) {
               this.log('⚠️ Ошибка парсинга профиля:', parseError);
             }
           } else {
             // Пробуем найти любой ключ с tilda_members_profile
-            const legacyKeys = Object.keys(localStorage).filter(key => 
-              key.startsWith('tilda_members_profile') && !key.includes('_timestamp')
+            const legacyKeys = Object.keys(localStorage).filter(
+              (key) =>
+                key.startsWith('tilda_members_profile') &&
+                !key.includes('_timestamp')
             );
             if (legacyKeys.length > 0) {
               const legacyKey = legacyKeys[0];
@@ -2373,7 +2451,10 @@
               if (legacyProfile) {
                 try {
                   profile = JSON.parse(legacyProfile);
-                  this.log('📦 Профиль загружен из localStorage (legacy) в updateWidgetState:', legacyKey);
+                  this.log(
+                    '📦 Профиль загружен из localStorage (legacy) в updateWidgetState:',
+                    legacyKey
+                  );
                 } catch (parseError) {
                   this.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
                 }
@@ -2384,34 +2465,51 @@
           this.log('⚠️ Ошибка чтения профиля из localStorage:', error);
         }
       }
-      
+
       if (profile) {
         try {
-          const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
-          const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
-          
+          const email =
+            profile.login && profile.login.trim() ? profile.login.trim() : null;
+          const phone =
+            profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
+
           // Обновляем state если данные есть и еще не сохранены или изменились
           if (email && email !== this.state.userEmail) {
             this.state.userEmail = email;
             this.safeSetStorage('tilda_user_email', email);
-            this.log('📧 Обновлен email из tilda_members_profile в updateWidgetState');
+            this.log(
+              '📧 Обновлен email из tilda_members_profile в updateWidgetState'
+            );
           }
           if (phone && phone !== this.state.userPhone) {
             this.state.userPhone = phone;
             this.safeSetStorage('tilda_user_phone', phone);
-            this.log('📱 Обновлен phone из tilda_members_profile в updateWidgetState');
+            this.log(
+              '📱 Обновлен phone из tilda_members_profile в updateWidgetState'
+            );
           }
-          if (!email && this.state.userEmail && !localStorage.getItem('tilda_user_email')) {
+          if (
+            !email &&
+            this.state.userEmail &&
+            !localStorage.getItem('tilda_user_email')
+          ) {
             this.state.userEmail = null;
           }
-          if (!phone && this.state.userPhone && !localStorage.getItem('tilda_user_phone')) {
+          if (
+            !phone &&
+            this.state.userPhone &&
+            !localStorage.getItem('tilda_user_phone')
+          ) {
             this.state.userPhone = null;
           }
         } catch (error) {
-          this.log('⚠️ Ошибка проверки tilda_members_profile в updateWidgetState:', error);
+          this.log(
+            '⚠️ Ошибка проверки tilda_members_profile в updateWidgetState:',
+            error
+          );
         }
       }
-      
+
       // Проверяем данные в состоянии виджета (загруженные из localStorage)
       const hasStoredData = this.state.userEmail || this.state.userPhone;
 
@@ -2434,10 +2532,13 @@
         });
         this.hideRegistrationPrompt();
         this.ensureWidgetMounted();
-        
+
         // Применяем стили виджета для авторизованного пользователя
         // Загружаем настройки проекта если они еще не загружены
-        if (!this.state.widgetSettings || Object.keys(this.state.widgetSettings).length === 0) {
+        if (
+          !this.state.widgetSettings ||
+          Object.keys(this.state.widgetSettings).length === 0
+        ) {
           this.loadProjectSettingsForPrompt()
             .then((settings) => {
               this.state.widgetSettings = settings.widgetSettings || {};
@@ -2452,7 +2553,7 @@
           // Если настройки уже загружены, применяем их
           this.applyWidgetStyles(this.state.widgetSettings);
         }
-        
+
         this.loadUserBalance(
           userContact || {
             email: this.state.userEmail,
@@ -2517,7 +2618,9 @@
         if (tildaPromoWrapper) {
           this.showTildaPromocodeField(tildaPromoWrapper);
         } else {
-          console.warn('⚠️ switchMode: поле промокода Tilda не найдено (.t-inputpromocode__wrapper)');
+          console.warn(
+            '⚠️ switchMode: поле промокода Tilda не найдено (.t-inputpromocode__wrapper)'
+          );
         }
       } else {
         // Переключаемся на режим бонусов
@@ -2543,17 +2646,17 @@
     // Отслеживание авторизации Tilda
     observeTildaAuth: function () {
       const self = this;
-      
+
       // Проверяем наличие tilda_members_profile при загрузке
       const checkTildaProfile = () => {
         let profile = null;
-        
+
         // 1. Проверяем window.tilda_members_profile
         if (typeof window !== 'undefined' && window.tilda_members_profile) {
           profile = window.tilda_members_profile;
           self.log('✅ Найден window.tilda_members_profile');
         }
-        
+
         // 2. Если window недоступен, проверяем localStorage по projectId
         if (!profile && self.config && self.config.projectId) {
           try {
@@ -2564,12 +2667,17 @@
                 profile = JSON.parse(profileFromStorage);
                 self.log('✅ Найден профиль в localStorage:', localStorageKey);
               } catch (parseError) {
-                self.log('⚠️ Ошибка парсинга профиля из localStorage:', parseError);
+                self.log(
+                  '⚠️ Ошибка парсинга профиля из localStorage:',
+                  parseError
+                );
               }
             } else {
               // Пробуем найти любой ключ с tilda_members_profile
-              const legacyKeys = Object.keys(localStorage).filter(key => 
-                key.startsWith('tilda_members_profile') && !key.includes('_timestamp')
+              const legacyKeys = Object.keys(localStorage).filter(
+                (key) =>
+                  key.startsWith('tilda_members_profile') &&
+                  !key.includes('_timestamp')
               );
               if (legacyKeys.length > 0) {
                 const legacyKey = legacyKeys[0];
@@ -2577,7 +2685,10 @@
                 if (legacyProfile) {
                   try {
                     profile = JSON.parse(legacyProfile);
-                    self.log('✅ Найден профиль в localStorage (legacy):', legacyKey);
+                    self.log(
+                      '✅ Найден профиль в localStorage (legacy):',
+                      legacyKey
+                    );
                   } catch (parseError) {
                     self.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
                   }
@@ -2588,31 +2699,52 @@
             self.log('⚠️ Ошибка чтения профиля из localStorage:', error);
           }
         }
-        
+
         // 3. Обрабатываем найденный профиль
         if (profile) {
           try {
             // Очищаем email и phone от пустых строк
-            const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
-            const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
+            const email =
+              profile.login && profile.login.trim()
+                ? profile.login.trim()
+                : null;
+            const phone =
+              profile.phone && profile.phone.trim()
+                ? profile.phone.trim()
+                : null;
 
             if (email || phone) {
-              const currentEmail = self.state.userEmail || localStorage.getItem('tilda_user_email') || null;
-              const currentPhone = self.state.userPhone || localStorage.getItem('tilda_user_phone') || null;
+              const currentEmail =
+                self.state.userEmail ||
+                localStorage.getItem('tilda_user_email') ||
+                null;
+              const currentPhone =
+                self.state.userPhone ||
+                localStorage.getItem('tilda_user_phone') ||
+                null;
 
               // Проверяем, изменились ли данные (с учетом null и пустых строк)
-              const emailChanged = email !== currentEmail && (email || currentEmail);
-              const phoneChanged = phone !== currentPhone && (phone || currentPhone);
+              const emailChanged =
+                email !== currentEmail && (email || currentEmail);
+              const phoneChanged =
+                phone !== currentPhone && (phone || currentPhone);
 
               // Если данные изменились или еще не были сохранены
-              if (emailChanged || phoneChanged || (!currentEmail && !currentPhone && (email || phone))) {
-                self.log('🔄 Обнаружена авторизация Tilda через tilda_members_profile', {
-                  email: email ? email.substring(0, 3) + '***' : 'нет',
-                  phone: phone ? phone.substring(0, 3) + '***' : 'нет',
-                  hadEmail: !!currentEmail,
-                  hadPhone: !!currentPhone
-                });
-                
+              if (
+                emailChanged ||
+                phoneChanged ||
+                (!currentEmail && !currentPhone && (email || phone))
+              ) {
+                self.log(
+                  '🔄 Обнаружена авторизация Tilda через tilda_members_profile',
+                  {
+                    email: email ? email.substring(0, 3) + '***' : 'нет',
+                    phone: phone ? phone.substring(0, 3) + '***' : 'нет',
+                    hadEmail: !!currentEmail,
+                    hadPhone: !!currentPhone
+                  }
+                );
+
                 // Обновляем состояние
                 if (email) {
                   self.state.userEmail = email;
@@ -2633,7 +2765,7 @@
 
                 // Обновляем виджет
                 self.updateWidgetState();
-                
+
                 // Загружаем баланс
                 if (email || phone) {
                   self.loadUserBalanceDebounced({
@@ -2651,9 +2783,14 @@
             self.log('⚠️ Ошибка при проверке tilda_members_profile:', error);
           }
         } else {
-          self.log('⚠️ tilda_members_profile не доступен ни в window, ни в localStorage');
+          self.log(
+            '⚠️ tilda_members_profile не доступен ни в window, ни в localStorage'
+          );
           if (self.config && self.config.projectId) {
-            self.log('🔍 Искали в localStorage с ключом:', `tilda_members_profile${self.config.projectId}`);
+            self.log(
+              '🔍 Искали в localStorage с ключом:',
+              `tilda_members_profile${self.config.projectId}`
+            );
           }
         }
       };
@@ -2664,21 +2801,35 @@
       // Отслеживаем изменения window.tilda_members_profile через MutationObserver
       if (typeof window !== 'undefined') {
         let lastProfile = null;
-        
+
         const observeProfile = () => {
           try {
             const currentProfile = window.tilda_members_profile;
-            
+
             if (currentProfile) {
               // Очищаем значения от пустых строк для сравнения
-              const currentLogin = currentProfile.login && currentProfile.login.trim() ? currentProfile.login.trim() : null;
-              const currentPhone = currentProfile.phone && currentProfile.phone.trim() ? currentProfile.phone.trim() : null;
-              const lastLogin = lastProfile?.login && lastProfile.login.trim() ? lastProfile.login.trim() : null;
-              const lastPhone = lastProfile?.phone && lastProfile.phone.trim() ? lastProfile.phone.trim() : null;
-              
+              const currentLogin =
+                currentProfile.login && currentProfile.login.trim()
+                  ? currentProfile.login.trim()
+                  : null;
+              const currentPhone =
+                currentProfile.phone && currentProfile.phone.trim()
+                  ? currentProfile.phone.trim()
+                  : null;
+              const lastLogin =
+                lastProfile?.login && lastProfile.login.trim()
+                  ? lastProfile.login.trim()
+                  : null;
+              const lastPhone =
+                lastProfile?.phone && lastProfile.phone.trim()
+                  ? lastProfile.phone.trim()
+                  : null;
+
               // Сравниваем только login и phone (с учетом null)
               if (currentLogin !== lastLogin || currentPhone !== lastPhone) {
-                self.log('🔄 Обнаружено изменение window.tilda_members_profile');
+                self.log(
+                  '🔄 Обнаружено изменение window.tilda_members_profile'
+                );
                 checkTildaProfile();
                 lastProfile = {
                   login: currentProfile.login || '',
@@ -2720,7 +2871,11 @@
       if (typeof window !== 'undefined' && window.addEventListener) {
         const storageHandler = (e) => {
           // Проверяем изменения в localStorage связанные с авторизацией Tilda
-          if (e.key === 'tilda_user_email' || e.key === 'tilda_user_phone' || !e.key) {
+          if (
+            e.key === 'tilda_user_email' ||
+            e.key === 'tilda_user_phone' ||
+            !e.key
+          ) {
             self.log('🔄 Обнаружено изменение в localStorage');
             setTimeout(() => {
               self.updateWidgetState();
@@ -2744,17 +2899,23 @@
       // Отслеживаем открытие корзины (когда пользователь может авторизоваться)
       const cartWindow = document.querySelector('.t706__cartwin');
       if (cartWindow) {
-        const cartObserver = self.createObserver(() => {
-          // При открытии корзины проверяем авторизацию
-          if (cartWindow.style.display !== 'none' && cartWindow.offsetParent !== null) {
-            setTimeout(() => {
-              checkTildaProfile();
-            }, 500);
+        const cartObserver = self.createObserver(
+          () => {
+            // При открытии корзины проверяем авторизацию
+            if (
+              cartWindow.style.display !== 'none' &&
+              cartWindow.offsetParent !== null
+            ) {
+              setTimeout(() => {
+                checkTildaProfile();
+              }, 500);
+            }
+          },
+          {
+            attributes: true,
+            attributeFilter: ['style', 'class']
           }
-        }, {
-          attributes: true,
-          attributeFilter: ['style', 'class']
-        });
+        );
 
         if (cartObserver) {
           cartObserver.observe(cartWindow, {
@@ -2885,7 +3046,7 @@
           profile = window.tilda_members_profile;
           this.log('✅ Найден window.tilda_members_profile');
         }
-        
+
         // 2. Если window.tilda_members_profile недоступен, проверяем localStorage
         // Tilda сохраняет профиль с ключом tilda_members_profile{projectId}
         if (!profile && this.config && this.config.projectId) {
@@ -2897,11 +3058,14 @@
                 profile = JSON.parse(profileFromStorage);
                 this.log('✅ Найден профиль в localStorage:', localStorageKey);
               } catch (parseError) {
-                this.log('⚠️ Ошибка парсинга профиля из localStorage:', parseError);
+                this.log(
+                  '⚠️ Ошибка парсинга профиля из localStorage:',
+                  parseError
+                );
               }
             } else {
               // Также проверяем без projectId (старый формат)
-              const legacyKeys = Object.keys(localStorage).filter(key => 
+              const legacyKeys = Object.keys(localStorage).filter((key) =>
                 key.startsWith('tilda_members_profile')
               );
               if (legacyKeys.length > 0) {
@@ -2911,7 +3075,10 @@
                 if (legacyProfile) {
                   try {
                     profile = JSON.parse(legacyProfile);
-                    this.log('✅ Найден профиль в localStorage (legacy):', legacyKey);
+                    this.log(
+                      '✅ Найден профиль в localStorage (legacy):',
+                      legacyKey
+                    );
                   } catch (parseError) {
                     this.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
                   }
@@ -2922,13 +3089,19 @@
             this.log('⚠️ Ошибка чтения профиля из localStorage:', error);
           }
         }
-        
+
         // 3. Обрабатываем найденный профиль
         if (profile) {
           try {
             // Очищаем email и phone от пустых строк
-            const email = profile.login && profile.login.trim() ? profile.login.trim() : null;
-            const phone = profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
+            const email =
+              profile.login && profile.login.trim()
+                ? profile.login.trim()
+                : null;
+            const phone =
+              profile.phone && profile.phone.trim()
+                ? profile.phone.trim()
+                : null;
 
             if (email || phone) {
               this.log('✅ Найдены контакты в window.tilda_members_profile:', {
@@ -3097,11 +3270,11 @@
 
             // Обновляем отображение баланса
             this.updateBalanceDisplay();
-            
+
             // Обновляем UI виджета для правильного отображения статуса верификации
             // НЕ вызываем loadUserBalance снова, т.к. баланс уже загружен
             this.showWidgetControls();
-            
+
             this.log(
               '✅ Баланс успешно загружен и применен:',
               this.state.bonusBalance,
@@ -3855,34 +4028,44 @@
         // КРИТИЧНО: Добавляем appliedBonuses во ВСЕ возможные места в объекте данных Tilda
         // Tilda использует данные из window.tcart для формирования JSON при отправке заказа
         // Нужно обновить данные ДО того, как Tilda начнет формировать JSON
-        if (typeof window !== 'undefined' && window.tcart && typeof window.tcart === 'object') {
+        if (
+          typeof window !== 'undefined' &&
+          window.tcart &&
+          typeof window.tcart === 'object'
+        ) {
           // Основной объект tcart
           window.tcart.appliedBonuses = String(amount);
           this.log('✅ appliedBonuses добавлен в window.tcart:', amount);
-          
+
           // Объект data внутри tcart (если существует)
           if (window.tcart.data && typeof window.tcart.data === 'object') {
             window.tcart.data.appliedBonuses = String(amount);
             this.log('✅ appliedBonuses добавлен в window.tcart.data');
           }
-          
+
           // Также пробуем добавить в корневой уровень window.tcart как числовое значение
           window.tcart.appliedBonusesNumber = Number(amount);
-          
+
           // Пробуем найти и обновить объект формы, который Tilda использует для сериализации
           // Tilda может хранить данные формы в разных местах
-          if (window.tcart.formData && typeof window.tcart.formData === 'object') {
+          if (
+            window.tcart.formData &&
+            typeof window.tcart.formData === 'object'
+          ) {
             window.tcart.formData.appliedBonuses = String(amount);
             this.log('✅ appliedBonuses добавлен в window.tcart.formData');
           }
-          
+
           // Проверяем, есть ли объект order или orderData
           if (window.tcart.order && typeof window.tcart.order === 'object') {
             window.tcart.order.appliedBonuses = String(amount);
             this.log('✅ appliedBonuses добавлен в window.tcart.order');
           }
-          
-          if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
+
+          if (
+            window.tcart.orderData &&
+            typeof window.tcart.orderData === 'object'
+          ) {
             window.tcart.orderData.appliedBonuses = String(amount);
             this.log('✅ appliedBonuses добавлен в window.tcart.orderData');
           }
@@ -3961,11 +4144,11 @@
         setTimeout(() => {
           this.addHiddenBonusField(amount);
         }, 100);
-        
+
         setTimeout(() => {
           this.addHiddenBonusField(amount);
         }, 500);
-        
+
         setTimeout(() => {
           this.addHiddenBonusField(amount);
         }, 1000);
@@ -4056,35 +4239,47 @@
     // Добавление скрытого поля с бонусами
     addHiddenBonusField: function (amount) {
       this.log('📝 Добавляем скрытое поле с бонусами:', amount);
-      
+
       // КРИТИЧНО: Обновляем объект данных формы Tilda ДО добавления поля в DOM
       // Tilda может использовать объект данных формы для формирования JSON
-      if (typeof window !== 'undefined' && window.tcart && typeof window.tcart === 'object') {
+      if (
+        typeof window !== 'undefined' &&
+        window.tcart &&
+        typeof window.tcart === 'object'
+      ) {
         // Обновляем все возможные места в window.tcart
         window.tcart.appliedBonuses = String(amount);
-        
+
         if (window.tcart.data && typeof window.tcart.data === 'object') {
           window.tcart.data.appliedBonuses = String(amount);
         }
-        
-        if (window.tcart.formData && typeof window.tcart.formData === 'object') {
+
+        if (
+          window.tcart.formData &&
+          typeof window.tcart.formData === 'object'
+        ) {
           window.tcart.formData.appliedBonuses = String(amount);
         }
-        
+
         if (window.tcart.order && typeof window.tcart.order === 'object') {
           window.tcart.order.appliedBonuses = String(amount);
         }
-        
-        if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
+
+        if (
+          window.tcart.orderData &&
+          typeof window.tcart.orderData === 'object'
+        ) {
           window.tcart.orderData.appliedBonuses = String(amount);
         }
-        
+
         this.log('✅ appliedBonuses обновлен во всех объектах window.tcart');
       }
-      
+
       // Удаляем все старые поля с бонусами
-      const oldFields = document.querySelectorAll('[name="appliedBonuses"], #applied_bonuses_field');
-      oldFields.forEach(field => {
+      const oldFields = document.querySelectorAll(
+        '[name="appliedBonuses"], #applied_bonuses_field'
+      );
+      oldFields.forEach((field) => {
         this.log('🗑️ Удаляем старое поле:', field.id || field.name);
         field.remove();
       });
@@ -4124,18 +4319,18 @@
           formClass: form.className,
           fieldValue: hiddenField.value
         });
-        
+
         // Также добавляем в тело документа для гарантии (Tilda может копировать поля при отправке)
         const backupField = hiddenField.cloneNode(true);
         backupField.id = 'applied_bonuses_field_backup';
         document.body.appendChild(backupField);
-        
+
         // Пробуем найти объект данных формы и обновить его напрямую
         // Tilda может хранить данные формы в разных местах
         if (form.dataset && typeof form.dataset === 'object') {
           form.dataset.appliedBonuses = String(amount);
         }
-        
+
         // Проверяем наличие поля через секунду
         setTimeout(() => {
           const checkField = document.querySelector('[name="appliedBonuses"]');
@@ -4146,7 +4341,9 @@
               inForm: !!checkField.closest('form')
             });
           } else {
-            this.log('⚠️ Поле примененных бонусов не найдено в DOM после добавления!');
+            this.log(
+              '⚠️ Поле примененных бонусов не найдено в DOM после добавления!'
+            );
           }
         }, 1000);
       } else {
@@ -4160,84 +4357,120 @@
     // Перехват отправки формы для гарантированного добавления appliedBonuses
     interceptFormSubmission: function () {
       const self = this;
-      
+
       // КРИТИЧНО: Перехватываем JSON.stringify для добавления appliedBonuses в JSON ДО сериализации
       // Tilda использует JSON.stringify для формирования JSON из объекта данных
       // ВАЖНО: Перехватываем только ОЧЕНЬ специфичные объекты заказов Tilda, чтобы не сломать работу виджета
-      if (typeof window !== 'undefined' && window.JSON && !window.JSON.stringify.__tildaBonusIntercepted) {
+      if (
+        typeof window !== 'undefined' &&
+        window.JSON &&
+        !window.JSON.stringify.__tildaBonusIntercepted
+      ) {
         const originalStringify = window.JSON.stringify;
-        window.JSON.stringify = function(value, replacer, space) {
+        window.JSON.stringify = function (value, replacer, space) {
           try {
             // Если сериализуется объект, который может быть заказом Tilda
             if (value && typeof value === 'object') {
               // ОЧЕНЬ строгая проверка: это должен быть объект с payment И formname === 'Cart'
               // Или массив, где первый элемент имеет payment и formname === 'Cart'
               let isTildaOrder = false;
-              
+
               if (Array.isArray(value)) {
                 // Массив заказов Tilda
-                if (value.length > 0 && value[0] && typeof value[0] === 'object') {
-                  isTildaOrder = 
-                    value[0].payment && 
-                    typeof value[0].payment === 'object' && 
-                    (value[0].formname === 'Cart' || value[0].formname === 'Order');
+                if (
+                  value.length > 0 &&
+                  value[0] &&
+                  typeof value[0] === 'object'
+                ) {
+                  isTildaOrder =
+                    value[0].payment &&
+                    typeof value[0].payment === 'object' &&
+                    (value[0].formname === 'Cart' ||
+                      value[0].formname === 'Order');
                 }
               } else {
                 // Одиночный заказ Tilda
-                isTildaOrder = 
-                  value.payment && 
-                  typeof value.payment === 'object' && 
+                isTildaOrder =
+                  value.payment &&
+                  typeof value.payment === 'object' &&
                   (value.formname === 'Cart' || value.formname === 'Order');
               }
-              
+
               // Применяем только если это точно заказ Tilda И есть примененные бонусы
               if (isTildaOrder && self.state && self.state.appliedBonuses > 0) {
-                self.log('🔍 Перехвачен JSON.stringify для объекта заказа Tilda, добавляем appliedBonuses:', self.state.appliedBonuses);
-                
+                self.log(
+                  '🔍 Перехвачен JSON.stringify для объекта заказа Tilda, добавляем appliedBonuses:',
+                  self.state.appliedBonuses
+                );
+
                 // Создаем копию объекта для модификации
                 let modifiedValue;
-                
+
                 if (Array.isArray(value)) {
                   // Если это массив, модифицируем первый элемент
                   modifiedValue = [...value];
-                  if (modifiedValue[0] && typeof modifiedValue[0] === 'object') {
-                    modifiedValue[0] = { ...modifiedValue[0], appliedBonuses: String(self.state.appliedBonuses) };
+                  if (
+                    modifiedValue[0] &&
+                    typeof modifiedValue[0] === 'object'
+                  ) {
+                    modifiedValue[0] = {
+                      ...modifiedValue[0],
+                      appliedBonuses: String(self.state.appliedBonuses)
+                    };
                   }
                 } else {
                   // Если это объект, добавляем appliedBonuses
-                  modifiedValue = { ...value, appliedBonuses: String(self.state.appliedBonuses) };
+                  modifiedValue = {
+                    ...value,
+                    appliedBonuses: String(self.state.appliedBonuses)
+                  };
                 }
-                
-                self.log('✅ appliedBonuses добавлен в объект перед JSON.stringify:', {
-                  appliedBonuses: modifiedValue.appliedBonuses || (Array.isArray(modifiedValue) && modifiedValue[0]?.appliedBonuses),
-                  hasPayment: !!(modifiedValue.payment || (Array.isArray(modifiedValue) && modifiedValue[0]?.payment))
-                });
-                
-                return originalStringify.call(this, modifiedValue, replacer, space);
+
+                self.log(
+                  '✅ appliedBonuses добавлен в объект перед JSON.stringify:',
+                  {
+                    appliedBonuses:
+                      modifiedValue.appliedBonuses ||
+                      (Array.isArray(modifiedValue) &&
+                        modifiedValue[0]?.appliedBonuses),
+                    hasPayment: !!(
+                      modifiedValue.payment ||
+                      (Array.isArray(modifiedValue) &&
+                        modifiedValue[0]?.payment)
+                    )
+                  }
+                );
+
+                return originalStringify.call(
+                  this,
+                  modifiedValue,
+                  replacer,
+                  space
+                );
               }
             }
           } catch (error) {
             // Если произошла ошибка при перехвате, просто вызываем оригинальный JSON.stringify
             self.log('⚠️ Ошибка при перехвате JSON.stringify:', error);
           }
-          
+
           // Для всех остальных случаев вызываем оригинальный JSON.stringify
           return originalStringify.call(this, value, replacer, space);
         };
-        
+
         // Помечаем, что перехват уже установлен, чтобы не устанавливать его дважды
         window.JSON.stringify.__tildaBonusIntercepted = true;
-        
+
         self.log('✅ JSON.stringify перехвачен для добавления appliedBonuses');
       }
-      
+
       // КРИТИЧНО: Устанавливаем механизм постоянного обновления поля appliedBonuses
       // Tilda может перерисовывать форму и сбрасывать значение, поэтому нужно постоянно проверять и обновлять
       const updateAppliedBonusesField = () => {
         if (self.state && self.state.appliedBonuses > 0) {
           // Находим все поля appliedBonuses и обновляем их значение
           const fields = document.querySelectorAll('[name="appliedBonuses"]');
-          fields.forEach(field => {
+          fields.forEach((field) => {
             if (field.value !== String(self.state.appliedBonuses)) {
               field.value = String(self.state.appliedBonuses);
               self.log('🔄 Обновлено значение поля appliedBonuses:', {
@@ -4247,14 +4480,14 @@
               });
             }
           });
-          
+
           // Если поле не найдено, добавляем его
           if (fields.length === 0) {
             self.addHiddenBonusField(self.state.appliedBonuses);
           }
         }
       };
-      
+
       // Обновляем поле при каждом изменении состояния
       let fieldWatcherInterval = null;
       const startFieldWatcher = () => {
@@ -4262,151 +4495,236 @@
         if (fieldWatcherInterval) {
           clearInterval(fieldWatcherInterval);
         }
-        
+
         // Проверяем каждые 500ms
         fieldWatcherInterval = setInterval(updateAppliedBonusesField, 500);
-        
+
         // Также обновляем при событиях Tilda
-        ['tcart:updated', 'tcart:reDraw', 'tcart:calcAmount'].forEach(eventName => {
-          document.addEventListener(eventName, updateAppliedBonusesField);
-        });
-        
+        ['tcart:updated', 'tcart:reDraw', 'tcart:calcAmount'].forEach(
+          (eventName) => {
+            document.addEventListener(eventName, updateAppliedBonusesField);
+          }
+        );
+
         // Сохраняем интервал для возможной остановки
         if (typeof self.fieldWatcherInterval === 'undefined') {
           self.fieldWatcherInterval = fieldWatcherInterval;
         }
       };
-      
+
       startFieldWatcher();
-      self.log('✅ Запущен механизм постоянного обновления поля appliedBonuses');
-      
+      self.log(
+        '✅ Запущен механизм постоянного обновления поля appliedBonuses'
+      );
+
       // Перехватываем отправку всех форм на странице
-      document.addEventListener('submit', function(e) {
-        if (self.state && self.state.appliedBonuses > 0) {
-          self.log('📤 Перехвачена отправка формы, добавляем appliedBonuses:', self.state.appliedBonuses);
-          
-          // СНАЧАЛА обновляем все существующие поля
-          updateAppliedBonusesField();
-          
-          // Затем добавляем/обновляем поле в форме
-          self.addHiddenBonusField(self.state.appliedBonuses);
-          
-          // Также добавляем поле напрямую в форму, которая отправляется
-          const form = e.target;
-          if (form && form.tagName === 'FORM') {
-            // Удаляем старое поле если есть
-            const existingField = form.querySelector('[name="appliedBonuses"]');
-            if (existingField) {
-              existingField.remove();
+      document.addEventListener(
+        'submit',
+        function (e) {
+          if (self.state && self.state.appliedBonuses > 0) {
+            self.log(
+              '📤 Перехвачена отправка формы, добавляем appliedBonuses:',
+              self.state.appliedBonuses
+            );
+
+            // СНАЧАЛА обновляем все существующие поля
+            updateAppliedBonusesField();
+
+            // Затем добавляем/обновляем поле в форме
+            self.addHiddenBonusField(self.state.appliedBonuses);
+
+            // Также добавляем поле напрямую в форму, которая отправляется
+            const form = e.target;
+            if (form && form.tagName === 'FORM') {
+              // Удаляем старое поле если есть
+              const existingField = form.querySelector(
+                '[name="appliedBonuses"]'
+              );
+              if (existingField) {
+                existingField.remove();
+              }
+
+              // Создаем и добавляем новое поле
+              const bonusField = document.createElement('input');
+              bonusField.type = 'hidden';
+              bonusField.name = 'appliedBonuses';
+              bonusField.value = String(self.state.appliedBonuses);
+              form.appendChild(bonusField);
+
+              self.log(
+                '✅ Поле appliedBonuses добавлено в отправляемую форму:',
+                {
+                  value: bonusField.value,
+                  formId: form.id || form.className
+                }
+              );
             }
-            
-            // Создаем и добавляем новое поле
-            const bonusField = document.createElement('input');
-            bonusField.type = 'hidden';
-            bonusField.name = 'appliedBonuses';
-            bonusField.value = String(self.state.appliedBonuses);
-            form.appendChild(bonusField);
-            
-            self.log('✅ Поле appliedBonuses добавлено в отправляемую форму:', {
-              value: bonusField.value,
-              formId: form.id || form.className
-            });
           }
-        }
-      }, true); // Используем capture phase для раннего перехвата
-      
+        },
+        true
+      ); // Используем capture phase для раннего перехвата
+
       // Перехватываем события Tilda для отправки заказа
       if (typeof window !== 'undefined') {
         // Перехватываем tcart__sendOrder если существует
         const originalSendOrder = window.tcart__sendOrder;
         if (typeof originalSendOrder === 'function') {
-          window.tcart__sendOrder = function(...args) {
+          window.tcart__sendOrder = function (...args) {
             if (self.state.appliedBonuses > 0) {
-              self.log('📤 Перехвачен tcart__sendOrder, добавляем appliedBonuses:', self.state.appliedBonuses);
-              
+              self.log(
+                '📤 Перехвачен tcart__sendOrder, добавляем appliedBonuses:',
+                self.state.appliedBonuses
+              );
+
               // КРИТИЧНО: Обновляем window.tcart.data ДО вызова оригинальной функции
               // Tilda может формировать JSON из этого объекта
               if (window.tcart && typeof window.tcart === 'object') {
                 window.tcart.appliedBonuses = String(self.state.appliedBonuses);
-                
-                if (window.tcart.data && typeof window.tcart.data === 'object') {
-                  window.tcart.data.appliedBonuses = String(self.state.appliedBonuses);
+
+                if (
+                  window.tcart.data &&
+                  typeof window.tcart.data === 'object'
+                ) {
+                  window.tcart.data.appliedBonuses = String(
+                    self.state.appliedBonuses
+                  );
                 }
-                
-                if (window.tcart.formData && typeof window.tcart.formData === 'object') {
-                  window.tcart.formData.appliedBonuses = String(self.state.appliedBonuses);
+
+                if (
+                  window.tcart.formData &&
+                  typeof window.tcart.formData === 'object'
+                ) {
+                  window.tcart.formData.appliedBonuses = String(
+                    self.state.appliedBonuses
+                  );
                 }
-                
-                if (window.tcart.order && typeof window.tcart.order === 'object') {
-                  window.tcart.order.appliedBonuses = String(self.state.appliedBonuses);
+
+                if (
+                  window.tcart.order &&
+                  typeof window.tcart.order === 'object'
+                ) {
+                  window.tcart.order.appliedBonuses = String(
+                    self.state.appliedBonuses
+                  );
                 }
-                
-                if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
-                  window.tcart.orderData.appliedBonuses = String(self.state.appliedBonuses);
+
+                if (
+                  window.tcart.orderData &&
+                  typeof window.tcart.orderData === 'object'
+                ) {
+                  window.tcart.orderData.appliedBonuses = String(
+                    self.state.appliedBonuses
+                  );
                 }
-                
+
                 self.log('✅ window.tcart обновлен перед tcart__sendOrder');
               }
-              
+
               self.addHiddenBonusField(self.state.appliedBonuses);
             }
             return originalSendOrder.apply(this, args);
           };
         }
-        
+
         // Перехватываем отправку через AJAX/FormData если используется
         const originalFetch = window.fetch;
         if (originalFetch) {
-          window.fetch = function(...args) {
+          window.fetch = function (...args) {
             // Проверяем, это ли запрос формы корзины
             const url = args[0];
             const options = args[1] || {};
-            
-            if (typeof url === 'string' && (url.includes('cart') || url.includes('order') || url.includes('checkout') || url.includes('webhook'))) {
+
+            if (
+              typeof url === 'string' &&
+              (url.includes('cart') ||
+                url.includes('order') ||
+                url.includes('checkout') ||
+                url.includes('webhook'))
+            ) {
               if (self.state.appliedBonuses > 0) {
-                self.log('📤 Перехвачен fetch запрос формы, добавляем appliedBonuses:', self.state.appliedBonuses);
-                
+                self.log(
+                  '📤 Перехвачен fetch запрос формы, добавляем appliedBonuses:',
+                  self.state.appliedBonuses
+                );
+
                 // КРИТИЧНО: Обновляем window.tcart ДО обработки body
                 // Tilda может формировать JSON из window.tcart в момент fetch
                 if (window.tcart && typeof window.tcart === 'object') {
-                  window.tcart.appliedBonuses = String(self.state.appliedBonuses);
-                  
-                  if (window.tcart.data && typeof window.tcart.data === 'object') {
-                    window.tcart.data.appliedBonuses = String(self.state.appliedBonuses);
+                  window.tcart.appliedBonuses = String(
+                    self.state.appliedBonuses
+                  );
+
+                  if (
+                    window.tcart.data &&
+                    typeof window.tcart.data === 'object'
+                  ) {
+                    window.tcart.data.appliedBonuses = String(
+                      self.state.appliedBonuses
+                    );
                   }
-                  
-                  if (window.tcart.formData && typeof window.tcart.formData === 'object') {
-                    window.tcart.formData.appliedBonuses = String(self.state.appliedBonuses);
+
+                  if (
+                    window.tcart.formData &&
+                    typeof window.tcart.formData === 'object'
+                  ) {
+                    window.tcart.formData.appliedBonuses = String(
+                      self.state.appliedBonuses
+                    );
                   }
-                  
-                  if (window.tcart.order && typeof window.tcart.order === 'object') {
-                    window.tcart.order.appliedBonuses = String(self.state.appliedBonuses);
+
+                  if (
+                    window.tcart.order &&
+                    typeof window.tcart.order === 'object'
+                  ) {
+                    window.tcart.order.appliedBonuses = String(
+                      self.state.appliedBonuses
+                    );
                   }
-                  
-                  if (window.tcart.orderData && typeof window.tcart.orderData === 'object') {
-                    window.tcart.orderData.appliedBonuses = String(self.state.appliedBonuses);
+
+                  if (
+                    window.tcart.orderData &&
+                    typeof window.tcart.orderData === 'object'
+                  ) {
+                    window.tcart.orderData.appliedBonuses = String(
+                      self.state.appliedBonuses
+                    );
                   }
-                  
+
                   self.log('✅ window.tcart обновлен перед fetch');
                 }
-                
+
                 // Если это FormData, добавляем appliedBonuses
                 if (options.body instanceof FormData) {
                   // Проверяем, есть ли поле 'data' или 'json' с JSON данными
-                  const jsonField = options.body.get('data') || options.body.get('json') || options.body.get('order');
+                  const jsonField =
+                    options.body.get('data') ||
+                    options.body.get('json') ||
+                    options.body.get('order');
                   if (jsonField && typeof jsonField === 'string') {
                     try {
                       const jsonData = JSON.parse(jsonField);
-                      jsonData.appliedBonuses = String(self.state.appliedBonuses);
+                      jsonData.appliedBonuses = String(
+                        self.state.appliedBonuses
+                      );
                       options.body.set('data', JSON.stringify(jsonData));
-                      self.log('✅ appliedBonuses добавлен в JSON внутри FormData');
+                      self.log(
+                        '✅ appliedBonuses добавлен в JSON внутри FormData'
+                      );
                     } catch {
                       // Если не удалось распарсить, добавляем как отдельное поле
-                      options.body.append('appliedBonuses', String(self.state.appliedBonuses));
-                      self.log('✅ appliedBonuses добавлен как отдельное поле в FormData');
+                      options.body.append(
+                        'appliedBonuses',
+                        String(self.state.appliedBonuses)
+                      );
+                      self.log(
+                        '✅ appliedBonuses добавлен как отдельное поле в FormData'
+                      );
                     }
                   } else {
-                    options.body.append('appliedBonuses', String(self.state.appliedBonuses));
+                    options.body.append(
+                      'appliedBonuses',
+                      String(self.state.appliedBonuses)
+                    );
                     self.log('✅ appliedBonuses добавлен в FormData');
                   }
                 } else if (typeof options.body === 'string') {
@@ -4428,47 +4746,51 @@
                 }
               }
             }
-            
+
             return originalFetch.apply(this, args);
           };
         }
       }
-      
+
       this.log('✅ Обработчики перехвата отправки формы установлены');
     },
 
     // Установка Proxy для перехвата формирования объекта данных формы Tilda
     setupTildaDataProxy: function () {
       const self = this;
-      
+
       if (typeof window === 'undefined') return;
-      
+
       // Проверяем, не установлен ли уже Proxy (чтобы не ломать Tilda)
       if (window.__tildaBonusProxySetup) {
         this.log('ℹ️ Proxy уже настроен ранее, пропускаем');
         return;
       }
-      
+
       // Пробуем установить Proxy для window.tcart.data (если он существует)
       // Это позволит автоматически добавлять appliedBonuses при обращении к объекту
       const setupProxyForTcartData = () => {
-        if (window.tcart && window.tcart.data && typeof window.tcart.data === 'object') {
+        if (
+          window.tcart &&
+          window.tcart.data &&
+          typeof window.tcart.data === 'object'
+        ) {
           // Проверяем, не установлен ли уже Proxy
           if (window.tcart.data.__isTildaBonusProxy) {
             return; // Уже установлен
           }
-          
+
           try {
             // Создаем Proxy для автоматического добавления appliedBonuses
             const originalData = window.tcart.data;
-            
+
             // ВАЖНО: Используем более безопасный подход - только добавляем toJSON, если его нет
             if (typeof Proxy !== 'undefined') {
               const proxy = new Proxy(originalData, {
-                get: function(target, prop) {
+                get: function (target, prop) {
                   // При получении объекта для сериализации добавляем appliedBonuses
                   if (prop === 'toJSON') {
-                    return function() {
+                    return function () {
                       const result = {};
                       for (const key in target) {
                         if (target.hasOwnProperty(key)) {
@@ -4476,45 +4798,52 @@
                         }
                       }
                       if (self.state && self.state.appliedBonuses > 0) {
-                        result.appliedBonuses = String(self.state.appliedBonuses);
-                        self.log('✅ Proxy: appliedBonuses добавлен в объект данных через toJSON');
+                        result.appliedBonuses = String(
+                          self.state.appliedBonuses
+                        );
+                        self.log(
+                          '✅ Proxy: appliedBonuses добавлен в объект данных через toJSON'
+                        );
                       }
                       return result;
                     };
                   }
                   return target[prop];
                 },
-                set: function(target, prop, value) {
+                set: function (target, prop, value) {
                   target[prop] = value;
                   return true;
                 }
               });
-              
+
               // Помечаем, что это Proxy
               proxy.__isTildaBonusProxy = true;
-              
+
               window.tcart.data = proxy;
               self.log('✅ Proxy установлен для window.tcart.data');
             }
           } catch (error) {
             // Если Proxy не поддерживается или произошла ошибка, просто обновляем данные напрямую
-            self.log('⚠️ Не удалось установить Proxy для window.tcart.data, используем прямой подход:', error);
+            self.log(
+              '⚠️ Не удалось установить Proxy для window.tcart.data, используем прямой подход:',
+              error
+            );
           }
         }
       };
-      
+
       // Пробуем установить Proxy сразу, если window.tcart уже существует
       if (window.tcart) {
         setupProxyForTcartData();
       }
-      
+
       // Также пробуем установить Proxy после загрузки Tilda (через некоторое время)
       setTimeout(setupProxyForTcartData, 1000);
       setTimeout(setupProxyForTcartData, 3000);
-      
+
       // Помечаем, что Proxy настройка запущена
       window.__tildaBonusProxySetup = true;
-      
+
       this.log('✅ Механизм Proxy для перехвата данных формы Tilda настроен');
     },
 
