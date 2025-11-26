@@ -232,19 +232,17 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     component: 'tilda-webhook-spend-decision'
   });
 
-  // Определяем потенциальную возможность начисления бонусов
-  // Финальное решение будет принято после обработки списания
-  // НОВАЯ ЛОГИКА:
-  // - EARN_ONLY: всегда начислять
-  // - SPEND_AND_EARN: начислять ТОЛЬКО если использовали бонусы
-  // - SPEND_ONLY: никогда не начислять
-  const canEarnBonuses =
-    bonusBehavior === 'EARN_ONLY' || bonusBehavior === 'SPEND_AND_EARN';
+  // Определяем логику начисления бонусов
+  // ПРАВИЛЬНАЯ ЛОГИКА:
+  // 1. Если клиент НЕ использует бонусы → ВСЕГДА начисляем на полную сумму
+  // 2. Если клиент использует бонусы:
+  //    - SPEND_AND_EARN → начисляем на ОСТАТОК суммы (после вычета бонусов)
+  //    - SPEND_ONLY → НЕ начисляем новые бонусы
+  // 3. EARN_ONLY → бонусы нельзя списывать, только начислять
 
-  // shouldEarnBonuses будет вычислена после обработки списания
-  // Изначально: для EARN_ONLY начисляем всегда
-  // Для SPEND_AND_EARN: начисляем только если actuallySpentBonuses = true (определится позже)
-  let shouldEarnBonuses = bonusBehavior === 'EARN_ONLY';
+  // shouldEarnBonuses и bonusBaseAmount будут вычислены после обработки списания
+  let shouldEarnBonuses = true; // По умолчанию начисляем
+  let bonusBaseAmount = totalAmount; // База для начисления - полная сумма
 
   logger.info('🎯 ФИНАЛЬНЫЕ ПАРАМЕТРЫ ЗАКАЗА', {
     projectId,
@@ -254,17 +252,12 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     isGupilPromo,
     bonusBehavior,
     shouldSpendBonuses,
-    canEarnBonuses,
+    bonusBaseAmount,
     DECISION_SUMMARY: {
       SPEND_DECISION: shouldSpendBonuses
         ? '✅ БУДУТ СПИСАНЫ'
         : '❌ НЕ БУДУТ СПИСАНЫ',
-      EARN_DECISION:
-        bonusBehavior === 'EARN_ONLY'
-          ? '✅ ВСЕГДА НАЧИСЛЯЮТСЯ'
-          : bonusBehavior === 'SPEND_AND_EARN'
-            ? '⚠️ НАЧИСЛЯТСЯ ТОЛЬКО ПРИ ОПЛАТЕ БОНУСАМИ'
-            : '❌ НЕ НАЧИСЛЯЮТСЯ'
+      EARN_DECISION: 'Будет определено после обработки списания'
     },
     component: 'tilda-webhook-final-params'
   });
@@ -465,20 +458,42 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
         });
       }
 
-      // Проверяем, нужно ли начислять бонусы
-      // НОВАЯ ЛОГИКА:
-      // - EARN_ONLY: всегда начислять бонусы за покупку
-      // - SPEND_AND_EARN: начислять ТОЛЬКО если были использованы бонусы при оплате
-      // - SPEND_ONLY: никогда не начислять новые бонусы
-      shouldEarnBonuses =
-        bonusBehavior === 'EARN_ONLY' ||
-        (bonusBehavior === 'SPEND_AND_EARN' && actuallySpentBonuses);
+      // Определяем, нужно ли начислять бонусы и на какую сумму
+      // ПРАВИЛЬНАЯ ЛОГИКА:
+      // - Если бонусы НЕ списывались → начисляем на полную сумму (ВСЕГДА)
+      // - Если бонусы списались + SPEND_AND_EARN → начисляем на ОСТАТОК суммы
+      // - Если бонусы списались + SPEND_ONLY → НЕ начисляем
+
+      if (actuallySpentBonuses) {
+        // Бонусы были списаны - смотрим на настройку
+        if (bonusBehavior === 'SPEND_ONLY') {
+          shouldEarnBonuses = false;
+        } else {
+          // SPEND_AND_EARN - начисляем на остаток
+          shouldEarnBonuses = true;
+          bonusBaseAmount = totalAmount - spentAmount;
+        }
+      } else {
+        // Бонусы НЕ списывались - начисляем на полную сумму
+        shouldEarnBonuses = true;
+        bonusBaseAmount = totalAmount;
+      }
+
+      logger.info('🎯 РЕШЕНИЕ О НАЧИСЛЕНИИ БОНУСОВ', {
+        projectId,
+        orderId,
+        actuallySpentBonuses,
+        spentAmount,
+        bonusBehavior,
+        shouldEarnBonuses,
+        bonusBaseAmount,
+        totalAmount,
+        component: 'tilda-webhook-earn-decision'
+      });
 
       if (!shouldEarnBonuses) {
         const noEarnReason =
-          bonusBehavior === 'SPEND_AND_EARN' && !actuallySpentBonuses
-            ? 'Бонусы не были использованы при оплате (режим SPEND_AND_EARN)'
-            : 'Начисление бонусов отключено (режим SPEND_ONLY)';
+          'Бонусы были использованы при оплате, режим SPEND_ONLY';
 
         logger.info('🚫 Начисление бонусов не выполнено', {
           projectId,
@@ -541,9 +556,21 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
     }
 
     // Начисляем бонусы за покупку с учётом уровня и реферальной системы
+    // Используем bonusBaseAmount - это либо полная сумма, либо остаток после списания бонусов
+    logger.info('💰 НАЧИСЛЕНИЕ БОНУСОВ', {
+      projectId,
+      orderId,
+      userId: user.id,
+      bonusBaseAmount,
+      totalAmount,
+      wasSpentBonuses: actuallySpentBonuses,
+      spentAmount: actuallySpentBonuses ? spentAmount : 0,
+      component: 'tilda-webhook-earn'
+    });
+
     const result = await BonusService.awardPurchaseBonus(
       user.id,
-      totalAmount,
+      bonusBaseAmount, // ✅ Используем правильную базу для начисления
       orderId,
       description
     );
