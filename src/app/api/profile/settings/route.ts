@@ -32,12 +32,6 @@ type ProfileSettings = {
     enableSecurityAlerts: boolean;
     notificationEmail: string;
   };
-  preferences: {
-    language: string;
-    timezone: string;
-    theme: string;
-    dateFormat: string;
-  };
 };
 
 const defaultSettings = (): ProfileSettings => ({
@@ -58,12 +52,6 @@ const defaultSettings = (): ProfileSettings => ({
     enableSystemNotifications: true,
     enableSecurityAlerts: true,
     notificationEmail: ''
-  },
-  preferences: {
-    language: 'ru',
-    timezone: 'Europe/Moscow',
-    theme: 'system',
-    dateFormat: 'DD.MM.YYYY'
   }
 });
 
@@ -79,10 +67,6 @@ const mergeSettings = (stored?: Partial<ProfileSettings>): ProfileSettings => {
     notifications: {
       ...defaults.notifications,
       ...(stored.notifications || {})
-    },
-    preferences: {
-      ...defaults.preferences,
-      ...(stored.preferences || {})
     }
   };
 };

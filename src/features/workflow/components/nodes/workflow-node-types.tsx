@@ -29,7 +29,7 @@ export const workflowNodeTypes: NodeTypes = {
   'trigger.email': TriggerNode,
 
   // Сообщения
-  'message': MessageNode,
+  message: MessageNode,
   'message.keyboard.inline': MessageNode,
   'message.keyboard.reply': MessageNode,
   'message.photo': MessageNode,
@@ -49,9 +49,10 @@ export const workflowNodeTypes: NodeTypes = {
   'action.find_user_by_contact': ActionNode,
   'action.link_telegram_account': ActionNode,
   'action.get_user_balance': ActionNode,
+  'action.check_channel_subscription': ActionNode,
 
   // Условия
-  'condition': ConditionNode,
+  condition: ConditionNode,
 
   // Поток управления
   'flow.delay': DelayNode,
@@ -63,5 +64,5 @@ export const workflowNodeTypes: NodeTypes = {
 
   // Интеграции
   'integration.webhook': ActionNode,
-  'integration.analytics': ActionNode,
+  'integration.analytics': ActionNode
 };

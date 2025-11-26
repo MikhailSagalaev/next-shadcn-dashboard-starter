@@ -19,7 +19,12 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 import {
   Play,
   MessageSquare,
@@ -44,7 +49,8 @@ import {
   Link2,
   Coins,
   BarChart3,
-  User
+  User,
+  Users
 } from 'lucide-react';
 import type { WorkflowNodeType, Position } from '@/types/workflow';
 
@@ -67,55 +73,296 @@ type ToolbarCategoryKey =
 
 const NODE_TEMPLATES: NodeTemplate[] = [
   // Triggers
-  { type: 'trigger.command', label: 'Команда', icon: Play, color: '#15803d', category: 'triggers', description: 'Запуск по команде, например /start' },
-  { type: 'trigger.message', label: 'Сообщение', icon: MessageSquare, color: '#2563eb', category: 'triggers', description: 'Автозапуск по тексту пользователя' },
-  { type: 'trigger.callback', label: 'Callback', icon: GitBranchPlus, color: '#a855f7', category: 'triggers', description: 'Обработка нажатий на inline-кнопки' },
-  { type: 'trigger.webhook', label: 'Webhook', icon: Webhook, color: '#f97316', category: 'triggers', description: 'Входящий запрос из внешней системы' },
-  { type: 'trigger.email', label: 'Email', icon: Mail, color: '#db2777', category: 'triggers', description: 'Запуск по входящему письму' },
+  {
+    type: 'trigger.command',
+    label: 'Команда',
+    icon: Play,
+    color: '#15803d',
+    category: 'triggers',
+    description: 'Запуск по команде, например /start'
+  },
+  {
+    type: 'trigger.message',
+    label: 'Сообщение',
+    icon: MessageSquare,
+    color: '#2563eb',
+    category: 'triggers',
+    description: 'Автозапуск по тексту пользователя'
+  },
+  {
+    type: 'trigger.callback',
+    label: 'Callback',
+    icon: GitBranchPlus,
+    color: '#a855f7',
+    category: 'triggers',
+    description: 'Обработка нажатий на inline-кнопки'
+  },
+  {
+    type: 'trigger.webhook',
+    label: 'Webhook',
+    icon: Webhook,
+    color: '#f97316',
+    category: 'triggers',
+    description: 'Входящий запрос из внешней системы'
+  },
+  {
+    type: 'trigger.email',
+    label: 'Email',
+    icon: Mail,
+    color: '#db2777',
+    category: 'triggers',
+    description: 'Запуск по входящему письму'
+  },
 
   // Messages
-  { type: 'message', label: 'Текстовое сообщение', icon: MessageSquare, color: '#2563eb', category: 'messages', description: 'Отправка обычного сообщения' },
-  { type: 'message.keyboard.inline', label: 'Inline клавиатура', icon: Keyboard, color: '#7c3aed', category: 'messages', description: 'Inline-кнопки под сообщением' },
-  { type: 'message.keyboard.reply', label: 'Reply клавиатура', icon: Keyboard, color: '#9333ea', category: 'messages', description: 'Меню с reply-кнопками' },
-  { type: 'message.photo', label: 'Фото', icon: Image, color: '#f59e0b', category: 'messages', description: 'Сообщение с изображением' },
-  { type: 'message.video', label: 'Видео', icon: Video, color: '#db2777', category: 'messages', description: 'Сообщение с видеороликом' },
-  { type: 'message.document', label: 'Документ', icon: FileText, color: '#0284c7', category: 'messages', description: 'Отправка файла или документа' },
-  { type: 'message.edit', label: 'Редактировать', icon: Edit3, color: '#6b7280', category: 'messages', description: 'Редактирование отправленного сообщения' },
-  { type: 'message.delete', label: 'Удалить', icon: Trash2, color: '#dc2626', category: 'messages', description: 'Удаление сообщения в чате' },
+  {
+    type: 'message',
+    label: 'Текстовое сообщение',
+    icon: MessageSquare,
+    color: '#2563eb',
+    category: 'messages',
+    description: 'Отправка обычного сообщения'
+  },
+  {
+    type: 'message.keyboard.inline',
+    label: 'Inline клавиатура',
+    icon: Keyboard,
+    color: '#7c3aed',
+    category: 'messages',
+    description: 'Inline-кнопки под сообщением'
+  },
+  {
+    type: 'message.keyboard.reply',
+    label: 'Reply клавиатура',
+    icon: Keyboard,
+    color: '#9333ea',
+    category: 'messages',
+    description: 'Меню с reply-кнопками'
+  },
+  {
+    type: 'message.photo',
+    label: 'Фото',
+    icon: Image,
+    color: '#f59e0b',
+    category: 'messages',
+    description: 'Сообщение с изображением'
+  },
+  {
+    type: 'message.video',
+    label: 'Видео',
+    icon: Video,
+    color: '#db2777',
+    category: 'messages',
+    description: 'Сообщение с видеороликом'
+  },
+  {
+    type: 'message.document',
+    label: 'Документ',
+    icon: FileText,
+    color: '#0284c7',
+    category: 'messages',
+    description: 'Отправка файла или документа'
+  },
+  {
+    type: 'message.edit',
+    label: 'Редактировать',
+    icon: Edit3,
+    color: '#6b7280',
+    category: 'messages',
+    description: 'Редактирование отправленного сообщения'
+  },
+  {
+    type: 'message.delete',
+    label: 'Удалить',
+    icon: Trash2,
+    color: '#dc2626',
+    category: 'messages',
+    description: 'Удаление сообщения в чате'
+  },
 
   // Actions
-  { type: 'action.api_request', label: 'API запрос', icon: Globe, color: '#2563eb', category: 'actions', description: 'HTTP запрос к внешнему сервису' },
-  { type: 'action.database_query', label: 'База данных', icon: Database, color: '#7c3aed', category: 'actions', description: 'Выполнение безопасного запроса к БД' },
-  { type: 'action.set_variable', label: 'Установить переменную', icon: Variable, color: '#db2777', category: 'actions', description: 'Сохранение значения в переменную' },
-  { type: 'action.get_variable', label: 'Получить переменную', icon: Variable, color: '#22c55e', category: 'actions', description: 'Чтение значения переменной' },
-  { type: 'action.request_contact', label: 'Запрос контакта', icon: Phone, color: '#f97316', category: 'actions', description: 'Ожидание номера телефона пользователя' },
-  { type: 'action.send_notification', label: 'Уведомление', icon: Mail, color: '#facc15', category: 'actions', description: 'Отправка email/telegram/webhook уведомлений' },
-  { type: 'action.check_user_linked', label: 'Проверка связи', icon: User, color: '#14b8a6', category: 'actions', description: 'Проверка привязки Telegram аккаунта' },
-  { type: 'action.find_user_by_contact', label: 'Поиск по контакту', icon: PhoneForwarded, color: '#0891b2', category: 'actions', description: 'Поиск пользователя по телефону или email' },
-  { type: 'action.link_telegram_account', label: 'Привязать Telegram', icon: Link2, color: '#6366f1', category: 'actions', description: 'Связка пользователя с Telegram аккаунтом' },
-  { type: 'action.get_user_balance', label: 'Баланс пользователя', icon: Coins, color: '#f59e0b', category: 'actions', description: 'Получение текущего баланса бонусов' },
+  {
+    type: 'action.api_request',
+    label: 'API запрос',
+    icon: Globe,
+    color: '#2563eb',
+    category: 'actions',
+    description: 'HTTP запрос к внешнему сервису'
+  },
+  {
+    type: 'action.database_query',
+    label: 'База данных',
+    icon: Database,
+    color: '#7c3aed',
+    category: 'actions',
+    description: 'Выполнение безопасного запроса к БД'
+  },
+  {
+    type: 'action.set_variable',
+    label: 'Установить переменную',
+    icon: Variable,
+    color: '#db2777',
+    category: 'actions',
+    description: 'Сохранение значения в переменную'
+  },
+  {
+    type: 'action.get_variable',
+    label: 'Получить переменную',
+    icon: Variable,
+    color: '#22c55e',
+    category: 'actions',
+    description: 'Чтение значения переменной'
+  },
+  {
+    type: 'action.request_contact',
+    label: 'Запрос контакта',
+    icon: Phone,
+    color: '#f97316',
+    category: 'actions',
+    description: 'Ожидание номера телефона пользователя'
+  },
+  {
+    type: 'action.send_notification',
+    label: 'Уведомление',
+    icon: Mail,
+    color: '#facc15',
+    category: 'actions',
+    description: 'Отправка email/telegram/webhook уведомлений'
+  },
+  {
+    type: 'action.check_user_linked',
+    label: 'Проверка связи',
+    icon: User,
+    color: '#14b8a6',
+    category: 'actions',
+    description: 'Проверка привязки Telegram аккаунта'
+  },
+  {
+    type: 'action.find_user_by_contact',
+    label: 'Поиск по контакту',
+    icon: PhoneForwarded,
+    color: '#0891b2',
+    category: 'actions',
+    description: 'Поиск пользователя по телефону или email'
+  },
+  {
+    type: 'action.link_telegram_account',
+    label: 'Привязать Telegram',
+    icon: Link2,
+    color: '#6366f1',
+    category: 'actions',
+    description: 'Связка пользователя с Telegram аккаунтом'
+  },
+  {
+    type: 'action.get_user_balance',
+    label: 'Баланс пользователя',
+    icon: Coins,
+    color: '#f59e0b',
+    category: 'actions',
+    description: 'Получение текущего баланса бонусов'
+  },
+  {
+    type: 'action.check_channel_subscription',
+    label: 'Проверка подписки',
+    icon: Users,
+    color: '#8b5cf6',
+    category: 'actions',
+    description: 'Проверка подписки пользователя на Telegram канал'
+  },
 
   // Logic & Flow
-  { type: 'condition', label: 'Условие', icon: GitBranchPlus, color: '#f97316', category: 'logic', description: 'Ветвление по условию/выражению' },
-  { type: 'flow.switch', label: 'Switch', icon: GitBranchPlus, color: '#f97316', category: 'logic', description: 'Множественный выбор ветки' },
-  { type: 'flow.delay', label: 'Задержка', icon: Clock, color: '#facc15', category: 'flow', description: 'Пауза перед продолжением выполнения' },
-  { type: 'flow.loop', label: 'Цикл', icon: Repeat, color: '#60a5fa', category: 'flow', description: 'Повторить действия несколько раз' },
-  { type: 'flow.sub_workflow', label: 'Подпроцесс', icon: GitMerge, color: '#8b5cf6', category: 'flow', description: 'Запуск вложенного workflow' },
-  { type: 'flow.jump', label: 'Переход', icon: GitBranchPlus, color: '#6366f1', category: 'flow', description: 'Переход на другую ноду' },
-  { type: 'flow.end', label: 'Завершение', icon: Flag, color: '#6b7280', category: 'flow', description: 'Завершение исполнения' },
+  {
+    type: 'condition',
+    label: 'Условие',
+    icon: GitBranchPlus,
+    color: '#f97316',
+    category: 'logic',
+    description: 'Ветвление по условию/выражению'
+  },
+  {
+    type: 'flow.switch',
+    label: 'Switch',
+    icon: GitBranchPlus,
+    color: '#f97316',
+    category: 'logic',
+    description: 'Множественный выбор ветки'
+  },
+  {
+    type: 'flow.delay',
+    label: 'Задержка',
+    icon: Clock,
+    color: '#facc15',
+    category: 'flow',
+    description: 'Пауза перед продолжением выполнения'
+  },
+  {
+    type: 'flow.loop',
+    label: 'Цикл',
+    icon: Repeat,
+    color: '#60a5fa',
+    category: 'flow',
+    description: 'Повторить действия несколько раз'
+  },
+  {
+    type: 'flow.sub_workflow',
+    label: 'Подпроцесс',
+    icon: GitMerge,
+    color: '#8b5cf6',
+    category: 'flow',
+    description: 'Запуск вложенного workflow'
+  },
+  {
+    type: 'flow.jump',
+    label: 'Переход',
+    icon: GitBranchPlus,
+    color: '#6366f1',
+    category: 'flow',
+    description: 'Переход на другую ноду'
+  },
+  {
+    type: 'flow.end',
+    label: 'Завершение',
+    icon: Flag,
+    color: '#6b7280',
+    category: 'flow',
+    description: 'Завершение исполнения'
+  },
 
   // Integrations
-  { type: 'integration.webhook', label: 'Интеграция (Webhook)', icon: Webhook, color: '#f97316', category: 'integrations', description: 'Вызов стороннего Webhook' },
-  { type: 'integration.analytics', label: 'Интеграция (Аналитика)', icon: BarChart3, color: '#1d4ed8', category: 'integrations', description: 'Отправка событий в аналитику' }
+  {
+    type: 'integration.webhook',
+    label: 'Интеграция (Webhook)',
+    icon: Webhook,
+    color: '#f97316',
+    category: 'integrations',
+    description: 'Вызов стороннего Webhook'
+  },
+  {
+    type: 'integration.analytics',
+    label: 'Интеграция (Аналитика)',
+    icon: BarChart3,
+    color: '#1d4ed8',
+    category: 'integrations',
+    description: 'Отправка событий в аналитику'
+  }
 ];
 
-const CATEGORY_METADATA: Record<ToolbarCategoryKey, { label: string; description: string }> = {
+const CATEGORY_METADATA: Record<
+  ToolbarCategoryKey,
+  { label: string; description: string }
+> = {
   triggers: { label: 'Триггеры', description: 'Точки входа в сценарий' },
   messages: { label: 'Сообщения', description: 'Коммуникация с пользователем' },
   actions: { label: 'Действия', description: 'Работа с данными и сервисами' },
   logic: { label: 'Логика', description: 'Ветвления и switch-case' },
-  flow: { label: 'Управление потоком', description: 'Циклы, задержки, подпроцессы' },
-  integrations: { label: 'Интеграции', description: 'Связь с внешними системами' }
+  flow: {
+    label: 'Управление потоком',
+    description: 'Циклы, задержки, подпроцессы'
+  },
+  integrations: {
+    label: 'Интеграции',
+    description: 'Связь с внешними системами'
+  }
 };
 
 interface WorkflowToolbarProps {
@@ -136,7 +383,10 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
   const handleAddNodeClick = useCallback(
     (nodeType: WorkflowNodeType) => {
       // Добавляем ноду в случайную позицию
-      onAddNode(nodeType, { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 });
+      onAddNode(nodeType, {
+        x: Math.random() * 300 + 100,
+        y: Math.random() * 300 + 100
+      });
     },
     [onAddNode]
   );
@@ -144,13 +394,18 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
   const filteredCategories = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
 
-    const categories = (Object.keys(CATEGORY_METADATA) as ToolbarCategoryKey[]).map((categoryKey) => {
-      const nodes = NODE_TEMPLATES.filter((template) => template.category === categoryKey);
+    const categories = (
+      Object.keys(CATEGORY_METADATA) as ToolbarCategoryKey[]
+    ).map((categoryKey) => {
+      const nodes = NODE_TEMPLATES.filter(
+        (template) => template.category === categoryKey
+      );
       const visibleNodes = normalized
-        ? nodes.filter((template) =>
-            template.label.toLowerCase().includes(normalized) ||
-            template.type.toLowerCase().includes(normalized) ||
-            template.description?.toLowerCase().includes(normalized)
+        ? nodes.filter(
+            (template) =>
+              template.label.toLowerCase().includes(normalized) ||
+              template.type.toLowerCase().includes(normalized) ||
+              template.description?.toLowerCase().includes(normalized)
           )
         : nodes;
 
@@ -171,9 +426,11 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
 
   return (
     <TooltipProvider>
-      <div className='flex flex-col gap-3 rounded-md border bg-background p-3 shadow-lg max-h-[calc(100vh-120px)] h-[calc(100vh-120px)]'>
-        <div className='flex flex-col gap-2 flex-shrink-0'>
-          <span className='text-xs font-medium uppercase text-muted-foreground'>Добавить ноду</span>
+      <div className='bg-background flex h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] flex-col gap-3 rounded-md border p-3 shadow-lg'>
+        <div className='flex flex-shrink-0 flex-col gap-2'>
+          <span className='text-muted-foreground text-xs font-medium uppercase'>
+            Добавить ноду
+          </span>
           <Input
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
@@ -182,19 +439,29 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
           />
         </div>
 
-        <ScrollArea className='flex-1 pr-2 min-h-0'>
+        <ScrollArea className='min-h-0 flex-1 pr-2'>
           {filteredCategories.length === 0 ? (
-            <div className='flex flex-col items-center gap-2 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground'>
+            <div className='text-muted-foreground flex flex-col items-center gap-2 rounded-md border border-dashed p-6 text-center text-sm'>
               <p>Ничего не найдено. Попробуйте изменить запрос.</p>
             </div>
           ) : (
-            <Accordion type='multiple' defaultValue={activeAccordionItems} className='space-y-2'>
+            <Accordion
+              type='multiple'
+              defaultValue={activeAccordionItems}
+              className='space-y-2'
+            >
               {filteredCategories.map(({ key, info, nodes }) => (
-                <AccordionItem key={key} value={key} className='border rounded-md px-2'>
+                <AccordionItem
+                  key={key}
+                  value={key}
+                  className='rounded-md border px-2'
+                >
                   <AccordionTrigger className='text-left text-sm font-semibold'>
                     <div className='flex flex-col text-left'>
                       <span>{info.label}</span>
-                      <span className='text-xs font-normal text-muted-foreground'>{info.description}</span>
+                      <span className='text-muted-foreground text-xs font-normal'>
+                        {info.description}
+                      </span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
@@ -204,25 +471,37 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
                           <TooltipTrigger asChild>
                             <Button
                               variant='outline'
-                              className='w-full h-auto justify-start gap-3 border-dashed px-3 py-2 text-left'
+                              className='h-auto w-full justify-start gap-3 border-dashed px-3 py-2 text-left'
                               draggable
-                              onDragStart={(event) => handleDragStart(event, template.type)}
+                              onDragStart={(event) =>
+                                handleDragStart(event, template.type)
+                              }
                               onClick={() => handleAddNodeClick(template.type)}
                             >
                               <div
                                 className='flex h-9 w-9 items-center justify-center rounded-md border'
-                                style={{ borderColor: template.color + '80', color: template.color }}
+                                style={{
+                                  borderColor: template.color + '80',
+                                  color: template.color
+                                }}
                               >
                                 <template.icon className='h-5 w-5' />
                               </div>
                               <div className='flex flex-col text-left text-sm'>
-                                <span className='font-medium leading-tight'>{template.label}</span>
-                                <span className='text-xs text-muted-foreground'>{template.type}</span>
+                                <span className='leading-tight font-medium'>
+                                  {template.label}
+                                </span>
+                                <span className='text-muted-foreground text-xs'>
+                                  {template.type}
+                                </span>
                               </div>
                             </Button>
                           </TooltipTrigger>
                           {template.description && (
-                            <TooltipContent side='right' className='max-w-xs text-sm'>
+                            <TooltipContent
+                              side='right'
+                              className='max-w-xs text-sm'
+                            >
                               {template.description}
                             </TooltipContent>
                           )}

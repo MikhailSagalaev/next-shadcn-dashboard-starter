@@ -1288,14 +1288,21 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
         throw new Error('Check channel subscription configuration is missing');
       }
 
-      if (!config.channelId) {
+      // Разрешаем шаблоны в channelId
+      const channelId = (
+        await resolveTemplateString(config.channelId || '', context)
+      ).trim();
+
+      if (!channelId) {
         throw new Error('Channel ID is required');
       }
 
-      // Получаем userId (из конфига или контекста)
-      let userId = config.userId;
+      // Получаем userId (из конфига или контекста, с разрешением шаблонов)
+      let userId = config.userId
+        ? (await resolveTemplateString(config.userId, context)).trim()
+        : null;
       if (!userId) {
-        userId = context.telegram?.userId;
+        userId = context.telegram?.userId?.toString();
       }
 
       if (!userId) {
@@ -1303,7 +1310,7 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
       }
 
       this.logStep(context, node, 'Checking channel subscription', 'info', {
-        channelId: config.channelId,
+        channelId,
         userId
       });
 
@@ -1335,8 +1342,8 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
       const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/getChatMember`;
 
       const response = await context.services.http.post(telegramApiUrl, {
-        chat_id: config.channelId,
-        user_id: userId
+        chat_id: channelId,
+        user_id: parseInt(userId, 10)
       });
 
       let isSubscribed = false;
@@ -1355,7 +1362,7 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
         isSubscribed = requiredStatuses.includes(memberStatus);
 
         this.logStep(context, node, 'Channel subscription checked', 'info', {
-          channelId: config.channelId,
+          channelId,
           userId,
           memberStatus,
           isSubscribed
@@ -1366,7 +1373,7 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
         const errorDescription = response?.description || 'Unknown error';
 
         this.logStep(context, node, 'Telegram API error', 'warn', {
-          channelId: config.channelId,
+          channelId,
           userId,
           errorCode,
           errorDescription
@@ -1378,7 +1385,7 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
         if (errorCode === 400 || errorCode === 403) {
           logger.warn('Channel subscription check failed', {
             projectId: context.projectId,
-            channelId: config.channelId,
+            channelId,
             errorCode,
             errorDescription
           });

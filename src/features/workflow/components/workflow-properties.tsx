@@ -19,7 +19,11 @@ import { Separator } from '@/components/ui/separator';
 import { X, Save } from 'lucide-react';
 import { MessageEditor } from '@/components/ui/message-editor';
 import { DatabaseQueryEditor } from '@/features/bot-constructor/components/editors/database-query-editor';
-import type { WorkflowNode, WorkflowNodeData, WorkflowNodeConfig } from '@/types/workflow';
+import type {
+  WorkflowNode,
+  WorkflowNodeData,
+  WorkflowNodeConfig
+} from '@/types/workflow';
 import type { MessageConfig } from '@/types/bot-constructor';
 
 interface WorkflowPropertiesProps {
@@ -29,11 +33,20 @@ interface WorkflowPropertiesProps {
   allNodes?: WorkflowNode[];
 }
 
-export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] }: WorkflowPropertiesProps) {
+export function WorkflowProperties({
+  node,
+  onNodeUpdate,
+  onClose,
+  allNodes = []
+}: WorkflowPropertiesProps) {
   const [nodeData, setNodeData] = useState<WorkflowNodeData>(node.data);
   const [nodeLabel, setNodeLabel] = useState(node.data.label);
-  const [nodeDescription, setNodeDescription] = useState(node.data.description || '');
-  const [nodeConfig, setNodeConfig] = useState<WorkflowNodeConfig>(node.data.config);
+  const [nodeDescription, setNodeDescription] = useState(
+    node.data.description || ''
+  );
+  const [nodeConfig, setNodeConfig] = useState<WorkflowNodeConfig>(
+    node.data.config
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -47,7 +60,7 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
     setIsSaving(true);
 
     // Имитируем небольшую задержку для показа анимации
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     const updatedNode: WorkflowNode = {
       ...node,
@@ -55,23 +68,26 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
         ...nodeData,
         label: nodeLabel,
         description: nodeDescription,
-        config: nodeConfig,
-      },
+        config: nodeConfig
+      }
     };
     onNodeUpdate(updatedNode);
 
     setIsSaving(false);
   }, [node, nodeData, nodeLabel, nodeDescription, nodeConfig, onNodeUpdate]);
 
-  const handleConfigChange = useCallback((key: string, value: any) => {
-    setNodeConfig((prevConfig) => ({
-      ...prevConfig,
-      [node.type!]: {
-        ...(prevConfig[node.type as keyof WorkflowNodeConfig] || {}),
-        [key]: value,
-      },
-    }));
-  }, [node.type]);
+  const handleConfigChange = useCallback(
+    (key: string, value: any) => {
+      setNodeConfig((prevConfig) => ({
+        ...prevConfig,
+        [node.type!]: {
+          ...(prevConfig[node.type as keyof WorkflowNodeConfig] || {}),
+          [key]: value
+        }
+      }));
+    },
+    [node.type]
+  );
 
   const renderConfigEditor = useCallback(() => {
     switch (node.type) {
@@ -91,7 +107,9 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
       case 'trigger.message':
         return (
           <div>
-            <Label htmlFor='pattern'>Шаблон сообщения (регулярное выражение)</Label>
+            <Label htmlFor='pattern'>
+              Шаблон сообщения (регулярное выражение)
+            </Label>
             <Input
               id='pattern'
               value={nodeConfig['trigger.message']?.pattern || ''}
@@ -108,88 +126,100 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
             <Input
               id='callbackData'
               value={nodeConfig['trigger.callback']?.callbackData || ''}
-              onChange={(e) => handleConfigChange('callbackData', e.target.value)}
+              onChange={(e) =>
+                handleConfigChange('callbackData', e.target.value)
+              }
               className='mt-1'
               placeholder='btn_click'
             />
           </div>
         );
-        case 'message':
-          return (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="messageText">Текст сообщения</Label>
-                <MessageEditor
-                  value={nodeConfig.message?.text || ''}
-                  onChange={(text) => {
-                    setNodeConfig((prevConfig) => ({
-                      ...prevConfig,
-                      message: {
-                        ...prevConfig.message,
-                        text,
-                        parseMode: prevConfig.message?.parseMode || 'HTML'
-                      },
-                    }));
-                  }}
-                  keyboard={nodeConfig.message?.keyboard || null}
-                  onKeyboardChange={(keyboard) => {
-                    setNodeConfig((prevConfig) => ({
-                      ...prevConfig,
-                      message: {
-                        ...prevConfig.message,
-                        keyboard: keyboard || undefined
-                      },
-                    }));
-                  }}
-                  placeholder="Введите текст сообщения..."
-                  showPreview={true}
-                  showVariableHelper={true}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="parseMode">Режим парсинга</Label>
-                <select
-                  id="parseMode"
-                  value={nodeConfig.message?.parseMode || 'HTML'}
-                  onChange={(e) => {
-                    setNodeConfig((prevConfig) => ({
-                      ...prevConfig,
-                      message: {
-                        ...prevConfig.message,
-                        parseMode: e.target.value as 'HTML' | 'Markdown' | 'MarkdownV2'
-                      },
-                    }));
-                  }}
-                  className="w-full p-2 border rounded-md"
-                >
-                  <option value="HTML">HTML</option>
-                  <option value="Markdown">Markdown</option>
-                  <option value="MarkdownV2">MarkdownV2</option>
-                </select>
-              </div>
+      case 'message':
+        return (
+          <div className='space-y-4'>
+            <div>
+              <Label htmlFor='messageText'>Текст сообщения</Label>
+              <MessageEditor
+                value={nodeConfig.message?.text || ''}
+                onChange={(text) => {
+                  setNodeConfig((prevConfig) => ({
+                    ...prevConfig,
+                    message: {
+                      ...prevConfig.message,
+                      text,
+                      parseMode: prevConfig.message?.parseMode || 'HTML'
+                    }
+                  }));
+                }}
+                keyboard={nodeConfig.message?.keyboard || null}
+                onKeyboardChange={(keyboard) => {
+                  setNodeConfig((prevConfig) => ({
+                    ...prevConfig,
+                    message: {
+                      ...prevConfig.message,
+                      keyboard: keyboard || undefined
+                    }
+                  }));
+                }}
+                placeholder='Введите текст сообщения...'
+                showPreview={true}
+                showVariableHelper={true}
+              />
             </div>
-          );
+
+            <div>
+              <Label htmlFor='parseMode'>Режим парсинга</Label>
+              <select
+                id='parseMode'
+                value={nodeConfig.message?.parseMode || 'HTML'}
+                onChange={(e) => {
+                  setNodeConfig((prevConfig) => ({
+                    ...prevConfig,
+                    message: {
+                      ...prevConfig.message,
+                      parseMode: e.target.value as
+                        | 'HTML'
+                        | 'Markdown'
+                        | 'MarkdownV2'
+                    }
+                  }));
+                }}
+                className='w-full rounded-md border p-2'
+              >
+                <option value='HTML'>HTML</option>
+                <option value='Markdown'>Markdown</option>
+                <option value='MarkdownV2'>MarkdownV2</option>
+              </select>
+            </div>
+          </div>
+        );
       case 'condition':
         return (
           <div className='space-y-4'>
             <div>
-              <Label htmlFor='conditionExpression'>Выражение (опционально)</Label>
+              <Label htmlFor='conditionExpression'>
+                Выражение (опционально)
+              </Label>
               <Textarea
                 id='conditionExpression'
                 value={nodeConfig.condition?.expression || ''}
-                onChange={(e) => handleConfigChange('expression', e.target.value)}
+                onChange={(e) =>
+                  handleConfigChange('expression', e.target.value)
+                }
                 className='mt-1'
                 placeholder='get("balance") > 100 && notEmpty(get("user"))'
                 rows={3}
               />
-              <p className='text-xs text-muted-foreground mt-1'>
-                JavaScript выражение. Доступны: get(), isEmpty(), notEmpty(), Math.*, etc.
+              <p className='text-muted-foreground mt-1 text-xs'>
+                JavaScript выражение. Доступны: get(), isEmpty(), notEmpty(),
+                Math.*, etc.
               </p>
             </div>
 
             <div className='border-t pt-4'>
-              <p className='text-sm text-muted-foreground mb-3'>Или используйте простой формат:</p>
+              <p className='text-muted-foreground mb-3 text-sm'>
+                Или используйте простой формат:
+              </p>
 
               <Label htmlFor='conditionVariable'>Переменная</Label>
               <Input
@@ -200,12 +230,14 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
                 placeholder='balance'
               />
 
-              <Label htmlFor='conditionOperator' className='mt-3 block'>Оператор</Label>
+              <Label htmlFor='conditionOperator' className='mt-3 block'>
+                Оператор
+              </Label>
               <select
                 id='conditionOperator'
                 value={nodeConfig.condition?.operator || ''}
                 onChange={(e) => handleConfigChange('operator', e.target.value)}
-                className='w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm'
+                className='border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm'
               >
                 <option value=''>Выберите оператор</option>
                 <option value='equals'>Равно (===)</option>
@@ -218,7 +250,9 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
                 <option value='is_not_empty'>Не пустое</option>
               </select>
 
-              <Label htmlFor='conditionValue' className='mt-3 block'>Значение</Label>
+              <Label htmlFor='conditionValue' className='mt-3 block'>
+                Значение
+              </Label>
               <Input
                 id='conditionValue'
                 value={nodeConfig.condition?.value || ''}
@@ -244,7 +278,7 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
                 'action.database_query': {
                   ...newConfig,
                   parameters: newConfig.parameters || {}
-                } as any,
+                } as any
               }));
             }}
           />
@@ -256,18 +290,81 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
             <Input
               id='variableName'
               value={nodeConfig['action.set_variable']?.variableName || ''}
-              onChange={(e) => handleConfigChange('variableName', e.target.value)}
+              onChange={(e) =>
+                handleConfigChange('variableName', e.target.value)
+              }
               className='mt-1'
               placeholder='myVar'
             />
-            <Label htmlFor='variableValue' className='mt-3 block'>Значение</Label>
+            <Label htmlFor='variableValue' className='mt-3 block'>
+              Значение
+            </Label>
             <Input
               id='variableValue'
               value={nodeConfig['action.set_variable']?.variableValue || ''}
-              onChange={(e) => handleConfigChange('variableValue', e.target.value)}
+              onChange={(e) =>
+                handleConfigChange('variableValue', e.target.value)
+              }
               className='mt-1'
               placeholder='value'
             />
+          </div>
+        );
+      case 'action.check_channel_subscription':
+        return (
+          <div className='space-y-4'>
+            <div>
+              <Label htmlFor='channelId'>ID канала</Label>
+              <Input
+                id='channelId'
+                value={
+                  nodeConfig['action.check_channel_subscription']?.channelId ||
+                  ''
+                }
+                onChange={(e) =>
+                  handleConfigChange('channelId', e.target.value)
+                }
+                className='mt-1'
+                placeholder='@channelname или -1001234567890'
+              />
+              <p className='text-muted-foreground mt-1 text-xs'>
+                ID канала Telegram (например, @channelname или -1001234567890).
+                Можно использовать переменные: {'{{telegram.chatId}}'}
+              </p>
+            </div>
+            <div>
+              <Label htmlFor='userId'>ID пользователя (опционально)</Label>
+              <Input
+                id='userId'
+                value={
+                  nodeConfig['action.check_channel_subscription']?.userId || ''
+                }
+                onChange={(e) => handleConfigChange('userId', e.target.value)}
+                className='mt-1'
+                placeholder='{{telegram.userId}}'
+              />
+              <p className='text-muted-foreground mt-1 text-xs'>
+                Если не указан, используется ID пользователя из контекста
+                Telegram
+              </p>
+            </div>
+            <div>
+              <Label htmlFor='assignTo'>Имя переменной для результата</Label>
+              <Input
+                id='assignTo'
+                value={
+                  nodeConfig['action.check_channel_subscription']?.assignTo ||
+                  'isChannelSubscribed'
+                }
+                onChange={(e) => handleConfigChange('assignTo', e.target.value)}
+                className='mt-1'
+                placeholder='isChannelSubscribed'
+              />
+              <p className='text-muted-foreground mt-1 text-xs'>
+                Результат (true/false) будет сохранен в эту переменную. Также
+                будет создана переменная {'{имя}_status'} со статусом подписки
+              </p>
+            </div>
           </div>
         );
       case 'flow.delay':
@@ -278,63 +375,75 @@ export function WorkflowProperties({ node, onNodeUpdate, onClose, allNodes = [] 
               id='delayMs'
               type='number'
               value={nodeConfig['flow.delay']?.delayMs || 1000}
-              onChange={(e) => handleConfigChange('delayMs', parseInt(e.target.value))}
+              onChange={(e) =>
+                handleConfigChange('delayMs', parseInt(e.target.value))
+              }
               className='mt-1'
             />
           </div>
         );
       case 'flow.end':
-        return <p className='text-sm text-muted-foreground'>Для этой ноды нет дополнительных настроек.</p>;
+        return (
+          <p className='text-muted-foreground text-sm'>
+            Для этой ноды нет дополнительных настроек.
+          </p>
+        );
       default:
-        return <p className='text-sm text-muted-foreground'>Выберите тип ноды для настройки.</p>;
+        return (
+          <p className='text-muted-foreground text-sm'>
+            Выберите тип ноды для настройки.
+          </p>
+        );
     }
   }, [node.type, nodeConfig, handleConfigChange]);
 
   return (
-    <div className='absolute right-4 top-4 z-20'>
-      <div className='relative w-[600px] max-w-[calc(100vw-100px)] h-[calc(82vh)] flex flex-col rounded-md border bg-background shadow-lg'>
+    <div className='absolute top-4 right-4 z-20'>
+      <div className='bg-background relative flex h-[calc(82vh)] w-[600px] max-w-[calc(100vw-100px)] flex-col rounded-md border shadow-lg'>
         <Button
           variant='ghost'
           size='icon'
-          className='absolute right-2 top-2 h-8 w-8 z-10'
+          className='absolute top-2 right-2 z-10 h-8 w-8'
           onClick={onClose}
         >
           <X className='h-4 w-4' />
         </Button>
-        
+
         {/* Scrollable content */}
-        <div className='overflow-y-auto flex-1 p-4 pr-6'>
-          <h3 className='mb-4 text-lg font-semibold'>Свойства ноды: {node.type}</h3>
+        <div className='flex-1 overflow-y-auto p-4 pr-6'>
+          <h3 className='mb-4 text-lg font-semibold'>
+            Свойства ноды: {node.type}
+          </h3>
 
           <div className='space-y-4'>
-          <div>
-            <Label htmlFor='nodeLabel'>Название ноды</Label>
-            <Input
-              id='nodeLabel'
-              value={nodeLabel}
-              onChange={(e) => setNodeLabel(e.target.value)}
-              className='mt-1'
-            />
-          </div>
-          <div>
-            <Label htmlFor='nodeDescription'>Описание</Label>
-            <Textarea
-              id='nodeDescription'
-              value={nodeDescription}
-              onChange={(e) => setNodeDescription(e.target.value)}
-              className='mt-1'
-            />
-          </div>
+            <div>
+              <Label htmlFor='nodeLabel'>Название ноды</Label>
+              <Input
+                id='nodeLabel'
+                value={nodeLabel}
+                onChange={(e) => setNodeLabel(e.target.value)}
+                className='mt-1'
+              />
+            </div>
+            <div>
+              <Label htmlFor='nodeDescription'>Описание</Label>
+              <Textarea
+                id='nodeDescription'
+                value={nodeDescription}
+                onChange={(e) => setNodeDescription(e.target.value)}
+                className='mt-1'
+              />
+            </div>
 
-          <Separator />
+            <Separator />
 
-          <h4 className='text-md font-semibold'>Конфигурация ноды</h4>
-          {renderConfigEditor()}
+            <h4 className='text-md font-semibold'>Конфигурация ноды</h4>
+            {renderConfigEditor()}
           </div>
         </div>
 
         {/* Fixed save button at bottom */}
-        <div className='flex-shrink-0 border-t bg-background p-4'>
+        <div className='bg-background flex-shrink-0 border-t p-4'>
           <Button
             onClick={handleSave}
             disabled={isSaving}

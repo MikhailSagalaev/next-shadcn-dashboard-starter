@@ -33,7 +33,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuTrigger,
+  ContextMenuTrigger
 } from '@/components/ui/context-menu';
 import { Trash2, Copy, Edit, AlignVerticalJustifyCenter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -61,7 +61,10 @@ import type {
   WorkflowNodeConfig,
   Position
 } from '@/types/workflow';
-import { validateWorkflow, type WorkflowValidationResult } from '@/lib/services/workflow/workflow-validator';
+import {
+  validateWorkflow,
+  type WorkflowValidationResult
+} from '@/lib/services/workflow/workflow-validator';
 
 interface WorkflowConstructorProps {
   projectId: string;
@@ -69,7 +72,9 @@ interface WorkflowConstructorProps {
 
 export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   // State
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(
+    null
+  );
   const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     nodeId?: string;
@@ -83,7 +88,8 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
-  const [validationResult, setValidationResult] = useState<WorkflowValidationResult | null>(null);
+  const [validationResult, setValidationResult] =
+    useState<WorkflowValidationResult | null>(null);
 
   // Custom hooks
   const {
@@ -125,13 +131,13 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
         ...node,
         position: {
           x: nodeWithPosition.x - 128,
-          y: nodeWithPosition.y - 71,
-        },
+          y: nodeWithPosition.y - 71
+        }
       };
     });
 
     setNodes(layoutedNodes);
-    
+
     setTimeout(() => {
       reactFlowInstance.fitView({ padding: 0.2, duration: 400 });
     }, 0);
@@ -228,14 +234,18 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
         return;
       }
 
-      const nodeType = event.dataTransfer.getData('application/reactflow') as WorkflowNodeType;
+      const nodeType = event.dataTransfer.getData(
+        'application/reactflow'
+      ) as WorkflowNodeType;
 
       if (!nodeType || !reactFlowInstance) {
         return;
       }
 
       // Получаем позицию курсора относительно канваса
-      const reactFlowBounds = (event.target as HTMLElement).closest('.react-flow')?.getBoundingClientRect();
+      const reactFlowBounds = (event.target as HTMLElement)
+        .closest('.react-flow')
+        ?.getBoundingClientRect();
       if (!reactFlowBounds) return;
 
       const position = reactFlowInstance.screenToFlowPosition({
@@ -254,7 +264,11 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       const node = reactFlowInstance.getNode(nodeId);
       if (!node) return;
 
-      reactFlowInstance.fitView({ nodes: [{ id: nodeId }], padding: 0.3, duration: 400 });
+      reactFlowInstance.fitView({
+        nodes: [{ id: nodeId }],
+        padding: 0.3,
+        duration: 400
+      });
 
       const found = nodes.find((n) => n.id === nodeId) ?? null;
       setSelectedNode(found);
@@ -300,6 +314,8 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
         return 'Связать аккаунт';
       case 'action.get_user_balance':
         return 'Получить баланс';
+      case 'action.check_channel_subscription':
+        return 'Проверка подписки';
 
       // Условия
       case 'condition':
@@ -339,7 +355,12 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       case 'trigger.callback':
         return { 'trigger.callback': { callbackData: 'btn_click' } };
       case 'trigger.webhook':
-        return { 'trigger.webhook': { webhookUrl: 'https://example.com/webhook', method: 'POST' } };
+        return {
+          'trigger.webhook': {
+            webhookUrl: 'https://example.com/webhook',
+            method: 'POST'
+          }
+        };
       case 'trigger.email':
         return { 'trigger.email': { email: 'user@example.com' } };
 
@@ -349,27 +370,76 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
 
       // Действия
       case 'action.api_request':
-        return { 'action.api_request': { url: 'https://api.example.com', method: 'GET' } };
+        return {
+          'action.api_request': {
+            url: 'https://api.example.com',
+            method: 'GET'
+          }
+        };
       case 'action.database_query':
-        return { 'action.database_query': { query: 'SELECT * FROM users WHERE id = $1', assignTo: 'result' } };
+        return {
+          'action.database_query': {
+            query: 'SELECT * FROM users WHERE id = $1',
+            assignTo: 'result'
+          }
+        };
       case 'action.set_variable':
-        return { 'action.set_variable': { variableName: 'myVar', variableValue: 'value', scope: 'user' } };
+        return {
+          'action.set_variable': {
+            variableName: 'myVar',
+            variableValue: 'value',
+            scope: 'user'
+          }
+        };
       case 'action.get_variable':
-        return { 'action.get_variable': { variableName: 'myVar', assignTo: 'result' } };
+        return {
+          'action.get_variable': { variableName: 'myVar', assignTo: 'result' }
+        };
       case 'action.send_notification':
-        return { 'action.send_notification': { notificationType: 'telegram', recipient: '{{telegram.userId}}' } };
+        return {
+          'action.send_notification': {
+            notificationType: 'telegram',
+            recipient: '{{telegram.userId}}'
+          }
+        };
       case 'action.check_user_linked':
-        return { 'action.check_user_linked': { userIdentifier: '{{telegram.userId}}', assignTo: 'isLinked' } };
+        return {
+          'action.check_user_linked': {
+            userIdentifier: '{{telegram.userId}}',
+            assignTo: 'isLinked'
+          }
+        };
       case 'action.find_user_by_contact':
-        return { 'action.find_user_by_contact': { contactType: 'phone', contactValue: '{{telegram.userPhone}}', assignTo: 'user' } };
+        return {
+          'action.find_user_by_contact': {
+            contactType: 'phone',
+            contactValue: '{{telegram.userPhone}}',
+            assignTo: 'user'
+          }
+        };
       case 'action.link_telegram_account':
-        return { 'action.link_telegram_account': { telegramId: '{{telegram.userId}}', contactType: 'phone', contactValue: '{{telegram.userPhone}}' } };
+        return {
+          'action.link_telegram_account': {
+            telegramId: '{{telegram.userId}}',
+            contactType: 'phone',
+            contactValue: '{{telegram.userPhone}}'
+          }
+        };
       case 'action.get_user_balance':
         return { 'action.get_user_balance': { assignTo: 'balance' } };
+      case 'action.check_channel_subscription':
+        return {
+          'action.check_channel_subscription': {
+            channelId: '@channelname',
+            assignTo: 'isChannelSubscribed'
+          }
+        };
 
       // Условия
       case 'condition':
-        return { condition: { variable: 'balance', operator: 'greater', value: 0 } };
+        return {
+          condition: { variable: 'balance', operator: 'greater', value: 0 }
+        };
 
       // Поток управления
       case 'flow.delay':
@@ -385,7 +455,12 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
 
       // Интеграции
       case 'integration.webhook':
-        return { 'integration.webhook': { url: 'https://example.com/webhook', method: 'POST' } };
+        return {
+          'integration.webhook': {
+            url: 'https://example.com/webhook',
+            method: 'POST'
+          }
+        };
       case 'integration.analytics':
         return { 'integration.analytics': { event: 'workflow_step' } };
 
@@ -401,7 +476,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       if (!currentWorkflow) {
         return;
       }
-      
+
       const newEdge: Edge = {
         id: `edge-${params.source}-${params.target}-${Date.now()}`,
         source: params.source!,
@@ -437,7 +512,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       if (!currentWorkflow) {
         return;
       }
-      
+
       setNodes((nds) =>
         nds.map((node) => (node.id === updatedNode.id ? updatedNode : node))
       );
@@ -468,35 +543,41 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   }, [currentWorkflow, nodes, edges, saveWorkflow]);
 
   // Toggle workflow active state
-  const handleToggleActive = useCallback(async (workflowId: string, isActive: boolean) => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}/workflows/${workflowId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isActive
-        })
-      });
+  const handleToggleActive = useCallback(
+    async (workflowId: string, isActive: boolean) => {
+      try {
+        const response = await fetch(
+          `/api/projects/${projectId}/workflows/${workflowId}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              isActive
+            })
+          }
+        );
 
-      if (!response.ok) {
-        throw new Error('Failed to toggle workflow active state');
-      }
+        if (!response.ok) {
+          throw new Error('Failed to toggle workflow active state');
+        }
 
-      const result = await response.json();
-      
-      // Обновляем текущий workflow
-      if (currentWorkflow && currentWorkflow.id === workflowId) {
-        setCurrentWorkflow({ ...currentWorkflow, isActive });
+        const result = await response.json();
+
+        // Обновляем текущий workflow
+        if (currentWorkflow && currentWorkflow.id === workflowId) {
+          setCurrentWorkflow({ ...currentWorkflow, isActive });
+        }
+
+        // Обновляем список workflow
+        await loadWorkflows();
+
+        console.log('Workflow active state updated:', result.workflow);
+      } catch (error) {
+        console.error('Error toggling workflow active state:', error);
       }
-      
-      // Обновляем список workflow
-      await loadWorkflows();
-      
-      console.log('Workflow active state updated:', result.workflow);
-    } catch (error) {
-      console.error('Error toggling workflow active state:', error);
-    }
-  }, [projectId, currentWorkflow, loadWorkflows, setCurrentWorkflow]);
+    },
+    [projectId, currentWorkflow, loadWorkflows, setCurrentWorkflow]
+  );
 
   // Context menu handlers
   const onNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
@@ -517,39 +598,50 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
     });
   }, []);
 
-  const handleDeleteNode = useCallback((nodeId: string) => {
-    setNodes((nodes) => nodes.filter((n) => n.id !== nodeId));
-    setEdges((edges) => edges.filter((e) => e.source !== nodeId && e.target !== nodeId));
-    setContextMenu(null);
-    if (selectedNode?.id === nodeId) {
-      setSelectedNode(null);
-    }
-  }, [setNodes, setEdges, selectedNode]);
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      setNodes((nodes) => nodes.filter((n) => n.id !== nodeId));
+      setEdges((edges) =>
+        edges.filter((e) => e.source !== nodeId && e.target !== nodeId)
+      );
+      setContextMenu(null);
+      if (selectedNode?.id === nodeId) {
+        setSelectedNode(null);
+      }
+    },
+    [setNodes, setEdges, selectedNode]
+  );
 
-  const handleDeleteEdge = useCallback((edgeId: string) => {
-    setEdges((edges) => edges.filter((e) => e.id !== edgeId));
-    setContextMenu(null);
-  }, [setEdges]);
+  const handleDeleteEdge = useCallback(
+    (edgeId: string) => {
+      setEdges((edges) => edges.filter((e) => e.id !== edgeId));
+      setContextMenu(null);
+    },
+    [setEdges]
+  );
 
-  const handleDuplicateNode = useCallback((nodeId: string) => {
-    const nodeToDuplicate = nodes.find((n) => n.id === nodeId);
-    if (nodeToDuplicate) {
-      const newNode: WorkflowNode = {
-        ...nodeToDuplicate,
-        id: `${nodeToDuplicate.type}-${Date.now()}`,
-        position: {
-          x: nodeToDuplicate.position.x + 50,
-          y: nodeToDuplicate.position.y + 50
-        },
-        data: {
-          ...nodeToDuplicate.data,
-          label: `${nodeToDuplicate.data.label} (копия)`
-        }
-      };
-      setNodes((nodes) => [...nodes, newNode]);
-    }
-    setContextMenu(null);
-  }, [nodes, setNodes]);
+  const handleDuplicateNode = useCallback(
+    (nodeId: string) => {
+      const nodeToDuplicate = nodes.find((n) => n.id === nodeId);
+      if (nodeToDuplicate) {
+        const newNode: WorkflowNode = {
+          ...nodeToDuplicate,
+          id: `${nodeToDuplicate.type}-${Date.now()}`,
+          position: {
+            x: nodeToDuplicate.position.x + 50,
+            y: nodeToDuplicate.position.y + 50
+          },
+          data: {
+            ...nodeToDuplicate.data,
+            label: `${nodeToDuplicate.data.label} (копия)`
+          }
+        };
+        setNodes((nodes) => [...nodes, newNode]);
+      }
+      setContextMenu(null);
+    },
+    [nodes, setNodes]
+  );
 
   // Data for ReactFlow
   const flowData = useMemo(
@@ -561,26 +653,27 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   );
 
   // Проверка наличия workflow
-  const hasNoWorkflow = !isLoading && !currentWorkflow && workflows.length === 0;
+  const hasNoWorkflow =
+    !isLoading && !currentWorkflow && workflows.length === 0;
 
   return (
     <div className='flex h-[calc(100vh-80px)] flex-col overflow-hidden'>
       {/* Header */}
       <div className='flex-shrink-0'>
         <WorkflowHeader
-        projectId={projectId}
-        workflows={workflows}
-        currentWorkflow={currentWorkflow}
-        selectedWorkflowId={selectedWorkflowId}
-        onWorkflowSelect={setSelectedWorkflowId}
-        onWorkflowCreate={createWorkflow}
-        onWorkflowLoad={loadWorkflow}
-        onWorkflowSave={handleSaveWorkflow}
-        onWorkflowDelete={deleteWorkflow}
-        onWorkflowExport={exportWorkflow}
-        onWorkflowImport={importWorkflow}
-        onWorkflowToggleActive={handleToggleActive}
-        isSaving={false}
+          projectId={projectId}
+          workflows={workflows}
+          currentWorkflow={currentWorkflow}
+          selectedWorkflowId={selectedWorkflowId}
+          onWorkflowSelect={setSelectedWorkflowId}
+          onWorkflowCreate={createWorkflow}
+          onWorkflowLoad={loadWorkflow}
+          onWorkflowSave={handleSaveWorkflow}
+          onWorkflowDelete={deleteWorkflow}
+          onWorkflowExport={exportWorkflow}
+          onWorkflowImport={importWorkflow}
+          onWorkflowToggleActive={handleToggleActive}
+          isSaving={false}
         />
       </div>
 
@@ -590,34 +683,39 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
         <div className='relative flex-1 overflow-hidden'>
           {/* Блокирующий overlay, если нет workflow */}
           {hasNoWorkflow && (
-            <div className='absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm'>
-              <div className='text-center space-y-4 p-8 bg-background border rounded-lg shadow-lg max-w-md'>
+            <div className='bg-background/80 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm'>
+              <div className='bg-background max-w-md space-y-4 rounded-lg border p-8 text-center shadow-lg'>
                 <h3 className='text-xl font-semibold'>Нет workflow</h3>
                 <p className='text-muted-foreground'>
-                  Для работы с конструктором необходимо создать или выбрать workflow.
-                  Используйте кнопку "Выберите workflow" в заголовке для создания или загрузки workflow.
+                  Для работы с конструктором необходимо создать или выбрать
+                  workflow. Используйте кнопку "Выберите workflow" в заголовке
+                  для создания или загрузки workflow.
                 </p>
               </div>
             </div>
           )}
           {/* Toolbar */}
-          <div className='absolute left-4 top-4 z-10'>
+          <div className='absolute top-4 left-4 z-10'>
             <WorkflowToolbar onAddNode={handleAddNode} />
           </div>
           {/* Auto layout button */}
-          <div className='absolute right-4 top-4 z-[1]'>
-            <Button 
-              variant="outline" 
-              size="sm" 
+          <div className='absolute top-4 right-4 z-[1]'>
+            <Button
+              variant='outline'
+              size='sm'
               onClick={onAutoLayout}
               disabled={nodes.length === 0}
-              title="Автоматическое выравнивание нод"
+              title='Автоматическое выравнивание нод'
             >
-              <AlignVerticalJustifyCenter className="h-4 w-4 mr-2" />
+              <AlignVerticalJustifyCenter className='mr-2 h-4 w-4' />
               Выравнять
             </Button>
           </div>
-          <div onDrop={onDrop} onDragOver={onDragOver} className='h-full w-full'>
+          <div
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            className='h-full w-full'
+          >
             <ReactFlow
               nodes={flowData.nodes}
               edges={flowData.edges}
@@ -626,8 +724,12 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               onConnect={currentWorkflow ? onConnect : undefined}
               onNodeClick={onNodeClick}
               onPaneClick={onPaneClick}
-              onNodeContextMenu={currentWorkflow ? onNodeContextMenu : undefined}
-              onEdgeContextMenu={currentWorkflow ? onEdgeContextMenu : undefined}
+              onNodeContextMenu={
+                currentWorkflow ? onNodeContextMenu : undefined
+              }
+              onEdgeContextMenu={
+                currentWorkflow ? onEdgeContextMenu : undefined
+              }
               onInit={setReactFlowInstance}
               nodeTypes={workflowNodeTypes}
               fitView
@@ -637,27 +739,27 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               nodesConnectable={!!currentWorkflow}
               elementsSelectable={!!currentWorkflow}
             >
-            <Panel position='bottom-left' className='ml-2 mb-2'>
-              <WorkflowValidationPanel
-                result={validationResult}
-                onFocusNode={handleFocusNode}
-                className='w-64'
-              />
-            </Panel>
-            <Background variant={BackgroundVariant.Dots} />
-            <Controls />
-            <MiniMap />
-            
-            {/* Properties panel */}
-            {selectedNode && (
-              <WorkflowProperties
-                node={selectedNode}
-                onNodeUpdate={onNodeUpdate}
-                onClose={() => setSelectedNode(null)}
-                allNodes={nodes}
-              />
-            )}
-          </ReactFlow>
+              <Panel position='bottom-left' className='mb-2 ml-2'>
+                <WorkflowValidationPanel
+                  result={validationResult}
+                  onFocusNode={handleFocusNode}
+                  className='w-64'
+                />
+              </Panel>
+              <Background variant={BackgroundVariant.Dots} />
+              <Controls />
+              <MiniMap />
+
+              {/* Properties panel */}
+              {selectedNode && (
+                <WorkflowProperties
+                  node={selectedNode}
+                  onNodeUpdate={onNodeUpdate}
+                  onClose={() => setSelectedNode(null)}
+                  allNodes={nodes}
+                />
+              )}
+            </ReactFlow>
           </div>
         </div>
       </div>
@@ -673,19 +775,19 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
           }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className='bg-background border rounded-md shadow-lg p-1 min-w-[150px]'>
+          <div className='bg-background min-w-[150px] rounded-md border p-1 shadow-lg'>
             {contextMenu.nodeId && (
               <>
                 <button
                   onClick={() => handleDuplicateNode(contextMenu.nodeId!)}
-                  className='flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent rounded-sm transition-colors'
+                  className='hover:bg-accent flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-colors'
                 >
                   <Copy className='h-4 w-4' />
                   Дублировать
                 </button>
                 <button
                   onClick={() => handleDeleteNode(contextMenu.nodeId!)}
-                  className='flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-accent rounded-sm transition-colors'
+                  className='text-destructive hover:bg-accent flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-colors'
                 >
                   <Trash2 className='h-4 w-4' />
                   Удалить ноду
@@ -695,7 +797,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
             {contextMenu.edgeId && (
               <button
                 onClick={() => handleDeleteEdge(contextMenu.edgeId!)}
-                className='flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-accent rounded-sm transition-colors'
+                className='text-destructive hover:bg-accent flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm transition-colors'
               >
                 <Trash2 className='h-4 w-4' />
                 Удалить связь

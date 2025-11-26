@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Shield, Bell, Key, Save, RefreshCw } from 'lucide-react';
+import { User, Shield, Bell, Save, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ProfileSettings {
@@ -62,12 +62,6 @@ interface ProfileSettings {
     enableSystemNotifications: boolean;
     enableSecurityAlerts: boolean;
     notificationEmail: string;
-  };
-  preferences: {
-    language: string;
-    timezone: string;
-    theme: string;
-    dateFormat: string;
   };
 }
 
@@ -92,12 +86,6 @@ export default function SettingsPage() {
       enableSystemNotifications: true,
       enableSecurityAlerts: true,
       notificationEmail: ''
-    },
-    preferences: {
-      language: 'ru',
-      timezone: 'Europe/Moscow',
-      theme: 'system',
-      dateFormat: 'DD.MM.YYYY'
     }
   });
 
@@ -146,34 +134,6 @@ export default function SettingsPage() {
   useEffect(() => {
     loadProfileData();
   }, [loadProfileData]);
-
-  useEffect(() => {
-    setTheme(settings.preferences.theme);
-  }, [settings.preferences.theme, setTheme]);
-
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.documentElement.lang = settings.preferences.language || 'ru';
-    }
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        'gupil:language',
-        settings.preferences.language
-      );
-      window.localStorage.setItem(
-        'gupil:timezone',
-        settings.preferences.timezone
-      );
-      window.localStorage.setItem(
-        'gupil:dateFormat',
-        settings.preferences.dateFormat
-      );
-    }
-  }, [
-    settings.preferences.language,
-    settings.preferences.timezone,
-    settings.preferences.dateFormat
-  ]);
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const phoneRegex = /^\+?[0-9()\s-]{6,}$/;
@@ -522,9 +482,6 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           notificationEmail: settings.notifications.notificationEmail,
-          language: settings.preferences.language,
-          timezone: settings.preferences.timezone,
-          dateFormat: settings.preferences.dateFormat,
           enableEmailNotifications:
             settings.notifications.enableEmailNotifications
         })
@@ -607,10 +564,6 @@ export default function SettingsPage() {
             <TabsTrigger value='notifications'>
               <Bell className='mr-2 h-4 w-4' />
               Уведомления
-            </TabsTrigger>
-            <TabsTrigger value='preferences'>
-              <Key className='mr-2 h-4 w-4' />
-              Предпочтения
             </TabsTrigger>
           </TabsList>
 
@@ -951,100 +904,6 @@ export default function SettingsPage() {
                         ? 'Отправляем...'
                         : 'Тестовое уведомление'}
                     </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Предпочтения */}
-          <TabsContent value='preferences'>
-            <Card>
-              <CardHeader>
-                <CardTitle className='flex items-center gap-2'>
-                  <Key className='h-5 w-5' />
-                  Предпочтения
-                </CardTitle>
-                <CardDescription>
-                  Персональные настройки интерфейса
-                </CardDescription>
-              </CardHeader>
-              <CardContent className='space-y-6'>
-                <div className='grid gap-4 md:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <Label htmlFor='language'>Язык</Label>
-                    <select
-                      id='language'
-                      className='border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
-                      value={settings.preferences.language}
-                      onChange={(e) =>
-                        handleInputChange(
-                          'preferences',
-                          'language',
-                          e.target.value
-                        )
-                      }
-                    >
-                      <option value='ru'>Русский</option>
-                      <option value='en'>English</option>
-                    </select>
-                  </div>
-                  <div className='space-y-2'>
-                    <Label htmlFor='timezone'>Часовой пояс</Label>
-                    <select
-                      id='timezone'
-                      className='border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
-                      value={settings.preferences.timezone}
-                      onChange={(e) =>
-                        handleInputChange(
-                          'preferences',
-                          'timezone',
-                          e.target.value
-                        )
-                      }
-                    >
-                      <option value='Europe/Moscow'>Москва (UTC+3)</option>
-                      <option value='Europe/London'>Лондон (UTC+0)</option>
-                      <option value='America/New_York'>Нью-Йорк (UTC-5)</option>
-                    </select>
-                  </div>
-                  <div className='space-y-2'>
-                    <Label htmlFor='theme'>Тема</Label>
-                    <select
-                      id='theme'
-                      className='border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
-                      value={settings.preferences.theme}
-                      onChange={(e) =>
-                        handleInputChange(
-                          'preferences',
-                          'theme',
-                          e.target.value
-                        )
-                      }
-                    >
-                      <option value='system'>Системная</option>
-                      <option value='light'>Светлая</option>
-                      <option value='dark'>Темная</option>
-                    </select>
-                  </div>
-                  <div className='space-y-2'>
-                    <Label htmlFor='dateFormat'>Формат даты</Label>
-                    <select
-                      id='dateFormat'
-                      className='border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
-                      value={settings.preferences.dateFormat}
-                      onChange={(e) =>
-                        handleInputChange(
-                          'preferences',
-                          'dateFormat',
-                          e.target.value
-                        )
-                      }
-                    >
-                      <option value='DD.MM.YYYY'>DD.MM.YYYY</option>
-                      <option value='MM/DD/YYYY'>MM/DD/YYYY</option>
-                      <option value='YYYY-MM-DD'>YYYY-MM-DD</option>
-                    </select>
                   </div>
                 </div>
               </CardContent>
