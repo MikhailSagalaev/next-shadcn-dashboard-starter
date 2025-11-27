@@ -28,6 +28,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { MailingTemplateEditor } from './mailing-template-editor';
+import { TelegramMailingEditor } from './telegram-mailing-editor';
 import { useToast } from '@/hooks/use-toast';
 
 interface MailingFormDialogProps {
@@ -55,28 +56,55 @@ export function MailingFormDialog({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
-  const [type, setType] = useState<'EMAIL' | 'SMS' | 'TELEGRAM' | 'WHATSAPP' | 'VIBER'>('EMAIL');
+  const [type, setType] = useState<
+    'EMAIL' | 'SMS' | 'TELEGRAM' | 'WHATSAPP' | 'VIBER'
+  >('EMAIL');
   const [segmentId, setSegmentId] = useState<string>('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+
+  // Telegram специфичные поля
+  const [imageUrl, setImageUrl] = useState('');
+  const [buttons, setButtons] = useState<
+    Array<{ text: string; url?: string; callback_data?: string }>
+  >([]);
+  const [parseMode, setParseMode] = useState<'HTML' | 'Markdown'>('HTML');
 
   useEffect(() => {
     if (mailing) {
       setName(mailing.name);
       setType(mailing.type);
       setSegmentId(mailing.segmentId || '');
-      // Загружаем шаблон если есть
-      if (mailing.templateId) {
-        // TODO: загрузить шаблон
-      }
+      // Загружаем данные рассылки
+      fetch(`/api/projects/${projectId}/mailings/${mailing.id}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.template) {
+            setSubject(data.template.subject || '');
+            setBody(
+              data.template.body || data.messageText || data.messageHtml || ''
+            );
+          }
+          // Загружаем Telegram метаданные из statistics
+          if (data.statistics && typeof data.statistics === 'object') {
+            if (data.statistics.imageUrl) setImageUrl(data.statistics.imageUrl);
+            if (data.statistics.buttons) setButtons(data.statistics.buttons);
+            if (data.statistics.parseMode)
+              setParseMode(data.statistics.parseMode);
+          }
+        })
+        .catch(() => {});
     } else {
       setName('');
-      setType('EMAIL');
+      setType('TELEGRAM'); // По умолчанию Telegram
       setSegmentId('');
       setSubject('');
       setBody('');
+      setImageUrl('');
+      setButtons([]);
+      setParseMode('HTML');
     }
-  }, [mailing, open]);
+  }, [mailing, open, projectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,8 +126,8 @@ export function MailingFormDialog({
               name: `${name} - шаблон`,
               subject,
               body,
-              type,
-            }),
+              type
+            })
           }
         );
 
@@ -115,15 +143,29 @@ export function MailingFormDialog({
         : `/api/projects/${projectId}/mailings`;
       const method = mailing ? 'PUT' : 'POST';
 
+      // Подготавливаем данные для рассылки
+      const mailingData: any = {
+        name,
+        type,
+        segmentId: segmentId || undefined,
+        templateId: templateId || undefined
+      };
+
+      // Для Telegram рассылок добавляем метаданные
+      if (type === 'TELEGRAM') {
+        mailingData.messageText = body;
+        mailingData.messageHtml = body;
+        mailingData.statistics = {
+          imageUrl: imageUrl || undefined,
+          buttons: buttons.length > 0 ? buttons : undefined,
+          parseMode: parseMode
+        };
+      }
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          type,
-          segmentId: segmentId || undefined,
-          templateId: templateId || undefined,
-        }),
+        body: JSON.stringify(mailingData)
       });
 
       if (!response.ok) {
@@ -132,7 +174,7 @@ export function MailingFormDialog({
 
       toast({
         title: 'Успешно',
-        description: mailing ? 'Рассылка обновлена' : 'Рассылка создана',
+        description: mailing ? 'Рассылка обновлена' : 'Рассылка создана'
       });
 
       onOpenChange(false);
@@ -141,7 +183,7 @@ export function MailingFormDialog({
       toast({
         title: 'Ошибка',
         description: 'Не удалось сохранить рассылку',
-        variant: 'destructive',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
@@ -150,9 +192,11 @@ export function MailingFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-4xl max-h-[90vh] overflow-y-auto'>
+      <DialogContent className='max-h-[90vh] max-w-4xl overflow-y-auto'>
         <DialogHeader>
-          <DialogTitle>{mailing ? 'Редактировать рассылку' : 'Создать рассылку'}</DialogTitle>
+          <DialogTitle>
+            {mailing ? 'Редактировать рассылку' : 'Создать рассылку'}
+          </DialogTitle>
           <DialogDescription>
             {mailing
               ? 'Измените параметры рассылки'
@@ -173,7 +217,10 @@ export function MailingFormDialog({
             </div>
             <div>
               <Label htmlFor='type'>Тип рассылки</Label>
-              <Select value={type} onValueChange={(value: any) => setType(value)}>
+              <Select
+                value={type}
+                onValueChange={(value: any) => setType(value)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -203,17 +250,39 @@ export function MailingFormDialog({
               </SelectContent>
             </Select>
           </div>
-          <MailingTemplateEditor
-            subject={subject}
-            body={body}
-            onSubjectChange={setSubject}
-            onBodyChange={setBody}
-          />
+          {type === 'TELEGRAM' ? (
+            <TelegramMailingEditor
+              messageText={body}
+              imageUrl={imageUrl}
+              buttons={buttons}
+              parseMode={parseMode}
+              onMessageChange={setBody}
+              onImageUrlChange={setImageUrl}
+              onButtonsChange={setButtons}
+              onParseModeChange={setParseMode}
+            />
+          ) : (
+            <MailingTemplateEditor
+              subject={subject}
+              body={body}
+              onSubjectChange={setSubject}
+              onBodyChange={setBody}
+            />
+          )}
           <DialogFooter>
-            <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => onOpenChange(false)}
+            >
               Отмена
             </Button>
-            <Button type='submit' disabled={loading || !name || !subject || !body}>
+            <Button
+              type='submit'
+              disabled={
+                loading || !name || !body || (type !== 'TELEGRAM' && !subject)
+              }
+            >
               {loading ? 'Сохранение...' : mailing ? 'Сохранить' : 'Создать'}
             </Button>
           </DialogFooter>
@@ -222,4 +291,3 @@ export function MailingFormDialog({
     </Dialog>
   );
 }
-

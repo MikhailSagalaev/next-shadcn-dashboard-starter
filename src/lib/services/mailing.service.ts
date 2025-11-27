@@ -19,6 +19,9 @@ export interface CreateMailingInput {
   segmentId?: string;
   templateId?: string;
   scheduledAt?: Date;
+  messageText?: string;
+  messageHtml?: string;
+  statistics?: Record<string, any>;
 }
 
 export interface CreateMailingTemplateInput {
@@ -51,15 +54,15 @@ export class MailingService {
           subject: data.subject,
           body: data.body,
           type: data.type,
-          isActive: data.isActive ?? true,
-        },
+          isActive: data.isActive ?? true
+        }
       });
 
       logger.info('Шаблон рассылки создан', {
         templateId: template.id,
         projectId: data.projectId,
         type: data.type,
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
 
       return template;
@@ -67,7 +70,7 @@ export class MailingService {
       logger.error('Ошибка создания шаблона рассылки', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -84,13 +87,13 @@ export class MailingService {
     try {
       const template = await db.mailingTemplate.update({
         where: { id: templateId },
-        data,
+        data
       });
 
       logger.info('Шаблон рассылки обновлен', {
         templateId: template.id,
         projectId,
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
 
       return template;
@@ -100,7 +103,7 @@ export class MailingService {
         projectId,
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -114,11 +117,11 @@ export class MailingService {
       const templates = await db.mailingTemplate.findMany({
         where: {
           projectId,
-          ...(type ? { type } : {}),
+          ...(type ? { type } : {})
         },
         orderBy: {
-          createdAt: 'desc',
-        },
+          createdAt: 'desc'
+        }
       });
 
       return templates;
@@ -126,7 +129,7 @@ export class MailingService {
       logger.error('Ошибка получения шаблонов рассылок', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -140,8 +143,8 @@ export class MailingService {
       const template = await db.mailingTemplate.findFirst({
         where: {
           id: templateId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       return template;
@@ -150,7 +153,7 @@ export class MailingService {
         templateId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -170,26 +173,29 @@ export class MailingService {
           templateId: data.templateId,
           status: data.scheduledAt ? 'SCHEDULED' : 'DRAFT',
           scheduledAt: data.scheduledAt,
+          messageText: data.messageText,
+          messageHtml: data.messageHtml,
+          statistics: data.statistics
         },
         include: {
           segment: {
             include: {
               members: {
                 include: {
-                  user: true,
-                },
-              },
-            },
+                  user: true
+                }
+              }
+            }
           },
-          template: true,
-        },
+          template: true
+        }
       });
 
       logger.info('Рассылка создана', {
         mailingId: mailing.id,
         projectId: data.projectId,
         type: data.type,
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
 
       return mailing;
@@ -197,7 +203,7 @@ export class MailingService {
       logger.error('Ошибка создания рассылки', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -206,26 +212,29 @@ export class MailingService {
   /**
    * Запуск рассылки
    */
-  static async startMailing(projectId: string, mailingId: string): Promise<void> {
+  static async startMailing(
+    projectId: string,
+    mailingId: string
+  ): Promise<void> {
     try {
       const mailing = await db.mailing.findFirst({
         where: {
           id: mailingId,
-          projectId,
+          projectId
         },
         include: {
           segment: {
             include: {
               members: {
                 include: {
-                  user: true,
-                },
-              },
-            },
+                  user: true
+                }
+              }
+            }
           },
           template: true,
-          recipients: true,
-        },
+          recipients: true
+        }
       });
 
       if (!mailing) {
@@ -241,26 +250,30 @@ export class MailingService {
         where: { id: mailingId },
         data: {
           status: 'SENDING',
-          sentAt: new Date(),
-        },
+          sentAt: new Date()
+        }
       });
 
       // Получаем список получателей
-      let recipients: Array<{ userId?: string; email?: string; phone?: string }> = [];
+      let recipients: Array<{
+        userId?: string;
+        email?: string;
+        phone?: string;
+      }> = [];
 
       if (mailing.segment) {
         // Получаем пользователей из сегмента
         recipients = mailing.segment.members.map((member) => ({
           userId: member.user.id,
           email: member.user.email || undefined,
-          phone: member.user.phone || undefined,
+          phone: member.user.phone || undefined
         }));
       } else if (mailing.recipients.length > 0) {
         // Используем существующих получателей
         recipients = mailing.recipients.map((r) => ({
           userId: r.userId || undefined,
           email: r.email || undefined,
-          phone: r.phone || undefined,
+          phone: r.phone || undefined
         }));
       }
 
@@ -272,41 +285,71 @@ export class MailingService {
             userId: recipient.userId,
             email: recipient.email,
             phone: recipient.phone,
-            status: 'PENDING',
-          })),
+            status: 'PENDING'
+          }))
         });
       }
 
       // Получаем обновленный список получателей
       const mailingRecipients = await db.mailingRecipient.findMany({
-        where: { mailingId: mailing.id },
+        where: { mailingId: mailing.id }
       });
 
       // Добавляем задачи в очередь
       const subject = mailing.template?.subject || '';
-      const body = mailing.template?.body || '';
+      const body =
+        mailing.template?.body ||
+        mailing.messageText ||
+        mailing.messageHtml ||
+        '';
+
+      // Извлекаем метаданные для Telegram рассылок
+      const mailingMetadata = (mailing.statistics as Record<string, any>) || {};
+      const telegramMetadata: Record<string, any> = {};
+
+      if (mailing.type === 'TELEGRAM') {
+        // Извлекаем данные для Telegram из statistics
+        if (mailingMetadata.imageUrl) {
+          telegramMetadata.imageUrl = mailingMetadata.imageUrl;
+        }
+        if (mailingMetadata.buttons) {
+          telegramMetadata.buttons = mailingMetadata.buttons;
+        }
+        if (mailingMetadata.parseMode) {
+          telegramMetadata.parseMode = mailingMetadata.parseMode;
+        }
+      }
 
       for (const recipient of mailingRecipients) {
         if (recipient.status === 'PENDING') {
-          await mailingQueue.add({
-            mailingId: mailing.id,
-            recipientId: recipient.id,
-            type: mailing.type,
-            recipient: {
-              userId: recipient.userId || undefined,
-              email: recipient.email || undefined,
-              phone: recipient.phone || undefined,
+          // Объединяем метаданные рассылки с метаданными получателя
+          const combinedMetadata = {
+            ...telegramMetadata,
+            ...((recipient.metadata as Record<string, any>) || {})
+          };
+
+          await mailingQueue.add(
+            {
+              mailingId: mailing.id,
+              recipientId: recipient.id,
+              type: mailing.type,
+              recipient: {
+                userId: recipient.userId || undefined,
+                email: recipient.email || undefined,
+                phone: recipient.phone || undefined
+              },
+              subject,
+              body,
+              metadata: combinedMetadata
             },
-            subject,
-            body,
-            metadata: recipient.metadata as Record<string, any> || {},
-          }, {
-            attempts: 3,
-            backoff: {
-              type: 'exponential',
-              delay: 2000,
-            },
-          });
+            {
+              attempts: 3,
+              backoff: {
+                type: 'exponential',
+                delay: 2000
+              }
+            }
+          );
         }
       }
 
@@ -314,22 +357,22 @@ export class MailingService {
         mailingId: mailing.id,
         projectId,
         recipientsCount: mailingRecipients.length,
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
     } catch (error) {
       logger.error('Ошибка запуска рассылки', {
         mailingId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
 
       // Обновляем статус на FAILED в случае ошибки
       await db.mailing.update({
         where: { id: mailingId },
         data: {
-          status: 'FAILED',
-        },
+          status: 'FAILED'
+        }
       });
 
       throw error;
@@ -341,33 +384,162 @@ export class MailingService {
    */
   static async getMailingStats(mailingId: string) {
     try {
-      const recipients = await db.mailingRecipient.findMany({
-        where: { mailingId },
+      const mailing = await db.mailing.findUnique({
+        where: { id: mailingId },
+        include: {
+          recipients: true,
+          history: {
+            orderBy: { timestamp: 'desc' },
+            take: 100
+          }
+        }
       });
 
+      if (!mailing) {
+        throw new Error('Рассылка не найдена');
+      }
+
+      const recipients = mailing.recipients;
+      const history = mailing.history;
+
+      // Базовые статистики
       const stats = {
         total: recipients.length,
         sent: recipients.filter((r) => r.status === 'SENT').length,
         failed: recipients.filter((r) => r.status === 'FAILED').length,
         pending: recipients.filter((r) => r.status === 'PENDING').length,
         bounced: recipients.filter((r) => r.status === 'BOUNCED').length,
+        opened: recipients.filter((r) => r.openedAt !== null).length,
+        clicked: recipients.filter((r) => r.clickedAt !== null).length
       };
+
+      // Статистика из истории
+      const historyStats = {
+        sent: history.filter((h) => h.type === 'SENT').length,
+        opened: history.filter((h) => h.type === 'OPENED').length,
+        clicked: history.filter((h) => h.type === 'CLICKED').length,
+        failed: history.filter((h) => h.type === 'FAILED').length
+      };
+
+      // Конверсии
+      const openRate = stats.sent > 0 ? (stats.opened / stats.sent) * 100 : 0;
+      const clickRate =
+        stats.opened > 0 ? (stats.clicked / stats.opened) * 100 : 0;
+      const clickThroughRate =
+        stats.sent > 0 ? (stats.clicked / stats.sent) * 100 : 0;
+
+      // График по времени
+      const timelineData = history.reduce(
+        (acc, event) => {
+          const date = new Date(event.timestamp).toISOString().split('T')[0];
+          if (!acc[date]) {
+            acc[date] = { sent: 0, opened: 0, clicked: 0, failed: 0 };
+          }
+          acc[date][event.type.toLowerCase() as keyof (typeof acc)[string]]++;
+          return acc;
+        },
+        {} as Record<
+          string,
+          { sent: number; opened: number; clicked: number; failed: number }
+        >
+      );
+
+      const timeline = Object.entries(timelineData)
+        .map(([date, counts]) => ({
+          date,
+          sent: counts.sent,
+          opened: counts.opened,
+          clicked: counts.clicked,
+          failed: counts.failed
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
 
       // Обновляем статистику в рассылке
       await db.mailing.update({
         where: { id: mailingId },
         data: {
-          statistics: stats,
-          status: stats.pending === 0 ? 'COMPLETED' : undefined,
-        },
+          statistics: {
+            ...stats,
+            historyStats,
+            openRate,
+            clickRate,
+            clickThroughRate
+          },
+          status: stats.pending === 0 ? 'COMPLETED' : undefined
+        }
       });
 
-      return stats;
+      return {
+        ...stats,
+        historyStats,
+        openRate: Math.round(openRate * 100) / 100,
+        clickRate: Math.round(clickRate * 100) / 100,
+        clickThroughRate: Math.round(clickThroughRate * 100) / 100,
+        timeline
+      };
     } catch (error) {
       logger.error('Ошибка получения статистики рассылки', {
         mailingId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Получение истории рассылки
+   */
+  static async getMailingHistory(
+    mailingId: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+      eventType?: string;
+    }
+  ) {
+    try {
+      const history = await db.mailingHistory.findMany({
+        where: {
+          mailingId,
+          ...(options?.eventType
+            ? {
+                type: options.eventType as
+                  | 'SENT'
+                  | 'OPENED'
+                  | 'CLICKED'
+                  | 'FAILED'
+              }
+            : {})
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              phone: true,
+              telegramId: true
+            }
+          },
+          recipient: {
+            select: {
+              id: true,
+              email: true,
+              phone: true
+            }
+          }
+        },
+        orderBy: { timestamp: 'desc' },
+        take: options?.limit || 100,
+        skip: options?.offset || 0
+      });
+
+      return history;
+    } catch (error) {
+      logger.error('Ошибка получения истории рассылки', {
+        mailingId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -381,22 +553,22 @@ export class MailingService {
       const mailing = await db.mailing.findFirst({
         where: {
           id: mailingId,
-          projectId,
+          projectId
         },
         include: {
           segment: true,
           template: true,
           recipients: {
             include: {
-              user: true,
-            },
+              user: true
+            }
           },
           _count: {
             select: {
-              recipients: true,
-            },
-          },
-        },
+              recipients: true
+            }
+          }
+        }
       });
 
       return mailing;
@@ -405,7 +577,7 @@ export class MailingService {
         mailingId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -423,25 +595,28 @@ export class MailingService {
       templateId?: string;
       scheduledAt?: Date;
       status?: MailingStatus;
+      messageText?: string;
+      messageHtml?: string;
+      statistics?: Record<string, any>;
     }
   ) {
     try {
       const mailing = await db.mailing.update({
         where: {
           id: mailingId,
-          projectId,
+          projectId
         },
         data,
         include: {
           segment: true,
-          template: true,
-        },
+          template: true
+        }
       });
 
       logger.info('Рассылка обновлена', {
         mailingId: mailing.id,
         projectId,
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
 
       return mailing;
@@ -451,7 +626,7 @@ export class MailingService {
         projectId,
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -460,26 +635,29 @@ export class MailingService {
   /**
    * Удаление рассылки
    */
-  static async deleteMailing(projectId: string, mailingId: string): Promise<void> {
+  static async deleteMailing(
+    projectId: string,
+    mailingId: string
+  ): Promise<void> {
     try {
       await db.mailing.delete({
         where: {
           id: mailingId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       logger.info('Рассылка удалена', {
         mailingId,
         projectId,
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
     } catch (error) {
       logger.error('Ошибка удаления рассылки', {
         mailingId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -493,31 +671,31 @@ export class MailingService {
       const mailings = await db.mailing.findMany({
         where: {
           projectId,
-          ...(status ? { status } : {}),
+          ...(status ? { status } : {})
         },
         include: {
           segment: {
             select: {
               id: true,
               name: true,
-              memberCount: true,
-            },
+              memberCount: true
+            }
           },
           template: {
             select: {
               id: true,
-              name: true,
-            },
+              name: true
+            }
           },
           _count: {
             select: {
-              recipients: true,
-            },
-          },
+              recipients: true
+            }
+          }
         },
         orderBy: {
-          createdAt: 'desc',
-        },
+          createdAt: 'desc'
+        }
       });
 
       return mailings;
@@ -525,7 +703,7 @@ export class MailingService {
       logger.error('Ошибка получения списка рассылок', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
@@ -534,32 +712,34 @@ export class MailingService {
   /**
    * Отмена рассылки
    */
-  static async cancelMailing(projectId: string, mailingId: string): Promise<void> {
+  static async cancelMailing(
+    projectId: string,
+    mailingId: string
+  ): Promise<void> {
     try {
       await db.mailing.update({
         where: {
           id: mailingId,
-          projectId,
+          projectId
         },
         data: {
-          status: 'CANCELLED',
-        },
+          status: 'CANCELLED'
+        }
       });
 
       logger.info('Рассылка отменена', {
         mailingId,
         projectId,
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
     } catch (error) {
       logger.error('Ошибка отмены рассылки', {
         mailingId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service',
+        component: 'mailing-service'
       });
       throw error;
     }
   }
 }
-

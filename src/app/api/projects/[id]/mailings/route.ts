@@ -22,7 +22,10 @@ const createMailingSchema = z.object({
   type: z.nativeEnum(MailingType),
   segmentId: z.string().optional(),
   templateId: z.string().optional(),
-  scheduledAt: z.string().optional()
+  scheduledAt: z.string().optional(),
+  messageText: z.string().optional(),
+  messageHtml: z.string().optional(),
+  statistics: z.record(z.any()).optional()
 });
 
 const getMailingsQuerySchema = z.object({
@@ -155,7 +158,10 @@ export async function POST(
       templateId: validatedData.templateId,
       scheduledAt: validatedData.scheduledAt
         ? new Date(validatedData.scheduledAt)
-        : undefined
+        : undefined,
+      messageText: validatedData.messageText,
+      messageHtml: validatedData.messageHtml,
+      statistics: validatedData.statistics
     };
 
     const mailing = await MailingService.createMailing(mailingPayload);

@@ -19,7 +19,12 @@ const updateMailingSchema = z.object({
   segmentId: z.string().optional(),
   templateId: z.string().optional(),
   scheduledAt: z.string().optional(),
-  status: z.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'COMPLETED', 'CANCELLED', 'FAILED']).optional(),
+  status: z
+    .enum(['DRAFT', 'SCHEDULED', 'SENDING', 'COMPLETED', 'CANCELLED', 'FAILED'])
+    .optional(),
+  messageText: z.string().optional(),
+  messageHtml: z.string().optional(),
+  statistics: z.record(z.any()).optional()
 });
 
 // GET /api/projects/[id]/mailings/[mailingId] - Получение рассылки
@@ -39,7 +44,10 @@ export async function GET(
     const mailing = await MailingService.getMailing(projectId, mailingId);
 
     if (!mailing) {
-      return NextResponse.json({ error: 'Рассылка не найдена' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Рассылка не найдена' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(mailing);
@@ -47,7 +55,7 @@ export async function GET(
     logger.error('Ошибка получения рассылки', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'mailings-api',
-      action: 'GET',
+      action: 'GET'
     });
 
     return NextResponse.json(
@@ -74,17 +82,30 @@ export async function PUT(
     const body = await request.json();
     const validatedData = updateMailingSchema.parse(body);
 
-    const mailing = await MailingService.updateMailing(projectId, mailingId, {
+    const updateData: any = {
       ...validatedData,
-      scheduledAt: validatedData.scheduledAt ? new Date(validatedData.scheduledAt) : undefined,
-    });
+      scheduledAt: validatedData.scheduledAt
+        ? new Date(validatedData.scheduledAt)
+        : undefined
+    };
+
+    // Удаляем undefined значения
+    if (updateData.messageText === undefined) delete updateData.messageText;
+    if (updateData.messageHtml === undefined) delete updateData.messageHtml;
+    if (updateData.statistics === undefined) delete updateData.statistics;
+
+    const mailing = await MailingService.updateMailing(
+      projectId,
+      mailingId,
+      updateData
+    );
 
     return NextResponse.json(mailing);
   } catch (error) {
     logger.error('Ошибка обновления рассылки', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'mailings-api',
-      action: 'PUT',
+      action: 'PUT'
     });
 
     if (error instanceof z.ZodError) {
@@ -122,7 +143,7 @@ export async function DELETE(
     logger.error('Ошибка удаления рассылки', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'mailings-api',
-      action: 'DELETE',
+      action: 'DELETE'
     });
 
     return NextResponse.json(
@@ -131,4 +152,3 @@ export async function DELETE(
     );
   }
 }
-

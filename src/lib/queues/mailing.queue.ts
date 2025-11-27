@@ -11,6 +11,7 @@ import Bull from 'bull';
 import { logger } from '@/lib/logger';
 import { db } from '@/lib/db';
 import type { MailingType } from '@prisma/client';
+import { botManager } from '@/lib/telegram/bot-manager';
 
 // Конфигурация Redis для очереди рассылок
 const getRedisConfig = () => {
@@ -99,8 +100,93 @@ mailingQueue.process(async (job: Bull.Job<MailingJobData>) => {
 
       case 'TELEGRAM':
         if (recipient.userId) {
-          // TODO: Интеграция с Telegram API через bot manager
-          success = true;
+          try {
+            // Получаем проект из рассылки
+            const mailing = await db.mailing.findUnique({
+              where: { id: mailingId },
+              select: { projectId: true }
+            });
+
+            if (!mailing) {
+              error = 'Рассылка не найдена';
+              break;
+            }
+
+            // Получаем пользователя для telegramId
+            const user = await db.user.findUnique({
+              where: { id: recipient.userId },
+              select: { telegramId: true }
+            });
+
+            if (!user || !user.telegramId) {
+              error = 'Пользователь не привязан к Telegram';
+              break;
+            }
+
+            // Парсим метаданные для изображения и кнопок
+            const imageUrl = metadata?.imageUrl as string | undefined;
+            const buttons = metadata?.buttons as
+              | Array<{
+                  text: string;
+                  url?: string;
+                  callback_data?: string;
+                }>
+              | undefined;
+            const parseMode =
+              (metadata?.parseMode as 'HTML' | 'Markdown') || 'HTML';
+
+            // Отправляем через BotManager
+            const result = await botManager.sendRichBroadcastMessage(
+              mailing.projectId,
+              [recipient.userId],
+              body,
+              {
+                imageUrl,
+                buttons,
+                parseMode
+              }
+            );
+
+            if (result.success && result.sentCount > 0) {
+              success = true;
+
+              // Создаем запись в истории
+              await db.mailingHistory.create({
+                data: {
+                  mailingId,
+                  recipientId,
+                  userId: recipient.userId || undefined,
+                  type: 'SENT',
+                  metadata: {
+                    sentAt: new Date().toISOString(),
+                    hasImage: !!imageUrl,
+                    buttonsCount: buttons?.length || 0
+                  }
+                }
+              });
+
+              // Обновляем счетчик отправленных
+              await db.mailing.update({
+                where: { id: mailingId },
+                data: {
+                  sentCount: { increment: 1 }
+                }
+              });
+            } else {
+              error = result.errors.join(', ') || 'Ошибка отправки';
+            }
+          } catch (telegramError) {
+            error =
+              telegramError instanceof Error
+                ? telegramError.message
+                : 'Ошибка отправки в Telegram';
+            logger.error('Telegram mailing error', {
+              mailingId,
+              recipientId,
+              error: error,
+              component: 'mailing-queue'
+            });
+          }
         } else {
           error = 'Пользователь не найден';
         }
@@ -126,6 +212,42 @@ mailingQueue.process(async (job: Bull.Job<MailingJobData>) => {
         error: error || null
       }
     });
+
+    // Создаем запись в истории для ошибок
+    if (!success) {
+      try {
+        await db.mailingHistory.create({
+          data: {
+            mailingId,
+            recipientId,
+            userId: recipient.userId || undefined,
+            type: 'FAILED',
+            metadata: {
+              error: error,
+              failedAt: new Date().toISOString()
+            }
+          }
+        });
+
+        // Обновляем счетчик ошибок
+        await db.mailing.update({
+          where: { id: mailingId },
+          data: {
+            failedCount: { increment: 1 }
+          }
+        });
+      } catch (historyError) {
+        logger.error('Error creating mailing history', {
+          mailingId,
+          recipientId,
+          error:
+            historyError instanceof Error
+              ? historyError.message
+              : 'Unknown error',
+          component: 'mailing-queue'
+        });
+      }
+    }
 
     if (success) {
       logger.info('Mailing sent successfully', {
