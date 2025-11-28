@@ -63,6 +63,7 @@ import {
   FolderOpen,
   X
 } from 'lucide-react';
+import { MessageEditor } from '@/components/ui/message-editor';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -87,8 +88,7 @@ const notificationSchema = z.object({
     .min(10, 'Сообщение должно содержать минимум 10 символов')
     .max(4000, 'Максимум 4000 символов'),
   imageUrl: z.string().url('Неверный формат URL').optional().or(z.literal('')),
-  buttons: z.array(buttonSchema).max(6, 'Максимум 6 кнопок').optional(),
-  parseMode: z.enum(['Markdown', 'HTML']).default('HTML')
+  buttons: z.array(buttonSchema).max(6, 'Максимум 6 кнопок').optional()
 });
 
 type NotificationFormValues = z.infer<typeof notificationSchema>;
@@ -129,92 +129,70 @@ export function RichNotificationDialog({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     null
   );
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const form = useForm<NotificationFormValues>({
     resolver: zodResolver(notificationSchema),
     defaultValues: {
       message: '',
       imageUrl: '',
-      buttons: [],
-      parseMode: 'HTML'
+      buttons: []
     }
   });
 
   const buttons = form.watch('buttons') || [];
   const message = form.watch('message');
   const imageUrl = form.watch('imageUrl');
-  const parseMode = form.watch('parseMode');
+  // Используем только HTML для Telegram
+  const parseMode = 'HTML';
 
-  // Применение форматирования к выделенному тексту
+  // Применение форматирования HTML к выделенному тексту
   const applyFormatting = (tag: string, placeholder: string = '') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+    // Находим textarea внутри MessageEditor
+    // MessageEditor использует textarea с определенным placeholder
+    const textarea = document.querySelector(
+      'textarea[placeholder*="текст"], textarea[placeholder*="Введите"]'
+    ) as HTMLTextAreaElement;
+    if (!textarea) {
+      toast.error(
+        'Не удалось найти поле ввода. Убедитесь, что редактор загружен.'
+      );
+      return;
+    }
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = message.substring(start, end);
+    const currentValue = textarea.value || message;
+    const selectedText = currentValue.substring(start, end);
 
     let newText = '';
     let cursorOffset = 0;
 
     switch (tag) {
       case 'bold':
-        if (parseMode === 'HTML') {
-          newText = `<b>${selectedText || placeholder}</b>`;
-          cursorOffset = selectedText ? 0 : 3;
-        } else {
-          newText = `**${selectedText || placeholder}**`;
-          cursorOffset = selectedText ? 0 : 2;
-        }
+        newText = `<b>${selectedText || placeholder}</b>`;
+        cursorOffset = selectedText ? 0 : 3;
         break;
       case 'italic':
-        if (parseMode === 'HTML') {
-          newText = `<i>${selectedText || placeholder}</i>`;
-          cursorOffset = selectedText ? 0 : 3;
-        } else {
-          newText = `__${selectedText || placeholder}__`;
-          cursorOffset = selectedText ? 0 : 2;
-        }
+        newText = `<i>${selectedText || placeholder}</i>`;
+        cursorOffset = selectedText ? 0 : 3;
         break;
       case 'underline':
-        if (parseMode === 'HTML') {
-          newText = `<u>${selectedText || placeholder}</u>`;
-          cursorOffset = selectedText ? 0 : 3;
-        } else {
-          // Markdown не поддерживает подчеркивание напрямую
-          newText = `__${selectedText || placeholder}__`;
-          cursorOffset = selectedText ? 0 : 2;
-        }
+        newText = `<u>${selectedText || placeholder}</u>`;
+        cursorOffset = selectedText ? 0 : 3;
         break;
       case 'strikethrough':
-        if (parseMode === 'HTML') {
-          newText = `<s>${selectedText || placeholder}</s>`;
-          cursorOffset = selectedText ? 0 : 3;
-        } else {
-          newText = `~${selectedText || placeholder}~`;
-          cursorOffset = selectedText ? 0 : 1;
-        }
+        newText = `<s>${selectedText || placeholder}</s>`;
+        cursorOffset = selectedText ? 0 : 3;
         break;
       case 'code':
-        if (parseMode === 'HTML') {
-          newText = `<code>${selectedText || placeholder}</code>`;
-          cursorOffset = selectedText ? 0 : 7;
-        } else {
-          newText = `\`${selectedText || placeholder}\``;
-          cursorOffset = selectedText ? 0 : 1;
-        }
+        newText = `<code>${selectedText || placeholder}</code>`;
+        cursorOffset = selectedText ? 0 : 7;
         break;
       case 'link':
         const url = prompt('Введите URL ссылки:', 'https://');
         if (url) {
-          if (parseMode === 'HTML') {
-            newText = `<a href="${url}">${selectedText || 'Текст ссылки'}</a>`;
-            cursorOffset = selectedText ? 0 : 1;
-          } else {
-            newText = `[${selectedText || 'Текст ссылки'}](${url})`;
-            cursorOffset = selectedText ? 0 : 1;
-          }
+          newText = `<a href="${url}">${selectedText || 'Текст ссылки'}</a>`;
+          cursorOffset = selectedText ? 0 : 1;
         } else {
           return;
         }
@@ -224,14 +202,19 @@ export function RichNotificationDialog({
     }
 
     const updatedMessage =
-      message.substring(0, start) + newText + message.substring(end);
+      currentValue.substring(0, start) + newText + currentValue.substring(end);
     form.setValue('message', updatedMessage);
+
+    // Обновляем значение textarea напрямую для немедленного отображения
+    textarea.value = updatedMessage;
 
     // Восстанавливаем позицию курсора
     setTimeout(() => {
       textarea.focus();
-      textarea.selectionStart = start + cursorOffset;
-      textarea.selectionEnd = start + newText.length - cursorOffset;
+      textarea.setSelectionRange(
+        start + cursorOffset,
+        start + newText.length - cursorOffset
+      );
     }, 0);
   };
 
@@ -270,7 +253,6 @@ export function RichNotificationDialog({
     if (template) {
       form.setValue('message', template.message);
       form.setValue('imageUrl', template.imageUrl || '');
-      form.setValue('parseMode', template.parseMode as 'HTML' | 'Markdown');
       if (template.buttons) {
         form.setValue('buttons', template.buttons as any);
       }
@@ -301,7 +283,7 @@ export function RichNotificationDialog({
             message: values.message,
             imageUrl: values.imageUrl || undefined,
             buttons: validButtons.length > 0 ? validButtons : undefined,
-            parseMode: values.parseMode
+            parseMode: 'HTML'
           })
         }
       );
@@ -343,7 +325,7 @@ export function RichNotificationDialog({
         metadata: {
           imageUrl: values.imageUrl || undefined,
           buttons: validButtons.length > 0 ? validButtons : undefined,
-          parseMode: values.parseMode
+          parseMode: 'HTML'
         }
       };
 
@@ -421,46 +403,38 @@ export function RichNotificationDialog({
       );
     }
 
-    if (parseMode === 'HTML') {
-      // Безопасный рендеринг HTML (только разрешенные теги)
-      const allowedTags = ['b', 'i', 'u', 's', 'a', 'code', 'pre'];
-      let html = message;
+    // Безопасный рендеринг HTML (только разрешенные теги для Telegram)
+    const allowedTags = ['b', 'i', 'u', 's', 'a', 'code', 'pre'];
+    let html = message;
 
-      // Удаляем неразрешенные теги
-      const tagRegex = /<\/?([a-z]+)[^>]*>/gi;
-      html = html.replace(tagRegex, (match, tagName) => {
-        if (allowedTags.includes(tagName.toLowerCase())) {
-          return match;
-        }
-        return '';
-      });
+    // Удаляем неразрешенные теги
+    const tagRegex = /<\/?([a-z]+)[^>]*>/gi;
+    html = html.replace(tagRegex, (match, tagName) => {
+      if (allowedTags.includes(tagName.toLowerCase())) {
+        return match;
+      }
+      return '';
+    });
 
-      return (
-        <div
-          className='text-sm break-words whitespace-pre-wrap'
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
+    // Заменяем переменные на примеры для превью
+    html = html
+      .replace(/\{user\.firstName\}/g, 'Иван')
+      .replace(/\{user\.lastName\}/g, 'Петров')
+      .replace(/\{user\.fullName\}/g, 'Иван Петров')
+      .replace(/\{user\.balanceFormatted\}/g, '1,250 бонусов')
+      .replace(/\{user\.currentLevel\}/g, 'Золотой')
+      .replace(/\{user\.referralCode\}/g, 'REF123')
+      .replace(
+        /\{[^}]+\}/g,
+        '<span class="text-blue-600 font-mono text-xs">[переменная]</span>'
       );
-    } else {
-      // Markdown рендеринг
-      let md = message;
-      md = md
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/__(.*?)__/g, '<em>$1</em>')
-        .replace(/~(.+?)~/g, '<s>$1</s>')
-        .replace(/`(.+?)`/g, '<code>$1</code>')
-        .replace(
-          /\[(.+?)\]\((.+?)\)/g,
-          '<a href="$2" class="text-blue-500 underline">$1</a>'
-        );
 
-      return (
-        <div
-          className='text-sm break-words whitespace-pre-wrap'
-          dangerouslySetInnerHTML={{ __html: md }}
-        />
-      );
-    }
+    return (
+      <div
+        className='text-sm break-words whitespace-pre-wrap'
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
   };
 
   return (
@@ -575,37 +549,7 @@ export function RichNotificationDialog({
                   )}
                 </div>
 
-                {/* Режим разметки */}
-                <FormField
-                  control={form.control}
-                  name='parseMode'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Режим разметки</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder='Выберите режим разметки' />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value='Markdown'>Markdown</SelectItem>
-                          <SelectItem value='HTML'>HTML</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        HTML поддерживает: &lt;b&gt;, &lt;i&gt;, &lt;u&gt;,
-                        &lt;s&gt;, &lt;a&gt;, &lt;code&gt;, &lt;pre&gt;
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Текст сообщения с кнопками форматирования */}
+                {/* Текст сообщения с поддержкой переменных и HTML форматирования */}
                 <FormField
                   control={form.control}
                   name='message'
@@ -613,14 +557,14 @@ export function RichNotificationDialog({
                     <FormItem>
                       <FormLabel>Текст сообщения</FormLabel>
                       <div className='space-y-2'>
-                        {/* Панель инструментов форматирования */}
+                        {/* Панель инструментов форматирования HTML */}
                         <div className='bg-muted/50 flex flex-wrap gap-1 rounded-md border p-1'>
                           <Button
                             type='button'
                             variant='ghost'
                             size='sm'
                             onClick={() => applyFormatting('bold', 'жирный')}
-                            title='Жирный'
+                            title='Жирный (HTML: &lt;b&gt;)'
                             className='h-8 w-8 p-0'
                           >
                             <Bold className='h-4 w-4' />
@@ -630,7 +574,7 @@ export function RichNotificationDialog({
                             variant='ghost'
                             size='sm'
                             onClick={() => applyFormatting('italic', 'курсив')}
-                            title='Курсив'
+                            title='Курсив (HTML: &lt;i&gt;)'
                             className='h-8 w-8 p-0'
                           >
                             <Italic className='h-4 w-4' />
@@ -642,7 +586,7 @@ export function RichNotificationDialog({
                             onClick={() =>
                               applyFormatting('underline', 'подчеркнутый')
                             }
-                            title='Подчеркивание'
+                            title='Подчеркивание (HTML: &lt;u&gt;)'
                             className='h-8 w-8 p-0'
                           >
                             <Underline className='h-4 w-4' />
@@ -654,7 +598,7 @@ export function RichNotificationDialog({
                             onClick={() =>
                               applyFormatting('strikethrough', 'зачеркнутый')
                             }
-                            title='Зачеркивание'
+                            title='Зачеркивание (HTML: &lt;s&gt;)'
                             className='h-8 w-8 p-0'
                           >
                             <Strikethrough className='h-4 w-4' />
@@ -664,7 +608,7 @@ export function RichNotificationDialog({
                             variant='ghost'
                             size='sm'
                             onClick={() => applyFormatting('code', 'код')}
-                            title='Код'
+                            title='Код (HTML: &lt;code&gt;)'
                             className='h-8 w-8 p-0'
                           >
                             <Code className='h-4 w-4' />
@@ -674,24 +618,26 @@ export function RichNotificationDialog({
                             variant='ghost'
                             size='sm'
                             onClick={() => applyFormatting('link')}
-                            title='Ссылка'
+                            title='Ссылка (HTML: &lt;a&gt;)'
                             className='h-8 w-8 p-0'
                           >
                             <LinkIcon className='h-4 w-4' />
                           </Button>
                         </div>
                         <FormControl>
-                          <Textarea
-                            ref={textareaRef}
+                          <MessageEditor
+                            value={field.value}
+                            onChange={field.onChange}
                             placeholder='Введите текст уведомления...'
-                            className='min-h-[200px] font-mono text-sm'
-                            {...field}
+                            showPreview={true}
+                            showVariableHelper={true}
                           />
                         </FormControl>
                       </div>
                       <FormDescription>
-                        Поддерживается {parseMode} разметка. Максимум 4000
-                        символов. {message.length}/4000
+                        Поддерживается HTML разметка (&lt;b&gt;, &lt;i&gt;,
+                        &lt;u&gt;, &lt;s&gt;, &lt;a&gt;, &lt;code&gt;). Максимум
+                        4000 символов. {message.length}/4000
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
