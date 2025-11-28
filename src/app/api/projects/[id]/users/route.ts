@@ -20,7 +20,7 @@ import { ProjectService } from '@/lib/services/project.service';
 
 const getQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(20).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(20).optional(),
   search: z.string().max(200).optional()
 });
 
@@ -44,7 +44,7 @@ async function getHandler(
     const page = parseInt(url.searchParams.get('page') || '1', 10);
     const limit = Math.min(
       parseInt(url.searchParams.get('limit') || '50', 10),
-      200
+      1000
     );
     const search = url.searchParams.get('search') || undefined;
 
@@ -73,8 +73,11 @@ async function getHandler(
         Number(user.totalEarned || 0) - Number(user.totalSpent || 0);
       const roundedBalance = Number(currentBalance.toFixed(2));
       const isLinkedToBot = Boolean(user.telegramId);
-      // Пользователь активен, если isActive === true ИЛИ активирован через Telegram
-      const computedActive = Boolean(user.isActive) || Boolean(user.telegramId);
+      // Пользователь активен, если:
+      // 1. Явно установлен isActive === true ИЛИ
+      // 2. Привязан к Telegram (telegramId не null)
+      // Примечание: пользователи без Telegram должны быть неактивными по умолчанию
+      const computedActive = user.isActive === true || Boolean(user.telegramId);
 
       // Логируем для отладки статуса пользователя
       if (index === 0) {

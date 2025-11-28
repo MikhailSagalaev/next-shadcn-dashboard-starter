@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -36,7 +36,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -46,17 +45,28 @@ import {
 } from '@/components/ui/select';
 import {
   Mail,
-  User,
   Send,
   Image as ImageIcon,
   Plus,
   Trash2,
   Eye,
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  Code,
+  Link as LinkIcon,
+  AlertCircle,
+  Save,
+  FolderOpen,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 const buttonSchema = z
   .object({
@@ -78,7 +88,7 @@ const notificationSchema = z.object({
     .max(4000, 'Максимум 4000 символов'),
   imageUrl: z.string().url('Неверный формат URL').optional().or(z.literal('')),
   buttons: z.array(buttonSchema).max(6, 'Максимум 6 кнопок').optional(),
-  parseMode: z.enum(['Markdown', 'HTML']).default('Markdown')
+  parseMode: z.enum(['Markdown', 'HTML']).default('HTML')
 });
 
 type NotificationFormValues = z.infer<typeof notificationSchema>;
@@ -97,9 +107,29 @@ export function RichNotificationDialog({
   projectId
 }: RichNotificationDialogProps) {
   const [loading, setLoading] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
   const [progress, setProgress] = useState<number>(0);
   const [inFlight, setInFlight] = useState<boolean>(false);
+  const [sendResults, setSendResults] = useState<{
+    sent: number;
+    failed: number;
+    blocked: number;
+  } | null>(null);
+  const [templates, setTemplates] = useState<
+    Array<{
+      id: string;
+      name: string;
+      message: string;
+      imageUrl?: string | null;
+      buttons?: any;
+      parseMode: string;
+    }>
+  >([]);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
+    null
+  );
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const form = useForm<NotificationFormValues>({
     resolver: zodResolver(notificationSchema),
@@ -116,6 +146,95 @@ export function RichNotificationDialog({
   const imageUrl = form.watch('imageUrl');
   const parseMode = form.watch('parseMode');
 
+  // Применение форматирования к выделенному тексту
+  const applyFormatting = (tag: string, placeholder: string = '') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = message.substring(start, end);
+
+    let newText = '';
+    let cursorOffset = 0;
+
+    switch (tag) {
+      case 'bold':
+        if (parseMode === 'HTML') {
+          newText = `<b>${selectedText || placeholder}</b>`;
+          cursorOffset = selectedText ? 0 : 3;
+        } else {
+          newText = `**${selectedText || placeholder}**`;
+          cursorOffset = selectedText ? 0 : 2;
+        }
+        break;
+      case 'italic':
+        if (parseMode === 'HTML') {
+          newText = `<i>${selectedText || placeholder}</i>`;
+          cursorOffset = selectedText ? 0 : 3;
+        } else {
+          newText = `__${selectedText || placeholder}__`;
+          cursorOffset = selectedText ? 0 : 2;
+        }
+        break;
+      case 'underline':
+        if (parseMode === 'HTML') {
+          newText = `<u>${selectedText || placeholder}</u>`;
+          cursorOffset = selectedText ? 0 : 3;
+        } else {
+          // Markdown не поддерживает подчеркивание напрямую
+          newText = `__${selectedText || placeholder}__`;
+          cursorOffset = selectedText ? 0 : 2;
+        }
+        break;
+      case 'strikethrough':
+        if (parseMode === 'HTML') {
+          newText = `<s>${selectedText || placeholder}</s>`;
+          cursorOffset = selectedText ? 0 : 3;
+        } else {
+          newText = `~${selectedText || placeholder}~`;
+          cursorOffset = selectedText ? 0 : 1;
+        }
+        break;
+      case 'code':
+        if (parseMode === 'HTML') {
+          newText = `<code>${selectedText || placeholder}</code>`;
+          cursorOffset = selectedText ? 0 : 7;
+        } else {
+          newText = `\`${selectedText || placeholder}\``;
+          cursorOffset = selectedText ? 0 : 1;
+        }
+        break;
+      case 'link':
+        const url = prompt('Введите URL ссылки:', 'https://');
+        if (url) {
+          if (parseMode === 'HTML') {
+            newText = `<a href="${url}">${selectedText || 'Текст ссылки'}</a>`;
+            cursorOffset = selectedText ? 0 : 1;
+          } else {
+            newText = `[${selectedText || 'Текст ссылки'}](${url})`;
+            cursorOffset = selectedText ? 0 : 1;
+          }
+        } else {
+          return;
+        }
+        break;
+      default:
+        return;
+    }
+
+    const updatedMessage =
+      message.substring(0, start) + newText + message.substring(end);
+    form.setValue('message', updatedMessage);
+
+    // Восстанавливаем позицию курсора
+    setTimeout(() => {
+      textarea.focus();
+      textarea.selectionStart = start + cursorOffset;
+      textarea.selectionEnd = start + newText.length - cursorOffset;
+    }, 0);
+  };
+
   const addButton = () => {
     const currentButtons = form.getValues('buttons') || [];
     if (currentButtons.length < 6) {
@@ -129,10 +248,85 @@ export function RichNotificationDialog({
     form.setValue('buttons', newButtons);
   };
 
+  // Загрузка шаблонов
+  useEffect(() => {
+    if (open && projectId) {
+      fetch(`/api/projects/${projectId}/notification-templates`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setTemplates(data);
+          }
+        })
+        .catch((error) => {
+          console.error('Error loading templates:', error);
+        });
+    }
+  }, [open, projectId]);
+
+  // Загрузка шаблона
+  const loadTemplate = (templateId: string) => {
+    const template = templates.find((t) => t.id === templateId);
+    if (template) {
+      form.setValue('message', template.message);
+      form.setValue('imageUrl', template.imageUrl || '');
+      form.setValue('parseMode', template.parseMode as 'HTML' | 'Markdown');
+      if (template.buttons) {
+        form.setValue('buttons', template.buttons as any);
+      }
+      setSelectedTemplateId(templateId);
+      toast.success('Шаблон загружен');
+    }
+  };
+
+  // Сохранение шаблона
+  const saveTemplate = async () => {
+    if (!templateName.trim()) {
+      toast.error('Введите название шаблона');
+      return;
+    }
+
+    try {
+      const values = form.getValues();
+      const validButtons =
+        values.buttons?.filter((button) => button.text.trim()) || [];
+
+      const response = await fetch(
+        `/api/projects/${projectId}/notification-templates`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: templateName,
+            message: values.message,
+            imageUrl: values.imageUrl || undefined,
+            buttons: validButtons.length > 0 ? validButtons : undefined,
+            parseMode: values.parseMode
+          })
+        }
+      );
+
+      if (response.ok) {
+        const newTemplate = await response.json();
+        setTemplates([newTemplate, ...templates]);
+        setTemplateName('');
+        setShowSaveTemplate(false);
+        toast.success('Шаблон сохранен');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Ошибка сохранения шаблона');
+      }
+    } catch (error) {
+      toast.error('Ошибка сохранения шаблона');
+      console.error('Error saving template:', error);
+    }
+  };
+
   const onSubmit = async (values: NotificationFormValues) => {
     setLoading(true);
     setInFlight(true);
     setProgress(10);
+    setSendResults(null);
 
     try {
       // Фильтруем пустые кнопки - оставляем только с текстом
@@ -167,21 +361,33 @@ export function RichNotificationDialog({
         const total = Number(data.total || selectedUserIds.length || 1);
         const sent = Number(data.sent || 0);
         const failed = Number(data.failed || 0);
+
+        // Подсчитываем заблокированных пользователей
+        const blocked =
+          result.results?.filter(
+            (r: any) =>
+              r.error?.includes('blocked by the user') ||
+              r.error?.includes('403: Forbidden')
+          ).length || 0;
+
+        setSendResults({ sent, failed, blocked });
         const pct = Math.min(100, Math.round(((sent + failed) / total) * 100));
         setProgress(pct);
-        toast.success(
-          `✅ Уведомления отправлены!\n\n` +
-            `📤 Отправлено: ${sent}\n` +
-            `❌ Ошибок: ${failed}\n` +
-            `📊 Всего: ${total}`
-        );
 
-        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
-          console.warn('Ошибки отправки:', data.results);
-        }
+        const message =
+          `✅ Уведомления отправлены!\n\n` +
+          `📤 Отправлено: ${sent}\n` +
+          `❌ Ошибок: ${failed}\n` +
+          (blocked > 0 ? `🚫 Заблокировано ботов: ${blocked}\n` : '') +
+          `📊 Всего: ${total}`;
+
+        toast.success(message);
 
         form.reset();
-        onOpenChange(false);
+        setTimeout(() => {
+          onOpenChange(false);
+          setSendResults(null);
+        }, 2000);
       } else {
         // Обработка ошибок валидации
         if (result.details && Array.isArray(result.details)) {
@@ -205,14 +411,56 @@ export function RichNotificationDialog({
     }
   };
 
-  const formatPreviewMessage = (text: string, mode: 'Markdown' | 'HTML') => {
-    if (mode === 'HTML') {
-      return text
-        .replace(/<b>(.*?)<\/b>/g, '**$1**')
-        .replace(/<i>(.*?)<\/i>/g, '*$1*')
-        .replace(/<code>(.*?)<\/code>/g, '`$1`');
+  // Рендеринг предпросмотра сообщения
+  const renderPreviewMessage = () => {
+    if (!message) {
+      return (
+        <div className='text-muted-foreground text-sm italic'>
+          Введите текст сообщения...
+        </div>
+      );
     }
-    return text;
+
+    if (parseMode === 'HTML') {
+      // Безопасный рендеринг HTML (только разрешенные теги)
+      const allowedTags = ['b', 'i', 'u', 's', 'a', 'code', 'pre'];
+      let html = message;
+
+      // Удаляем неразрешенные теги
+      const tagRegex = /<\/?([a-z]+)[^>]*>/gi;
+      html = html.replace(tagRegex, (match, tagName) => {
+        if (allowedTags.includes(tagName.toLowerCase())) {
+          return match;
+        }
+        return '';
+      });
+
+      return (
+        <div
+          className='text-sm break-words whitespace-pre-wrap'
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      );
+    } else {
+      // Markdown рендеринг
+      let md = message;
+      md = md
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.*?)__/g, '<em>$1</em>')
+        .replace(/~(.+?)~/g, '<s>$1</s>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(
+          /\[(.+?)\]\((.+?)\)/g,
+          '<a href="$2" class="text-blue-500 underline">$1</a>'
+        );
+
+      return (
+        <div
+          className='text-sm break-words whitespace-pre-wrap'
+          dangerouslySetInnerHTML={{ __html: md }}
+        />
+      );
+    }
   };
 
   return (
@@ -232,36 +480,100 @@ export function RichNotificationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='grid grid-cols-1 gap-6 lg:grid-cols-5'>
+        {sendResults && (
+          <Alert className='mb-4'>
+            <AlertCircle className='h-4 w-4' />
+            <AlertTitle>Результаты отправки</AlertTitle>
+            <AlertDescription>
+              Отправлено: {sendResults.sent} | Ошибок: {sendResults.failed}
+              {sendResults.blocked > 0 && (
+                <> | Заблокировано ботов: {sendResults.blocked}</>
+              )}
+              {sendResults.blocked > 0 && (
+                <div className='text-muted-foreground mt-2 text-xs'>
+                  💡 Некоторые пользователи заблокировали бота. Это нормально -
+                  они не получат уведомления.
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
           {/* Форма */}
-          <div className='lg:col-span-3'>
+          <div className='space-y-6'>
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
                 className='space-y-6'
               >
-                {/* Текст сообщения */}
-                <FormField
-                  control={form.control}
-                  name='message'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Текст сообщения</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder='Введите текст уведомления...'
-                          className='min-h-[120px]'
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Поддерживается {parseMode} разметка. Максимум 4000
-                        символов.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                {/* Шаблоны */}
+                <div className='space-y-2'>
+                  <div className='flex items-center justify-between'>
+                    <FormLabel>Шаблоны</FormLabel>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setShowSaveTemplate(true)}
+                      disabled={!message.trim()}
+                    >
+                      <Save className='mr-2 h-4 w-4' />
+                      Сохранить
+                    </Button>
+                  </div>
+                  {templates.length > 0 && (
+                    <Select
+                      value={selectedTemplateId || ''}
+                      onValueChange={loadTemplate}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder='Выберите шаблон...' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
-                />
+                  {showSaveTemplate && (
+                    <div className='flex gap-2'>
+                      <Input
+                        placeholder='Название шаблона'
+                        value={templateName}
+                        onChange={(e) => setTemplateName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            saveTemplate();
+                          }
+                        }}
+                      />
+                      <Button
+                        type='button'
+                        size='sm'
+                        onClick={saveTemplate}
+                        disabled={!templateName.trim()}
+                      >
+                        Сохранить
+                      </Button>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => {
+                          setShowSaveTemplate(false);
+                          setTemplateName('');
+                        }}
+                      >
+                        <X className='h-4 w-4' />
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Режим разметки */}
                 <FormField
@@ -284,6 +596,103 @@ export function RichNotificationDialog({
                           <SelectItem value='HTML'>HTML</SelectItem>
                         </SelectContent>
                       </Select>
+                      <FormDescription>
+                        HTML поддерживает: &lt;b&gt;, &lt;i&gt;, &lt;u&gt;,
+                        &lt;s&gt;, &lt;a&gt;, &lt;code&gt;, &lt;pre&gt;
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Текст сообщения с кнопками форматирования */}
+                <FormField
+                  control={form.control}
+                  name='message'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Текст сообщения</FormLabel>
+                      <div className='space-y-2'>
+                        {/* Панель инструментов форматирования */}
+                        <div className='bg-muted/50 flex flex-wrap gap-1 rounded-md border p-1'>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => applyFormatting('bold', 'жирный')}
+                            title='Жирный'
+                            className='h-8 w-8 p-0'
+                          >
+                            <Bold className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => applyFormatting('italic', 'курсив')}
+                            title='Курсив'
+                            className='h-8 w-8 p-0'
+                          >
+                            <Italic className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() =>
+                              applyFormatting('underline', 'подчеркнутый')
+                            }
+                            title='Подчеркивание'
+                            className='h-8 w-8 p-0'
+                          >
+                            <Underline className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() =>
+                              applyFormatting('strikethrough', 'зачеркнутый')
+                            }
+                            title='Зачеркивание'
+                            className='h-8 w-8 p-0'
+                          >
+                            <Strikethrough className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => applyFormatting('code', 'код')}
+                            title='Код'
+                            className='h-8 w-8 p-0'
+                          >
+                            <Code className='h-4 w-4' />
+                          </Button>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => applyFormatting('link')}
+                            title='Ссылка'
+                            className='h-8 w-8 p-0'
+                          >
+                            <LinkIcon className='h-4 w-4' />
+                          </Button>
+                        </div>
+                        <FormControl>
+                          <Textarea
+                            ref={textareaRef}
+                            placeholder='Введите текст уведомления...'
+                            className='min-h-[200px] font-mono text-sm'
+                            {...field}
+                          />
+                        </FormControl>
+                      </div>
+                      <FormDescription>
+                        Поддерживается {parseMode} разметка. Максимум 4000
+                        символов. {message.length}/4000
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -314,9 +723,9 @@ export function RichNotificationDialog({
                 />
 
                 {/* Кнопки */}
-                <div className='space-y-6'>
+                <div className='space-y-4'>
                   <div className='flex items-center justify-between'>
-                    <FormLabel>Кнопки (необязательно)</FormLabel>
+                    <FormLabel>Кнопки (необязательно, максимум 6)</FormLabel>
                     <Button
                       type='button'
                       variant='outline'
@@ -389,47 +798,50 @@ export function RichNotificationDialog({
             </Form>
           </div>
 
-          {/* Превью */}
-          <div className='lg:col-span-2'>
-            <div className='sticky top-0'>
-              <div className='mb-3 flex items-center gap-2'>
-                <Eye className='h-4 w-4' />
-                <span className='font-medium'>Превью</span>
-              </div>
+          {/* Превью в стиле Telegram */}
+          <div className='space-y-4'>
+            <div className='flex items-center gap-2'>
+              <Eye className='h-4 w-4' />
+              <span className='font-medium'>Предпросмотр (Telegram)</span>
+            </div>
 
-              <Card className='bg-muted/50 p-4'>
-                <div className='space-y-3'>
-                  {inFlight && (
-                    <div className='bg-background rounded border p-3'>
-                      <div className='text-muted-foreground mb-2 text-xs'>
-                        Отправка рассылки...
-                      </div>
-                      <Progress value={progress} />
+            <Card className='border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 dark:border-blue-800 dark:from-blue-950 dark:to-blue-900'>
+              <CardContent className='space-y-4 p-4'>
+                {inFlight && (
+                  <div className='bg-background rounded-lg border p-3'>
+                    <div className='text-muted-foreground mb-2 text-xs'>
+                      Отправка рассылки...
                     </div>
-                  )}
-                  {imageUrl && (
-                    <div className='overflow-hidden rounded border bg-white'>
-                      <img
-                        src={imageUrl}
-                        alt='Preview'
-                        className='h-32 w-full object-cover'
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  <div className='bg-background rounded border p-3'>
-                    <div className='text-sm whitespace-pre-wrap'>
-                      {message
-                        ? formatPreviewMessage(message, parseMode)
-                        : 'Введите текст сообщения...'}
-                    </div>
+                    <Progress value={progress} />
                   </div>
+                )}
 
-                  {buttons.length > 0 && (
-                    <div className='space-y-2'>
+                {/* Изображение */}
+                {imageUrl && (
+                  <div className='overflow-hidden rounded-lg border-2 border-blue-200 bg-white shadow-sm dark:border-blue-800'>
+                    <img
+                      src={imageUrl}
+                      alt='Preview'
+                      className='h-48 w-full object-cover'
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Сообщение в стиле Telegram */}
+                <div className='rounded-lg border border-blue-200 bg-white p-4 shadow-sm dark:border-blue-700 dark:bg-gray-800'>
+                  <div className='space-y-2'>{renderPreviewMessage()}</div>
+                </div>
+
+                {/* Кнопки */}
+                {buttons.length > 0 && (
+                  <div className='space-y-2'>
+                    <div className='text-muted-foreground text-xs font-medium'>
+                      Кнопки:
+                    </div>
+                    <div className='grid grid-cols-2 gap-2'>
                       {buttons.map(
                         (button, index) =>
                           button.text && (
@@ -437,24 +849,32 @@ export function RichNotificationDialog({
                               key={index}
                               variant='outline'
                               size='sm'
-                              className='w-full justify-start'
+                              className='w-full justify-start bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700'
                               disabled
                             >
                               {button.url && (
                                 <ExternalLink className='mr-2 h-3 w-3' />
                               )}
-                              {button.text || `Кнопка ${index + 1}`}
+                              <span className='truncate'>
+                                {button.text || `Кнопка ${index + 1}`}
+                              </span>
                             </Button>
                           )
                       )}
                     </div>
-                  )}
-                </div>
-              </Card>
+                  </div>
+                )}
 
-              <div className='text-muted-foreground mt-3 text-xs'>
-                Получатели: {selectedUserIds.length} пользователей
-              </div>
+                {!message && !imageUrl && buttons.length === 0 && (
+                  <div className='text-muted-foreground py-8 text-center text-sm'>
+                    Превью появится после заполнения полей
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className='text-muted-foreground text-xs'>
+              Получатели: {selectedUserIds.length} пользователей
             </div>
           </div>
         </div>

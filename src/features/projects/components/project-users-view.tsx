@@ -123,6 +123,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     'bonus_award' | 'bonus_deduct' | 'notification'
   >('bonus_award');
   const [profileUser, setProfileUser] = useState<UserWithBonuses | null>(null);
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [groupName, setGroupName] = useState('');
 
   // Users management hook
   const {
@@ -144,15 +146,12 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
 
   // Debounced обработчик поиска (согласно документации Next.js)
   // Определяем после получения loadUsers из хука
-  const handleDebouncedSearch = useDebouncedCallback(
-    (term: string) => {
-      setDebouncedSearchTerm(term);
-      setSearchTerm(term);
-      // Сбрасываем на первую страницу при новом поиске
-      loadUsers(1);
-    },
-    400
-  );
+  const handleDebouncedSearch = useDebouncedCallback((term: string) => {
+    setDebouncedSearchTerm(term);
+    setSearchTerm(term);
+    // Сбрасываем на первую страницу при новом поиске
+    loadUsers(1);
+  }, 400);
 
   // Обработчики пагинации
   const handlePageChange = useCallback(
@@ -171,36 +170,39 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     [loadUsers]
   );
 
-  const handleUserProfile = useCallback(async (user: DisplayUser) => {
-    // Устанавливаем базовые данные пользователя
-    setProfileUser(user as unknown as UserWithBonuses);
-    
-    // Загружаем свежий баланс из транзакций для унификации с ботом
-    try {
-      const response = await fetch(
-        `/api/projects/${projectId}/users/${user.id}/balance`,
-        { cache: 'no-store' }
-      );
-      if (response.ok) {
-        const balanceData = await response.json();
-        if (balanceData.success && balanceData.balanceDetails) {
-          // Обновляем баланс в профиле из транзакций
-          setProfileUser((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              bonusBalance: Number(balanceData.balanceDetails.currentBalance),
-              totalEarned: Number(balanceData.balanceDetails.totalEarned),
-              totalSpent: Number(balanceData.balanceDetails.totalSpent)
-            };
-          });
+  const handleUserProfile = useCallback(
+    async (user: DisplayUser) => {
+      // Устанавливаем базовые данные пользователя
+      setProfileUser(user as unknown as UserWithBonuses);
+
+      // Загружаем свежий баланс из транзакций для унификации с ботом
+      try {
+        const response = await fetch(
+          `/api/projects/${projectId}/users/${user.id}/balance`,
+          { cache: 'no-store' }
+        );
+        if (response.ok) {
+          const balanceData = await response.json();
+          if (balanceData.success && balanceData.balanceDetails) {
+            // Обновляем баланс в профиле из транзакций
+            setProfileUser((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                bonusBalance: Number(balanceData.balanceDetails.currentBalance),
+                totalEarned: Number(balanceData.balanceDetails.totalEarned),
+                totalSpent: Number(balanceData.balanceDetails.totalSpent)
+              };
+            });
+          }
         }
+      } catch (error) {
+        console.error('Ошибка загрузки баланса пользователя:', error);
+        // В случае ошибки оставляем данные из списка пользователей
       }
-    } catch (error) {
-      console.error('Ошибка загрузки баланса пользователя:', error);
-      // В случае ошибки оставляем данные из списка пользователей
-    }
-  }, [projectId]);
+    },
+    [projectId]
+  );
 
   // Stats data
   const statsData = {
@@ -239,6 +241,70 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     );
   };
 
+  // Создание группы из выбранных пользователей
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || selectedUsers.length === 0) {
+      toast({
+        title: 'Ошибка',
+        description: 'Введите название группы и выберите пользователей',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      // Создаем сегмент типа MANUAL
+      const response = await fetch(`/api/projects/${projectId}/segments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: groupName,
+          description: `Группа из ${selectedUsers.length} пользователей`,
+          type: 'MANUAL',
+          rules: {} // Пустые правила для ручной группы
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка создания группы');
+      }
+
+      const segment = await response.json();
+
+      // Добавляем пользователей в группу
+      const addMemberResponses = await Promise.all(
+        selectedUsers.map((userId) =>
+          fetch(`/api/projects/${projectId}/segments/${segment.id}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+          })
+        )
+      );
+
+      const allAdded = addMemberResponses.every((r) => r.ok);
+      if (!allAdded) {
+        throw new Error('Не все пользователи были добавлены в группу');
+      }
+
+      toast({
+        title: 'Успешно',
+        description: `Группа "${groupName}" создана с ${selectedUsers.length} пользователями`
+      });
+
+      setShowCreateGroupDialog(false);
+      setGroupName('');
+      setSelectedUsers([]);
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось создать группу',
+        variant: 'destructive'
+      });
+      console.error('Error creating group:', error);
+    }
+  };
+
   const handleDeleteSelected = async () => {
     if (selectedUsers.length === 0) return;
     if (!confirm(`Удалить выбранных пользователей (${selectedUsers.length})?`))
@@ -269,11 +335,14 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     if (!confirm(`Удалить пользователя ${user.email || 'без email'}?`)) {
       return;
     }
-    
+
     try {
-      const response = await fetch(`/api/projects/${projectId}/users/${user.id}`, {
-        method: 'DELETE'
-      });
+      const response = await fetch(
+        `/api/projects/${projectId}/users/${user.id}`,
+        {
+          method: 'DELETE'
+        }
+      );
 
       if (response.ok) {
         toast({
@@ -317,7 +386,6 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     },
     [handleDebouncedSearch]
   );
-
 
   // Синхронизация поискового запроса с URL только при первом монтировании
   useEffect(() => {
@@ -626,6 +694,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           />
         </div>
         <div className='flex items-center space-x-2'>
+          {selectedUsers.length > 0 && (
+            <Button
+              variant='outline'
+              onClick={() => setShowCreateGroupDialog(true)}
+            >
+              <Users className='mr-2 h-4 w-4' />
+              Создать группу ({selectedUsers.length})
+            </Button>
+          )}
           <Button onClick={() => setShowCreateUserDialog(true)}>
             <Plus className='mr-2 h-4 w-4' />
             Добавить пользователя
@@ -732,20 +809,20 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             </div>
             <div className='flex items-center space-x-2'>
               <div className='relative w-64'>
-                <Search className='text-muted-foreground pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2' />
+                <Search className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
                 <Input
                   type='text'
                   placeholder='Поиск...'
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className='h-9 pl-9 pr-9 [&::-webkit-search-cancel-button]:hidden'
+                  className='h-9 pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden'
                   disabled={usersLoading && !debouncedSearchTerm}
                   autoComplete='off'
                   spellCheck='false'
                 />
                 {usersLoading && debouncedSearchTerm && (
-                  <div className='pointer-events-none absolute right-3 top-1/2 -translate-y-1/2'>
-                    <Loader2 className='h-4 w-4 animate-spin text-muted-foreground' />
+                  <div className='pointer-events-none absolute top-1/2 right-3 -translate-y-1/2'>
+                    <Loader2 className='text-muted-foreground h-4 w-4 animate-spin' />
                   </div>
                 )}
               </div>
@@ -816,6 +893,55 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         onOpenChange={setShowCreateUserDialog}
         onSuccess={handleCreateUser}
       />
+
+      {/* Диалог создания группы */}
+      <Dialog
+        open={showCreateGroupDialog}
+        onOpenChange={setShowCreateGroupDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Создать группу пользователей</DialogTitle>
+            <DialogDescription>
+              Создать группу из {selectedUsers.length} выбранных пользователей
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4'>
+            <div>
+              <Label htmlFor='groupName'>Название группы</Label>
+              <Input
+                id='groupName'
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder='Введите название группы'
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCreateGroup();
+                  }
+                }}
+              />
+            </div>
+            <div className='text-muted-foreground text-sm'>
+              В группу будет добавлено {selectedUsers.length} пользователей
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => {
+                setShowCreateGroupDialog(false);
+                setGroupName('');
+              }}
+            >
+              Отмена
+            </Button>
+            <Button onClick={handleCreateGroup} disabled={!groupName.trim()}>
+              Создать группу
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {selectedUser && (
         <BonusAwardDialog
@@ -919,18 +1045,22 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 {(profileUser.telegramId || profileUser.telegramUsername) && (
                   <>
                     <div>
-                      <Label className='text-sm font-medium'>Telegram Username</Label>
+                      <Label className='text-sm font-medium'>
+                        Telegram Username
+                      </Label>
                       <p className='text-muted-foreground text-sm'>
-                        {profileUser.telegramUsername ? `@${profileUser.telegramUsername}` : 'Не указан'}
+                        {profileUser.telegramUsername
+                          ? `@${profileUser.telegramUsername}`
+                          : 'Не указан'}
                       </p>
                     </div>
                     <div>
                       <Label className='text-sm font-medium'>Telegram ID</Label>
                       <p className='text-muted-foreground text-sm'>
-                        {profileUser.telegramId 
-                          ? (typeof profileUser.telegramId === 'bigint' 
-                              ? profileUser.telegramId.toString() 
-                              : String(profileUser.telegramId))
+                        {profileUser.telegramId
+                          ? typeof profileUser.telegramId === 'bigint'
+                            ? profileUser.telegramId.toString()
+                            : String(profileUser.telegramId)
                           : 'Не указан'}
                       </p>
                     </div>
@@ -1163,7 +1293,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               <div className='flex h-full flex-col space-y-3'>
                 <div className='flex-1 overflow-auto rounded-lg border'>
                   <Table>
-                    <TableHeader className='sticky top-0 z-10 bg-background'>
+                    <TableHeader className='bg-background sticky top-0 z-10'>
                       <TableRow>
                         <TableHead className='w-[160px]'>Дата</TableHead>
                         <TableHead className='w-[120px] text-center'>
@@ -1209,30 +1339,30 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                             {Number(t.amount).toFixed(2)}₽
                           </TableCell>
                           <TableCell
-                            className='break-words text-sm'
+                            className='text-sm break-words'
                             title={t.description || ''}
                           >
                             {t.description || '-'}
                             {t.metadata?.spendAggregatedCount ? (
-                              <span className='ml-2 text-xs text-muted-foreground'>
+                              <span className='text-muted-foreground ml-2 text-xs'>
                                 (совмещено {t.metadata.spendAggregatedCount}{' '}
                                 операций)
                               </span>
                             ) : null}
                             {Array.isArray(t.aggregatedTransactions) &&
                             t.aggregatedTransactions.length > 0 ? (
-                              <div className='mt-2 space-y-1 rounded-md border border-dashed border-muted-foreground/30 bg-muted/50 p-2 text-xs text-muted-foreground'>
+                              <div className='border-muted-foreground/30 bg-muted/50 text-muted-foreground mt-2 space-y-1 rounded-md border border-dashed p-2 text-xs'>
                                 {t.aggregatedTransactions.map((child: any) => (
                                   <div
                                     key={child.id}
                                     className='flex flex-wrap items-center justify-between gap-2'
                                   >
                                     <span>
-                                      {new Date(
-                                        child.createdAt
-                                      ).toLocaleString('ru-RU')}
+                                      {new Date(child.createdAt).toLocaleString(
+                                        'ru-RU'
+                                      )}
                                     </span>
-                                    <span className='font-medium text-destructive'>
+                                    <span className='text-destructive font-medium'>
                                       -{Number(child.amount).toFixed(2)}₽
                                     </span>
                                     {child.metadata?.spentFromBonusId ? (

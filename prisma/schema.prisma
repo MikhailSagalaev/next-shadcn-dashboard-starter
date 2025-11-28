@@ -43,6 +43,7 @@ model Project {
   segments             Segment[]
   mailings             Mailing[]
   mailingTemplates     MailingTemplate[]
+  notificationTemplates NotificationTemplate[]
   retailCrmIntegration RetailCrmIntegration?
   ChatChannel          ChatChannel[]
   Chat                 Chat[]
@@ -164,7 +165,7 @@ model User {
   birthDate         DateTime?          @map("birth_date") @db.Date
   telegramId        BigInt?            @map("telegram_id")
   telegramUsername  String?            @map("telegram_username")
-  isActive          Boolean            @default(true) @map("is_active")
+  isActive          Boolean            @default(false) @map("is_active")
   registeredAt      DateTime           @default(now()) @map("registered_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
   currentLevel      String             @default("Базовый") @map("current_level")
@@ -1071,4 +1072,20 @@ model ChatMessage {
   @@index([chatId, createdAt])
   @@index([externalId])
   @@map("chat_messages")
+}
+
+model NotificationTemplate {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  name        String
+  message     String   @db.Text
+  imageUrl    String?  @map("image_url")
+  buttons     Json?    // Array of { text, url?, callback_data? }
+  parseMode   String   @default("HTML") @map("parse_mode") // HTML or Markdown
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("notification_templates")
 }

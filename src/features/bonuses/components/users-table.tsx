@@ -216,11 +216,7 @@ export function UsersTable({
       header: 'Telegram',
       cell: ({ row }) => {
         const username = row.getValue('telegramUsername') as string | undefined;
-        return (
-          <div className='text-sm'>
-            {username ? `@${username}` : '-'}
-          </div>
-        );
+        return <div className='text-sm'>{username ? `@${username}` : '-'}</div>;
       }
     },
     {
@@ -460,6 +456,7 @@ export function UsersTable({
         totalCount={totalCount}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
+        pageSizeOptions={[10, 20, 50, 100, 200, 500, 1000]}
       />
     </div>
   );
