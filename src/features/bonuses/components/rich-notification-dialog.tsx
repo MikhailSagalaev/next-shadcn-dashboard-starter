@@ -146,14 +146,14 @@ export function RichNotificationDialog({
   const parseMode = 'HTML';
 
   // Ref для доступа к textarea в MessageEditor через callback
-  const formattingCallbackRef = useRef<
-    ((textarea: HTMLTextAreaElement) => void) | null
+  const formattingAccessorRef = useRef<
+    ((callback: (textarea: HTMLTextAreaElement) => void) => void) | null
   >(null);
 
   // Обработчик для получения доступа к textarea из MessageEditor
   const handleFormattingRequest = useCallback(
-    (callback: (textarea: HTMLTextAreaElement) => void) => {
-      formattingCallbackRef.current = callback;
+    (accessor: (callback: (textarea: HTMLTextAreaElement) => void) => void) => {
+      formattingAccessorRef.current = accessor;
     },
     []
   );
@@ -223,8 +223,8 @@ export function RichNotificationDialog({
     };
 
     // Используем callback если доступен, иначе ищем textarea через DOM
-    if (formattingCallbackRef.current) {
-      formattingCallbackRef.current(performFormatting);
+    if (formattingAccessorRef.current) {
+      formattingAccessorRef.current(performFormatting);
     } else {
       // Fallback: ищем textarea через DOM
       const textarea = document.querySelector(

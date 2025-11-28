@@ -27,7 +27,7 @@ interface MessageEditorProps {
   showPreview?: boolean;
   showVariableHelper?: boolean;
   onFormattingRequest?: (
-    callback: (textarea: HTMLTextAreaElement) => void
+    accessor: (callback: (textarea: HTMLTextAreaElement) => void) => void
   ) => void;
 }
 
@@ -50,14 +50,16 @@ export function MessageEditor({
 
   // Предоставляем доступ к textarea для форматирования
   useEffect(() => {
-    if (onFormattingRequest) {
-      onFormattingRequest((callback) => {
-        if (textareaRef.current) {
-          callback(textareaRef.current);
+    if (onFormattingRequest && textareaRef.current) {
+      onFormattingRequest(
+        (callback: (textarea: HTMLTextAreaElement) => void) => {
+          if (textareaRef.current) {
+            callback(textareaRef.current);
+          }
         }
-      });
+      );
     }
-  }, [onFormattingRequest, textareaRef]);
+  }, [onFormattingRequest]);
 
   // Обработка изменения текста
   const handleTextChangeInternal = (newValue: string) => {
