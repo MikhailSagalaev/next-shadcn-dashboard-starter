@@ -313,7 +313,7 @@ export function VariableSelector({
             onValueChange={setActiveCategory}
             className='w-full'
           >
-            <TabsList className='bg-muted/50 grid h-auto w-full grid-cols-6 p-1'>
+            <TabsList className='bg-muted/50 grid h-auto w-full grid-cols-6 gap-1 p-1'>
               {Object.entries(VARIABLE_CATEGORIES).map(([key, category]) => {
                 const Icon = category.icon;
                 const hasVariables =
@@ -326,25 +326,26 @@ export function VariableSelector({
                     value={key}
                     disabled={!hasVariables}
                     className={cn(
-                      'flex flex-col items-center gap-1 p-2 text-xs font-medium transition-all duration-200',
+                      'flex flex-col items-center gap-1 p-1.5 text-xs font-medium transition-all duration-200',
                       'data-[state=active]:bg-background data-[state=active]:shadow-sm',
                       'data-[state=active]:border-border data-[state=active]:border',
                       'hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50',
-                      'min-h-[50px] justify-center rounded-lg',
+                      'min-h-[60px] justify-center overflow-hidden rounded-lg',
                       isActive && 'bg-background border-border border shadow-sm'
                     )}
                   >
                     <Icon
                       className={cn(
-                        'h-3 w-3 transition-colors',
+                        'h-3 w-3 shrink-0 transition-colors',
                         isActive ? 'text-primary' : 'text-muted-foreground'
                       )}
                     />
                     <span
                       className={cn(
-                        'text-center text-[10px] leading-tight',
+                        'line-clamp-2 px-0.5 text-center text-[9px] leading-tight break-words',
                         isActive ? 'text-foreground' : 'text-muted-foreground'
                       )}
+                      style={{ wordBreak: 'break-word', hyphens: 'auto' }}
                     >
                       {category.title}
                     </span>
@@ -352,7 +353,7 @@ export function VariableSelector({
                       <Badge
                         variant='secondary'
                         className={cn(
-                          'h-3 px-1 py-0.5 text-[9px]',
+                          'h-3 shrink-0 px-1 py-0.5 text-[8px]',
                           isActive
                             ? 'bg-primary/10 text-primary'
                             : 'bg-muted text-muted-foreground'

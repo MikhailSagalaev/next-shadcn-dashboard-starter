@@ -42,7 +42,6 @@ export function MessageEditor({
   showVariableHelper = true,
   onFormattingRequest
 }: MessageEditorProps) {
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { suggestions, showSuggestions, handleTextChange, setShowSuggestions } =
@@ -134,43 +133,6 @@ export function MessageEditor({
     }
   };
 
-  // Подсветка переменных в тексте
-  const highlightVariables = (text: string) => {
-    const parts = text.split(/(\{[^}]+\})/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('{') && part.endsWith('}')) {
-        return (
-          <Badge key={index} variant='secondary' className='mx-1'>
-            {part}
-          </Badge>
-        );
-      }
-      return part;
-    });
-  };
-
-  // Предварительный просмотр с заменой переменных (заглушка)
-  const renderPreview = (text: string) => {
-    return text
-      .replace(/\{user\.firstName\}/g, 'Иван')
-      .replace(/\{user\.lastName\}/g, 'Петров')
-      .replace(/\{user\.fullName\}/g, 'Иван Петров')
-      .replace(/\{user\.balanceFormatted\}/g, '1,250 бонусов')
-      .replace(/\{user\.currentLevel\}/g, 'Золотой')
-      .replace(/\{user\.referralCode\}/g, 'REF123')
-      .replace(/\{user\.referralLink\}/g, 'https://t.me/bot?start=ref_REF123')
-      .replace(/\{user\.totalEarnedFormatted\}/g, '5,000 бонусов')
-      .replace(/\{user\.totalSpentFormatted\}/g, '3,750 бонусов')
-      .replace(/\{user\.totalPurchasesFormatted\}/g, '25,000 ₽')
-      .replace(/\{user\.email\}/g, 'ivan@example.com')
-      .replace(/\{user\.phone\}/g, '+7 (999) 123-45-67')
-      .replace(/\{user\.telegramUsername\}/g, '@ivan_petrov')
-      .replace(/\{user\.registeredAt\}/g, '15.10.2025, 14:30')
-      .replace(/\{user\.transactionCount\}/g, '15')
-      .replace(/\{user\.bonusCount\}/g, '8')
-      .replace(/\{[^}]+\}/g, '❓ Неизвестная переменная');
-  };
-
   return (
     <div className={cn('space-y-4', className)}>
       {/* Панель инструментов */}
@@ -205,95 +167,60 @@ export function MessageEditor({
               }
             />
           )}
-
-          {showPreview && (
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={() => setIsPreviewMode(!isPreviewMode)}
-              className='h-8 px-3 text-xs'
-            >
-              {isPreviewMode ? (
-                <>
-                  <Code className='mr-1.5 h-3 w-3' />
-                  Код
-                </>
-              ) : (
-                <>
-                  <Eye className='mr-1.5 h-3 w-3' />
-                  Превью
-                </>
-              )}
-            </Button>
-          )}
         </div>
       </div>
 
       {/* Редактор */}
       <div className='relative'>
-        {isPreviewMode ? (
-          <div className='min-h-[120px] rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50 to-blue-50 p-4 whitespace-pre-wrap shadow-sm'>
-            <div className='mb-2 flex items-center gap-2'>
-              <Eye className='h-4 w-4 text-blue-600' />
-              <span className='text-sm font-medium text-gray-700'>
-                Предварительный просмотр
-              </span>
-            </div>
-            <div className='text-sm leading-relaxed text-gray-800'>
-              {highlightVariables(renderPreview(value))}
-            </div>
+        <div className='relative'>
+          <div className='mb-2 flex items-center gap-2'>
+            <Code className='h-4 w-4 text-gray-600' />
+            <span className='text-sm font-medium text-gray-700'>
+              Редактирование
+            </span>
           </div>
-        ) : (
-          <div className='relative'>
-            <div className='mb-2 flex items-center gap-2'>
-              <Code className='h-4 w-4 text-gray-600' />
-              <span className='text-sm font-medium text-gray-700'>
-                Редактирование
-              </span>
-            </div>
-            <Textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => handleTextChangeInternal(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              className='min-h-[120px] border-gray-200 font-mono text-sm focus:border-blue-500 focus:ring-blue-500'
-            />
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => handleTextChangeInternal(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            className='min-h-[120px] border-gray-200 font-mono text-sm focus:border-blue-500 focus:ring-blue-500'
+          />
 
-            {/* Подсказки автодополнения */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className='absolute top-full right-0 left-0 z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg'>
-                <div className='border-b border-gray-100 p-2'>
-                  <span className='text-xs font-medium text-gray-600'>
-                    Доступные переменные:
-                  </span>
-                </div>
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={suggestion.key}
-                    onClick={() => handleSuggestionSelect(suggestion)}
-                    className='flex w-full items-center justify-between border-b border-gray-50 px-3 py-2 text-left last:border-b-0 hover:bg-blue-50'
-                  >
-                    <div>
-                      <div className='text-sm font-medium'>
-                        {suggestion.label}
-                      </div>
-                      <div className='text-xs text-gray-500'>
-                        {suggestion.key}
-                      </div>
-                    </div>
-                    <Badge
-                      variant='secondary'
-                      className='bg-blue-100 text-xs text-blue-700'
-                    >
-                      {suggestion.key}
-                    </Badge>
-                  </button>
-                ))}
+          {/* Подсказки автодополнения */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className='absolute top-full right-0 left-0 z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg'>
+              <div className='border-b border-gray-100 p-2'>
+                <span className='text-xs font-medium text-gray-600'>
+                  Доступные переменные:
+                </span>
               </div>
-            )}
-          </div>
-        )}
+              {suggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion.key}
+                  onClick={() => handleSuggestionSelect(suggestion)}
+                  className='flex w-full items-center justify-between border-b border-gray-50 px-3 py-2 text-left last:border-b-0 hover:bg-blue-50'
+                >
+                  <div>
+                    <div className='text-sm font-medium'>
+                      {suggestion.label}
+                    </div>
+                    <div className='text-xs text-gray-500'>
+                      {suggestion.key}
+                    </div>
+                  </div>
+                  <Badge
+                    variant='secondary'
+                    className='bg-blue-100 text-xs text-blue-700'
+                  >
+                    {suggestion.key}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Статистика переменных */}

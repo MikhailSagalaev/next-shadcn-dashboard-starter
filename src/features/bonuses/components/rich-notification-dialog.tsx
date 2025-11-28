@@ -495,9 +495,9 @@ export function RichNotificationDialog({
           </Alert>
         )}
 
-        <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
+        <div className='grid grid-cols-1 gap-6 lg:grid-cols-3'>
           {/* Форма */}
-          <div className='space-y-6'>
+          <div className='space-y-6 lg:col-span-2'>
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
@@ -768,7 +768,7 @@ export function RichNotificationDialog({
           </div>
 
           {/* Превью в стиле Telegram */}
-          <div className='space-y-4'>
+          <div className='space-y-4 lg:col-span-1'>
             <div className='flex items-center gap-2'>
               <Eye className='h-4 w-4' />
               <span className='font-medium'>Предпросмотр (Telegram)</span>
