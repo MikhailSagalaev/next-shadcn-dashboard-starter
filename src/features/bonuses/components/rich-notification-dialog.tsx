@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -145,77 +145,99 @@ export function RichNotificationDialog({
   // Используем только HTML для Telegram
   const parseMode = 'HTML';
 
+  // Ref для доступа к textarea в MessageEditor через callback
+  const formattingCallbackRef = useRef<
+    ((textarea: HTMLTextAreaElement) => void) | null
+  >(null);
+
+  // Обработчик для получения доступа к textarea из MessageEditor
+  const handleFormattingRequest = useCallback(
+    (callback: (textarea: HTMLTextAreaElement) => void) => {
+      formattingCallbackRef.current = callback;
+    },
+    []
+  );
+
   // Применение форматирования HTML к выделенному тексту
   const applyFormatting = (tag: string, placeholder: string = '') => {
-    // Находим textarea внутри MessageEditor
-    // MessageEditor использует textarea с определенным placeholder
-    const textarea = document.querySelector(
-      'textarea[placeholder*="текст"], textarea[placeholder*="Введите"]'
-    ) as HTMLTextAreaElement;
-    if (!textarea) {
-      toast.error(
-        'Не удалось найти поле ввода. Убедитесь, что редактор загружен.'
-      );
-      return;
-    }
+    const performFormatting = (textarea: HTMLTextAreaElement) => {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const currentValue = textarea.value || message;
+      const selectedText = currentValue.substring(start, end);
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentValue = textarea.value || message;
-    const selectedText = currentValue.substring(start, end);
+      let newText = '';
+      let cursorOffset = 0;
 
-    let newText = '';
-    let cursorOffset = 0;
-
-    switch (tag) {
-      case 'bold':
-        newText = `<b>${selectedText || placeholder}</b>`;
-        cursorOffset = selectedText ? 0 : 3;
-        break;
-      case 'italic':
-        newText = `<i>${selectedText || placeholder}</i>`;
-        cursorOffset = selectedText ? 0 : 3;
-        break;
-      case 'underline':
-        newText = `<u>${selectedText || placeholder}</u>`;
-        cursorOffset = selectedText ? 0 : 3;
-        break;
-      case 'strikethrough':
-        newText = `<s>${selectedText || placeholder}</s>`;
-        cursorOffset = selectedText ? 0 : 3;
-        break;
-      case 'code':
-        newText = `<code>${selectedText || placeholder}</code>`;
-        cursorOffset = selectedText ? 0 : 7;
-        break;
-      case 'link':
-        const url = prompt('Введите URL ссылки:', 'https://');
-        if (url) {
-          newText = `<a href="${url}">${selectedText || 'Текст ссылки'}</a>`;
-          cursorOffset = selectedText ? 0 : 1;
-        } else {
+      switch (tag) {
+        case 'bold':
+          newText = `<b>${selectedText || placeholder}</b>`;
+          cursorOffset = selectedText ? 0 : 3;
+          break;
+        case 'italic':
+          newText = `<i>${selectedText || placeholder}</i>`;
+          cursorOffset = selectedText ? 0 : 3;
+          break;
+        case 'underline':
+          newText = `<u>${selectedText || placeholder}</u>`;
+          cursorOffset = selectedText ? 0 : 3;
+          break;
+        case 'strikethrough':
+          newText = `<s>${selectedText || placeholder}</s>`;
+          cursorOffset = selectedText ? 0 : 3;
+          break;
+        case 'code':
+          newText = `<code>${selectedText || placeholder}</code>`;
+          cursorOffset = selectedText ? 0 : 7;
+          break;
+        case 'link':
+          const url = prompt('Введите URL ссылки:', 'https://');
+          if (url) {
+            newText = `<a href="${url}">${selectedText || 'Текст ссылки'}</a>`;
+            cursorOffset = selectedText ? 0 : 1;
+          } else {
+            return;
+          }
+          break;
+        default:
           return;
-        }
-        break;
-      default:
+      }
+
+      const updatedMessage =
+        currentValue.substring(0, start) +
+        newText +
+        currentValue.substring(end);
+      form.setValue('message', updatedMessage);
+
+      // Обновляем значение textarea напрямую для немедленного отображения
+      textarea.value = updatedMessage;
+
+      // Восстанавливаем позицию курсора
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(
+          start + cursorOffset,
+          start + newText.length - cursorOffset
+        );
+      }, 0);
+    };
+
+    // Используем callback если доступен, иначе ищем textarea через DOM
+    if (formattingCallbackRef.current) {
+      formattingCallbackRef.current(performFormatting);
+    } else {
+      // Fallback: ищем textarea через DOM
+      const textarea = document.querySelector(
+        'textarea'
+      ) as HTMLTextAreaElement;
+      if (!textarea) {
+        toast.error(
+          'Не удалось найти поле ввода. Убедитесь, что редактор загружен.'
+        );
         return;
+      }
+      performFormatting(textarea);
     }
-
-    const updatedMessage =
-      currentValue.substring(0, start) + newText + currentValue.substring(end);
-    form.setValue('message', updatedMessage);
-
-    // Обновляем значение textarea напрямую для немедленного отображения
-    textarea.value = updatedMessage;
-
-    // Восстанавливаем позицию курсора
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(
-        start + cursorOffset,
-        start + newText.length - cursorOffset
-      );
-    }, 0);
   };
 
   const addButton = () => {
@@ -631,6 +653,7 @@ export function RichNotificationDialog({
                             placeholder='Введите текст уведомления...'
                             showPreview={true}
                             showVariableHelper={true}
+                            onFormattingRequest={handleFormattingRequest}
                           />
                         </FormControl>
                       </div>
