@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -98,15 +98,14 @@ export function UsersTable({
   const [rowSelection, setRowSelection] = useState({});
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: 50
+    pageSize: pageSize
   });
 
-  // Обработчик изменений пагинации - вызываем только при изменении размера страницы
-  useEffect(() => {
-    if (pagination.pageSize !== pageSize && onPageSizeChange) {
-      onPageSizeChange(pagination.pageSize);
-    }
-  }, [pagination.pageSize, pageSize, onPageSizeChange]);
+  // Обработчик изменений пагинации изнутри таблицы
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPagination((prev) => ({ ...prev, pageSize: newPageSize, pageIndex: 0 }));
+    onPageSizeChange?.(newPageSize);
+  };
 
   const columns: ColumnDef<User>[] = [
     {
@@ -343,11 +342,18 @@ export function UsersTable({
     pageCount: Math.ceil(totalCount / pageSize)
   });
 
-  // Синхронизируем пагинацию с внешними пропсами
+  // Синхронизируем пагинацию с внешними пропсами (только pageIndex, pageSize обновляется через handlePageSizeChange)
   useEffect(() => {
-    setPagination({
-      pageIndex: currentPage - 1,
-      pageSize
+    setPagination((prev) => {
+      const newPageIndex = currentPage - 1;
+      // Обновляем pageSize только если он изменился извне (не через handlePageSizeChange)
+      if (prev.pageIndex !== newPageIndex || prev.pageSize !== pageSize) {
+        return {
+          pageIndex: newPageIndex,
+          pageSize
+        };
+      }
+      return prev;
     });
   }, [currentPage, pageSize]);
 
@@ -455,7 +461,7 @@ export function UsersTable({
         table={table}
         totalCount={totalCount}
         onPageChange={onPageChange}
-        onPageSizeChange={onPageSizeChange}
+        onPageSizeChange={handlePageSizeChange}
         pageSizeOptions={[10, 20, 50, 100, 200, 500, 1000]}
       />
     </div>
