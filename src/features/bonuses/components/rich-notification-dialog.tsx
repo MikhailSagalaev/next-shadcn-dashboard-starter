@@ -61,12 +61,18 @@ import {
   AlertCircle,
   Save,
   FolderOpen,
-  X
+  X,
+  Check
 } from 'lucide-react';
 import { MessageEditor } from '@/components/ui/message-editor';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
 const buttonSchema = z
@@ -507,16 +513,72 @@ export function RichNotificationDialog({
                 <div className='space-y-2'>
                   <div className='flex items-center justify-between'>
                     <FormLabel>Шаблоны</FormLabel>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() => setShowSaveTemplate(true)}
-                      disabled={!message.trim()}
+                    <Popover
+                      open={showSaveTemplate}
+                      onOpenChange={setShowSaveTemplate}
                     >
-                      <Save className='mr-2 h-4 w-4' />
-                      Сохранить
-                    </Button>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          disabled={!message.trim()}
+                        >
+                          <Save className='mr-2 h-4 w-4' />
+                          Сохранить шаблон
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className='w-80' align='end'>
+                        <div className='space-y-4'>
+                          <div className='space-y-2'>
+                            <h4 className='leading-none font-medium'>
+                              Сохранить шаблон
+                            </h4>
+                            <p className='text-muted-foreground text-sm'>
+                              Введите название для сохранения текущего сообщения
+                              как шаблона
+                            </p>
+                          </div>
+                          <div className='space-y-2'>
+                            <Input
+                              placeholder='Название шаблона'
+                              value={templateName}
+                              onChange={(e) => setTemplateName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  saveTemplate();
+                                }
+                              }}
+                              autoFocus
+                            />
+                            <div className='flex gap-2'>
+                              <Button
+                                type='button'
+                                size='sm'
+                                onClick={saveTemplate}
+                                disabled={!templateName.trim()}
+                                className='flex-1'
+                              >
+                                <Check className='mr-2 h-4 w-4' />
+                                Сохранить
+                              </Button>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                onClick={() => {
+                                  setShowSaveTemplate(false);
+                                  setTemplateName('');
+                                }}
+                              >
+                                Отмена
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   {templates.length > 0 && (
                     <Select
@@ -534,40 +596,6 @@ export function RichNotificationDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
-                  {showSaveTemplate && (
-                    <div className='flex gap-2'>
-                      <Input
-                        placeholder='Название шаблона'
-                        value={templateName}
-                        onChange={(e) => setTemplateName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            saveTemplate();
-                          }
-                        }}
-                      />
-                      <Button
-                        type='button'
-                        size='sm'
-                        onClick={saveTemplate}
-                        disabled={!templateName.trim()}
-                      >
-                        Сохранить
-                      </Button>
-                      <Button
-                        type='button'
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => {
-                          setShowSaveTemplate(false);
-                          setTemplateName('');
-                        }}
-                      >
-                        <X className='h-4 w-4' />
-                      </Button>
-                    </div>
                   )}
                 </div>
 
@@ -771,7 +799,7 @@ export function RichNotificationDialog({
           <div className='space-y-4 lg:col-span-1'>
             <div className='flex items-center gap-2'>
               <Eye className='h-4 w-4' />
-              <span className='font-medium'>Предпросмотр (Telegram)</span>
+              <span className='font-medium'>Предпросмотр</span>
             </div>
 
             <Card className='border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 dark:border-blue-800 dark:from-blue-950 dark:to-blue-900'>
