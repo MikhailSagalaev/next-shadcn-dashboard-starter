@@ -19,3 +19,8 @@ CREATE INDEX IF NOT EXISTS "notification_templates_project_id_idx" ON "notificat
 
 ALTER TABLE "notification_templates" ADD CONSTRAINT "notification_templates_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+
+
+
+
+

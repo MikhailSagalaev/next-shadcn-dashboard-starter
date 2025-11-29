@@ -28,7 +28,7 @@ import {
   Tab
 } from '@heroui/react';
 
-import { MessageEditor } from './editors/message-editor';
+import { TelegramRichEditor } from '@/components/ui/telegram-rich-editor';
 import { KeyboardBuilder } from './editors/keyboard-builder';
 import { ConditionEditor } from './editors/condition-editor';
 import { BotfatherHelper } from './editors/botfather-helper';
@@ -118,16 +118,23 @@ export function BotConstructorProperties({
     <Tabs defaultSelectedKey='message' aria-label='Message editor tabs'>
       <Tab key='message' title='Сообщение'>
         <div className='mt-4 space-y-4'>
-          <MessageEditor
-            config={localNode.data.config.message || { text: '' }}
-            onChange={(messageConfig) =>
+          <TelegramRichEditor
+            value={localNode.data.config.message?.text || ''}
+            onChange={(text) =>
               updateNodeData({
                 config: {
                   ...localNode.data.config,
-                  message: messageConfig
+                  message: {
+                    ...localNode.data.config.message,
+                    text,
+                    parseMode: 'HTML'
+                  }
                 }
               })
             }
+            placeholder='Введите текст сообщения...'
+            showVariableHelper={true}
+            minHeight='200px'
           />
         </div>
       </Tab>

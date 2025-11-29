@@ -17,7 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { X, Save } from 'lucide-react';
-import { MessageEditor } from '@/components/ui/message-editor';
+import { TelegramRichEditor } from '@/components/ui/telegram-rich-editor';
+import { KeyboardEditor } from '@/components/ui/keyboard-editor';
 import { DatabaseQueryEditor } from '@/features/bot-constructor/components/editors/database-query-editor';
 import type {
   WorkflowNode,
@@ -139,7 +140,7 @@ export function WorkflowProperties({
           <div className='space-y-4'>
             <div>
               <Label htmlFor='messageText'>Текст сообщения</Label>
-              <MessageEditor
+              <TelegramRichEditor
                 value={nodeConfig.message?.text || ''}
                 onChange={(text) => {
                   setNodeConfig((prevConfig) => ({
@@ -147,50 +148,33 @@ export function WorkflowProperties({
                     message: {
                       ...prevConfig.message,
                       text,
-                      parseMode: prevConfig.message?.parseMode || 'HTML'
-                    }
-                  }));
-                }}
-                keyboard={nodeConfig.message?.keyboard || null}
-                onKeyboardChange={(keyboard) => {
-                  setNodeConfig((prevConfig) => ({
-                    ...prevConfig,
-                    message: {
-                      ...prevConfig.message,
-                      keyboard: keyboard || undefined
+                      parseMode: 'HTML'
                     }
                   }));
                 }}
                 placeholder='Введите текст сообщения...'
-                showPreview={true}
                 showVariableHelper={true}
+                minHeight='200px'
               />
             </div>
 
-            <div>
-              <Label htmlFor='parseMode'>Режим парсинга</Label>
-              <select
-                id='parseMode'
-                value={nodeConfig.message?.parseMode || 'HTML'}
-                onChange={(e) => {
-                  setNodeConfig((prevConfig) => ({
-                    ...prevConfig,
-                    message: {
-                      ...prevConfig.message,
-                      parseMode: e.target.value as
-                        | 'HTML'
-                        | 'Markdown'
-                        | 'MarkdownV2'
-                    }
-                  }));
-                }}
-                className='w-full rounded-md border p-2'
-              >
-                <option value='HTML'>HTML</option>
-                <option value='Markdown'>Markdown</option>
-                <option value='MarkdownV2'>MarkdownV2</option>
-              </select>
-            </div>
+            {nodeConfig.message?.keyboard && (
+              <div>
+                <Label>Клавиатура</Label>
+                <KeyboardEditor
+                  value={nodeConfig.message.keyboard}
+                  onChange={(keyboard) => {
+                    setNodeConfig((prevConfig) => ({
+                      ...prevConfig,
+                      message: {
+                        ...prevConfig.message,
+                        keyboard: keyboard || undefined
+                      }
+                    }));
+                  }}
+                />
+              </div>
+            )}
           </div>
         );
       case 'condition':
