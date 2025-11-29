@@ -68,7 +68,7 @@ interface MailingAnalyticsViewProps {
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
 
-export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
+export function MailingAnalyticsViewNew({ params }: MailingAnalyticsViewProps) {
   const router = useRouter();
   const [projectId, setProjectId] = useState('');
   const [mailingId, setMailingId] = useState('');

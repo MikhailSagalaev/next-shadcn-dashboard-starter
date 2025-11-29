@@ -66,7 +66,7 @@ interface MailingsPageViewProps {
   projectId: string;
 }
 
-export function MailingsPageView({ projectId }: MailingsPageViewProps) {
+export function MailingsPageViewNew({ projectId }: MailingsPageViewProps) {
   const router = useRouter();
   const [mailings, setMailings] = useState<any[]>([]);
   const [segments, setSegments] = useState<any[]>([]);
