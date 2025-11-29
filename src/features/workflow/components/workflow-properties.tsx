@@ -20,6 +20,7 @@ import { X, Save } from 'lucide-react';
 import { TelegramRichEditor } from '@/components/ui/telegram-rich-editor';
 import { KeyboardEditor } from '@/components/ui/keyboard-editor';
 import { DatabaseQueryEditor } from '@/features/bot-constructor/components/editors/database-query-editor';
+import { MessageNodeEditor } from './message-node-editor';
 import type {
   WorkflowNode,
   WorkflowNodeData,
@@ -137,45 +138,10 @@ export function WorkflowProperties({
         );
       case 'message':
         return (
-          <div className='space-y-4'>
-            <div>
-              <Label htmlFor='messageText'>Текст сообщения</Label>
-              <TelegramRichEditor
-                value={nodeConfig.message?.text || ''}
-                onChange={(text) => {
-                  setNodeConfig((prevConfig) => ({
-                    ...prevConfig,
-                    message: {
-                      ...prevConfig.message,
-                      text,
-                      parseMode: 'HTML'
-                    }
-                  }));
-                }}
-                placeholder='Введите текст сообщения...'
-                showVariableHelper={true}
-                minHeight='200px'
-              />
-            </div>
-
-            {nodeConfig.message?.keyboard && (
-              <div>
-                <Label>Клавиатура</Label>
-                <KeyboardEditor
-                  value={nodeConfig.message.keyboard}
-                  onChange={(keyboard) => {
-                    setNodeConfig((prevConfig) => ({
-                      ...prevConfig,
-                      message: {
-                        ...prevConfig.message,
-                        keyboard: keyboard || undefined
-                      }
-                    }));
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          <MessageNodeEditor
+            nodeConfig={nodeConfig}
+            setNodeConfig={setNodeConfig}
+          />
         );
       case 'condition':
         return (

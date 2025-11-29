@@ -265,6 +265,36 @@ export function RichNotificationDialog({
     }
   };
 
+  // Удаление шаблона
+  const deleteTemplate = async (templateId: string) => {
+    if (!confirm('Вы уверены, что хотите удалить этот шаблон?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/notification-templates/${templateId}`,
+        {
+          method: 'DELETE'
+        }
+      );
+
+      if (response.ok) {
+        setTemplates(templates.filter((t) => t.id !== templateId));
+        if (selectedTemplateId === templateId) {
+          setSelectedTemplateId(null);
+        }
+        toast.success('Шаблон удален');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Ошибка удаления шаблона');
+      }
+    } catch (error) {
+      toast.error('Ошибка удаления шаблона');
+      console.error('Error deleting template:', error);
+    }
+  };
+
   const onSubmit = async (values: NotificationFormValues) => {
     setLoading(true);
     setInFlight(true);
@@ -514,21 +544,35 @@ export function RichNotificationDialog({
                     </Popover>
                   </div>
                   {templates.length > 0 && (
-                    <Select
-                      value={selectedTemplateId || ''}
-                      onValueChange={loadTemplate}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder='Выберите шаблон...' />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {templates.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>
-                            {template.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className='space-y-2'>
+                      <Select
+                        value={selectedTemplateId || ''}
+                        onValueChange={loadTemplate}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder='Выберите шаблон...' />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedTemplateId && (
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          onClick={() => deleteTemplate(selectedTemplateId)}
+                          className='w-full text-red-600 hover:bg-red-50 hover:text-red-700'
+                        >
+                          <Trash2 className='mr-2 h-4 w-4' />
+                          Удалить выбранный шаблон
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
 
