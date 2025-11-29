@@ -118,16 +118,22 @@ function HTMLConverterPlugin({
           const root = $getRoot();
           root.clear();
           root.append(...nodes);
+          // Явно устанавливаем направление LTR
+          root.setDirection('ltr');
           setLastLoadedValue(htmlValue);
           setIsReady(true);
           onInitialized();
-          console.log('HTML loaded successfully');
+          console.log('HTML loaded successfully, direction set to LTR');
         } catch (error) {
           console.error('Error parsing HTML:', error);
         }
       });
     } else if (!htmlValue && !isReady) {
-      // Если нет начального значения, сразу помечаем как готовый
+      // Если нет начального значения, сразу помечаем как готовый и устанавливаем LTR
+      editor.update(() => {
+        const root = $getRoot();
+        root.setDirection('ltr');
+      });
       setIsReady(true);
       onInitialized();
     }
@@ -416,7 +422,7 @@ export function TelegramRichEditor({
 
       {/* Редактор */}
       <div className='overflow-hidden rounded-lg border shadow-sm'>
-        <LexicalComposer initialConfig={editorConfig} key={value}>
+        <LexicalComposer initialConfig={editorConfig}>
           <ToolbarPlugin />
           <div className='bg-background relative' dir='ltr'>
             <RichTextPlugin
