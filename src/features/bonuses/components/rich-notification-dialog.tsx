@@ -64,7 +64,7 @@ import {
   X,
   Check
 } from 'lucide-react';
-import { MessageEditor } from '@/components/ui/message-editor';
+import { TelegramMessageEditor } from '@/components/ui/telegram-message-editor';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -151,100 +151,7 @@ export function RichNotificationDialog({
   // Используем только HTML для Telegram
   const parseMode = 'HTML';
 
-  // Ref для доступа к textarea в MessageEditor через callback
-  const formattingAccessorRef = useRef<
-    ((callback: (textarea: HTMLTextAreaElement) => void) => void) | null
-  >(null);
-
-  // Обработчик для получения доступа к textarea из MessageEditor
-  const handleFormattingRequest = useCallback(
-    (accessor: (callback: (textarea: HTMLTextAreaElement) => void) => void) => {
-      formattingAccessorRef.current = accessor;
-    },
-    []
-  );
-
-  // Применение форматирования HTML к выделенному тексту
-  const applyFormatting = (tag: string, placeholder: string = '') => {
-    const performFormatting = (textarea: HTMLTextAreaElement) => {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const currentValue = textarea.value || message;
-      const selectedText = currentValue.substring(start, end);
-
-      let newText = '';
-      let cursorOffset = 0;
-
-      switch (tag) {
-        case 'bold':
-          newText = `<b>${selectedText || placeholder}</b>`;
-          cursorOffset = selectedText ? 0 : 3;
-          break;
-        case 'italic':
-          newText = `<i>${selectedText || placeholder}</i>`;
-          cursorOffset = selectedText ? 0 : 3;
-          break;
-        case 'underline':
-          newText = `<u>${selectedText || placeholder}</u>`;
-          cursorOffset = selectedText ? 0 : 3;
-          break;
-        case 'strikethrough':
-          newText = `<s>${selectedText || placeholder}</s>`;
-          cursorOffset = selectedText ? 0 : 3;
-          break;
-        case 'code':
-          newText = `<code>${selectedText || placeholder}</code>`;
-          cursorOffset = selectedText ? 0 : 7;
-          break;
-        case 'link':
-          const url = prompt('Введите URL ссылки:', 'https://');
-          if (url) {
-            newText = `<a href="${url}">${selectedText || 'Текст ссылки'}</a>`;
-            cursorOffset = selectedText ? 0 : 1;
-          } else {
-            return;
-          }
-          break;
-        default:
-          return;
-      }
-
-      const updatedMessage =
-        currentValue.substring(0, start) +
-        newText +
-        currentValue.substring(end);
-      form.setValue('message', updatedMessage);
-
-      // Обновляем значение textarea напрямую для немедленного отображения
-      textarea.value = updatedMessage;
-
-      // Восстанавливаем позицию курсора
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(
-          start + cursorOffset,
-          start + newText.length - cursorOffset
-        );
-      }, 0);
-    };
-
-    // Используем callback если доступен, иначе ищем textarea через DOM
-    if (formattingAccessorRef.current) {
-      formattingAccessorRef.current(performFormatting);
-    } else {
-      // Fallback: ищем textarea через DOM
-      const textarea = document.querySelector(
-        'textarea'
-      ) as HTMLTextAreaElement;
-      if (!textarea) {
-        toast.error(
-          'Не удалось найти поле ввода. Убедитесь, что редактор загружен.'
-        );
-        return;
-      }
-      performFormatting(textarea);
-    }
-  };
+  // Форматирование теперь обрабатывается встроенными инструментами shadcn-editor
 
   const addButton = () => {
     const currentButtons = form.getValues('buttons') || [];
@@ -606,85 +513,14 @@ export function RichNotificationDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Текст сообщения</FormLabel>
-                      <div className='space-y-2'>
-                        {/* Панель инструментов форматирования HTML */}
-                        <div className='bg-muted/50 flex flex-wrap gap-1 rounded-md border p-1'>
-                          <Button
-                            type='button'
-                            variant='ghost'
-                            size='sm'
-                            onClick={() => applyFormatting('bold', 'жирный')}
-                            title='Жирный (HTML: &lt;b&gt;)'
-                            className='h-8 w-8 p-0'
-                          >
-                            <Bold className='h-4 w-4' />
-                          </Button>
-                          <Button
-                            type='button'
-                            variant='ghost'
-                            size='sm'
-                            onClick={() => applyFormatting('italic', 'курсив')}
-                            title='Курсив (HTML: &lt;i&gt;)'
-                            className='h-8 w-8 p-0'
-                          >
-                            <Italic className='h-4 w-4' />
-                          </Button>
-                          <Button
-                            type='button'
-                            variant='ghost'
-                            size='sm'
-                            onClick={() =>
-                              applyFormatting('underline', 'подчеркнутый')
-                            }
-                            title='Подчеркивание (HTML: &lt;u&gt;)'
-                            className='h-8 w-8 p-0'
-                          >
-                            <Underline className='h-4 w-4' />
-                          </Button>
-                          <Button
-                            type='button'
-                            variant='ghost'
-                            size='sm'
-                            onClick={() =>
-                              applyFormatting('strikethrough', 'зачеркнутый')
-                            }
-                            title='Зачеркивание (HTML: &lt;s&gt;)'
-                            className='h-8 w-8 p-0'
-                          >
-                            <Strikethrough className='h-4 w-4' />
-                          </Button>
-                          <Button
-                            type='button'
-                            variant='ghost'
-                            size='sm'
-                            onClick={() => applyFormatting('code', 'код')}
-                            title='Код (HTML: &lt;code&gt;)'
-                            className='h-8 w-8 p-0'
-                          >
-                            <Code className='h-4 w-4' />
-                          </Button>
-                          <Button
-                            type='button'
-                            variant='ghost'
-                            size='sm'
-                            onClick={() => applyFormatting('link')}
-                            title='Ссылка (HTML: &lt;a&gt;)'
-                            className='h-8 w-8 p-0'
-                          >
-                            <LinkIcon className='h-4 w-4' />
-                          </Button>
-                        </div>
-                        <FormControl>
-                          <MessageEditor
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder='Введите текст уведомления...'
-                            showPreview={true}
-                            showVariableHelper={true}
-                            onFormattingRequest={handleFormattingRequest}
-                          />
-                        </FormControl>
-                      </div>
+                      <FormControl>
+                        <TelegramMessageEditor
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder='Введите текст уведомления...'
+                          showVariableHelper={true}
+                        />
+                      </FormControl>
                       <FormDescription>
                         Поддерживается HTML разметка (&lt;b&gt;, &lt;i&gt;,
                         &lt;u&gt;, &lt;s&gt;, &lt;a&gt;, &lt;code&gt;). Максимум
