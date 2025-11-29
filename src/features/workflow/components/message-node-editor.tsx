@@ -176,7 +176,7 @@ export function MessageNodeEditor({
       {/* Шаблоны */}
       <div className='space-y-2'>
         <div className='flex items-center justify-between'>
-          <Label>Шаблоны</Label>
+          {templates.length > 0 && <Label>Шаблоны</Label>}
           <Popover open={showSaveTemplate} onOpenChange={setShowSaveTemplate}>
             <PopoverTrigger asChild>
               <Button

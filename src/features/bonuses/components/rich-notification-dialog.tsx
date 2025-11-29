@@ -482,7 +482,7 @@ export function RichNotificationDialog({
                 {/* Шаблоны */}
                 <div className='space-y-2'>
                   <div className='flex items-center justify-between'>
-                    <FormLabel>Шаблоны</FormLabel>
+                    {templates.length > 0 && <FormLabel>Шаблоны</FormLabel>}
                     <Popover
                       open={showSaveTemplate}
                       onOpenChange={setShowSaveTemplate}

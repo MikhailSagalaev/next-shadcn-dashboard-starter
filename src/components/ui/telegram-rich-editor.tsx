@@ -103,7 +103,8 @@ function HTMLConverterPlugin({
   const [lastLoadedValue, setLastLoadedValue] = useState('');
 
   useEffect(() => {
-    if (!isInitialized && htmlValue !== lastLoadedValue) {
+    if (htmlValue && htmlValue !== lastLoadedValue) {
+      console.log('Loading HTML into editor:', htmlValue);
       editor.update(() => {
         try {
           const parser = new DOMParser();
@@ -116,6 +117,7 @@ function HTMLConverterPlugin({
           root.clear();
           root.append(...nodes);
           setLastLoadedValue(htmlValue);
+          console.log('HTML loaded successfully');
         } catch (error) {
           console.error('Error parsing HTML:', error);
         }
@@ -333,18 +335,18 @@ export function TelegramRichEditor({
 }: TelegramRichEditorProps) {
   const [htmlValue, setHtmlValue] = useState(value);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [externalValue, setExternalValue] = useState(value);
 
   useEffect(() => {
-    if (value !== externalValue) {
-      setExternalValue(value);
+    console.log('TelegramRichEditor value changed:', value);
+    if (value !== htmlValue) {
       setHtmlValue(value);
       setIsInitialized(false);
     }
-  }, [value, externalValue]);
+  }, [value]);
 
   const handleHTMLChange = useCallback(
     (html: string) => {
+      console.log('HTML changed:', html);
       setHtmlValue(html);
       onChange(html);
       if (!isInitialized) {
