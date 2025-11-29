@@ -59,7 +59,8 @@ import {
 import { cn } from '@/lib/utils';
 
 const editorTheme = {
-  paragraph: 'mb-1',
+  root: 'ltr',
+  paragraph: 'mb-1 ltr text-left',
   text: {
     bold: 'font-bold',
     italic: 'italic',
@@ -421,7 +422,7 @@ export function TelegramRichEditor({
               contentEditable={
                 <ContentEditable
                   className='overflow-auto px-4 py-3 outline-none'
-                  style={{ minHeight }}
+                  style={{ minHeight, direction: 'ltr', textAlign: 'left' }}
                 />
               }
               placeholder={
