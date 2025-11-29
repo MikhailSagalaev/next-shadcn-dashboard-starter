@@ -380,6 +380,7 @@ export function TelegramRichEditor({
     namespace: 'TelegramRichEditor',
     theme: editorTheme,
     nodes: editorNodes,
+    editorState: undefined,
     onError: () => {
       // Silently handle Lexical errors
     }
@@ -415,14 +416,20 @@ export function TelegramRichEditor({
 
       {/* Редактор */}
       <div className='overflow-hidden rounded-lg border shadow-sm'>
-        <LexicalComposer initialConfig={editorConfig}>
+        <LexicalComposer initialConfig={editorConfig} key={value}>
           <ToolbarPlugin />
-          <div className='bg-background relative'>
+          <div className='bg-background relative' dir='ltr'>
             <RichTextPlugin
               contentEditable={
                 <ContentEditable
                   className='overflow-auto px-4 py-3 outline-none'
-                  style={{ minHeight, direction: 'ltr', textAlign: 'left' }}
+                  style={{
+                    minHeight,
+                    direction: 'ltr',
+                    textAlign: 'left',
+                    unicodeBidi: 'embed'
+                  }}
+                  dir='ltr'
                 />
               }
               placeholder={
