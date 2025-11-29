@@ -170,10 +170,15 @@ export function RichNotificationDialog({
   useEffect(() => {
     if (open && projectId) {
       fetch(`/api/projects/${projectId}/notification-templates`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setTemplates(data);
+        .then(async (res) => {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              setTemplates(data);
+            }
+          } else {
+            console.error('Server returned non-JSON response');
           }
         })
         .catch((error) => {
@@ -224,18 +229,39 @@ export function RichNotificationDialog({
       );
 
       if (response.ok) {
-        const newTemplate = await response.json();
-        setTemplates([newTemplate, ...templates]);
-        setTemplateName('');
-        setShowSaveTemplate(false);
-        toast.success('Шаблон сохранен');
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const newTemplate = await response.json();
+          setTemplates([newTemplate, ...templates]);
+          setTemplateName('');
+          setShowSaveTemplate(false);
+          toast.success('Шаблон сохранен');
+        } else {
+          throw new Error('Сервер вернул неверный формат ответа');
+        }
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Ошибка сохранения шаблона');
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const error = await response.json();
+          toast.error(error.error || 'Ошибка сохранения шаблона');
+        } else {
+          const text = await response.text();
+          console.error('Server error response:', text);
+          toast.error(
+            `Ошибка сервера (${response.status}). Проверьте логи сервера.`
+          );
+        }
       }
     } catch (error) {
-      toast.error('Ошибка сохранения шаблона');
-      console.error('Error saving template:', error);
+      if (error instanceof SyntaxError) {
+        toast.error(
+          'Сервер вернул неверный формат. Возможно, не установлены зависимости или ошибка компиляции.'
+        );
+        console.error('JSON parse error:', error);
+      } else {
+        toast.error('Ошибка сохранения шаблона');
+        console.error('Error saving template:', error);
+      }
     }
   };
 
