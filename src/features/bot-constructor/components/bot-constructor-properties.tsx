@@ -135,6 +135,7 @@ export function BotConstructorProperties({
             placeholder='Введите текст сообщения...'
             showVariableHelper={true}
             minHeight='200px'
+            showActions={true}
           />
         </div>
       </Tab>

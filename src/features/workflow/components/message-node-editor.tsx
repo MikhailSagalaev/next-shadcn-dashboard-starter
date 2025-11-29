@@ -290,6 +290,7 @@ export function MessageNodeEditor({
           placeholder='Введите текст сообщения...'
           showVariableHelper={true}
           minHeight='200px'
+          showActions={true}
         />
       </div>
 
