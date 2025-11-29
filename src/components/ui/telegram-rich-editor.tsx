@@ -178,8 +178,8 @@ function HTMLConverterPlugin({
           setLastLoadedValue(htmlValue);
           setIsReady(true);
           onInitialized();
-        } catch (error) {
-          console.error('Error parsing HTML:', error);
+        } catch {
+          // Silently handle HTML parsing errors
         }
       });
     } else if (!htmlValue && !isReady) {
@@ -227,7 +227,7 @@ function LTRPlugin() {
     });
 
     // Слушаем изменения и принудительно устанавливаем LTR
-    return editor.registerUpdateListener(({ editorState, dirtyElements }) => {
+    return editor.registerUpdateListener(({ dirtyElements }) => {
       if (dirtyElements.size > 0) {
         editor.update(
           () => {
@@ -676,6 +676,7 @@ export function TelegramRichEditor({
     if (value !== htmlValue) {
       setHtmlValue(value);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const handleHTMLChange = useCallback(
