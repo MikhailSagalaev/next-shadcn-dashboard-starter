@@ -287,7 +287,7 @@ export function VariableSelector({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger || defaultTrigger}</DialogTrigger>
-      <DialogContent className='animate-in fade-in-0 zoom-in-95 max-h-[80vh] max-w-4xl p-0 duration-200'>
+      <DialogContent className='animate-in fade-in-0 zoom-in-95 max-h-[85vh] max-w-4xl overflow-hidden p-0 duration-200'>
         <DialogHeader className='border-b bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3'>
           <DialogTitle className='flex items-center gap-2 text-lg font-semibold text-gray-900'>
             <Target className='h-4 w-4 text-blue-600' />
@@ -313,7 +313,7 @@ export function VariableSelector({
             onValueChange={setActiveCategory}
             className='w-full'
           >
-            <TabsList className='bg-muted/50 grid h-auto w-full grid-cols-6 gap-1 p-1'>
+            <TabsList className='bg-muted/50 grid h-auto w-full grid-cols-6 gap-1.5 p-1.5'>
               {Object.entries(VARIABLE_CATEGORIES).map(([key, category]) => {
                 const Icon = category.icon;
                 const hasVariables =
@@ -326,26 +326,35 @@ export function VariableSelector({
                     value={key}
                     disabled={!hasVariables}
                     className={cn(
-                      'flex flex-col items-center gap-1 p-1.5 text-xs font-medium transition-all duration-200',
+                      'relative flex flex-col items-center justify-start gap-1.5 p-2 text-xs font-medium transition-all duration-200',
                       'data-[state=active]:bg-background data-[state=active]:shadow-sm',
                       'data-[state=active]:border-border data-[state=active]:border',
                       'hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50',
-                      'min-h-[60px] justify-center overflow-hidden rounded-lg',
+                      'max-h-[80px] min-h-[70px] w-full rounded-lg',
+                      'overflow-hidden',
                       isActive && 'bg-background border-border border shadow-sm'
                     )}
                   >
                     <Icon
                       className={cn(
-                        'h-3 w-3 shrink-0 transition-colors',
+                        'h-3.5 w-3.5 shrink-0 transition-colors',
                         isActive ? 'text-primary' : 'text-muted-foreground'
                       )}
                     />
                     <span
                       className={cn(
-                        'line-clamp-2 px-0.5 text-center text-[9px] leading-tight break-words',
+                        'w-full px-1 text-center text-[10px] leading-[1.2]',
+                        'break-words hyphens-auto',
                         isActive ? 'text-foreground' : 'text-muted-foreground'
                       )}
-                      style={{ wordBreak: 'break-word', hyphens: 'auto' }}
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        wordBreak: 'break-word',
+                        hyphens: 'auto'
+                      }}
                     >
                       {category.title}
                     </span>
@@ -353,7 +362,8 @@ export function VariableSelector({
                       <Badge
                         variant='secondary'
                         className={cn(
-                          'h-3 shrink-0 px-1 py-0.5 text-[8px]',
+                          'h-4 shrink-0 px-1.5 py-0 text-[9px] font-semibold',
+                          'flex items-center justify-center',
                           isActive
                             ? 'bg-primary/10 text-primary'
                             : 'bg-muted text-muted-foreground'
