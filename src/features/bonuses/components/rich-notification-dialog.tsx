@@ -190,7 +190,9 @@ export function RichNotificationDialog({
   // Загрузка шаблона
   const loadTemplate = (templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
+    console.log('Loading template:', template);
     if (template) {
+      console.log('Template message:', template.message);
       form.setValue('message', template.message || '');
       form.setValue('imageUrl', template.imageUrl || '');
       if (template.buttons) {
@@ -198,6 +200,8 @@ export function RichNotificationDialog({
       }
       setSelectedTemplateId(templateId);
       toast.success('Шаблон загружен');
+    } else {
+      console.error('Template not found:', templateId);
     }
   };
 
@@ -212,6 +216,8 @@ export function RichNotificationDialog({
       const values = form.getValues();
       const validButtons =
         values.buttons?.filter((button) => button.text.trim()) || [];
+
+      console.log('Saving template with message:', values.message);
 
       const response = await fetch(
         `/api/projects/${projectId}/notification-templates`,
@@ -232,6 +238,7 @@ export function RichNotificationDialog({
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           const newTemplate = await response.json();
+          console.log('Template saved:', newTemplate);
           setTemplates([newTemplate, ...templates]);
           setTemplateName('');
           setShowSaveTemplate(false);

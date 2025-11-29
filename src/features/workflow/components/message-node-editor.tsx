@@ -82,7 +82,9 @@ export function MessageNodeEditor({
   // Загрузка шаблона
   const loadTemplate = (templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
+    console.log('Loading template:', template);
     if (template) {
+      console.log('Template message:', template.message);
       setNodeConfig((prevConfig) => ({
         ...prevConfig,
         message: {
@@ -93,6 +95,8 @@ export function MessageNodeEditor({
       }));
       setSelectedTemplateId(templateId);
       toast.success('Шаблон загружен');
+    } else {
+      console.error('Template not found:', templateId);
     }
   };
 
@@ -103,6 +107,9 @@ export function MessageNodeEditor({
       return;
     }
 
+    const messageText = nodeConfig.message?.text || '';
+    console.log('Saving template with message:', messageText);
+
     try {
       const response = await fetch(
         `/api/projects/${projectId}/notification-templates`,
@@ -111,7 +118,7 @@ export function MessageNodeEditor({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: templateName,
-            message: nodeConfig.message?.text || '',
+            message: messageText,
             parseMode: 'HTML'
           })
         }
@@ -119,6 +126,7 @@ export function MessageNodeEditor({
 
       if (response.ok) {
         const newTemplate = await response.json();
+        console.log('Template saved:', newTemplate);
         setTemplates([newTemplate, ...templates]);
         setTemplateName('');
         setShowSaveTemplate(false);
