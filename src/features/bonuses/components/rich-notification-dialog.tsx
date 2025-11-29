@@ -191,7 +191,7 @@ export function RichNotificationDialog({
   const loadTemplate = (templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
     if (template) {
-      form.setValue('message', template.message);
+      form.setValue('message', template.message || '');
       form.setValue('imageUrl', template.imageUrl || '');
       if (template.buttons) {
         form.setValue('buttons', template.buttons as any);

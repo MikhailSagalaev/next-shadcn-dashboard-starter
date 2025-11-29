@@ -287,15 +287,15 @@ export function VariableSelector({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger || defaultTrigger}</DialogTrigger>
-      <DialogContent className='animate-in fade-in-0 zoom-in-95 max-h-[85vh] max-w-4xl overflow-hidden p-0 duration-200'>
-        <DialogHeader className='border-b bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3'>
+      <DialogContent className='animate-in fade-in-0 zoom-in-95 max-h-[90vh] max-w-5xl overflow-hidden p-0 duration-200'>
+        <DialogHeader className='border-b bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4'>
           <DialogTitle className='flex items-center gap-2 text-lg font-semibold text-gray-900'>
-            <Target className='h-4 w-4 text-blue-600' />
+            <Target className='h-5 w-5 text-blue-600' />
             Переменные
           </DialogTitle>
         </DialogHeader>
 
-        <div className='space-y-4 px-4 py-3'>
+        <div className='space-y-4 px-6 py-4'>
           {/* Поиск */}
           <div className='relative'>
             <Search className='absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400' />
@@ -313,7 +313,7 @@ export function VariableSelector({
             onValueChange={setActiveCategory}
             className='w-full'
           >
-            <TabsList className='bg-muted/50 grid h-auto w-full grid-cols-6 gap-1.5 p-1.5'>
+            <TabsList className='bg-muted/50 grid h-auto w-full grid-cols-6 gap-2 p-2'>
               {Object.entries(VARIABLE_CATEGORIES).map(([key, category]) => {
                 const Icon = category.icon;
                 const hasVariables =
@@ -326,35 +326,26 @@ export function VariableSelector({
                     value={key}
                     disabled={!hasVariables}
                     className={cn(
-                      'relative flex flex-col items-center justify-start gap-1.5 p-2 text-xs font-medium transition-all duration-200',
-                      'data-[state=active]:bg-background data-[state=active]:shadow-sm',
-                      'data-[state=active]:border-border data-[state=active]:border',
+                      'relative flex flex-col items-center justify-center gap-2 p-3 text-xs font-medium transition-all duration-200',
+                      'data-[state=active]:bg-background data-[state=active]:shadow-md',
+                      'data-[state=active]:border-primary/20 data-[state=active]:border-2',
                       'hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50',
-                      'max-h-[80px] min-h-[70px] w-full rounded-lg',
-                      'overflow-hidden',
-                      isActive && 'bg-background border-border border shadow-sm'
+                      'min-h-[90px] w-full rounded-lg',
+                      isActive &&
+                        'bg-background border-primary/20 border-2 shadow-md'
                     )}
                   >
                     <Icon
                       className={cn(
-                        'h-3.5 w-3.5 shrink-0 transition-colors',
+                        'h-5 w-5 shrink-0 transition-colors',
                         isActive ? 'text-primary' : 'text-muted-foreground'
                       )}
                     />
                     <span
                       className={cn(
-                        'w-full px-1 text-center text-[10px] leading-[1.2]',
-                        'break-words hyphens-auto',
+                        'w-full text-center text-[11px] leading-tight font-medium',
                         isActive ? 'text-foreground' : 'text-muted-foreground'
                       )}
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        wordBreak: 'break-word',
-                        hyphens: 'auto'
-                      }}
                     >
                       {category.title}
                     </span>
@@ -362,7 +353,7 @@ export function VariableSelector({
                       <Badge
                         variant='secondary'
                         className={cn(
-                          'h-4 shrink-0 px-1.5 py-0 text-[9px] font-semibold',
+                          'h-5 shrink-0 px-2 py-0 text-[10px] font-semibold',
                           'flex items-center justify-center',
                           isActive
                             ? 'bg-primary/10 text-primary'
@@ -382,10 +373,10 @@ export function VariableSelector({
                 <TabsContent
                   key={categoryKey}
                   value={categoryKey}
-                  className='mt-0'
+                  className='mt-4'
                 >
-                  <ScrollArea className='h-64'>
-                    <div className='space-y-2 pr-3'>
+                  <ScrollArea className='h-80'>
+                    <div className='space-y-2 pr-4'>
                       {category.variables.length === 0 ? (
                         <div className='flex flex-col items-center justify-center py-8 text-center'>
                           <div className='mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100'>

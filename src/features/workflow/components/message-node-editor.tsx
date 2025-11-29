@@ -87,7 +87,7 @@ export function MessageNodeEditor({
         ...prevConfig,
         message: {
           ...prevConfig.message,
-          text: template.message,
+          text: template.message || '',
           parseMode: 'HTML'
         }
       }));
