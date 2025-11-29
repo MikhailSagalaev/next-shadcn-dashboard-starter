@@ -25,3 +25,4 @@ ALTER TABLE "notification_templates" ADD CONSTRAINT "notification_templates_proj
 
 
 
+
