@@ -93,14 +93,15 @@ interface TelegramRichEditorProps {
 function HTMLConverterPlugin({
   htmlValue,
   onHTMLChange,
-  isInitialized
+  onInitialized
 }: {
   htmlValue: string;
   onHTMLChange: (html: string) => void;
-  isInitialized: boolean;
+  onInitialized: () => void;
 }) {
   const [editor] = useLexicalComposerContext();
   const [lastLoadedValue, setLastLoadedValue] = useState('');
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (htmlValue && htmlValue !== lastLoadedValue) {
@@ -117,24 +118,31 @@ function HTMLConverterPlugin({
           root.clear();
           root.append(...nodes);
           setLastLoadedValue(htmlValue);
+          setIsReady(true);
+          onInitialized();
           console.log('HTML loaded successfully');
         } catch (error) {
           console.error('Error parsing HTML:', error);
         }
       });
+    } else if (!htmlValue && !isReady) {
+      // Если нет начального значения, сразу помечаем как готовый
+      setIsReady(true);
+      onInitialized();
     }
-  }, [editor, htmlValue, isInitialized, lastLoadedValue]);
+  }, [editor, htmlValue, lastLoadedValue, isReady, onInitialized]);
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isReady) return;
 
     return editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         const html = $generateHtmlFromNodes(editor, null);
+        console.log('Editor content changed:', html);
         onHTMLChange(html);
       });
     });
-  }, [editor, isInitialized, onHTMLChange]);
+  }, [editor, isReady, onHTMLChange]);
 
   return null;
 }
@@ -349,12 +357,14 @@ export function TelegramRichEditor({
       console.log('HTML changed:', html);
       setHtmlValue(html);
       onChange(html);
-      if (!isInitialized) {
-        setIsInitialized(true);
-      }
     },
-    [onChange, isInitialized]
+    [onChange]
   );
+
+  const handleInitialized = useCallback(() => {
+    console.log('Editor initialized');
+    setIsInitialized(true);
+  }, []);
 
   const handleVariableInsert = useCallback((variable: string) => {
     if ((window as any).__insertTelegramVariable) {
@@ -429,7 +439,7 @@ export function TelegramRichEditor({
             <HTMLConverterPlugin
               htmlValue={htmlValue}
               onHTMLChange={handleHTMLChange}
-              isInitialized={isInitialized}
+              onInitialized={handleInitialized}
             />
             <VariableInsertPlugin onVariableInsert={handleVariableInsert} />
           </div>
