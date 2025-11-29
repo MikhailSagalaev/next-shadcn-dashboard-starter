@@ -100,23 +100,28 @@ function HTMLConverterPlugin({
   isInitialized: boolean;
 }) {
   const [editor] = useLexicalComposerContext();
+  const [lastLoadedValue, setLastLoadedValue] = useState('');
 
   useEffect(() => {
-    if (htmlValue && !isInitialized) {
+    if (!isInitialized && htmlValue !== lastLoadedValue) {
       editor.update(() => {
         try {
           const parser = new DOMParser();
-          const dom = parser.parseFromString(htmlValue, 'text/html');
+          const dom = parser.parseFromString(
+            htmlValue || '<p></p>',
+            'text/html'
+          );
           const nodes = $generateNodesFromDOM(editor, dom);
           const root = $getRoot();
           root.clear();
           root.append(...nodes);
+          setLastLoadedValue(htmlValue);
         } catch (error) {
-          // Silently handle parsing errors
+          console.error('Error parsing HTML:', error);
         }
       });
     }
-  }, [editor, htmlValue, isInitialized]);
+  }, [editor, htmlValue, isInitialized, lastLoadedValue]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -328,13 +333,15 @@ export function TelegramRichEditor({
 }: TelegramRichEditorProps) {
   const [htmlValue, setHtmlValue] = useState(value);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [externalValue, setExternalValue] = useState(value);
 
   useEffect(() => {
-    if (value !== htmlValue) {
+    if (value !== externalValue) {
+      setExternalValue(value);
       setHtmlValue(value);
       setIsInitialized(false);
     }
-  }, [value, htmlValue]);
+  }, [value, externalValue]);
 
   const handleHTMLChange = useCallback(
     (html: string) => {
