@@ -25,8 +25,11 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     const body = await request.json();
     const data = registerSchema.parse(body);
 
+    // Нормализуем email (case-insensitive)
+    const normalizedEmail = data.email.toLowerCase().trim();
+
     const existing = await db.adminAccount.findUnique({
-      where: { email: data.email }
+      where: { email: normalizedEmail }
     });
     if (existing) {
       return NextResponse.json(
@@ -36,19 +39,19 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     }
 
     const passwordHash = await hashPassword(data.password);
-    
+
     // Генерируем токен верификации email
     const verificationToken = Buffer.from(
-      `${data.email}:${Date.now()}:${Math.random()}`
+      `${normalizedEmail}:${Date.now()}:${Math.random()}`
     ).toString('base64url');
-    
+
     // Устанавливаем срок действия токена (24 часа)
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
 
     const created = await db.adminAccount.create({
       data: {
-        email: data.email,
+        email: normalizedEmail,
         passwordHash,
         role: data.role ?? 'ADMIN',
         emailVerified: false,
@@ -59,17 +62,23 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
 
     // Отправляем email с подтверждением
     try {
-      const { NotificationService } = await import('@/lib/services/notification.service');
-      await NotificationService.sendVerificationEmail(data.email, verificationToken);
-      
+      const { NotificationService } = await import(
+        '@/lib/services/notification.service'
+      );
+      await NotificationService.sendVerificationEmail(
+        normalizedEmail,
+        verificationToken
+      );
+
       logger.info('Email verification sent', {
-        email: data.email.substring(0, 3) + '***',
+        email: normalizedEmail.substring(0, 3) + '***',
         accountId: created.id
       });
     } catch (emailError) {
       logger.error('Failed to send verification email', {
-        error: emailError instanceof Error ? emailError.message : 'Unknown error',
-        email: data.email.substring(0, 3) + '***'
+        error:
+          emailError instanceof Error ? emailError.message : 'Unknown error',
+        email: normalizedEmail.substring(0, 3) + '***'
       });
       // Продолжаем регистрацию даже если email не отправился
     }
@@ -77,8 +86,9 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     // НЕ создаем сессию - пользователь должен подтвердить email
     return NextResponse.json(
       {
-        message: 'Регистрация успешна! Пожалуйста, проверьте вашу электронную почту для подтверждения аккаунта.',
-        email: data.email
+        message:
+          'Регистрация успешна! Пожалуйста, проверьте вашу электронную почту для подтверждения аккаунта.',
+        email: normalizedEmail
       },
       { status: 201 }
     );
@@ -94,7 +104,8 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
+    const errorMessage =
+      err instanceof Error ? err.message : 'Неизвестная ошибка';
     // Если известная проблема (например, JWT_SECRET), вернём 500 c явным сообщением
     if (errorMessage.includes('JWT_SECRET')) {
       return NextResponse.json(
@@ -102,7 +113,10 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
         { status: 500 }
       );
     }
-    return NextResponse.json({ error: 'Внутренняя ошибка', details: errorMessage }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Внутренняя ошибка', details: errorMessage },
+      { status: 500 }
+    );
   }
 }
 

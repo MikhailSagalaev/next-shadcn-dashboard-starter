@@ -22,25 +22,29 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     const body = await request.json();
     const { email } = resendSchema.parse(body);
 
+    // Нормализуем email (case-insensitive)
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Получаем аккаунт
     const account = await db.adminAccount.findUnique({
-      where: { email }
+      where: { email: normalizedEmail }
     });
 
     // Безопасный ответ - не раскрываем существует ли аккаунт
     if (!account || !account.isActive) {
       logger.warn('Resend verification attempt for non-existent account', {
-        email: email.substring(0, 3) + '***'
+        email: normalizedEmail.substring(0, 3) + '***'
       });
       return NextResponse.json({
-        message: 'Если аккаунт с таким email существует, письмо будет отправлено.'
+        message:
+          'Если аккаунт с таким email существует, письмо будет отправлено.'
       });
     }
 
     // Проверяем, нужна ли верификация
     if (account.emailVerified) {
       logger.info('Resend verification for already verified account', {
-        email: email.substring(0, 3) + '***'
+        email: normalizedEmail.substring(0, 3) + '***'
       });
       return NextResponse.json({
         message: 'Этот аккаунт уже подтвержден. Вы можете войти в систему.'
@@ -49,9 +53,9 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
 
     // Генерируем новый токен
     const verificationToken = Buffer.from(
-      `${email}:${Date.now()}:${Math.random()}`
+      `${normalizedEmail}:${Date.now()}:${Math.random()}`
     ).toString('base64url');
-    
+
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
 
@@ -66,17 +70,23 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
 
     // Отправляем email
     try {
-      const { NotificationService } = await import('@/lib/services/notification.service');
-      await NotificationService.sendVerificationEmail(email, verificationToken);
-      
+      const { NotificationService } = await import(
+        '@/lib/services/notification.service'
+      );
+      await NotificationService.sendVerificationEmail(
+        normalizedEmail,
+        verificationToken
+      );
+
       logger.info('Verification email resent', {
-        email: email.substring(0, 3) + '***',
+        email: normalizedEmail.substring(0, 3) + '***',
         accountId: account.id
       });
     } catch (emailError) {
       logger.error('Failed to resend verification email', {
-        error: emailError instanceof Error ? emailError.message : 'Unknown error',
-        email: email.substring(0, 3) + '***'
+        error:
+          emailError instanceof Error ? emailError.message : 'Unknown error',
+        email: normalizedEmail.substring(0, 3) + '***'
       });
       return NextResponse.json(
         { error: 'Не удалось отправить письмо. Попробуйте позже.' },
@@ -99,13 +109,12 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    return NextResponse.json(
-      { error: 'Внутренняя ошибка' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Внутренняя ошибка' }, { status: 500 });
   }
 }
 
 // Более строгий rate limit для повторной отправки: 3 попытки за 15 минут
-export const POST = withAuthRateLimit(handlePOST, { maxRequests: 3, windowMs: 15 * 60 * 1000 });
-
+export const POST = withAuthRateLimit(handlePOST, {
+  maxRequests: 3,
+  windowMs: 15 * 60 * 1000
+});

@@ -25,8 +25,11 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     const body = await request.json();
     const data = loginSchema.parse(body);
 
+    // Нормализуем email (case-insensitive)
+    const normalizedEmail = data.email.toLowerCase().trim();
+
     const account = await db.adminAccount.findUnique({
-      where: { email: data.email }
+      where: { email: normalizedEmail }
     });
     if (!account || !account.isActive) {
       return NextResponse.json(
@@ -42,9 +45,10 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
         accountId: account.id
       });
       return NextResponse.json(
-        { 
+        {
           error: 'Email не подтвержден',
-          message: 'Пожалуйста, подтвердите ваш email перед входом. Проверьте вашу почту для ссылки подтверждения.'
+          message:
+            'Пожалуйста, подтвердите ваш email перед входом. Проверьте вашу почту для ссылки подтверждения.'
         },
         { status: 403 }
       );
@@ -82,8 +86,12 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
-    return NextResponse.json({ error: 'Внутренняя ошибка', details: errorMessage }, { status: 500 });
+    const errorMessage =
+      err instanceof Error ? err.message : 'Неизвестная ошибка';
+    return NextResponse.json(
+      { error: 'Внутренняя ошибка', details: errorMessage },
+      { status: 500 }
+    );
   }
 }
 

@@ -18,17 +18,20 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     const body = await request.json();
     const { email } = forgotPasswordSchema.parse(body);
 
+    // Нормализуем email (case-insensitive)
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Безопасность: всегда возвращаем успех, не раскрывая наличие аккаунта
     try {
       const account = await db.adminAccount.findUnique({
-        where: { email },
+        where: { email: normalizedEmail },
         select: { id: true, isActive: true, metadata: true }
       });
 
       if (account?.isActive) {
         // Логируем для аудита (без раскрытия деталей)
         logger.info('Запрошено восстановление пароля - аккаунт найден', {
-          email: email.substring(0, 3) + '***',
+          email: normalizedEmail.substring(0, 3) + '***',
           accountId: account.id.substring(0, 8) + '...',
           component: 'auth-forgot-password'
         });
@@ -55,7 +58,7 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
         });
 
         logger.info('Токен восстановления сохранён, отправляем email', {
-          email: email.substring(0, 3) + '***',
+          email: normalizedEmail.substring(0, 3) + '***',
           component: 'auth-forgot-password'
         });
 
@@ -64,12 +67,12 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
           '@/lib/services/notification.service'
         );
         const emailSent = await NotificationService.sendPasswordResetEmail(
-          email,
+          normalizedEmail,
           resetToken
         );
 
         logger.info('Результат отправки email восстановления', {
-          email: email.substring(0, 3) + '***',
+          email: normalizedEmail.substring(0, 3) + '***',
           emailSent,
           component: 'auth-forgot-password'
         });
@@ -77,7 +80,7 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
         logger.info(
           'Запрос восстановления пароля - аккаунт не найден или неактивен',
           {
-            email: email.substring(0, 3) + '***',
+            email: normalizedEmail.substring(0, 3) + '***',
             accountFound: !!account,
             isActive: account?.isActive,
             component: 'auth-forgot-password'
@@ -87,7 +90,7 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
     } catch (e) {
       // Логируем ошибку, но не раскрываем пользователю
       logger.error('Ошибка обработки forgot-password', {
-        email: email.substring(0, 3) + '***',
+        email: normalizedEmail.substring(0, 3) + '***',
         error: e instanceof Error ? e.message : 'Unknown error',
         stack: e instanceof Error ? e.stack : undefined,
         component: 'auth-forgot-password'
