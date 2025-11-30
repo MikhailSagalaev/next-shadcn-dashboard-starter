@@ -103,13 +103,15 @@ export function ProjectLogsView({
 
   async function replayLog(log: WebhookLogEntry) {
     // ✅ ЗАЩИТА ОТ ДВОЙНОГО КЛИКА: проверяем, не выполняется ли уже replay для этого лога
-    if (replayingRef.current === log.id) {
+    if (replayingRef.current === log.id || replayingLog === log.id) {
       console.log('⏸️ Replay уже выполняется для этого лога, пропускаем');
       return;
     }
 
+    // Устанавливаем защиту сразу синхронно
+    replayingRef.current = log.id;
+
     try {
-      replayingRef.current = log.id;
       setReplayingLog(log.id);
 
       // Сервер выполняет запрос и возвращает результат

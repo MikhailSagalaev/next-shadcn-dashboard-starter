@@ -36,8 +36,7 @@ import {
   Settings,
   Save
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { cn } from '@/lib/utils';
+
 import { Project } from '@/types';
 import { PageContainer } from '@/components/page-container';
 import Link from 'next/link';
@@ -567,61 +566,31 @@ export function ProjectIntegrationView({
         </Alert>
 
         {/* Табы с инструкциями */}
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className='w-full space-y-6'
-        >
-          <TabsList className='bg-muted/50 grid h-auto w-full grid-cols-3 gap-2 rounded-lg p-1.5'>
-            {[
-              { value: 'widget', label: 'Виджет', icon: Code },
-              { value: 'webhook', label: 'Webhook', icon: Webhook },
-              { value: 'logs', label: 'Логи', icon: FileText }
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.value;
-              return (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className={cn(
-                    'relative flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-medium transition-all duration-300',
-                    'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md',
-                    'data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground',
-                    'data-[state=inactive]:hover:bg-muted/80',
-                    'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
-                  )}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId='activeIntegrationTab'
-                      className='bg-background border-border/50 absolute inset-0 rounded-md border shadow-md'
-                      transition={{
-                        type: 'spring',
-                        stiffness: 500,
-                        damping: 30
-                      }}
-                    />
-                  )}
-                  <Icon
-                    className={cn(
-                      'relative z-10 h-4 w-4 transition-transform duration-300',
-                      isActive && 'scale-110'
-                    )}
-                  />
-                  <span className='relative z-10'>{tab.label}</span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+        <div className='w-full'>
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className='w-full space-y-6'
+          >
+            <TabsList className='grid w-full grid-cols-3'>
+              <TabsTrigger value='widget' className='flex items-center gap-2'>
+                <Code className='h-4 w-4' />
+                Виджет
+              </TabsTrigger>
+              <TabsTrigger value='webhook' className='flex items-center gap-2'>
+                <Webhook className='h-4 w-4' />
+                Webhook
+              </TabsTrigger>
+              <TabsTrigger value='logs' className='flex items-center gap-2'>
+                <FileText className='h-4 w-4' />
+                Логи
+              </TabsTrigger>
+            </TabsList>
 
-          {/* Виджет */}
-          <TabsContent value='widget' className='mt-0 min-h-[640px] space-y-4'>
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+            {/* Виджет */}
+            <TabsContent
+              value='widget'
+              className='mt-0 min-h-[600px] space-y-4'
             >
               <Card className='overflow-hidden'>
                 <CardHeader>
@@ -2566,16 +2535,12 @@ export function ProjectIntegrationView({
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
-          </TabsContent>
+            </TabsContent>
 
-          {/* Webhook */}
-          <TabsContent value='webhook' className='mt-0 min-h-[640px] space-y-4'>
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+            {/* Webhook */}
+            <TabsContent
+              value='webhook'
+              className='mt-0 min-h-[600px] space-y-4'
             >
               <Card className='overflow-hidden'>
                 <CardHeader>
@@ -2615,59 +2580,27 @@ export function ProjectIntegrationView({
                         Найдите раздел &quot;Уведомления и интеграции&quot;
                       </li>
                       <li>Добавьте новый webhook</li>
-                      <li>Вставьте URL и выберите тип &quot;Заказы&quot;</li>
+                      <li>Вставьте URL</li>
                       <li>Сохраните настройки</li>
                     </ol>
-                  </div>
-
-                  <Separator />
-
-                  <div className='space-y-2'>
-                    <Label>Тестовые данные для проверки:</Label>
-                    <div className='relative'>
-                      <pre className='bg-muted overflow-x-auto rounded-lg p-4 text-sm'>
-                        <code>{testWebhookData}</code>
-                      </pre>
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        className='absolute top-2 right-2'
-                        onClick={() => copyToClipboard(testWebhookData, 'test')}
-                      >
-                        {copied === 'test' ? (
-                          <CheckCircle2 className='h-4 w-4 text-green-600' />
-                        ) : (
-                          <Copy className='h-4 w-4' />
-                        )}
-                      </Button>
-                    </div>
-                    <p className='text-muted-foreground text-sm'>
-                      Используйте эти данные для тестирования webhook через
-                      Postman или curl
+                    <p className='text-muted-foreground mt-2 text-sm'>
+                      При сохранении Tilda автоматически отправит тестовый
+                      запрос для проверки подключения
                     </p>
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
-          </TabsContent>
+            </TabsContent>
 
-          {/* Логи: полноценный интерфейс (embedded для фиксированной ширины) */}
-          <TabsContent value='logs' className='mt-0 min-h-[640px] space-y-4'>
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className='w-full'>
-                <ProjectLogsView
-                  embedded
-                  params={Promise.resolve({ id: projectId })}
-                />
-              </div>
-            </motion.div>
-          </TabsContent>
-        </Tabs>
+            {/* Логи: полноценный интерфейс (embedded для фиксированной ширины) */}
+            <TabsContent value='logs' className='mt-0 min-h-[600px] space-y-4'>
+              <ProjectLogsView
+                embedded
+                params={Promise.resolve({ id: projectId })}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
 
         {/* Дополнительная информация */}
         <Card>

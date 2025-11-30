@@ -716,6 +716,21 @@
 
         // Проверка статуса ответа
         if (!response.ok) {
+          // Для 404 пытаемся прочитать JSON ответ (API возвращает структурированную ошибку)
+          if (response.status === 404) {
+            try {
+              const errorData = await response.json();
+              this.log('📋 API вернул 404 с данными:', errorData);
+              // Возвращаем данные ошибки для обработки в вызывающем коде
+              return errorData;
+            } catch (jsonError) {
+              this.log('⚠️ Не удалось прочитать JSON из 404 ответа');
+              throw new Error(
+                `HTTP ${response.status}: ${response.statusText}`
+              );
+            }
+          }
+
           if (response.status >= 500 && retryCount < this.config.maxRetries) {
             this.log(
               `API request failed with ${response.status}, retrying... (${retryCount + 1}/${this.config.maxRetries})`
@@ -3296,19 +3311,28 @@
           this.state.bonusBalance = 0;
           this.updateBalanceDisplay();
 
-          // Показываем ошибку вместо плашки с приглашением зарегистрироваться
-          if (data?.error && data.error.includes('не найден')) {
-            this.showErrorMessage(data.error);
-          } else {
-            // Если это другая ошибка, показываем плашку с приглашением зарегистрироваться
-            this.showRegistrationPrompt();
-          }
+          // Показываем плашку с приглашением зарегистрироваться
+          // Пользователь не найден в системе бонусов - нужно зарегистрироваться через бота
+          this.showRegistrationPrompt();
         }
       } catch (error) {
         if (error && error.name === 'AbortError') {
           this.log('Запрос баланса отменён (новый ввод)');
         } else {
           this.log('Ошибка загрузки баланса:', error);
+
+          // Проверяем, является ли это ошибкой 404 (пользователь не найден)
+          const errorMessage = error?.message || String(error);
+          if (errorMessage.includes('404')) {
+            this.log(
+              '🔔 Пользователь не найден в системе (404), показываем плашку регистрации'
+            );
+            // Очищаем старые данные баланса
+            this.state.bonusBalance = 0;
+            this.updateBalanceDisplay();
+            // Показываем плашку с приглашением зарегистрироваться
+            this.showRegistrationPrompt();
+          }
         }
       } finally {
         this.showLoading(false);

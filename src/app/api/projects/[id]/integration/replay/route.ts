@@ -343,72 +343,13 @@ export async function POST(
       );
     }
 
-    // Сохраняем новый лог
-    let newLog;
-    try {
-      console.log('💾 Сохраняем новый лог в БД:', {
-        projectId,
-        endpoint,
-        method,
-        hasHeaders: !!headers,
-        hasBody: !!requestBody,
-        hasResponse: !!responseBody,
-        status: response.status,
-        ok: response.ok,
-        component: 'webhook-replay'
-      });
-
-      newLog = await db.webhookLog.create({
-        data: {
-          projectId,
-          endpoint,
-          method,
-          headers: safeJson(headers),
-          body: safeJson(requestBody),
-          response: safeJson(responseBody),
-          status: response.status,
-          success: response.ok
-        }
-      });
-
-      console.log('📝 Новый лог создан', {
-        projectId,
-        logId: newLog.id,
-        originalLogId: logId,
-        component: 'webhook-replay'
-      });
-    } catch (dbCreateError) {
-      console.error('❌ Ошибка при создании нового лога в БД:', {
-        projectId,
-        logId,
-        error:
-          dbCreateError instanceof Error
-            ? dbCreateError.message
-            : String(dbCreateError),
-        component: 'webhook-replay'
-      });
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            type: 'DATABASE_CREATE_ERROR',
-            message: 'Ошибка при создании лога в базе данных',
-            details:
-              dbCreateError instanceof Error
-                ? dbCreateError.message
-                : String(dbCreateError)
-          }
-        },
-        { status: 500 }
-      );
-    }
+    // НЕ создаём лог здесь - webhook handler уже создаёт свой лог при обработке запроса
+    // Это предотвращает дублирование логов
 
     return NextResponse.json({
       success: true,
       message: 'Запрос успешно выполнен',
-      log: {
-        id: newLog.id,
+      result: {
         status: response.status,
         success: response.ok,
         response: responseBody
