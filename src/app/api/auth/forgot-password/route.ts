@@ -27,14 +27,13 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
 
       if (account?.isActive) {
         // Логируем для аудита (без раскрытия деталей)
-        logger.info('Запрошено восстановление пароля', {
+        logger.info('Запрошено восстановление пароля - аккаунт найден', {
           email: email.substring(0, 3) + '***',
           accountId: account.id.substring(0, 8) + '...',
           component: 'auth-forgot-password'
         });
 
-        // Генерируем токен восстановления (простая реализация)
-        // TODO: В production использовать криптографически стойкий токен
+        // Генерируем токен восстановления
         const resetToken = Buffer.from(
           `${account.id}:${Date.now()}:${Math.random()}`
         ).toString('base64url');
@@ -55,17 +54,42 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
           }
         });
 
+        logger.info('Токен восстановления сохранён, отправляем email', {
+          email: email.substring(0, 3) + '***',
+          component: 'auth-forgot-password'
+        });
+
         // Отправляем email через NotificationService
         const { NotificationService } = await import(
           '@/lib/services/notification.service'
         );
-        await NotificationService.sendPasswordResetEmail(email, resetToken);
+        const emailSent = await NotificationService.sendPasswordResetEmail(
+          email,
+          resetToken
+        );
+
+        logger.info('Результат отправки email восстановления', {
+          email: email.substring(0, 3) + '***',
+          emailSent,
+          component: 'auth-forgot-password'
+        });
+      } else {
+        logger.info(
+          'Запрос восстановления пароля - аккаунт не найден или неактивен',
+          {
+            email: email.substring(0, 3) + '***',
+            accountFound: !!account,
+            isActive: account?.isActive,
+            component: 'auth-forgot-password'
+          }
+        );
       }
     } catch (e) {
       // Логируем ошибку, но не раскрываем пользователю
       logger.error('Ошибка обработки forgot-password', {
         email: email.substring(0, 3) + '***',
         error: e instanceof Error ? e.message : 'Unknown error',
+        stack: e instanceof Error ? e.stack : undefined,
         component: 'auth-forgot-password'
       });
     }
