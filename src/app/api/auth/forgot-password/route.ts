@@ -123,4 +123,8 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-export const POST = withAuthRateLimit(handlePOST);
+// Rate limit: 10 попыток за 15 минут (более мягкий чем для login)
+export const POST = withAuthRateLimit(handlePOST, {
+  maxRequests: 10,
+  windowMs: 15 * 60 * 1000
+});
