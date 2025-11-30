@@ -72,6 +72,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [hasLevels, setHasLevels] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -91,9 +92,20 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     try {
       setLoading(true);
 
-      const response = await fetch(`/api/projects/${projectId}`);
-      if (response.ok) {
-        const projectData = await response.json();
+      // Загружаем проект и уровни параллельно
+      const [projectResponse, levelsResponse] = await Promise.all([
+        fetch(`/api/projects/${projectId}`),
+        fetch(`/api/projects/${projectId}/bonus-levels`)
+      ]);
+
+      // Проверяем наличие уровней
+      if (levelsResponse.ok) {
+        const levelsData = await levelsResponse.json();
+        setHasLevels(Array.isArray(levelsData) && levelsData.length > 0);
+      }
+
+      if (projectResponse.ok) {
+        const projectData = await projectResponse.json();
         setProject(projectData);
         setFormData({
           name: projectData.name || '',
@@ -109,7 +121,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             projectData?.referralProgram?.welcomeBonus || 0
           )
         });
-      } else if (response.status === 403) {
+      } else if (projectResponse.status === 403) {
         // Проект не принадлежит текущему админу
         toast({
           title: 'Доступ запрещен',
@@ -117,14 +129,14 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             'Этот проект не принадлежит вашему аккаунту. Если проект был создан до обновления, его нужно привязать через миграцию.',
           variant: 'destructive'
         });
-      } else if (response.status === 404) {
+      } else if (projectResponse.status === 404) {
         toast({
           title: 'Проект не найден',
           description: 'Проект с указанным ID не существует',
           variant: 'destructive'
         });
       } else {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await projectResponse.json().catch(() => ({}));
         toast({
           title: 'Ошибка загрузки',
           description: errorData.error || 'Не удалось загрузить данные проекта',
@@ -390,27 +402,49 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 </div>
 
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <Label htmlFor='bonusPercentage'>Процент бонусов (%)</Label>
-                    <Input
-                      id='bonusPercentage'
-                      type='number'
-                      min='0'
-                      max='100'
-                      step='0.01'
-                      value={formData.bonusPercentage}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          bonusPercentage: parseFloat(e.target.value) || 0
-                        })
-                      }
-                      placeholder='1.0'
-                    />
-                    <p className='text-muted-foreground text-xs'>
-                      Базовый процент бонусов за каждую покупку
-                    </p>
-                  </div>
+                  {/* Показываем поле процента только если нет уровней */}
+                  {!hasLevels ? (
+                    <div className='space-y-2'>
+                      <Label htmlFor='bonusPercentage'>
+                        Процент бонусов (%)
+                      </Label>
+                      <Input
+                        id='bonusPercentage'
+                        type='number'
+                        min='0'
+                        max='100'
+                        step='0.01'
+                        value={formData.bonusPercentage}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            bonusPercentage: parseFloat(e.target.value) || 0
+                          })
+                        }
+                        placeholder='1.0'
+                      />
+                      <p className='text-muted-foreground text-xs'>
+                        Базовый процент бонусов за каждую покупку
+                      </p>
+                    </div>
+                  ) : (
+                    <div className='space-y-2'>
+                      <Label className='text-muted-foreground'>
+                        Процент бонусов
+                      </Label>
+                      <div className='rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950'>
+                        <p className='text-sm text-blue-700 dark:text-blue-300'>
+                          Процент начисления определяется{' '}
+                          <Link
+                            href={`/dashboard/projects/${projectId}/bonus-levels`}
+                            className='font-medium underline hover:no-underline'
+                          >
+                            уровнями бонусов
+                          </Link>
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <div className='space-y-2'>
                     <Label htmlFor='bonusExpiryDays'>
                       Срок действия бонусов (дни)
