@@ -811,6 +811,7 @@ export class WorkflowRuntimeService {
             let contactPhone: string | undefined;
             let contactEmail: string | undefined;
             let messageText: string | undefined;
+            let isEnterEmailButton = false;
 
             if (trigger === 'message' && context.message) {
               // Проверяем, есть ли контакт в сообщении
@@ -821,16 +822,54 @@ export class WorkflowRuntimeService {
                   executionId: waitingExecution.id
                 });
               } else if (context.message.text) {
-                // Если текст похож на email, используем его как email
                 const text = context.message.text.trim();
-                if (text.includes('@') && text.includes('.')) {
+                messageText = text;
+
+                // ✅ КРИТИЧНО: Проверяем, нажал ли пользователь кнопку "Ввести email"
+                const enterEmailPatterns = [
+                  'ввести email',
+                  'ввести e-mail',
+                  'ввести емейл',
+                  'ввести почту',
+                  '✉️ ввести email',
+                  '📧 ввести email'
+                ];
+                const lowerText = text.toLowerCase();
+                isEnterEmailButton = enterEmailPatterns.some((pattern) =>
+                  lowerText.includes(pattern.toLowerCase())
+                );
+
+                if (isEnterEmailButton) {
+                  logger.info(
+                    '📧 User clicked "Enter email" button, waiting for email input',
+                    {
+                      text,
+                      executionId: waitingExecution.id
+                    }
+                  );
+                  // Отправляем запрос на ввод email
+                  try {
+                    await context.reply(
+                      '📧 Введите ваш email адрес:\n\nНапример: example@mail.ru'
+                    );
+                  } catch (replyError) {
+                    logger.error('Failed to send email prompt', {
+                      error:
+                        replyError instanceof Error
+                          ? replyError.message
+                          : String(replyError)
+                    });
+                  }
+                  // Оставляем execution в waiting состоянии для получения email
+                  return true;
+                } else if (text.includes('@') && text.includes('.')) {
+                  // Если текст похож на email, используем его как email
                   contactEmail = text;
                   logger.info('📧 Email received from user', {
                     email: contactEmail,
                     executionId: waitingExecution.id
                   });
                 }
-                messageText = text;
               }
             }
 
