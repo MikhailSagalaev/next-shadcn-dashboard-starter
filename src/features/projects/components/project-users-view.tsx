@@ -26,7 +26,8 @@ import {
   User as UserIcon,
   Badge as BadgeIcon,
   Target,
-  TrendingUp
+  TrendingUp,
+  Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -75,6 +76,7 @@ import { Loader2 } from 'lucide-react';
 import type { Project, User, Bonus } from '@/types/bonus';
 import type { DisplayUser } from '@/features/bonuses/types';
 import { UserCreateDialog } from './user-create-dialog';
+import { UserImportDialog } from './user-import-dialog';
 import { UsersTable } from '../../bonuses/components/users-table';
 import { BonusAwardDialog } from './bonus-award-dialog';
 import { EnhancedBulkActionsToolbar } from '@/features/bonuses/components/enhanced-bulk-actions-toolbar';
@@ -215,6 +217,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
 
   // Dialog states
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [showRichNotificationDialog, setShowRichNotificationDialog] =
     useState(false);
   const [showBonusDialog, setShowBonusDialog] = useState(false);
@@ -703,6 +706,10 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               Создать группу ({selectedUsers.length})
             </Button>
           )}
+          <Button variant='outline' onClick={() => setShowImportDialog(true)}>
+            <Upload className='mr-2 h-4 w-4' />
+            Импорт CSV
+          </Button>
           <Button onClick={() => setShowCreateUserDialog(true)}>
             <Plus className='mr-2 h-4 w-4' />
             Добавить пользователя
@@ -892,6 +899,13 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         open={showCreateUserDialog}
         onOpenChange={setShowCreateUserDialog}
         onSuccess={handleCreateUser}
+      />
+
+      <UserImportDialog
+        projectId={projectId}
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        onSuccess={() => loadUsers(1)}
       />
 
       {/* Диалог создания группы */}
