@@ -678,7 +678,7 @@ class BotTemplatesService {
               label: 'Профиль активного пользователя',
               config: {
                 message: {
-                  text: '👋 Добро пожаловать назад, <b>{user.firstName}</b>!\n\n💰 <b>Бонусная программа: Маока</b>\n\n💵 Ваш баланс бонусов: <b>{user.balanceFormatted}</b>\n📊 Всего заработано: <b>{user.totalEarnedFormatted}</b>\n🛒 Потрачено: <b>{user.totalSpentFormatted}</b>\n🏆 Истекает в ближайшие 30 дней: <b>{user.expiringBonusesFormatted}</b>\n\nВыберите действие:',
+                  text: '👋 Добро пожаловать назад, <b>{user.firstName}</b>!\n\n💵 Ваш баланс бонусов: <b>{user.balanceFormatted}</b>\n📊 Всего заработано: <b>{user.totalEarnedFormatted}</b>\n🛒 Потрачено: <b>{user.totalSpentFormatted}</b>\n🏆 Истекает в ближайшие 30 дней: <b>{user.expiringBonusesFormatted}</b>\n\nВыберите действие:',
                   keyboard: {
                     type: 'inline',
                     buttons: [

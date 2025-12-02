@@ -891,6 +891,15 @@
             // Сохраняем настройки в state
             this.state.widgetSettings = settings.widgetSettings || {};
 
+            // Сохраняем botUsername для использования в уведомлении о верификации
+            if (settings.botUsername) {
+              const cleanBotUsername = String(settings.botUsername)
+                .replace(/[<>'"&]/g, '')
+                .replace('@', '');
+              this.state.botUsername = cleanBotUsername;
+              this.log('🤖 botUsername сохранён в state:', cleanBotUsername);
+            }
+
             // Применяем стили виджета
             if (settings.widgetSettings) {
               this.applyWidgetStyles(settings.widgetSettings);
@@ -906,10 +915,18 @@
             );
             // Пытаемся загрузить из кэша как fallback
             const cachedSettings = this.getCachedProjectSettings();
-            if (cachedSettings && cachedSettings.widgetSettings) {
+            if (cachedSettings) {
               this.log('📋 Используем настройки из кэша как fallback');
               this.state.widgetSettings = cachedSettings.widgetSettings || {};
-              this.applyWidgetStyles(cachedSettings.widgetSettings);
+              if (cachedSettings.botUsername) {
+                const cleanBotUsername = String(cachedSettings.botUsername)
+                  .replace(/[<>'"&]/g, '')
+                  .replace('@', '');
+                this.state.botUsername = cleanBotUsername;
+              }
+              if (cachedSettings.widgetSettings) {
+                this.applyWidgetStyles(cachedSettings.widgetSettings);
+              }
             }
           });
       } catch (error) {
@@ -1294,10 +1311,15 @@
               ? `https://t.me/${this.state.botUsername}`
               : null);
 
+          // Формируем текст с кликабельной ссылкой на бота
+          const botLinkText = verificationButtonUrl
+            ? `<a href="${verificationButtonUrl}" target="_blank" style="color: #78350F; text-decoration: underline; font-weight: 500;">Telegram боте</a>`
+            : 'Telegram боте';
+
           verificationNotice.innerHTML = `
             <div style="padding: 16px; background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; text-align: center;">
               <p style="margin: 0 0 8px 0; color: #92400E; font-weight: 600;">⚠️ Требуется верификация</p>
-              <p style="margin: 0 0 12px 0; color: #78350F; font-size: 14px;">Для использования бонусов подтвердите свой аккаунт в Telegram боте</p>
+              <p style="margin: 0 0 12px 0; color: #78350F; font-size: 14px;">Для использования бонусов подтвердите свой аккаунт в ${botLinkText}</p>
               ${verificationButtonUrl ? `<a href="${verificationButtonUrl}" target="_blank" style="display: inline-block; padding: 8px 16px; background: #F59E0B; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">Перейти в бота</a>` : ''}
             </div>
           `;
@@ -3989,13 +4011,21 @@
         const userState = this.getUserState();
         console.log('👤 applyBonuses: userState =', userState);
 
+        // Формируем ссылку на бота
+        const botUrl =
+          this.state.widgetSettings?.registrationButtonUrl ||
+          (this.state.botUsername
+            ? `https://t.me/${this.state.botUsername}`
+            : null);
+        const botLink = botUrl
+          ? `<a href="${botUrl}" target="_blank" style="color: inherit; text-decoration: underline;">Telegram боте</a>`
+          : 'Telegram боте';
+
         let errorMessage = '';
         if (userState === 'not_registered') {
-          errorMessage =
-            'Для использования бонусов необходимо зарегистрироваться и подтвердить аккаунт в Telegram боте';
+          errorMessage = `Для использования бонусов необходимо зарегистрироваться и подтвердить аккаунт в ${botLink}`;
         } else if (userState === 'registered_not_confirmed') {
-          errorMessage =
-            'Для использования бонусов необходимо подтвердить аккаунт в Telegram боте';
+          errorMessage = `Для использования бонусов необходимо подтвердить аккаунт в ${botLink}`;
         } else {
           errorMessage = `Ошибка проверки пользователя (состояние: ${userState}). Обратитесь в поддержку.`;
         }

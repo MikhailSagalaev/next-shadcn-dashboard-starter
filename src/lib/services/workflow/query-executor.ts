@@ -32,10 +32,10 @@ export interface CreateUserParams {
 
 export interface AddBonusParams {
   userId: string;
-  amount: number;
+  amount: number | string;
   type: string;
   description?: string;
-  expiresAt?: Date;
+  expiresAt?: Date | string;
 }
 
 export interface SpendBonusParams {
@@ -251,18 +251,51 @@ export const SAFE_QUERIES = {
 
     // Проверяем существование пользователя
     const user = await db.user.findUnique({
-      where: { id: params.userId }
+      where: { id: params.userId },
+      include: { project: true }
     });
 
     if (!user) {
       throw new Error(`User not found: ${params.userId}`);
     }
 
+    // Обрабатываем expiresAt - пустая строка или невалидное значение = null
+    let expiresAt: Date | null = null;
+    if (params.expiresAt) {
+      if (params.expiresAt instanceof Date) {
+        expiresAt = params.expiresAt;
+      } else if (
+        typeof params.expiresAt === 'string' &&
+        params.expiresAt.trim() !== ''
+      ) {
+        const parsed = new Date(params.expiresAt);
+        if (!isNaN(parsed.getTime())) {
+          expiresAt = parsed;
+        }
+      }
+    }
+
+    // Если expiresAt не указан, используем настройки проекта
+    if (!expiresAt && user.project) {
+      const bonusExpiryDays = Number(user.project.bonusExpiryDays || 365);
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + bonusExpiryDays);
+    }
+
+    // Преобразуем amount в число
+    const amount =
+      typeof params.amount === 'string'
+        ? parseFloat(params.amount)
+        : Number(params.amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw new Error(`Invalid bonus amount: ${params.amount}`);
+    }
+
     // Создаем бонус
     const bonus = await db.bonus.create({
       data: {
         userId: params.userId,
-        amount: params.amount,
+        amount: amount,
         type: params.type as
           | 'PURCHASE'
           | 'BIRTHDAY'
@@ -271,7 +304,7 @@ export const SAFE_QUERIES = {
           | 'PROMO'
           | 'WELCOME',
         description: params.description,
-        expiresAt: params.expiresAt
+        expiresAt: expiresAt
       }
     });
 
@@ -280,7 +313,7 @@ export const SAFE_QUERIES = {
       data: {
         userId: params.userId,
         type: 'EARN',
-        amount: params.amount,
+        amount: amount,
         description: params.description || `Начислено ${params.amount} бонусов`
       }
     });
@@ -814,19 +847,43 @@ export const SAFE_QUERIES = {
    */
   check_user_by_contact: async (
     db: PrismaClient,
-    params: { phone?: string | object; email?: string; projectId: string }
+    params: {
+      phone?: string | object;
+      email?: string;
+      projectId: string;
+      telegramId?: string;
+    }
   ) => {
     console.log('🔍 check_user_by_contact called with params', {
       phone: params.phone,
       phoneType: typeof params.phone,
       email: params.email,
+      telegramId: params.telegramId,
       projectId: params.projectId
     });
 
     let user = null;
 
-    // Обрабатываем телефон
-    if (params.phone) {
+    // Сначала пробуем найти по Telegram ID (если передан)
+    if (params.telegramId && !params.telegramId.includes('{{')) {
+      console.log('🔍 Ищем по Telegram ID:', params.telegramId);
+      try {
+        user = await db.user.findFirst({
+          where: {
+            telegramId: BigInt(params.telegramId),
+            projectId: params.projectId
+          }
+        });
+        if (user) {
+          console.log('✅ Пользователь найден по Telegram ID:', user.id);
+        }
+      } catch (e) {
+        console.log('⚠️ Ошибка поиска по Telegram ID:', e);
+      }
+    }
+
+    // Обрабатываем телефон (если не нашли по Telegram ID)
+    if (!user && params.phone) {
       let phoneNumber: string;
 
       // Если phone - это объект contactReceived, извлекаем phoneNumber
@@ -1031,6 +1088,107 @@ export const SAFE_QUERIES = {
     });
 
     return !!welcomeBonus;
+  },
+
+  /**
+   * Обновить контактные данные пользователя (телефон/email из полученного контакта)
+   * Используется когда пользователь уже найден по Telegram ID, но отправляет контакт
+   */
+  update_user_contact: async (
+    db: PrismaClient,
+    params: {
+      telegramId: string;
+      projectId: string;
+      phone?: string;
+      email?: string;
+    }
+  ) => {
+    logger.debug('Executing update_user_contact', { params });
+
+    // Находим пользователя по Telegram ID
+    const user = await db.user.findFirst({
+      where: {
+        telegramId: BigInt(params.telegramId),
+        projectId: params.projectId
+      }
+    });
+
+    if (!user) {
+      console.log(
+        '❌ update_user_contact: Пользователь не найден по Telegram ID'
+      );
+      return null;
+    }
+
+    // Подготавливаем данные для обновления
+    const updateData: { phone?: string; email?: string; updatedAt: Date } = {
+      updatedAt: new Date()
+    };
+
+    // Обновляем телефон если передан и отличается
+    if (params.phone) {
+      const phoneNumber =
+        typeof params.phone === 'string' ? params.phone.trim() : '';
+      if (
+        phoneNumber &&
+        !phoneNumber.includes('{{') &&
+        phoneNumber !== user.phone
+      ) {
+        updateData.phone = phoneNumber;
+        console.log('📞 update_user_contact: Обновляем телефон:', phoneNumber);
+      }
+    }
+
+    // Обновляем email если передан и отличается
+    if (params.email) {
+      const email = params.email.trim().toLowerCase();
+      if (email && !email.includes('{{') && email !== user.email) {
+        updateData.email = email;
+        console.log('📧 update_user_contact: Обновляем email:', email);
+      }
+    }
+
+    // Если нечего обновлять, возвращаем текущего пользователя
+    if (!updateData.phone && !updateData.email) {
+      console.log(
+        'ℹ️ update_user_contact: Нечего обновлять, возвращаем текущего пользователя'
+      );
+      return {
+        id: user.id,
+        projectId: user.projectId,
+        email: user.email,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        telegramId: user.telegramId?.toString(),
+        telegramUsername: user.telegramUsername,
+        isActive: user.isActive
+      };
+    }
+
+    // Обновляем пользователя
+    const updatedUser = await db.user.update({
+      where: { id: user.id },
+      data: updateData
+    });
+
+    console.log('✅ update_user_contact: Пользователь обновлён:', {
+      userId: updatedUser.id,
+      phone: updatedUser.phone,
+      email: updatedUser.email
+    });
+
+    return {
+      id: updatedUser.id,
+      projectId: updatedUser.projectId,
+      email: updatedUser.email,
+      phone: updatedUser.phone,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      telegramId: updatedUser.telegramId?.toString(),
+      telegramUsername: updatedUser.telegramUsername,
+      isActive: updatedUser.isActive
+    };
   }
 };
 

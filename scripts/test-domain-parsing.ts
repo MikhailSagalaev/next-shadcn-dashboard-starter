@@ -19,19 +19,20 @@ function normalizeDomain(domain?: string): string | undefined {
 
   // Убираем протокол если есть
   normalized = normalized.replace(/^https?:\/\//, '');
-  
+
   // Убираем www если есть
   normalized = normalized.replace(/^www\./, '');
-  
+
   // Убираем завершающий слеш
   normalized = normalized.replace(/\/$/, '');
-  
+
   // Убираем путь если есть (оставляем только домен)
   normalized = normalized.split('/')[0];
-  
+
   // Проверяем, что это валидный домен
-  const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
-  
+  const domainRegex =
+    /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+
   if (!domainRegex.test(normalized)) {
     logger.warn('Некорректный формат домена', {
       original: domain,
@@ -52,19 +53,19 @@ function normalizeDomain(domain?: string): string | undefined {
 
 function testDomainParsing() {
   console.log('🔍 ТЕСТИРОВАНИЕ ПАРСИНГА ДОМЕНОВ');
-  console.log('=' .repeat(50));
+  console.log('='.repeat(50));
 
   const testDomains = [
-    'maoka.ru',
-    'https://maoka.ru/',
-    'http://www.maoka.ru/path',
-    'MAOKA.RU',
-    'https://www.maoka.ru/some/path/',
-    'maoka.ru/',
-    'www.maoka.ru',
-    'https://maoka.ru',
-    'http://maoka.ru',
-    'maoka.ru/path/to/page',
+    'example-shop.ru',
+    'https://example-shop.ru/',
+    'http://www.example-shop.ru/path',
+    'EXAMPLE-SHOP.RU',
+    'https://www.example-shop.ru/some/path/',
+    'example-shop.ru/',
+    'www.example-shop.ru',
+    'https://example-shop.ru',
+    'http://example-shop.ru',
+    'example-shop.ru/path/to/page',
     'invalid-domain',
     'not-a-domain',
     '',

@@ -40,7 +40,7 @@
 
 #### Формат реферальной ссылки:
 ```
-https://maoka.ru/?utm_ref={userId}
+https://your-domain.com/?utm_ref={userId}
 ```
 
 ## Примеры использования в сообщениях
