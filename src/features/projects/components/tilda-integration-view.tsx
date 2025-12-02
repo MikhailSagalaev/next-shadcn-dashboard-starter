@@ -461,13 +461,11 @@ export function ProjectIntegrationView({
         currentBotSettings = await botResponse.json();
       }
 
-      // Обновляем функциональные настройки с новыми настройками виджета
-      const updatedSettings = {
-        ...currentBotSettings,
-        functionalSettings: {
-          ...(currentBotSettings.functionalSettings || {}),
-          widgetSettings: widgetSettings
-        }
+      // Формируем только functionalSettings для обновления
+      // НЕ передаём botToken чтобы избежать полной перезаписи настроек
+      const updatedFunctionalSettings = {
+        ...(currentBotSettings.functionalSettings || {}),
+        widgetSettings: widgetSettings
       };
 
       const response = await fetch(`/api/projects/${projectId}/bot`, {
@@ -475,7 +473,9 @@ export function ProjectIntegrationView({
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(updatedSettings)
+        body: JSON.stringify({
+          functionalSettings: updatedFunctionalSettings
+        })
       });
 
       if (response.ok) {

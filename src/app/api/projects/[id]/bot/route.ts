@@ -383,10 +383,11 @@ export async function PUT(
       where: { projectId: id }
     });
 
-    // Если передан только functionalSettings, обновляем только их
+    // Если передан только functionalSettings, обновляем только их (мержим с существующими)
     if (body.functionalSettings && !body.botToken && !body.botUsername) {
       logger.info('Обновляем только функциональные настройки бота', {
-        projectId: id
+        projectId: id,
+        newSettingsKeys: Object.keys(body.functionalSettings)
       });
 
       if (!existingSettings) {
@@ -399,11 +400,43 @@ export async function PUT(
         );
       }
 
-      // Обновляем только functionalSettings
+      // Мержим существующие functionalSettings с новыми (глубокий мерж для widgetSettings)
+      const existingFunctionalSettings =
+        (existingSettings.functionalSettings as Record<string, unknown>) || {};
+      const newFunctionalSettings = body.functionalSettings || {};
+
+      const mergedFunctionalSettings = {
+        ...existingFunctionalSettings,
+        ...newFunctionalSettings,
+        // Глубокий мерж для widgetSettings если они есть в обоих объектах
+        ...(newFunctionalSettings.widgetSettings
+          ? {
+              widgetSettings: {
+                ...((existingFunctionalSettings.widgetSettings as Record<
+                  string,
+                  unknown
+                >) || {}),
+                ...(newFunctionalSettings.widgetSettings as Record<
+                  string,
+                  unknown
+                >)
+              }
+            }
+          : {})
+      };
+
+      logger.info('Мержим functionalSettings', {
+        projectId: id,
+        existingKeys: Object.keys(existingFunctionalSettings),
+        newKeys: Object.keys(newFunctionalSettings),
+        mergedKeys: Object.keys(mergedFunctionalSettings)
+      });
+
+      // Обновляем functionalSettings с мержем
       const updatedSettings = await db.botSettings.update({
         where: { projectId: id },
         data: {
-          functionalSettings: body.functionalSettings || {}
+          functionalSettings: mergedFunctionalSettings
         }
       });
 
