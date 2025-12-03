@@ -360,94 +360,12 @@
       "selected": false
     },
     {
-      "id": "check-welcome-bonus",
-      "data": {
-        "label": "Проверить приветственные бонусы",
-        "config": {
-          "action.database_query": {
-            "query": "check_welcome_bonus",
-            "assignTo": "hasWelcomeBonus",
-            "parameters": {
-              "userId": "{{contactUser.id}}"
-            }
-          }
-        }
-      },
-      "type": "action.database_query",
-      "dragging": false,
-      "measured": {
-        "width": 256,
-        "height": 162
-      },
-      "position": {
-        "x": 3654,
-        "y": 307.5
-      },
-      "selected": false
-    },
-    {
-      "id": "check-bonus-exists",
-      "data": {
-        "label": "Есть приветственные бонусы?",
-        "config": {
-          "condition": {
-            "value": false,
-            "operator": "equals",
-            "variable": "hasWelcomeBonus"
-          }
-        }
-      },
-      "type": "condition",
-      "dragging": false,
-      "measured": {
-        "width": 256,
-        "height": 162
-      },
-      "position": {
-        "x": 4060,
-        "y": 307.5
-      },
-      "selected": false
-    },
-    {
-      "id": "add-welcome-bonus",
-      "data": {
-        "label": "Начислить приветственные бонусы",
-        "config": {
-          "action.database_query": {
-            "query": "add_bonus",
-            "assignTo": "",
-            "parameters": {
-              "type": "WELCOME",
-              "amount": "555",
-              "userId": "{{contactUser.id}}",
-              "expiresAt": "",
-              "description": "Приветственные бонусы за активацию аккаунта"
-            },
-            "resultMapping": {}
-          }
-        },
-        "description": ""
-      },
-      "type": "action.database_query",
-      "dragging": false,
-      "measured": {
-        "width": 256,
-        "height": 162
-      },
-      "position": {
-        "x": 4466,
-        "y": 242
-      },
-      "selected": false
-    },
-    {
       "id": "success-activated-user",
       "data": {
         "label": "Успешная активация",
         "config": {
           "message": {
-            "text": "🎉 Аккаунт успешно активирован!\n\n💰 Вам начислено 100 приветственных бонусов!\n\n📊 Ваш профиль:\n• Баланс: {user.balanceFormatted}\n• Уровень: {user.currentLevel}\n• Реферальный код: {user.referralCode}\n\n✨ Добро пожаловать в программу лояльности!"
+            "text": "🎉 Аккаунт успешно активирован!\n\n💰 Приветственные бонусы начислены (если настроены в проекте)!\n\n📊 Ваш профиль:\n• Баланс: {user.balanceFormatted}\n• Уровень: {user.currentLevel}\n• Реферальный код: {user.referralCode}\n\n✨ Добро пожаловать в программу лояльности!"
           }
         }
       },
@@ -957,43 +875,6 @@
       "target": "activate-user",
       "animated": true,
       "sourceHandle": "false"
-    },
-    {
-      "id": "edge-activate-user-check-welcome-bonus-1760624947127",
-      "type": "default",
-      "source": "activate-user",
-      "target": "check-welcome-bonus",
-      "animated": true
-    },
-    {
-      "id": "edge-check-welcome-bonus-check-bonus-exists-1760624947128",
-      "type": "default",
-      "source": "check-welcome-bonus",
-      "target": "check-bonus-exists",
-      "animated": true
-    },
-    {
-      "id": "edge-check-bonus-exists-add-welcome-bonus-1760624947129",
-      "type": "default",
-      "source": "check-bonus-exists",
-      "target": "add-welcome-bonus",
-      "animated": true,
-      "sourceHandle": "true"
-    },
-    {
-      "id": "edge-check-bonus-exists-success-activated-user-1760624947130",
-      "type": "default",
-      "source": "check-bonus-exists",
-      "target": "success-activated-user",
-      "animated": true,
-      "sourceHandle": "false"
-    },
-    {
-      "id": "edge-add-welcome-bonus-success-activated-user-1760624947131",
-      "type": "default",
-      "source": "add-welcome-bonus",
-      "target": "success-activated-user",
-      "animated": true
     },
     {
       "id": "edge-already-active-message-end-node-1760624947133",
