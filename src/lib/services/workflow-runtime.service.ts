@@ -15,6 +15,8 @@ import { MenuCommandHandler } from './workflow/handlers/action-handlers';
 import { nodeHandlersRegistry } from './workflow/node-handlers-registry';
 import { ExecutionContextManager } from './workflow/execution-context-manager';
 import { CacheService } from '@/lib/redis';
+import { validateEmail, looksLikeEmail } from '@/lib/utils/email-validator';
+import { parseBirthday } from '@/lib/services/date-parser';
 import type {
   WorkflowVersion,
   WorkflowNode,
@@ -839,7 +841,25 @@ export class WorkflowRuntimeService {
                   lowerText.includes(pattern.toLowerCase())
                 );
 
-                if (isEnterEmailButton) {
+                // Проверяем кнопку "Пропустить"
+                const skipPatterns = [
+                  'пропустить',
+                  'skip',
+                  '⏭️ пропустить',
+                  '⏭️ skip'
+                ];
+                const isSkipButton = skipPatterns.some((pattern) =>
+                  lowerText.includes(pattern.toLowerCase())
+                );
+
+                if (isSkipButton) {
+                  logger.info('⏭️ User clicked "Skip" button', {
+                    text,
+                    executionId: waitingExecution.id
+                  });
+                  // Сохраняем флаг пропуска в переменные
+                  messageText = '__SKIP__';
+                } else if (isEnterEmailButton) {
                   logger.info(
                     '📧 User clicked "Enter email" button, waiting for email input',
                     {
@@ -862,13 +882,50 @@ export class WorkflowRuntimeService {
                   }
                   // Оставляем execution в waiting состоянии для получения email
                   return true;
-                } else if (text.includes('@') && text.includes('.')) {
-                  // Если текст похож на email, используем его как email
-                  contactEmail = text;
-                  logger.info('📧 Email received from user', {
-                    email: contactEmail,
-                    executionId: waitingExecution.id
-                  });
+                } else if (looksLikeEmail(text)) {
+                  // Валидируем email через EmailValidator
+                  const emailValidation = validateEmail(text);
+                  if (emailValidation.valid && emailValidation.email) {
+                    contactEmail = emailValidation.email;
+                    logger.info('📧 Valid email received from user', {
+                      email: contactEmail,
+                      executionId: waitingExecution.id
+                    });
+                  } else {
+                    // Невалидный email - отправляем сообщение об ошибке
+                    logger.warn('⚠️ Invalid email format received', {
+                      input: text,
+                      error: emailValidation.error,
+                      executionId: waitingExecution.id
+                    });
+                    try {
+                      await context.reply(
+                        `❌ ${emailValidation.error || 'Неверный формат email'}\n\n📧 Пожалуйста, введите корректный email адрес:\nНапример: example@mail.ru`
+                      );
+                    } catch (replyError) {
+                      logger.error('Failed to send email validation error', {
+                        error:
+                          replyError instanceof Error
+                            ? replyError.message
+                            : String(replyError)
+                      });
+                    }
+                    // Оставляем в waiting состоянии для повторного ввода
+                    return true;
+                  }
+                } else {
+                  // Проверяем, может это дата рождения
+                  const birthdayResult = parseBirthday(text);
+                  if (birthdayResult.success && birthdayResult.date) {
+                    // Сохраняем распарсенную дату в переменные
+                    logger.info('🎂 Birthday received from user', {
+                      input: text,
+                      parsed: birthdayResult.formatted,
+                      executionId: waitingExecution.id
+                    });
+                    // Дата будет сохранена позже в workflow через переменную
+                    messageText = birthdayResult.formatted;
+                  }
                 }
               }
             }

@@ -4,6 +4,55 @@
 
 ---
 
+## [2025-12-04] - 📧 Email Registration Workflow + User Metadata
+
+### 🎯 Добавлено
+- **Поле `metadata` в модели User** (`prisma/schema.prisma`):
+  - JSON поле для хранения произвольных данных пользователя
+  - Поддержка ключ-значение для комментариев и кастомных полей
+  - Миграция: `prisma/migrations/20251204_add_user_metadata/migration.sql`
+
+- **DateParser сервис** (`src/lib/services/date-parser.ts`):
+  - Парсинг дат в форматах: DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY
+  - Поддержка коротких форматов: DD.MM, DD/MM, DD-MM (с текущим годом)
+  - Валидация: проверка на будущие даты и возраст > 120 лет
+  - Property-based тесты: `src/lib/services/date-parser.property.test.ts`
+
+- **Email Validator** (`src/lib/utils/email-validator.ts`):
+  - Валидация формата email
+  - Property-based тесты: `src/lib/utils/email-validator.property.test.ts`
+
+- **Методы работы с metadata в UserService** (`src/lib/services/user.service.ts`):
+  - `getMetadata(userId)` - получение metadata
+  - `setMetadata(userId, key, value)` - установка значения
+  - `updateMetadata(userId, data)` - merge с существующими данными
+  - `removeMetadataKey(userId, key)` - удаление ключа
+  - `updateBirthday(userId, birthDate)` - обновление даты рождения
+
+- **Новые запросы в QueryExecutor** (`src/lib/services/workflow/query-executor.ts`):
+  - `update_user_birthday` - обновление даты рождения
+  - `get_user_metadata` - получение metadata
+  - `update_user_metadata` - обновление metadata с merge
+
+- **Шаблон workflow "Регистрация через Email"** (`src/lib/workflow-templates/email-registration.json`):
+  - Идентификация по email вместо контакта
+  - Сбор даты рождения после активации
+  - Опциональный запрос контакта
+
+- **Admin UI для metadata пользователя**:
+  - Компонент `UserMetadataSection` (`src/features/bonuses/components/user-metadata-section.tsx`)
+  - API endpoint `/api/projects/[id]/users/[userId]/metadata` (GET, PATCH, PUT)
+  - Отображение metadata в диалоге профиля пользователя
+  - Добавление, редактирование и удаление полей metadata
+  - Интеграция в `bonus-management-page.tsx`
+
+### 📋 Спецификация
+- `.kiro/specs/email-registration-workflow/requirements.md`
+- `.kiro/specs/email-registration-workflow/design.md`
+- `.kiro/specs/email-registration-workflow/tasks.md`
+
+---
+
 ## [2025-12-03] - 🐛 Исправлен баг с захардкоженными приветственными бонусами (555)
 
 ### 🐛 Исправлено

@@ -177,6 +177,7 @@ model User {
   utmMedium         String?            @map("utm_medium")
   utmSource         String?            @map("utm_source")
   utmTerm           String?            @map("utm_term")
+  metadata          Json?              @default("{}")
   bonuses           Bonus[]
   notifications     Notification[]
   transactions      Transaction[]

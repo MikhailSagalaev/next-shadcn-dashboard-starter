@@ -1189,6 +1189,122 @@ export const SAFE_QUERIES = {
       telegramUsername: updatedUser.telegramUsername,
       isActive: updatedUser.isActive
     };
+  },
+
+  /**
+   * Обновить дату рождения пользователя
+   * @requirements 2.2, 2.3
+   */
+  update_user_birthday: async (
+    db: PrismaClient,
+    params: { userId: string; birthDate: string | Date }
+  ) => {
+    logger.debug('Executing update_user_birthday', { params });
+
+    // Парсим дату если передана строка
+    let birthDate: Date;
+    if (typeof params.birthDate === 'string') {
+      birthDate = new Date(params.birthDate);
+    } else {
+      birthDate = params.birthDate;
+    }
+
+    if (isNaN(birthDate.getTime())) {
+      throw new Error('Invalid birth date');
+    }
+
+    const user = await db.user.update({
+      where: { id: params.userId },
+      data: {
+        birthDate,
+        updatedAt: new Date()
+      }
+    });
+
+    logger.info('User birthday updated', {
+      userId: params.userId,
+      birthDate: birthDate.toISOString()
+    });
+
+    return {
+      id: user.id,
+      birthDate: user.birthDate,
+      success: true
+    };
+  },
+
+  /**
+   * Получить metadata пользователя
+   * @requirements 4.2
+   */
+  get_user_metadata: async (db: PrismaClient, params: { userId: string }) => {
+    logger.debug('Executing get_user_metadata', { params });
+
+    const user = await db.user.findUnique({
+      where: { id: params.userId }
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      userId: user.id,
+      metadata: ((user as any).metadata as Record<string, any>) || {}
+    };
+  },
+
+  /**
+   * Обновить metadata пользователя (merge с существующими данными)
+   * @requirements 4.1, 4.3, 4.4
+   */
+  update_user_metadata: async (
+    db: PrismaClient,
+    params: { userId: string; metadata: Record<string, any> }
+  ) => {
+    logger.debug('Executing update_user_metadata', { params });
+
+    // Получаем текущие metadata
+    const user = await db.user.findUnique({
+      where: { id: params.userId }
+    });
+
+    if (!user) {
+      throw new Error(`User not found: ${params.userId}`);
+    }
+
+    const currentMetadata =
+      ((user as any).metadata as Record<string, any>) || {};
+
+    // Merge: null значения удаляют ключи
+    const newMetadata = { ...currentMetadata };
+    for (const [key, value] of Object.entries(params.metadata)) {
+      if (value === null || value === undefined) {
+        delete newMetadata[key];
+      } else {
+        newMetadata[key] = value;
+      }
+    }
+
+    // Обновляем пользователя
+    await (db.user as any).update({
+      where: { id: params.userId },
+      data: {
+        metadata: newMetadata,
+        updatedAt: new Date()
+      }
+    });
+
+    logger.info('User metadata updated', {
+      userId: params.userId,
+      keysUpdated: Object.keys(params.metadata)
+    });
+
+    return {
+      userId: params.userId,
+      metadata: newMetadata,
+      success: true
+    };
   }
 };
 

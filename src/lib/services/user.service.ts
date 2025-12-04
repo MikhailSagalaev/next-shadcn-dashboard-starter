@@ -514,6 +514,111 @@ export class UserService {
 
     return { transactions: transactions as any, total };
   }
+
+  // ==================== METADATA OPERATIONS ====================
+
+  /**
+   * Получить metadata пользователя
+   */
+  static async getMetadata(userId: string): Promise<Record<string, any>> {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { metadata: true }
+    });
+
+    if (!user) {
+      throw new Error(`Пользователь не найден: ${userId}`);
+    }
+
+    return (user.metadata as Record<string, any>) || {};
+  }
+
+  /**
+   * Установить значение metadata по ключу
+   */
+  static async setMetadata(
+    userId: string,
+    key: string,
+    value: any
+  ): Promise<Record<string, any>> {
+    const currentMetadata = await this.getMetadata(userId);
+
+    let newMetadata: Record<string, any>;
+    if (value === null || value === undefined) {
+      // Удаляем ключ если значение null
+      const { [key]: _, ...rest } = currentMetadata;
+      newMetadata = rest;
+    } else {
+      newMetadata = { ...currentMetadata, [key]: value };
+    }
+
+    await db.user.update({
+      where: { id: userId },
+      data: { metadata: newMetadata }
+    });
+
+    return newMetadata;
+  }
+
+  /**
+   * Обновить metadata (merge с существующими данными)
+   */
+  static async updateMetadata(
+    userId: string,
+    data: Record<string, any>
+  ): Promise<Record<string, any>> {
+    const currentMetadata = await this.getMetadata(userId);
+
+    // Merge: null значения удаляют ключи
+    const newMetadata = { ...currentMetadata };
+    for (const [key, value] of Object.entries(data)) {
+      if (value === null || value === undefined) {
+        delete newMetadata[key];
+      } else {
+        newMetadata[key] = value;
+      }
+    }
+
+    await db.user.update({
+      where: { id: userId },
+      data: { metadata: newMetadata }
+    });
+
+    return newMetadata;
+  }
+
+  /**
+   * Удалить ключ из metadata
+   */
+  static async removeMetadataKey(
+    userId: string,
+    key: string
+  ): Promise<Record<string, any>> {
+    return this.setMetadata(userId, key, null);
+  }
+
+  /**
+   * Обновить дату рождения пользователя
+   */
+  static async updateBirthday(userId: string, birthDate: Date): Promise<User> {
+    const user = await db.user.update({
+      where: { id: userId },
+      data: { birthDate },
+      include: {
+        project: true,
+        bonuses: true,
+        transactions: true
+      }
+    });
+
+    logger.info('Обновлена дата рождения пользователя', {
+      userId,
+      birthDate: birthDate.toISOString(),
+      component: 'user-service'
+    });
+
+    return user as any;
+  }
 }
 
 export class BonusService {

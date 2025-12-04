@@ -75,6 +75,7 @@ import { BulkActionsToolbar } from './bulk-actions-toolbar';
 import { EnhancedBulkActionsToolbar } from './enhanced-bulk-actions-toolbar';
 import { RichNotificationDialog } from './rich-notification-dialog';
 import { UsersTable } from './users-table';
+import { UserMetadataSection } from './user-metadata-section';
 import { BonusAwardDialog } from '../../projects/components/bonus-award-dialog';
 
 // Types
@@ -818,6 +819,13 @@ export function BonusManagementPageRefactored({
                   </p>
                 </div>
               </div>
+
+              {/* Metadata Section */}
+              <UserMetadataSection
+                userId={profileUser.id}
+                projectId={currentProjectId || ''}
+                readOnly={false}
+              />
             </div>
           )}
         </DialogContent>
