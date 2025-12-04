@@ -4,6 +4,25 @@
 
 ---
 
+## [2025-12-04] - 🐛 Исправление Email Registration Workflow
+
+### 🐛 Исправлено
+- **Критический баг: бот не ждал ввода email**
+  - Проблема: workflow сразу переходил к проверке email без ожидания ввода
+  - Причина: неправильные connections в шаблоне (пропускали `wait-email-input` ноду)
+  - Исправлено: `request-email` → `wait-email-input` → `check-email-user`
+
+- **Message Handler не обрабатывал `waitForInput: true`**
+  - Добавлена поддержка флага `waitForInput` в конфигурации message ноды
+  - Если `waitForInput: true`, workflow устанавливает `waitType: 'input'` и ждёт ввода
+
+### 🔧 Изменено
+- `src/lib/workflow-templates/email-registration.json` - исправлены connections
+- `src/lib/services/workflow/handlers/message-handler.ts` - поддержка waitForInput
+- Добавлен скрипт `scripts/update-email-workflow.ts` для обновления workflow в БД
+
+---
+
 ## [2025-12-04] - 📧 Email Registration Workflow + User Metadata
 
 ### 🎯 Добавлено

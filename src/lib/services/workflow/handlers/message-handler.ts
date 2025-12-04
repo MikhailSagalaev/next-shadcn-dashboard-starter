@@ -29,7 +29,10 @@ export class MessageHandler extends BaseNodeHandler {
     return nodeType === 'message';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       // Получаем текст сообщения из конфигурации ноды
       const messageConfig = node.data?.config?.message;
@@ -42,7 +45,7 @@ export class MessageHandler extends BaseNodeHandler {
         first_name: context.telegram.firstName || '',
         user_id: context.telegram.userId || '',
         chat_id: context.telegram.chatId || '',
-        
+
         // Workflow переменные
         workflow_id: context.workflowId,
         execution_id: context.executionId,
@@ -55,22 +58,43 @@ export class MessageHandler extends BaseNodeHandler {
           const found = await QueryExecutor.execute(
             context.services.db as any,
             'check_user_by_telegram',
-            { telegramId: context.telegram.userId, projectId: context.projectId }
+            {
+              telegramId: context.telegram.userId,
+              projectId: context.projectId
+            }
           );
           if (found?.id) {
             context.userId = found.id;
-            this.logStep(context, node, 'Resolved userId from telegramId', 'info', { userId: context.userId });
+            this.logStep(
+              context,
+              node,
+              'Resolved userId from telegramId',
+              'info',
+              { userId: context.userId }
+            );
           }
         } catch (e) {
-          this.logStep(context, node, 'Failed resolve userId from telegramId', 'warn', { error: e });
+          this.logStep(
+            context,
+            node,
+            'Failed resolve userId from telegramId',
+            'warn',
+            { error: e }
+          );
         }
       }
 
       // Проверяем, требуется ли userId для этого сообщения
       if (!context.userId && messageText.includes('{user.')) {
-        this.logStep(context, node, 'User not authenticated, cannot display personalized message', 'warn', {
-          hasUserVariables: messageText.includes('{user.')
-        });
+        this.logStep(
+          context,
+          node,
+          'User not authenticated, cannot display personalized message',
+          'warn',
+          {
+            hasUserVariables: messageText.includes('{user.')
+          }
+        );
 
         // Отправляем сообщение об ошибке привязки аккаунта
         const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
@@ -86,85 +110,122 @@ export class MessageHandler extends BaseNodeHandler {
       // Получаем переменные пользователя, если userId доступен
       if (context.userId) {
         try {
-          this.logStep(context, node, 'Loading user variables', 'debug', { userId: context.userId });
-          
+          this.logStep(context, node, 'Loading user variables', 'debug', {
+            userId: context.userId
+          });
+
           const userVariables = await UserVariablesService.getUserVariables(
             context.services.db,
             context.userId,
             context.projectId
           );
-          
-          this.logStep(context, node, 'User variables loaded', 'debug', { 
+
+          this.logStep(context, node, 'User variables loaded', 'debug', {
             variableCount: Object.keys(userVariables).length,
             sampleVariables: Object.keys(userVariables).slice(0, 5)
           });
-          
+
           // ✅ КРИТИЧНО: Добавляем переменные пользователя с префиксом user.
           // Только если значение не undefined/null
           Object.entries(userVariables).forEach(([key, value]) => {
             if (value !== undefined && value !== null) {
-            additionalVariables[key] = String(value);
+              additionalVariables[key] = String(value);
             } else {
-              console.warn(`⚠️ Skipping user variable ${key} because value is ${value}`);
+              console.warn(
+                `⚠️ Skipping user variable ${key} because value is ${value}`
+              );
             }
           });
 
           // Принудительная гарантия наличия user.expiringBonusesFormatted
-          if (userVariables['user.expiringBonusesFormatted'] !== undefined && userVariables['user.expiringBonusesFormatted'] !== null) {
-            additionalVariables['user.expiringBonusesFormatted'] = String(userVariables['user.expiringBonusesFormatted']);
+          if (
+            userVariables['user.expiringBonusesFormatted'] !== undefined &&
+            userVariables['user.expiringBonusesFormatted'] !== null
+          ) {
+            additionalVariables['user.expiringBonusesFormatted'] = String(
+              userVariables['user.expiringBonusesFormatted']
+            );
           }
 
           // Логируем для отладки
           logger.debug('message-handler debug', {
             userVariablesKeys: Object.keys(userVariables),
-            expiringBonusesInUserVars: 'user.expiringBonusesFormatted' in userVariables,
-            expiringBonusesValue: userVariables['user.expiringBonusesFormatted'],
+            expiringBonusesInUserVars:
+              'user.expiringBonusesFormatted' in userVariables,
+            expiringBonusesValue:
+              userVariables['user.expiringBonusesFormatted'],
             additionalVariablesKeys: Object.keys(additionalVariables),
-            expiringBonusesInAdditional: 'user.expiringBonusesFormatted' in additionalVariables,
-            referralCountInAdditional: 'user.referralCount' in additionalVariables,
+            expiringBonusesInAdditional:
+              'user.expiringBonusesFormatted' in additionalVariables,
+            referralCountInAdditional:
+              'user.referralCount' in additionalVariables,
             referralCountValue: additionalVariables['user.referralCount'],
-            progressPercentInAdditional: 'user.progressPercent' in additionalVariables,
+            progressPercentInAdditional:
+              'user.progressPercent' in additionalVariables,
             progressPercentValue: additionalVariables['user.progressPercent']
           });
 
           // Финальная проверка перед отправкой
           logger.debug('final message check', {
             originalMessageText: messageText,
-            hasExpiringBonusesPlaceholder: messageText.includes('{user.expiringBonusesFormatted}'),
+            hasExpiringBonusesPlaceholder: messageText.includes(
+              '{user.expiringBonusesFormatted}'
+            ),
             finalMessageText: messageText
           });
 
           // ТОЧНАЯ проверка после замены переменных
-          const replacedText = await ProjectVariablesService.replaceVariablesInText(
-            context.projectId,
-            messageText,
-            additionalVariables
-          );
+          const replacedText =
+            await ProjectVariablesService.replaceVariablesInText(
+              context.projectId,
+              messageText,
+              additionalVariables
+            );
           console.log('🔄 AFTER PROJECT VARIABLES REPLACEMENT:');
           console.log('   Replaced text:', replacedText);
-          console.log('   Has placeholder after replacement:', replacedText.includes('{user.expiringBonusesFormatted}'));
+          console.log(
+            '   Has placeholder after replacement:',
+            replacedText.includes('{user.expiringBonusesFormatted}')
+          );
 
           // Обновляем messageText
           messageText = replacedText;
 
-          this.logStep(context, node, 'User variables added to additionalVariables', 'debug', {
-            userVariablesCount: Object.keys(userVariables).length,
-            additionalVariablesCount: Object.keys(additionalVariables).length,
-            sampleUserVariables: Object.keys(userVariables).slice(0, 3),
-            expiringBonusesValue: userVariables['user.expiringBonusesFormatted'],
-            hasExpiringBonuses: 'user.expiringBonusesFormatted' in additionalVariables,
-            allUserVariables: userVariables,
-            allAdditionalVariables: additionalVariables
-          });
+          this.logStep(
+            context,
+            node,
+            'User variables added to additionalVariables',
+            'debug',
+            {
+              userVariablesCount: Object.keys(userVariables).length,
+              additionalVariablesCount: Object.keys(additionalVariables).length,
+              sampleUserVariables: Object.keys(userVariables).slice(0, 3),
+              expiringBonusesValue:
+                userVariables['user.expiringBonusesFormatted'],
+              hasExpiringBonuses:
+                'user.expiringBonusesFormatted' in additionalVariables,
+              allUserVariables: userVariables,
+              allAdditionalVariables: additionalVariables
+            }
+          );
         } catch (error) {
-          this.logStep(context, node, 'Failed to load user variables', 'warn', { error });
+          this.logStep(context, node, 'Failed to load user variables', 'warn', {
+            error
+          });
         }
       } else {
-        this.logStep(context, node, 'No userId available, skipping user variables', 'debug');
-        
+        this.logStep(
+          context,
+          node,
+          'No userId available, skipping user variables',
+          'debug'
+        );
+
         // Добавляем базовые переменные даже без userId
-        additionalVariables['user.firstName'] = context.telegram.firstName || 'Пользователь';
-        additionalVariables['user.telegramUsername'] = context.telegram.username || '';
+        additionalVariables['user.firstName'] =
+          context.telegram.firstName || 'Пользователь';
+        additionalVariables['user.telegramUsername'] =
+          context.telegram.username || '';
         additionalVariables['user.balanceFormatted'] = '0 бонусов';
         additionalVariables['user.currentLevel'] = 'Базовый';
         additionalVariables['user.referralCode'] = 'Недоступно';
@@ -172,20 +233,32 @@ export class MessageHandler extends BaseNodeHandler {
       }
 
       // 🔍 Отладка перед заменой переменных
-      this.logStep(context, node, 'About to replace variables in text', 'debug', {
-        textLength: messageText.length,
-        hasExpiringBonusesPlaceholder: messageText.includes('{user.expiringBonusesFormatted}'),
-        additionalVariablesKeys: Object.keys(additionalVariables),
-        expiringBonusesInAdditional: 'user.expiringBonusesFormatted' in additionalVariables,
-        expiringBonusesValue: additionalVariables['user.expiringBonusesFormatted'],
-        allAdditionalVariables: additionalVariables
-      });
+      this.logStep(
+        context,
+        node,
+        'About to replace variables in text',
+        'debug',
+        {
+          textLength: messageText.length,
+          hasExpiringBonusesPlaceholder: messageText.includes(
+            '{user.expiringBonusesFormatted}'
+          ),
+          additionalVariablesKeys: Object.keys(additionalVariables),
+          expiringBonusesInAdditional:
+            'user.expiringBonusesFormatted' in additionalVariables,
+          expiringBonusesValue:
+            additionalVariables['user.expiringBonusesFormatted'],
+          allAdditionalVariables: additionalVariables
+        }
+      );
 
       // Заменяем переменные проекта в тексте
       this.logStep(context, node, 'Replacing variables in text', 'debug', {
         originalText: messageText.substring(0, 100),
         variableCount: Object.keys(additionalVariables).length,
-        hasUserVariables: Object.keys(additionalVariables).some(k => k.startsWith('user.'))
+        hasUserVariables: Object.keys(additionalVariables).some((k) =>
+          k.startsWith('user.')
+        )
       });
 
       messageText = await ProjectVariablesService.replaceVariablesInText(
@@ -193,10 +266,11 @@ export class MessageHandler extends BaseNodeHandler {
         messageText,
         additionalVariables
       );
-      
+
       this.logStep(context, node, 'Variables replaced', 'debug', {
         finalText: messageText.substring(0, 100),
-        hasUnreplacedVariables: messageText.includes('{') && messageText.includes('}')
+        hasUnreplacedVariables:
+          messageText.includes('{') && messageText.includes('}')
       });
 
       // Отправляем сообщение через Telegram API
@@ -210,7 +284,8 @@ export class MessageHandler extends BaseNodeHandler {
       };
 
       // ✨ НОВОЕ: Добавляем клавиатуру если она настроена
-      const keyboardConfig = messageConfig?.keyboard || (node.data?.config as any)?.keyboard;
+      const keyboardConfig =
+        messageConfig?.keyboard || (node.data?.config as any)?.keyboard;
       if (keyboardConfig) {
         const keyboard = this.buildKeyboard(keyboardConfig);
         if (keyboard) {
@@ -220,53 +295,83 @@ export class MessageHandler extends BaseNodeHandler {
 
       await context.services.http.post(telegramApiUrl, payload);
 
-      this.logStep(context, node, 'Message sent successfully', 'info', { 
+      this.logStep(context, node, 'Message sent successfully', 'info', {
         originalText: messageConfig?.text,
         processedText: messageText,
         hasKeyboard: !!keyboardConfig
       });
 
       // ✨ НОВОЕ: Проверяем, нужно ли ждать ответа пользователя
-      if (keyboardConfig) {
-        const needsWaiting = this.checkIfNeedsWaiting(keyboardConfig);
-        
-        if (needsWaiting.shouldWait) {
-          this.logStep(context, node, `Setting waiting state: ${needsWaiting.waitType}`, 'info');
-          
-          // Импортируем здесь чтобы избежать circular dependencies
-          const { db } = await import('@/lib/db');
-          
-          // Устанавливаем состояние ожидания
-          await db.workflowExecution.update({
-            where: { id: context.executionId },
-            data: {
-              status: 'waiting',
-              waitType: needsWaiting.waitType,
-              currentNodeId: node.id,
-              waitPayload: {
-                nodeId: node.id,
-                keyboard: keyboardConfig,
-                requestedAt: new Date()
-              }
+      // 1. Проверяем явный флаг waitForInput в конфигурации сообщения
+      const waitForInput = messageConfig?.waitForInput === true;
+
+      // 2. Проверяем клавиатуру на необходимость ожидания
+      const needsWaiting = keyboardConfig
+        ? this.checkIfNeedsWaiting(keyboardConfig)
+        : { shouldWait: false, waitType: null };
+
+      // 🔍 DEBUG: Логируем проверку waitForInput
+      console.log('🔍 MESSAGE HANDLER: Checking wait conditions', {
+        nodeId: node.id,
+        nodeLabel: node.data?.label,
+        waitForInput,
+        messageConfigWaitForInput: messageConfig?.waitForInput,
+        keyboardType: keyboardConfig?.type,
+        needsWaitingShouldWait: needsWaiting.shouldWait,
+        needsWaitingType: needsWaiting.waitType
+      });
+
+      // ✅ КРИТИЧНО: Если waitForInput=true, всегда ждём ввода пользователя
+      if (waitForInput || needsWaiting.shouldWait) {
+        const waitType = waitForInput ? 'input' : needsWaiting.waitType;
+
+        this.logStep(
+          context,
+          node,
+          `Setting waiting state: ${waitType}`,
+          'info',
+          {
+            waitForInput,
+            keyboardWaiting: needsWaiting.shouldWait,
+            nodeId: node.id
+          }
+        );
+
+        // Импортируем здесь чтобы избежать circular dependencies
+        const { db } = await import('@/lib/db');
+
+        // Устанавливаем состояние ожидания
+        await db.workflowExecution.update({
+          where: { id: context.executionId },
+          data: {
+            status: 'waiting',
+            waitType: waitType,
+            currentNodeId: node.id,
+            waitPayload: {
+              nodeId: node.id,
+              keyboard: keyboardConfig,
+              waitForInput: waitForInput,
+              requestedAt: new Date()
             }
-          });
+          }
+        });
 
-          // ✅ КЕШИРУЕМ WAITING EXECUTION В REDIS
-          const { WorkflowRuntimeService } = await import('../../workflow-runtime.service');
-          await WorkflowRuntimeService.cacheWaitingExecution(
-            context.executionId,
-            context.projectId,
-            context.telegram.chatId || '',
-            needsWaiting.waitType
-          );
+        // ✅ КЕШИРУЕМ WAITING EXECUTION В REDIS
+        const { WorkflowRuntimeService } = await import(
+          '../../workflow-runtime.service'
+        );
+        await WorkflowRuntimeService.cacheWaitingExecution(
+          context.executionId,
+          context.projectId,
+          context.telegram.chatId || '',
+          waitType as 'contact' | 'callback' | 'input'
+        );
 
-          // Возвращаем специальный результат, который означает "остановиться и ждать"
-          return '__WAITING_FOR_USER_INPUT__';
-        }
+        // Возвращаем специальный результат, который означает "остановиться и ждать"
+        return '__WAITING_FOR_USER_INPUT__';
       }
 
       return null;
-
     } catch (error) {
       this.logStep(context, node, 'Failed to send message', 'error', { error });
       throw error;
@@ -276,8 +381,8 @@ export class MessageHandler extends BaseNodeHandler {
   /**
    * Проверяет, нужно ли ждать ответа пользователя после отправки сообщения
    */
-  private checkIfNeedsWaiting(keyboardConfig: any): { 
-    shouldWait: boolean; 
+  private checkIfNeedsWaiting(keyboardConfig: any): {
+    shouldWait: boolean;
     waitType: 'contact' | 'callback' | 'input' | null;
   } {
     if (!keyboardConfig || !keyboardConfig.buttons) {
@@ -285,7 +390,7 @@ export class MessageHandler extends BaseNodeHandler {
     }
 
     const buttons = keyboardConfig.buttons;
-    
+
     // Проверяем все кнопки на наличие request_contact
     for (const row of buttons) {
       for (const button of row) {
@@ -330,8 +435,8 @@ export class MessageHandler extends BaseNodeHandler {
    * ✨ НОВОЕ: Построение inline клавиатуры
    */
   private buildInlineKeyboard(buttons: InlineButton[][]): any {
-    const keyboard = buttons.map(row => 
-      row.map(button => {
+    const keyboard = buttons.map((row) =>
+      row.map((button) => {
         const btn: any = { text: button.text };
 
         if (button.callback_data) {
@@ -358,8 +463,8 @@ export class MessageHandler extends BaseNodeHandler {
    * ✨ НОВОЕ: Построение reply клавиатуры
    */
   private buildReplyKeyboard(buttons: ReplyButton[][], config: any): any {
-    const keyboard = buttons.map(row =>
-      row.map(button => {
+    const keyboard = buttons.map((row) =>
+      row.map((button) => {
         const btn: any = { text: button.text };
 
         if (button.request_contact) {
@@ -396,12 +501,18 @@ export class MessageHandler extends BaseNodeHandler {
       errors.push('Message text is required and must be a string');
     }
 
-    if (config.parseMode && !['Markdown', 'HTML', 'MarkdownV2'].includes(config.parseMode)) {
+    if (
+      config.parseMode &&
+      !['Markdown', 'HTML', 'MarkdownV2'].includes(config.parseMode)
+    ) {
       errors.push('Parse mode must be one of: Markdown, HTML, MarkdownV2');
     }
 
     if (config.keyboard) {
-      if (config.keyboard.type && !['inline', 'reply'].includes(config.keyboard.type)) {
+      if (
+        config.keyboard.type &&
+        !['inline', 'reply'].includes(config.keyboard.type)
+      ) {
         errors.push('Keyboard type must be "inline" or "reply"');
       }
 

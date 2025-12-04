@@ -104,11 +104,25 @@
             "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📧 Для начала работы введите ваш email адрес, который использовался при регистрации на сайте:\n\nНапример: example@mail.ru",
             "keyboard": {
               "type": "remove"
-            }
+            },
+            "waitForInput": true
           }
         }
       },
       "position": { "x": 1624, "y": 500 }
+    },
+    {
+      "id": "wait-email-input",
+      "type": "trigger.message",
+      "data": {
+        "label": "Ожидание ввода email",
+        "config": {
+          "trigger.message": {
+            "pattern": ".*"
+          }
+        }
+      },
+      "position": { "x": 1830, "y": 500 }
     },
     {
       "id": "check-email-user",
@@ -601,7 +615,8 @@
     { "id": "c4", "source": "check-user-status", "target": "request-email", "sourceHandle": "false" },
     { "id": "c5", "source": "check-user-active", "target": "active-user-profile", "sourceHandle": "true" },
     { "id": "c6", "source": "check-user-active", "target": "request-email", "sourceHandle": "false" },
-    { "id": "c7", "source": "request-email", "target": "check-email-user" },
+    { "id": "c7", "source": "request-email", "target": "wait-email-input" },
+    { "id": "c7b", "source": "wait-email-input", "target": "check-email-user" },
     { "id": "c8", "source": "check-email-user", "target": "check-email-found" },
     { "id": "c9", "source": "check-email-found", "target": "check-telegram-already-linked", "sourceHandle": "true" },
     { "id": "c10", "source": "check-email-found", "target": "website-registration", "sourceHandle": "false" },
