@@ -172,11 +172,15 @@ export function useProjectUsers({
             updatedAt: new Date(user.updatedAt || Date.now()),
             firstName: user.firstName,
             lastName: user.lastName,
-            birthDate: user.birthDate,
+            birthDate: user.birthDate ? new Date(user.birthDate) : null,
             registeredAt: user.registeredAt,
             currentLevel: user.currentLevel,
+            telegramId: user.telegramId || null,
             telegramUsername: user.telegramUsername,
-            isActive: user.isActive !== undefined ? Boolean(user.isActive) : false
+            isActive:
+              user.isActive !== undefined ? Boolean(user.isActive) : false,
+            referralCode: user.referralCode,
+            totalPurchases: user.totalPurchases
           })
         );
 

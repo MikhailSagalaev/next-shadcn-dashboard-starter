@@ -59,7 +59,10 @@ import {
   Filter,
   MessageSquare,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Edit,
+  Save,
+  X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
@@ -109,6 +112,16 @@ export function BonusManagementPageRefactored({
   const [historyPage, setHistoryPage] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editFormData, setEditFormData] = useState<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    birthDate: string;
+    isActive: boolean;
+  } | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Custom hooks
   const {
@@ -529,6 +542,103 @@ export function BonusManagementPageRefactored({
     }
   }, [currentProjectId, router]);
 
+  // Начать редактирование профиля
+  const handleStartEditProfile = useCallback(() => {
+    if (profileUser) {
+      setEditFormData({
+        firstName: profileUser.firstName || '',
+        lastName: profileUser.lastName || '',
+        email: profileUser.email || '',
+        phone: profileUser.phone || '',
+        birthDate: profileUser.birthDate
+          ? new Date(profileUser.birthDate).toISOString().split('T')[0]
+          : '',
+        isActive: profileUser.isActive ?? false
+      });
+      setIsEditingProfile(true);
+    }
+  }, [profileUser]);
+
+  // Отменить редактирование
+  const handleCancelEditProfile = useCallback(() => {
+    setIsEditingProfile(false);
+    setEditFormData(null);
+  }, []);
+
+  // Сохранить профиль
+  const handleSaveProfile = useCallback(async () => {
+    if (!profileUser || !editFormData || !currentProjectId) return;
+
+    setIsSavingProfile(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${currentProjectId}/users/${profileUser.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: editFormData.firstName || null,
+            lastName: editFormData.lastName || null,
+            email: editFormData.email || null,
+            phone: editFormData.phone || null,
+            birthDate: editFormData.birthDate || null,
+            isActive: editFormData.isActive
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Ошибка сохранения');
+      }
+
+      const result = await response.json();
+
+      // Обновляем данные в profileUser
+      setProfileUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              firstName: result.user.firstName,
+              lastName: result.user.lastName,
+              name:
+                `${result.user.firstName || ''} ${result.user.lastName || ''}`.trim() ||
+                prev.email ||
+                'Без имени',
+              email: result.user.email,
+              phone: result.user.phone,
+              birthDate: result.user.birthDate
+                ? new Date(result.user.birthDate)
+                : null,
+              isActive: result.user.isActive
+            }
+          : null
+      );
+
+      setIsEditingProfile(false);
+      setEditFormData(null);
+
+      toast({
+        title: 'Профиль обновлён',
+        description: 'Данные пользователя успешно сохранены'
+      });
+
+      // Обновляем список пользователей
+      refreshUsers();
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Не удалось сохранить профиль',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }, [profileUser, editFormData, currentProjectId, toast, refreshUsers]);
+
   // Render error state
   if (hasError && !isLoading) {
     return (
@@ -747,11 +857,50 @@ export function BonusManagementPageRefactored({
       {/* User Profile Dialog */}
       <Dialog
         open={!!profileUser}
-        onOpenChange={(o) => !o && setProfileUser(null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setProfileUser(null);
+            setIsEditingProfile(false);
+            setEditFormData(null);
+          }
+        }}
       >
         <DialogContent className='max-w-2xl'>
           <DialogHeader>
-            <DialogTitle>Профиль пользователя</DialogTitle>
+            <div className='flex items-center justify-between'>
+              <DialogTitle>Профиль пользователя</DialogTitle>
+              {profileUser && !isEditingProfile && (
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={handleStartEditProfile}
+                >
+                  <Edit className='mr-2 h-4 w-4' />
+                  Редактировать
+                </Button>
+              )}
+              {isEditingProfile && (
+                <div className='flex gap-2'>
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    onClick={handleCancelEditProfile}
+                    disabled={isSavingProfile}
+                  >
+                    <X className='mr-2 h-4 w-4' />
+                    Отмена
+                  </Button>
+                  <Button
+                    size='sm'
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile}
+                  >
+                    <Save className='mr-2 h-4 w-4' />
+                    {isSavingProfile ? 'Сохранение...' : 'Сохранить'}
+                  </Button>
+                </div>
+              )}
+            </div>
           </DialogHeader>
           {profileUser && (
             <div className='space-y-6'>
@@ -773,58 +922,197 @@ export function BonusManagementPageRefactored({
                 </div>
               </div>
 
-              <div className='grid grid-cols-2 gap-4'>
-                <div>
-                  <Label className='text-sm font-medium'>Email</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.email || 'Не указан'}
-                  </p>
+              {isEditingProfile && editFormData ? (
+                /* Режим редактирования */
+                <div className='grid grid-cols-2 gap-4'>
+                  <div>
+                    <Label className='text-sm font-medium'>Имя</Label>
+                    <Input
+                      value={editFormData.firstName}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          firstName: e.target.value
+                        })
+                      }
+                      placeholder='Введите имя'
+                    />
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Фамилия</Label>
+                    <Input
+                      value={editFormData.lastName}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          lastName: e.target.value
+                        })
+                      }
+                      placeholder='Введите фамилию'
+                    />
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Email</Label>
+                    <Input
+                      type='email'
+                      value={editFormData.email}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          email: e.target.value
+                        })
+                      }
+                      placeholder='email@example.com'
+                    />
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Телефон</Label>
+                    <Input
+                      value={editFormData.phone}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          phone: e.target.value
+                        })
+                      }
+                      placeholder='+7 (999) 123-45-67'
+                    />
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Дата рождения</Label>
+                    <Input
+                      type='date'
+                      value={editFormData.birthDate}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          birthDate: e.target.value
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Статус</Label>
+                    <div className='flex items-center space-x-2 pt-2'>
+                      <Checkbox
+                        id='isActive'
+                        checked={editFormData.isActive}
+                        onCheckedChange={(checked) =>
+                          setEditFormData({
+                            ...editFormData,
+                            isActive: !!checked
+                          })
+                        }
+                      />
+                      <label htmlFor='isActive' className='text-sm'>
+                        Активный пользователь
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>
+                      Активные бонусы
+                    </Label>
+                    <p className='text-muted-foreground pt-2 text-sm'>
+                      {profileUser.bonusBalance} ₽
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>
+                      Всего заработано
+                    </Label>
+                    <p className='text-muted-foreground pt-2 text-sm'>
+                      {profileUser.totalEarned} ₽
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Label className='text-sm font-medium'>Телефон</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.phone || 'Не указан'}
-                  </p>
+              ) : (
+                /* Режим просмотра */
+                <div className='grid grid-cols-2 gap-4'>
+                  <div>
+                    <Label className='text-sm font-medium'>Email</Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.email || 'Не указан'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Телефон</Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.phone || 'Не указан'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>
+                      Активные бонусы
+                    </Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.bonusBalance} ₽
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>
+                      Всего заработано
+                    </Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.totalEarned} ₽
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>
+                      Дата регистрации
+                    </Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {new Date(profileUser.createdAt).toLocaleDateString(
+                        'ru-RU'
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Статус</Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.isActive ? (
+                        <Badge variant='default' className='bg-green-500'>
+                          Активный
+                        </Badge>
+                      ) : (
+                        <Badge variant='secondary'>Неактивный</Badge>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Дата рождения</Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.birthDate
+                        ? new Date(profileUser.birthDate).toLocaleDateString(
+                            'ru-RU'
+                          )
+                        : 'Не указана'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>
+                      Telegram Username
+                    </Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.telegramUsername
+                        ? `@${profileUser.telegramUsername}`
+                        : 'Не указан'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className='text-sm font-medium'>Telegram ID</Label>
+                    <p className='text-muted-foreground text-sm'>
+                      {profileUser.telegramId || 'Не указан'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Label className='text-sm font-medium'>Активные бонусы</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.bonusBalance} ₽
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>
-                    Всего заработано
-                  </Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.totalEarned} ₽
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>
-                    Дата регистрации
-                  </Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {new Date(profileUser.createdAt).toLocaleDateString(
-                      'ru-RU'
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>Telegram</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.telegramUsername
-                      ? `@${profileUser.telegramUsername}`
-                      : 'Не подключен'}
-                  </p>
-                </div>
-              </div>
+              )}
 
               {/* Metadata Section */}
               <UserMetadataSection
                 userId={profileUser.id}
                 projectId={currentProjectId || ''}
-                readOnly={false}
+                readOnly={isEditingProfile}
               />
             </div>
           )}
