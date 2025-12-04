@@ -271,11 +271,40 @@
               "buttons": [
                 [{ "text": "⏭️ Пропустить" }]
               ]
-            }
+            },
+            "waitForInput": true
           }
         }
       },
       "position": { "x": 4872, "y": 500 }
+    },
+    {
+      "id": "wait-birthday-input",
+      "type": "trigger.message",
+      "data": {
+        "label": "Ожидание ввода даты рождения",
+        "config": {
+          "trigger.message": {
+            "pattern": ".*"
+          }
+        }
+      },
+      "position": { "x": 5078, "y": 500 }
+    },
+    {
+      "id": "check-birthday-skip",
+      "type": "condition",
+      "data": {
+        "label": "Пропустить дату?",
+        "config": {
+          "condition": {
+            "operator": "contains",
+            "variable": "telegram.message.text",
+            "value": "Пропустить"
+          }
+        }
+      },
+      "position": { "x": 5178, "y": 500 }
     },
     {
       "id": "save-birthday",
@@ -308,11 +337,40 @@
                 [{ "text": "📱 Поделиться контактом", "request_contact": true }],
                 [{ "text": "⏭️ Пропустить" }]
               ]
-            }
+            },
+            "waitForInput": true
           }
         }
       },
       "position": { "x": 5684, "y": 500 }
+    },
+    {
+      "id": "wait-phone-input",
+      "type": "trigger.message",
+      "data": {
+        "label": "Ожидание контакта или пропуска",
+        "config": {
+          "trigger.message": {
+            "pattern": ".*"
+          }
+        }
+      },
+      "position": { "x": 5890, "y": 500 }
+    },
+    {
+      "id": "check-phone-skip",
+      "type": "condition",
+      "data": {
+        "label": "Пропустить телефон?",
+        "config": {
+          "condition": {
+            "operator": "contains",
+            "variable": "telegram.message.text",
+            "value": "Пропустить"
+          }
+        }
+      },
+      "position": { "x": 5990, "y": 500 }
     },
     {
       "id": "save-phone",
@@ -627,9 +685,15 @@
     { "id": "c15", "source": "check-bonus-exists", "target": "add-welcome-bonus", "sourceHandle": "true" },
     { "id": "c16", "source": "check-bonus-exists", "target": "request-birthday", "sourceHandle": "false" },
     { "id": "c17", "source": "add-welcome-bonus", "target": "request-birthday" },
-    { "id": "c18", "source": "request-birthday", "target": "save-birthday" },
+    { "id": "c18", "source": "request-birthday", "target": "wait-birthday-input" },
+    { "id": "c18b", "source": "wait-birthday-input", "target": "check-birthday-skip" },
+    { "id": "c18c", "source": "check-birthday-skip", "target": "request-phone", "sourceHandle": "true" },
+    { "id": "c18d", "source": "check-birthday-skip", "target": "save-birthday", "sourceHandle": "false" },
     { "id": "c19", "source": "save-birthday", "target": "request-phone" },
-    { "id": "c20", "source": "request-phone", "target": "save-phone" },
+    { "id": "c20", "source": "request-phone", "target": "wait-phone-input" },
+    { "id": "c20b", "source": "wait-phone-input", "target": "check-phone-skip" },
+    { "id": "c20c", "source": "check-phone-skip", "target": "success-message", "sourceHandle": "true" },
+    { "id": "c20d", "source": "check-phone-skip", "target": "save-phone", "sourceHandle": "false" },
     { "id": "c21", "source": "save-phone", "target": "success-message" },
     { "id": "c22", "source": "retry-email-trigger", "target": "request-email" },
     { "id": "c23", "source": "menu-balance-trigger", "target": "show-balance-details" },

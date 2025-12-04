@@ -46,6 +46,28 @@ async function main() {
     console.log(`   ${c.id}: ${c.source} → ${c.target}`);
   });
 
+  // Проверяем connections для birthday
+  const birthdayConnections = template.connections.filter(
+    (c: any) => c.source.includes('birthday') || c.target.includes('birthday')
+  );
+  console.log('\n📊 Connections для birthday:');
+  birthdayConnections.forEach((c: any) => {
+    console.log(
+      `   ${c.id}: ${c.source} → ${c.target} ${c.sourceHandle ? `(${c.sourceHandle})` : ''}`
+    );
+  });
+
+  // Проверяем connections для phone
+  const phoneConnections = template.connections.filter(
+    (c: any) => c.source.includes('phone') || c.target.includes('phone')
+  );
+  console.log('\n📊 Connections для phone:');
+  phoneConnections.forEach((c: any) => {
+    console.log(
+      `   ${c.id}: ${c.source} → ${c.target} ${c.sourceHandle ? `(${c.sourceHandle})` : ''}`
+    );
+  });
+
   // Находим все активные workflows
   const workflows = await prisma.workflow.findMany({
     where: {
