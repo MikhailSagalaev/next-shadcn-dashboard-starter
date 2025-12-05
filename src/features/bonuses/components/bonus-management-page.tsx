@@ -79,6 +79,7 @@ import { EnhancedBulkActionsToolbar } from './enhanced-bulk-actions-toolbar';
 import { RichNotificationDialog } from './rich-notification-dialog';
 import { UsersTable } from './users-table';
 import { UserMetadataSection } from './user-metadata-section';
+import { UserReferralsSection } from './user-referrals-section';
 import { BonusAwardDialog } from '../../projects/components/bonus-award-dialog';
 
 // Types
@@ -1114,6 +1115,14 @@ export function BonusManagementPageRefactored({
                 projectId={currentProjectId || ''}
                 readOnly={isEditingProfile}
               />
+
+              {/* Referrals Section */}
+              {!isEditingProfile && (
+                <UserReferralsSection
+                  userId={profileUser.id}
+                  projectId={currentProjectId || ''}
+                />
+              )}
             </div>
           )}
         </DialogContent>

@@ -75,7 +75,7 @@
     "@lexical/table": "^0.38.2",
     "@lexical/text": "^0.38.2",
     "@lexical/utils": "^0.38.2",
-    "@prisma/client": "^6.12.0",
+    "@prisma/client": "^6.13.0",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-aspect-ratio": "^1.1.2",
@@ -134,14 +134,14 @@
     "lucide-react": "^0.555.0",
     "match-sorter": "^8.0.0",
     "motion": "^11.17.0",
-    "next": "15.3.2",
+    "next": "15.5.7",
     "next-themes": "^0.4.6",
     "nextjs-toploader": "^3.7.15",
     "nuqs": "^2.4.1",
     "otplib": "^12.0.1",
     "papaparse": "^5.5.3",
     "postcss": "8.4.49",
-    "prisma": "^6.12.0",
+    "prisma": "^6.13.0",
     "qrcode": "^1.5.4",
     "react": "19.0.0",
     "react-day-picker": "^8.10.1",
@@ -155,7 +155,7 @@
     "resend": "^6.4.0",
     "sharp": "^0.33.5",
     "sonner": "^2.0.7",
-    "sort-by": "^1.2.0",
+    "sort-by": "0.0.2",
     "tailwind-merge": "^3.0.2",
     "tailwindcss": "^4.0.0",
     "tailwindcss-animate": "^1.0.7",
@@ -196,7 +196,17 @@
   },
   "overrides": {
     "@types/react": "19.0.1",
-    "@types/react-dom": "19.0.2"
+    "@types/react-dom": "19.0.2",
+    "js-yaml": "^4.1.1",
+    "hono": "^4.10.3",
+    "valibot": "^1.2.0",
+    "object-path": "^0.11.8"
+  },
+  "resolutions": {
+    "js-yaml": "^4.1.1",
+    "hono": "^4.10.3",
+    "valibot": "^1.2.0",
+    "object-path": "^0.11.8"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
