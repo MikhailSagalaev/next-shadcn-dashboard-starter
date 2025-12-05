@@ -825,8 +825,15 @@ export class RouterIntegration {
       let nextNodeId: string;
 
       if (waitType === 'contact') {
-        // Для контактов всегда переходим к check-contact-user
-        nextNodeId = 'check-contact-user';
+        // ✅ ИСПРАВЛЕНО: Для контактов используем currentNodeId и идём по connections
+        // Это позволяет правильно обрабатывать контакт на этапе request-phone
+        // вместо перехода к глобальному check-contact-user
+        nextNodeId = waitingExecution.currentNodeId || 'start-trigger';
+        logger.info('📞 Contact received during waiting execution', {
+          currentNodeId: waitingExecution.currentNodeId,
+          nextNodeId,
+          executionId: waitingExecution.id
+        });
       } else if (waitType === 'callback') {
         // ✨ ДЛЯ CALLBACK: Ищем trigger.callback ноду с соответствующим callbackData
         const callbackData = data;

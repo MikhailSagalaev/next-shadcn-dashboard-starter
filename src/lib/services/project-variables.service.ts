@@ -30,7 +30,9 @@ export class ProjectVariablesService {
   /**
    * Получить все переменные проекта
    */
-  static async getProjectVariables(projectId: string): Promise<ProjectVariable[]> {
+  static async getProjectVariables(
+    projectId: string
+  ): Promise<ProjectVariable[]> {
     return db.projectVariable.findMany({
       where: { projectId },
       orderBy: [
@@ -60,12 +62,17 @@ export class ProjectVariablesService {
   /**
    * Получить переменные в виде объекта key-value
    */
-  static async getVariablesAsObject(projectId: string): Promise<Record<string, string>> {
+  static async getVariablesAsObject(
+    projectId: string
+  ): Promise<Record<string, string>> {
     const variables = await this.getProjectVariables(projectId);
-    return variables.reduce((acc, variable) => {
-      acc[variable.key] = variable.value;
-      return acc;
-    }, {} as Record<string, string>);
+    return variables.reduce(
+      (acc, variable) => {
+        acc[variable.key] = variable.value;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
   }
 
   /**
@@ -76,7 +83,9 @@ export class ProjectVariablesService {
   ): Promise<ProjectVariable> {
     // Проверяем, что ключ валиден (только буквы, цифры, подчеркивание)
     if (!/^[a-zA-Z0-9_]+$/.test(input.key)) {
-      throw new Error('Ключ переменной может содержать только буквы, цифры и подчеркивание');
+      throw new Error(
+        'Ключ переменной может содержать только буквы, цифры и подчеркивание'
+      );
     }
 
     return db.projectVariable.create({
@@ -204,7 +213,7 @@ export class ProjectVariablesService {
 
   /**
    * Заменить переменные в тексте
-   * Поддерживает формат {variable_name}
+   * Поддерживает формат {variable_name} и {project.variable_name}
    */
   static async replaceVariablesInText(
     projectId: string,
@@ -214,15 +223,42 @@ export class ProjectVariablesService {
     // Получаем переменные проекта
     const projectVariables = await this.getVariablesAsObject(projectId);
 
+    // ✅ КРИТИЧНО: Добавляем переменные проекта с префиксом project.
+    // Это позволяет использовать {project.domain}, {project.name} и т.д.
+    const projectPrefixedVariables: Record<string, string> = {};
+    for (const [key, value] of Object.entries(projectVariables)) {
+      // Добавляем с префиксом project.
+      projectPrefixedVariables[`project.${key}`] = value;
+    }
+
+    // Также загружаем данные проекта напрямую для гарантии наличия domain
+    try {
+      const project = await db.project.findUnique({
+        where: { id: projectId },
+        select: { name: true, domain: true }
+      });
+      if (project) {
+        projectPrefixedVariables['project.domain'] = project.domain || '';
+        projectPrefixedVariables['project.name'] = project.name || '';
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to load project data for variables:', error);
+    }
+
     // Объединяем с дополнительными переменными
     const allVariables = {
       ...projectVariables,
+      ...projectPrefixedVariables,
       ...additionalVariables
     };
 
     // Принудительная гарантия наличия user.expiringBonusesFormatted
-    if (additionalVariables && 'user.expiringBonusesFormatted' in additionalVariables) {
-      allVariables['user.expiringBonusesFormatted'] = additionalVariables['user.expiringBonusesFormatted'];
+    if (
+      additionalVariables &&
+      'user.expiringBonusesFormatted' in additionalVariables
+    ) {
+      allVariables['user.expiringBonusesFormatted'] =
+        additionalVariables['user.expiringBonusesFormatted'];
     }
 
     // Заменяем все вхождения {variable_name} и {user.variable}
@@ -239,10 +275,14 @@ export class ProjectVariablesService {
       const beforeReplace = result;
 
       // ✅ КРИТИЧНО: Приводим значение к строке и обрабатываем undefined/null
-      const stringValue = value === undefined || value === null ? '' : String(value);
+      const stringValue =
+        value === undefined || value === null ? '' : String(value);
 
       // Заменяем плейсхолдер на значение
-      result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), stringValue);
+      result = result.replace(
+        new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+        stringValue
+      );
 
       // Отладка для всех переменных
       if (key.startsWith('user.')) {
@@ -260,7 +300,10 @@ export class ProjectVariablesService {
     }
 
     console.log('✅ FINAL RESULT:', result);
-    console.log('   Contains any user.* placeholders:', result.includes('{user.'));
+    console.log(
+      '   Contains any user.* placeholders:',
+      result.includes('{user.')
+    );
 
     return result;
   }
@@ -268,14 +311,16 @@ export class ProjectVariablesService {
   /**
    * Получить список доступных переменных для подсказок в UI
    */
-  static async getAvailableVariables(projectId: string): Promise<Array<{
-    key: string;
-    value: string;
-    description?: string;
-    isSystem: boolean;
-  }>> {
+  static async getAvailableVariables(projectId: string): Promise<
+    Array<{
+      key: string;
+      value: string;
+      description?: string;
+      isSystem: boolean;
+    }>
+  > {
     const variables = await this.getProjectVariables(projectId);
-    return variables.map(v => ({
+    return variables.map((v) => ({
       key: v.key,
       value: v.value,
       description: v.description || undefined,
@@ -283,4 +328,3 @@ export class ProjectVariablesService {
     }));
   }
 }
-

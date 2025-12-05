@@ -1070,14 +1070,47 @@ export class WorkflowRuntimeService {
                     {
                       currentNodeId,
                       waitType: waitingExecution.waitType,
-                      contactReceived: contactPhone || contactEmail
+                      contactReceived: contactPhone || contactEmail,
+                      messageText
                     }
                   );
 
                   // Получаем следующую ноду по connections
-                  const nextNodeId = await (processor as any).getNextNodeId(
+                  let nextNodeId = await (processor as any).getNextNodeId(
                     currentNodeId
                   );
+
+                  // ✅ КРИТИЧНО: Если следующая нода — trigger.message, пропускаем её
+                  // и идём к следующей ноде (condition или action)
+                  // Это нужно потому что trigger.message не обрабатывает контакты
+                  if (nextNodeId) {
+                    const nextNode = versionToUse.nodes[nextNodeId];
+                    if (nextNode?.type === 'trigger.message') {
+                      console.log(
+                        '🔧 Next node is trigger.message, skipping to next',
+                        {
+                          skippedNodeId: nextNodeId,
+                          skippedNodeLabel: nextNode.data?.label
+                        }
+                      );
+                      // Получаем следующую ноду после trigger.message
+                      const afterTriggerNodeId = await (
+                        processor as any
+                      ).getNextNodeId(nextNodeId);
+                      if (afterTriggerNodeId) {
+                        nextNodeId = afterTriggerNodeId;
+                        console.log(
+                          '🔧 Skipped trigger.message, new next node',
+                          {
+                            nextNodeId,
+                            nextNodeType: versionToUse.nodes[nextNodeId]?.type,
+                            nextNodeLabel:
+                              versionToUse.nodes[nextNodeId]?.data?.label
+                          }
+                        );
+                      }
+                    }
+                  }
 
                   console.log('🔧 Next node determined from connections', {
                     currentNodeId,
