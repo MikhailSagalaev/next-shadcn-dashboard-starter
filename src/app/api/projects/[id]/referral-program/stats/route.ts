@@ -21,8 +21,8 @@ export async function GET(
     const { searchParams } = new URL(request.url);
 
     // Получаем параметры фильтрации
-    const period = searchParams.get('period') || '30'; // дней
-    const userId = searchParams.get('userId'); // статистика конкретного пользователя
+    const periodParam = searchParams.get('period') || 'month';
+    const userId = searchParams.get('userId');
 
     // Проверяем существование проекта
     const project = await db.project.findUnique({
@@ -33,15 +33,29 @@ export async function GET(
       return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
     }
 
-    let stats;
+    // Определяем период в днях
+    let periodDays: number;
+    switch (periodParam) {
+      case 'week':
+        periodDays = 7;
+        break;
+      case 'month':
+        periodDays = 30;
+        break;
+      case 'all':
+        periodDays = 36500; // ~100 лет
+        break;
+      default:
+        periodDays = parseInt(periodParam) || 30;
+    }
+
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - periodDays);
 
     if (userId) {
       // Статистика конкретного пользователя
       const user = await db.user.findFirst({
-        where: {
-          id: userId,
-          projectId: projectId
-        }
+        where: { id: userId, projectId }
       });
 
       if (!user) {
@@ -51,116 +65,172 @@ export async function GET(
         );
       }
 
-      stats = await ReferralService.getReferralStats(userId);
-    } else {
-      // Общая статистика проекта
-      const periodDays = parseInt(period);
-      const dateFrom = new Date();
-      dateFrom.setDate(dateFrom.getDate() - periodDays);
-
-      // Общее количество рефералов
-      const totalReferrals = await db.user.count({
-        where: {
-          projectId: projectId,
-          referredBy: { not: null }
-        }
-      });
-
-      // Рефералы за период
-      const periodReferrals = await db.user.count({
-        where: {
-          projectId: projectId,
-          referredBy: { not: null },
-          registeredAt: { gte: dateFrom }
-        }
-      });
-
-      // Топ рефереров
-      const topReferrers = await db.user.findMany({
-        where: {
-          projectId: projectId,
-          referrals: { some: {} }
-        },
-        include: {
-          _count: {
-            select: { referrals: true }
-          }
-        },
-        orderBy: {
-          referrals: { _count: 'desc' }
-        },
-        take: 10
-      });
-
-      // Общий объем выплаченных реферальных бонусов
-      const totalReferralBonuses = await db.transaction.aggregate({
-        where: {
-          user: { projectId: projectId },
-          isReferralBonus: true,
-          type: 'EARN'
-        },
-        _sum: { amount: true }
-      });
-
-      // Реферальные бонусы за период
-      const periodReferralBonuses = await db.transaction.aggregate({
-        where: {
-          user: { projectId: projectId },
-          isReferralBonus: true,
-          type: 'EARN',
-          createdAt: { gte: dateFrom }
-        },
-        _sum: { amount: true }
-      });
-
-      // UTM источники
-      const utmSources = await db.user.groupBy({
-        by: ['utmSource'],
-        where: {
-          projectId: projectId,
-          utmSource: { not: null },
-          referredBy: { not: null }
-        },
-        _count: true
-      });
-
-      stats = {
-        overview: {
-          totalReferrals,
-          periodReferrals,
-          totalBonusPaid: Number(totalReferralBonuses._sum?.amount || 0),
-          periodBonusPaid: Number(periodReferralBonuses._sum?.amount || 0)
-        },
-        topReferrers: topReferrers.map((user: any) => ({
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          referralsCount: user._count.referrals,
-          referralCode: user.referralCode
-        })),
-        utmSources: utmSources
-          .map((source: { utmSource: string | null; _count: number }) => ({
-            source: source.utmSource,
-            count: source._count
-          }))
-          .sort(
-            (a: { count: number }, b: { count: number }) => b.count - a.count
-          ),
-        period: periodDays
-      };
+      const stats = await ReferralService.getReferralStats(userId);
+      return NextResponse.json(stats);
     }
+
+    // Общая статистика проекта
+
+    // Общее количество рефералов
+    const totalReferrals = await db.user.count({
+      where: {
+        projectId,
+        referredBy: { not: null }
+      }
+    });
+
+    // Рефералы за период
+    const periodReferrals = await db.user.count({
+      where: {
+        projectId,
+        referredBy: { not: null },
+        registeredAt: { gte: dateFrom }
+      }
+    });
+
+    // Активные рефереры (у которых есть хотя бы 1 реферал)
+    const activeReferrers = await db.user.count({
+      where: {
+        projectId,
+        referrals: { some: {} }
+      }
+    });
+
+    // Общий объем выплаченных реферальных бонусов
+    const totalReferralBonuses = await db.transaction.aggregate({
+      where: {
+        user: { projectId },
+        isReferralBonus: true,
+        type: 'EARN'
+      },
+      _sum: { amount: true }
+    });
+
+    // Реферальные бонусы за период
+    const periodReferralBonuses = await db.transaction.aggregate({
+      where: {
+        user: { projectId },
+        isReferralBonus: true,
+        type: 'EARN',
+        createdAt: { gte: dateFrom }
+      },
+      _sum: { amount: true }
+    });
+
+    // Средний чек от рефералов (транзакции SPEND от пользователей с referredBy)
+    const referralOrders = await db.transaction.aggregate({
+      where: {
+        user: {
+          projectId,
+          referredBy: { not: null }
+        },
+        type: 'SPEND'
+      },
+      _avg: { amount: true },
+      _count: true
+    });
+
+    // Топ рефереров с суммой бонусов
+    const topReferrersRaw = await db.user.findMany({
+      where: {
+        projectId,
+        referrals: { some: {} }
+      },
+      include: {
+        _count: {
+          select: { referrals: true }
+        },
+        transactions: {
+          where: {
+            isReferralBonus: true,
+            type: 'EARN'
+          },
+          select: { amount: true }
+        }
+      },
+      orderBy: {
+        referrals: { _count: 'desc' }
+      },
+      take: 10
+    });
+
+    const topReferrers = topReferrersRaw.map((user) => ({
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      referralCount: user._count.referrals,
+      totalBonus: user.transactions.reduce(
+        (sum, t) => sum + Number(t.amount),
+        0
+      )
+    }));
+
+    // UTM источники
+    const utmSourcesRaw = await db.user.groupBy({
+      by: ['utmSource', 'utmMedium', 'utmCampaign'],
+      where: {
+        projectId,
+        referredBy: { not: null },
+        OR: [
+          { utmSource: { not: null } },
+          { utmMedium: { not: null } },
+          { utmCampaign: { not: null } }
+        ]
+      },
+      _count: true
+    });
+
+    const utmSources = utmSourcesRaw
+      .map((source) => ({
+        utm_source: source.utmSource,
+        utm_medium: source.utmMedium,
+        utm_campaign: source.utmCampaign,
+        count: source._count
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // Распределение по уровням реферальной программы
+    const levelBreakdownRaw = await db.transaction.groupBy({
+      by: ['referralLevel'],
+      where: {
+        user: { projectId },
+        isReferralBonus: true,
+        type: 'EARN',
+        referralLevel: { not: null }
+      },
+      _sum: { amount: true },
+      _count: true
+    });
+
+    const levelBreakdown = levelBreakdownRaw
+      .filter((l) => l.referralLevel !== null)
+      .map((l) => ({
+        level: l.referralLevel as number,
+        payouts: l._count,
+        totalBonus: Number(l._sum.amount || 0)
+      }))
+      .sort((a, b) => a.level - b.level);
+
+    const stats = {
+      totalReferrals,
+      periodReferrals,
+      totalBonusPaid: Number(totalReferralBonuses._sum?.amount || 0),
+      periodBonusPaid: Number(periodReferralBonuses._sum?.amount || 0),
+      activeReferrers,
+      averageOrderValue: Math.abs(Number(referralOrders._avg?.amount || 0)),
+      topReferrers,
+      utmSources,
+      levelBreakdown
+    };
 
     logger.info('Referral stats retrieved', {
       projectId,
-      userId: userId || 'all',
-      period: userId ? 'user-specific' : `${period} days`
+      period: periodParam
     });
 
-    return NextResponse.json({
-      success: true,
-      data: stats
-    });
+    return NextResponse.json(stats);
   } catch (error: any) {
     const { id: projectId } = await context.params;
     logger.error('Error retrieving referral stats', {
