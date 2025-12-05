@@ -4,24 +4,32 @@
 
 ---
 
-## [2025-12-05] - 🐛 Исправление обработки контакта в workflow
+## [2025-12-05] - 🎨 Улучшение страницы пользователей проекта + исправление ошибок
+
+### 🎯 Добавлено
+- **Управление данными пользователя на странице `/dashboard/projects/[id]/users`**
+  - Добавлены секции метаданных и рефералов в диалог профиля пользователя (как на `/dashboard/bonuses`)
+  - Добавлено отображение даты рождения в профиле
+  - Добавлен скролл для диалога профиля при большом контенте
 
 ### 🐛 Исправлено
+- **Ошибка "Cannot read properties of undefined (reading 'length')" при клике на ноды в сценарии**
+  - Причина: `keyboard.buttons` мог быть `undefined` в `KeyboardEditor`
+  - Решение: добавлена проверка `Array.isArray(value.buttons)` с fallback на пустой массив
+
 - **Ошибка "No handler found for node type: trigger.contact"**
-  - Причина: в `node-handlers-registry.ts` в списке `allNodeTypes` отсутствовал тип `trigger.contact`
-  - Решение: добавлен `trigger.contact` и `action.check_channel_subscription` в список типов для регистрации handlers
+  - Причина: в `node-handlers-registry.ts` отсутствовал тип `trigger.contact`
+  - Решение: добавлен `trigger.contact` и `action.check_channel_subscription`
 
 - **Контакт не обрабатывался при нажатии "Поделиться контактом"**
-  - Причина 1: когда `waitForInput=true` и клавиатура содержит `request_contact`, `waitType` устанавливался как `'input'` вместо `'contact'`
-  - Причина 2: поиск waiting execution для `waitType='contact'` не находил executions с `waitType='input'`
-  - Решение: 
-    - В `message-handler.ts` приоритет `waitType`: contact > callback > input
-    - В `workflow-runtime.service.ts` поиск для contact/input ищет оба типа
+  - Решение: исправлен приоритет `waitType` (contact > callback > input) и поиск waiting execution
 
 ### 🔧 Изменено
+- `src/features/projects/components/project-users-view.tsx` - добавлены UserMetadataSection и UserReferralsSection
+- `src/components/ui/keyboard-editor.tsx` - защита от undefined buttons
 - `src/lib/services/workflow/node-handlers-registry.ts` - добавлены недостающие типы нод
-- `src/lib/services/workflow/handlers/message-handler.ts` - исправлен приоритет waitType для request_contact
-- `src/lib/services/workflow-runtime.service.ts` - исправлен поиск waiting execution для contact/input
+- `src/lib/services/workflow/handlers/message-handler.ts` - исправлен приоритет waitType
+- `src/lib/services/workflow-runtime.service.ts` - исправлен поиск waiting execution
 
 ---
 

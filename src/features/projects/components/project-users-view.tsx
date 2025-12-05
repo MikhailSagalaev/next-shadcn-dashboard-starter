@@ -78,6 +78,8 @@ import type { DisplayUser } from '@/features/bonuses/types';
 import { UserCreateDialog } from './user-create-dialog';
 import { UserImportDialog } from './user-import-dialog';
 import { UsersTable } from '../../bonuses/components/users-table';
+import { UserMetadataSection } from '../../bonuses/components/user-metadata-section';
+import { UserReferralsSection } from '../../bonuses/components/user-referrals-section';
 import { BonusAwardDialog } from './bonus-award-dialog';
 import { EnhancedBulkActionsToolbar } from '@/features/bonuses/components/enhanced-bulk-actions-toolbar';
 import { RichNotificationDialog } from '@/features/bonuses/components/rich-notification-dialog';
@@ -983,7 +985,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         open={!!profileUser}
         onOpenChange={(o) => !o && setProfileUser(null)}
       >
-        <DialogContent className='max-w-2xl'>
+        <DialogContent className='max-h-[85vh] max-w-2xl overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Профиль пользователя</DialogTitle>
             <DialogDescription>
@@ -1057,31 +1059,50 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     {profileUser.isActive ? 'Активный' : 'Неактивный'}
                   </p>
                 </div>
-                {(profileUser.telegramId || profileUser.telegramUsername) && (
-                  <>
-                    <div>
-                      <Label className='text-sm font-medium'>
-                        Telegram Username
-                      </Label>
-                      <p className='text-muted-foreground text-sm'>
-                        {profileUser.telegramUsername
-                          ? `@${profileUser.telegramUsername}`
-                          : 'Не указан'}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className='text-sm font-medium'>Telegram ID</Label>
-                      <p className='text-muted-foreground text-sm'>
-                        {profileUser.telegramId
-                          ? typeof profileUser.telegramId === 'bigint'
-                            ? profileUser.telegramId.toString()
-                            : String(profileUser.telegramId)
-                          : 'Не указан'}
-                      </p>
-                    </div>
-                  </>
-                )}
+                <div>
+                  <Label className='text-sm font-medium'>Дата рождения</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {(profileUser as any).birthDate
+                      ? new Date(
+                          (profileUser as any).birthDate
+                        ).toLocaleDateString('ru-RU')
+                      : 'Не указана'}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>
+                    Telegram Username
+                  </Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.telegramUsername
+                      ? `@${profileUser.telegramUsername}`
+                      : 'Не указан'}
+                  </p>
+                </div>
+                <div>
+                  <Label className='text-sm font-medium'>Telegram ID</Label>
+                  <p className='text-muted-foreground text-sm'>
+                    {profileUser.telegramId
+                      ? typeof profileUser.telegramId === 'bigint'
+                        ? profileUser.telegramId.toString()
+                        : String(profileUser.telegramId)
+                      : 'Не указан'}
+                  </p>
+                </div>
               </div>
+
+              {/* Metadata Section */}
+              <UserMetadataSection
+                userId={profileUser.id}
+                projectId={projectId}
+                readOnly={false}
+              />
+
+              {/* Referrals Section */}
+              <UserReferralsSection
+                userId={profileUser.id}
+                projectId={projectId}
+              />
             </div>
           )}
         </DialogContent>
