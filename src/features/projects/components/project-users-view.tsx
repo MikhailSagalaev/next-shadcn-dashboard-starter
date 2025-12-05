@@ -875,12 +875,13 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 updatedAt: new Date(user.registeredAt),
                 isActive: user.isActive !== undefined ? user.isActive : false
               }))}
+              projectId={projectId}
               onSelectionChange={setSelectedUsers}
-              // onProfileClick={handleUserProfile} // Disabled for now due to type mismatch
               onBonusAwardClick={(user: any) => handleOpenBonusDialog(user)}
               onHistoryClick={handleOpenHistoryDialog}
               onProfileClick={handleUserProfile}
               onDeleteUser={handleDeleteUser}
+              onUserUpdated={() => loadUsers(currentPage)}
               onExport={handleExportAll}
               loading={usersLoading}
               totalCount={totalUsers}

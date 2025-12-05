@@ -30,7 +30,9 @@ import {
   Eye,
   Coins,
   Gift,
-  Trash2
+  Trash2,
+  Edit,
+  Loader2
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -57,16 +59,29 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DataTablePagination } from '@/components/ui/table/data-table-pagination';
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
 import type { DisplayUser as User } from '../types';
 
 interface UsersTableProps {
   data: User[];
+  projectId?: string;
   onExport: () => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   onProfileClick?: (user: User) => void;
   onHistoryClick?: (userId: string) => void;
   onBonusAwardClick?: (user: User) => void;
   onDeleteUser?: (user: User) => void;
+  onUserUpdated?: () => void;
   loading?: boolean;
   totalCount?: number;
   onPageChange?: (page: number) => void;
@@ -77,12 +92,14 @@ interface UsersTableProps {
 
 export function UsersTable({
   data,
+  projectId,
   onExport,
   onSelectionChange,
   onProfileClick,
   onHistoryClick,
   onBonusAwardClick,
   onDeleteUser,
+  onUserUpdated,
   loading = false,
   totalCount = data.length,
   onPageChange,
@@ -90,6 +107,7 @@ export function UsersTable({
   currentPage = 1,
   pageSize = 50
 }: UsersTableProps) {
+  const { toast } = useToast();
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'createdAt', desc: true }
   ]);
@@ -100,6 +118,68 @@ export function UsersTable({
     pageIndex: 0,
     pageSize: pageSize
   });
+
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    isActive: false
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setEditForm({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      isActive: user.isActive ?? false
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser || !projectId) return;
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/users/${editingUser.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editForm)
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Ошибка сохранения');
+      }
+
+      toast({
+        title: 'Успешно',
+        description: 'Данные пользователя обновлены'
+      });
+
+      setEditDialogOpen(false);
+      onUserUpdated?.();
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description:
+          error instanceof Error ? error.message : 'Не удалось сохранить',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Обработчик изменений пагинации изнутри таблицы
   const handlePageSizeChange = (newPageSize: number) => {
@@ -289,11 +369,15 @@ export function UsersTable({
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end'>
               <DropdownMenuLabel>Действия</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                <Edit className='mr-2 h-4 w-4' />
+                Редактировать
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onBonusAwardClick?.(user)}>
                 <Gift className='mr-2 h-4 w-4' />
                 Начислить бонусы
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onHistoryClick(user.id)}>
+              <DropdownMenuItem onClick={() => onHistoryClick?.(user.id)}>
                 <Coins className='mr-2 h-4 w-4' />
                 История бонусов
               </DropdownMenuItem>
@@ -464,6 +548,103 @@ export function UsersTable({
         onPageSizeChange={handlePageSizeChange}
         pageSizeOptions={[10, 20, 50, 100, 200, 500, 1000]}
       />
+
+      {/* Edit User Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className='sm:max-w-[425px]'>
+          <DialogHeader>
+            <DialogTitle>Редактировать пользователя</DialogTitle>
+            <DialogDescription>
+              Измените данные пользователя и нажмите Сохранить
+            </DialogDescription>
+          </DialogHeader>
+          <div className='grid gap-4 py-4'>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='firstName' className='text-right'>
+                Имя
+              </Label>
+              <Input
+                id='firstName'
+                value={editForm.firstName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, firstName: e.target.value })
+                }
+                className='col-span-3'
+              />
+            </div>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='lastName' className='text-right'>
+                Фамилия
+              </Label>
+              <Input
+                id='lastName'
+                value={editForm.lastName}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, lastName: e.target.value })
+                }
+                className='col-span-3'
+              />
+            </div>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='email' className='text-right'>
+                Email
+              </Label>
+              <Input
+                id='email'
+                type='email'
+                value={editForm.email}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, email: e.target.value })
+                }
+                className='col-span-3'
+              />
+            </div>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='phone' className='text-right'>
+                Телефон
+              </Label>
+              <Input
+                id='phone'
+                value={editForm.phone}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, phone: e.target.value })
+                }
+                className='col-span-3'
+              />
+            </div>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='isActive' className='text-right'>
+                Активен
+              </Label>
+              <div className='col-span-3 flex items-center space-x-2'>
+                <Switch
+                  id='isActive'
+                  checked={editForm.isActive}
+                  onCheckedChange={(checked) =>
+                    setEditForm({ ...editForm, isActive: checked })
+                  }
+                />
+                <span className='text-muted-foreground text-sm'>
+                  {editForm.isActive ? 'Активный' : 'Неактивный'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => setEditDialogOpen(false)}
+              disabled={isSaving}
+            >
+              Отмена
+            </Button>
+            <Button onClick={handleSaveUser} disabled={isSaving}>
+              {isSaving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+              Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
