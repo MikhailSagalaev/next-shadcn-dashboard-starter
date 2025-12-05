@@ -1369,21 +1369,60 @@ class BotManager {
 }
 
 // Создаем глобальный экземпляр менеджера
+// КРИТИЧНО: Сохраняем в globalThis для всех окружений (включая production)
 const globalForBotManager = globalThis as unknown as {
   botManager: BotManager | undefined;
+  botsInitialized: boolean | undefined;
 };
 
 export const botManager = globalForBotManager.botManager ?? new BotManager();
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForBotManager.botManager = botManager;
-}
+// Сохраняем в globalThis для ВСЕХ окружений, чтобы боты не терялись
+globalForBotManager.botManager = botManager;
 
-// Автоматическая загрузка ботов при инициализации модуля
-// ОТКЛЮЧАЕМ автозагрузку - будем загружать только по требованию
-// botManager.loadAllBots().catch(error => {
-//   logger.error('Ошибка автоматической загрузки ботов:', {
-//     error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-//     component: 'bot-manager'
-//   });
-// });
+// Флаг инициализации ботов
+let botsInitializationPromise: Promise<void> | null = null;
+
+/**
+ * Проверяет и запускает ботов если они ещё не запущены
+ * Безопасно вызывать многократно - инициализация произойдёт только один раз
+ */
+export async function ensureBotsInitialized(): Promise<void> {
+  // Если уже инициализированы - выходим
+  if (globalForBotManager.botsInitialized) {
+    return;
+  }
+
+  // Если инициализация уже запущена - ждём её завершения
+  if (botsInitializationPromise) {
+    return botsInitializationPromise;
+  }
+
+  // Запускаем инициализацию
+  botsInitializationPromise = (async () => {
+    try {
+      const stats = botManager.getStats();
+      if (stats.total === 0) {
+        logger.info('🚀 Автоматический запуск ботов...', {
+          component: 'bot-manager'
+        });
+        await botManager.loadAllBots();
+        logger.info('✅ Боты успешно запущены', {
+          component: 'bot-manager',
+          stats: botManager.getStats()
+        });
+      }
+      globalForBotManager.botsInitialized = true;
+    } catch (error) {
+      logger.error('❌ Ошибка автоматического запуска ботов', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        component: 'bot-manager'
+      });
+      // Сбрасываем promise чтобы можно было повторить попытку
+      botsInitializationPromise = null;
+      throw error;
+    }
+  })();
+
+  return botsInitializationPromise;
+}

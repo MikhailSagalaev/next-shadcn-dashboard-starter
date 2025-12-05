@@ -479,7 +479,7 @@
             "parameters": {
               "telegramId": "{{telegram.userId}}",
               "projectId": "{{projectId}}",
-              "phone": "{{contactReceived.phoneNumber}}"
+              "phone": "{{telegram.contact.phoneNumber}}"
             }
           }
         }

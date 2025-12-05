@@ -508,10 +508,10 @@ export class WorkflowRuntimeService {
               projectId,
               status: 'waiting',
               telegramChatId: chatId,
-              // ✅ КРИТИЧНО: Для /start команды ищем любой waiting execution (contact, input, callback)
-              // Для других триггеров ищем по конкретному waitType
+              // ✅ КРИТИЧНО: Для contact и input ищем оба типа, т.к. они взаимозаменяемы
+              // (пользователь может отправить контакт когда ожидается input и наоборот)
               waitType:
-                waitType === 'input'
+                waitType === 'input' || waitType === 'contact'
                   ? ({ in: ['input', 'contact'] } as any)
                   : waitType ||
                     (trigger === 'start'
@@ -930,6 +930,16 @@ export class WorkflowRuntimeService {
               }
             }
 
+            // Создаём объект контакта для передачи в контекст
+            const contactData = contactPhone
+              ? {
+                  phoneNumber: contactPhone,
+                  firstName: context.message?.contact?.first_name,
+                  lastName: context.message?.contact?.last_name,
+                  telegramUserId: context.message?.contact?.user_id?.toString()
+                }
+              : undefined;
+
             // Resume execution context
             const resumedContext = await ExecutionContextManager.resumeContext(
               waitingExecution.id,
@@ -937,7 +947,8 @@ export class WorkflowRuntimeService {
               context.from?.id,
               context.from?.username,
               messageText,
-              trigger === 'callback' ? context.callbackQuery?.data : undefined
+              trigger === 'callback' ? context.callbackQuery?.data : undefined,
+              contactData
             );
 
             // ✅ КРИТИЧНО: Сохраняем контакт/email в переменные для использования в workflow

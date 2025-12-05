@@ -47,6 +47,27 @@ export class ExecutionContextManager {
       );
     }
 
+    // ✅ КРИТИЧНО: Проверяем существование workflow перед созданием execution
+    const workflowExists = await db.workflow.findUnique({
+      where: { id: workflowId },
+      select: { id: true }
+    });
+
+    if (!workflowExists) {
+      console.error('❌ Workflow not found in database, clearing cache:', {
+        workflowId,
+        projectId
+      });
+      // Очищаем кэш для этого проекта
+      const { WorkflowRuntimeService } = await import(
+        '../workflow-runtime.service'
+      );
+      await WorkflowRuntimeService.invalidateCache(projectId);
+      throw new Error(
+        `Workflow ${workflowId} not found. Cache has been cleared, please retry.`
+      );
+    }
+
     // Создаем запись о выполнении
     let execution: any;
     const executionPayload = {
@@ -74,6 +95,14 @@ export class ExecutionContextManager {
         code: dbError?.code,
         meta: dbError?.meta
       });
+      // Если ошибка foreign key - очищаем кэш
+      if (dbError?.code === 'P2003') {
+        const { WorkflowRuntimeService } = await import(
+          '../workflow-runtime.service'
+        );
+        await WorkflowRuntimeService.invalidateCache(projectId);
+        console.log('🧹 Cache invalidated due to foreign key error');
+      }
       throw dbError;
     }
 
@@ -148,7 +177,8 @@ export class ExecutionContextManager {
     telegramUserId?: string,
     telegramUsername?: string,
     messageText?: string,
-    callbackData?: string
+    callbackData?: string,
+    contact?: TelegramContact
   ): Promise<ExecutionContext> {
     // Получаем существующий execution
     const execution = await db.workflowExecution.findUnique({
@@ -208,7 +238,8 @@ export class ExecutionContextManager {
         message: {
           text: messageText,
           callbackData
-        }
+        },
+        contact: contact
       },
       variables: variableManager,
       logger: simpleLogger,

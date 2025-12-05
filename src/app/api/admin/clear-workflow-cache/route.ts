@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { workflowCache } from '@/lib/services/workflow-cache';
+import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
 import { requireAdmin } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
@@ -15,14 +16,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Очищаем весь кэш workflow
+    // Получаем projectId из query параметров (опционально)
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get('projectId');
+
+    // Очищаем кэш workflow
     workflowCache.clearAll();
-    
-    logger.info('Workflow cache cleared', { adminId: admin.sub });
+
+    // Очищаем кэш WorkflowRuntimeService
+    if (projectId) {
+      await WorkflowRuntimeService.invalidateCache(projectId);
+      logger.info('Workflow cache cleared for project', {
+        adminId: admin.sub,
+        projectId
+      });
+    } else {
+      await WorkflowRuntimeService.clearAllCache();
+      logger.info('All workflow caches cleared', { adminId: admin.sub });
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Workflow cache cleared successfully'
+      message: projectId
+        ? `Workflow cache cleared for project ${projectId}`
+        : 'All workflow caches cleared successfully'
     });
   } catch (error) {
     logger.error('Failed to clear workflow cache', {

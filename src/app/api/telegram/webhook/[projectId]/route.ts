@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { botManager } from '@/lib/telegram/bot-manager';
+import { botManager, ensureBotsInitialized } from '@/lib/telegram/bot-manager';
 import { logger } from '@/lib/logger';
 
 // POST /api/telegram/webhook/[projectId] - Webhook для обработки сообщений
@@ -27,8 +27,11 @@ export async function POST(
       component: 'telegram-webhook'
     });
 
+    // ✅ КРИТИЧНО: Убеждаемся что боты инициализированы
+    await ensureBotsInitialized();
+
     // Получаем webhook handler для проекта
-    const webhookHandler = botManager.getWebhookHandler(projectId);
+    let webhookHandler = botManager.getWebhookHandler(projectId);
 
     if (!webhookHandler) {
       logger.error(`❌ Webhook handler не найден для проекта`, {

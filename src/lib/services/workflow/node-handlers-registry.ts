@@ -37,6 +37,7 @@ export class NodeHandlersRegistry {
       'trigger.callback',
       'trigger.webhook',
       'trigger.email',
+      'trigger.contact',
       // Сообщения
       'message',
       'message.keyboard.inline',
@@ -58,6 +59,7 @@ export class NodeHandlersRegistry {
       'action.link_telegram_account',
       'action.get_user_balance',
       'action.menu_command',
+      'action.check_channel_subscription',
       // Условия
       'condition',
       // Поток управления
@@ -81,12 +83,16 @@ export class NodeHandlersRegistry {
     // Регистрируем handler для каждого поддерживаемого типа
     for (const nodeType of supportedTypes) {
       if (this.handlers.has(nodeType)) {
-        console.warn(`Handler for node type '${nodeType}' is already registered. Overwriting.`);
+        console.warn(
+          `Handler for node type '${nodeType}' is already registered. Overwriting.`
+        );
       }
       this.handlers.set(nodeType, handler);
     }
 
-    console.log(`Registered handler for node types: ${supportedTypes.join(', ')}`);
+    console.log(
+      `Registered handler for node types: ${supportedTypes.join(', ')}`
+    );
   }
 
   /**

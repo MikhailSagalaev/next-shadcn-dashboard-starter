@@ -1222,11 +1222,13 @@ export const SAFE_QUERIES = {
         if (match) {
           const day = parseInt(match[1], 10);
           const month = parseInt(match[2], 10);
-          // Для дня рождения без года используем 1900 (чтобы не было "будущей даты")
-          const year = match[3] ? parseInt(match[3], 10) : 1900;
+          // Для дня рождения без года используем 2000 (нейтральный год)
+          // Используем UTC чтобы избежать проблем с часовыми поясами
+          const year = match[3] ? parseInt(match[3], 10) : 2000;
 
           if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-            birthDate = new Date(year, month - 1, day);
+            // Создаём дату в UTC чтобы избежать сдвига из-за часового пояса
+            birthDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
             parsed = true;
             logger.info('Birthday parsed successfully', {
               input: dateStr,

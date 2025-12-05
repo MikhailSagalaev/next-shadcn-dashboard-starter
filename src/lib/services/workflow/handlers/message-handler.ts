@@ -322,8 +322,15 @@ export class MessageHandler extends BaseNodeHandler {
       });
 
       // ✅ КРИТИЧНО: Если waitForInput=true, всегда ждём ввода пользователя
+      // ✅ ИСПРАВЛЕНО: Если клавиатура содержит request_contact, используем 'contact' как waitType
       if (waitForInput || needsWaiting.shouldWait) {
-        const waitType = waitForInput ? 'input' : needsWaiting.waitType;
+        // Приоритет: contact > callback > input
+        const waitType =
+          needsWaiting.waitType === 'contact'
+            ? 'contact'
+            : waitForInput
+              ? 'input'
+              : needsWaiting.waitType;
 
         this.logStep(
           context,

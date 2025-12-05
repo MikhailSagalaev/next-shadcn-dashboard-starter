@@ -32,12 +32,24 @@ export async function register() {
       process.on('SIGINT', () => shutdown('SIGINT'));
     }
 
-    // Динамический импорт для избежания проблем с crypto
+    // ✅ КРИТИЧНО: Инициализация ботов при запуске
+    // Используем ensureBotsInitialized для надёжной инициализации
     try {
-      const { startupBots } = await import('@/lib/telegram/startup');
-      startupBots();
+      console.log('🚀 Запуск инициализации ботов...');
+      const { ensureBotsInitialized } = await import(
+        '@/lib/telegram/bot-manager'
+      );
+      // Запускаем асинхронно с небольшой задержкой для стабильности
+      setTimeout(async () => {
+        try {
+          await ensureBotsInitialized();
+          console.log('✅ Боты успешно инициализированы');
+        } catch (error) {
+          console.error('❌ Ошибка инициализации ботов:', error);
+        }
+      }, 2000);
     } catch (error) {
-      console.error('Failed to initialize bots:', error);
+      console.error('Failed to import bot-manager:', error);
     }
   }
 }
