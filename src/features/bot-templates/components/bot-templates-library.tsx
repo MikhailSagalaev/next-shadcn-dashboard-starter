@@ -36,13 +36,9 @@ import {
   Search,
   Download,
   Clock,
-  Users,
-  TrendingUp,
   CheckCircle,
   AlertCircle,
   Loader2,
-  Zap,
-  BookOpen,
   Heart,
   MessageSquare,
   ShoppingCart,
@@ -54,9 +50,7 @@ import {
   Settings,
   Megaphone,
   UserCheck,
-  Star,
-  Trash2,
-  MoreVertical
+  Star
 } from 'lucide-react';
 
 import type {
@@ -72,9 +66,10 @@ interface TemplatesLibraryProps {
 interface TemplateCardProps {
   template: BotTemplate;
   onInstall: (template: BotTemplate) => void;
-  onDelete?: (template: BotTemplate) => void;
+  onViewDetails: (template: BotTemplate) => void;
+  onLike: (template: BotTemplate) => void;
   isInstalling: boolean;
-  showAdminActions?: boolean;
+  isLiked?: boolean;
 }
 
 const categoryIcons = {
@@ -118,14 +113,18 @@ const difficultyColors = {
 const TemplateCard: React.FC<TemplateCardProps> = ({
   template,
   onInstall,
-  onDelete,
+  onViewDetails,
+  onLike,
   isInstalling,
-  showAdminActions = false
+  isLiked = false
 }) => {
   const Icon = categoryIcons[template.category] || Settings;
 
   return (
-    <Card className='group transition-all hover:shadow-lg'>
+    <Card
+      className='group cursor-pointer transition-all hover:shadow-lg'
+      onClick={() => onViewDetails(template)}
+    >
       <CardHeader className='pb-3'>
         <div className='flex items-start gap-3'>
           <div
@@ -139,33 +138,23 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
           </div>
           <div className='flex-1'>
             <div className='flex items-start justify-between'>
-              <CardTitle className='text-lg'>
-                {template.name}
-              </CardTitle>
-              {showAdminActions && onDelete && (
-                <Button
-                  variant='ghost'
-                  size='icon'
-                  className='h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100'
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm(`Удалить шаблон "${template.name}"?`)) {
-                      onDelete(template);
-                    }
-                  }}
-                >
-                  <Trash2 className='h-4 w-4 text-destructive' />
-                </Button>
-              )}
+              <CardTitle className='text-lg'>{template.name}</CardTitle>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='h-8 w-8'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLike(template);
+                }}
+              >
+                <Heart
+                  className={`h-4 w-4 ${isLiked ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`}
+                />
+              </Button>
             </div>
             <div className='mt-1 flex items-center gap-2'>
               <Badge variant='secondary' className='text-xs'>
-                <Icon className='mr-1 h-3 w-3' />
-                {categoryLabels[template.category]}
-              </Badge>
-              <Badge
-                className={`text-xs ${difficultyColors[template.difficulty]}`}
-              >
                 {difficultyLabels[template.difficulty]}
               </Badge>
             </div>
@@ -193,18 +182,21 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
 
         <div className='text-muted-foreground flex items-center justify-between text-sm'>
           <div className='flex items-center gap-4'>
-            <div className='flex items-center gap-1'>
+            <div className='flex items-center gap-1' title='Установок'>
               <Download className='h-3 w-3' />
               <span>{template.installs}</span>
             </div>
-            <div className='flex items-center gap-1'>
+            <div className='flex items-center gap-1' title='Время настройки'>
               <Clock className='h-3 w-3' />
               <span>{template.estimatedTime}м</span>
             </div>
           </div>
 
           <Button
-            onClick={() => onInstall(template)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onInstall(template);
+            }}
             disabled={isInstalling}
             className='h-8'
           >
@@ -250,23 +242,52 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
     null
   );
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId || null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    initialProjectId || null
+  );
   const [showInstallDialog, setShowInstallDialog] = useState(false);
-  const [templateToInstall, setTemplateToInstall] = useState<BotTemplate | null>(null);
+  const [templateToInstall, setTemplateToInstall] =
+    useState<BotTemplate | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [installedWorkflowId, setInstalledWorkflowId] = useState<string | null>(null);
-  const [installedTemplateName, setInstalledTemplateName] = useState<string | null>(null);
+  const [installedWorkflowId, setInstalledWorkflowId] = useState<string | null>(
+    null
+  );
+  const [installedTemplateName, setInstalledTemplateName] = useState<
+    string | null
+  >(null);
+  const [likedTemplates, setLikedTemplates] = useState<Set<string>>(new Set());
   const router = useRouter();
   const { toast } = useToast();
+
+  // Загрузка лайков из localStorage
+  useEffect(() => {
+    const savedLikes = localStorage.getItem('likedTemplates');
+    if (savedLikes) {
+      setLikedTemplates(new Set(JSON.parse(savedLikes)));
+    }
+  }, []);
+
+  const handleLikeTemplate = (template: BotTemplate) => {
+    setLikedTemplates((prev) => {
+      const newLikes = new Set(prev);
+      if (newLikes.has(template.id)) {
+        newLikes.delete(template.id);
+      } else {
+        newLikes.add(template.id);
+      }
+      localStorage.setItem('likedTemplates', JSON.stringify([...newLikes]));
+      return newLikes;
+    });
+  };
 
   const loadProjects = async () => {
     try {
       const response = await fetch('/api/projects');
       if (!response.ok) throw new Error('Failed to load projects');
-      
+
       const data = await response.json();
       setProjects(data.projects || []);
-      
+
       // Если нет выбранного проекта и есть проекты, выбираем первый
       if (!selectedProjectId && data.projects && data.projects.length > 0) {
         setSelectedProjectId(data.projects[0].id);
@@ -401,7 +422,7 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
         setShowSuccessDialog(true);
       } else {
         console.error('Failed to install template:', result.error);
-        
+
         toast({
           title: 'Ошибка',
           description: result.error || 'Не удалось установить шаблон',
@@ -419,45 +440,6 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
       setInstallingTemplate(null);
     }
   };
-
-  const handleDeleteTemplate = async (template: BotTemplate) => {
-    try {
-      const response = await fetch(`/api/templates/${template.id}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete template');
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: 'Успех',
-          description: `Шаблон "${template.name}" удален`,
-          variant: 'default'
-        });
-        
-        // Перезагружаем шаблоны
-        loadTemplates();
-      } else {
-        toast({
-          title: 'Ошибка',
-          description: result.error || 'Не удалось удалить шаблон',
-          variant: 'destructive'
-        });
-      }
-    } catch (error) {
-      console.error('Delete error:', error);
-      toast({
-        title: 'Ошибка',
-        description: 'Произошла ошибка при удалении шаблона',
-        variant: 'destructive'
-      });
-    }
-  };
-
 
   if (loading) {
     return (
@@ -487,9 +469,9 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
       </div>
 
       {/* Фильтры и поиск */}
-      <div className='grid grid-cols-[256px_1fr] gap-4'>
+      <div className='grid grid-cols-[240px_1fr] gap-6'>
         {/* Левая панель фильтров */}
-        <div className='w-64'>
+        <div className='w-60'>
           <Card>
             <CardHeader>
               <CardTitle className='text-base'>Фильтры</CardTitle>
@@ -497,26 +479,28 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
             <CardContent className='space-y-4'>
               {/* Поиск */}
               <div>
-                <label className='text-sm font-medium mb-2 block'>Поиск</label>
+                <label className='mb-2 block text-sm font-medium'>Поиск</label>
                 <div className='relative'>
                   <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform' />
                   <Input
                     placeholder='Название, описание...'
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className='pl-10'
+                    className='w-full pl-10'
                   />
                 </div>
               </div>
 
               {/* Категория */}
               <div>
-                <label className='text-sm font-medium mb-2 block'>Категория</label>
+                <label className='mb-2 block text-sm font-medium'>
+                  Категория
+                </label>
                 <Select
                   value={selectedCategory}
                   onValueChange={(value: any) => setSelectedCategory(value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className='w-full'>
                     <SelectValue placeholder='Все категории' />
                   </SelectTrigger>
                   <SelectContent>
@@ -524,7 +508,9 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                     {Object.entries(categoryLabels).map(([key, label]) => (
                       <SelectItem key={key} value={key}>
                         <div className='flex items-center gap-2'>
-                          {React.createElement(categoryIcons[key] || Settings, { className: 'h-4 w-4' })}
+                          {React.createElement(categoryIcons[key] || Settings, {
+                            className: 'h-4 w-4'
+                          })}
                           {label}
                         </div>
                       </SelectItem>
@@ -535,12 +521,14 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
 
               {/* Сложность */}
               <div>
-                <label className='text-sm font-medium mb-2 block'>Сложность</label>
+                <label className='mb-2 block text-sm font-medium'>
+                  Сложность
+                </label>
                 <Select
                   value={selectedDifficulty}
                   onValueChange={(value: any) => setSelectedDifficulty(value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className='w-full'>
                     <SelectValue placeholder='Любая сложность' />
                   </SelectTrigger>
                   <SelectContent>
@@ -554,12 +542,14 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
 
               {/* Сортировка */}
               <div>
-                <label className='text-sm font-medium mb-2 block'>Сортировка</label>
+                <label className='mb-2 block text-sm font-medium'>
+                  Сортировка
+                </label>
                 <Select
                   value={sortBy}
                   onValueChange={(value: any) => setSortBy(value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className='w-full'>
                     <SelectValue placeholder='Сортировка' />
                   </SelectTrigger>
                   <SelectContent>
@@ -572,17 +562,20 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
               </div>
 
               {/* Активные фильтры */}
-              {(selectedCategory !== 'all' || selectedDifficulty !== 'all' || searchQuery) && (
+              {(selectedCategory !== 'all' ||
+                selectedDifficulty !== 'all' ||
+                searchQuery) && (
                 <div className='space-y-2'>
-                  <label className='text-sm font-medium'>Активные фильтры</label>
+                  <label className='text-sm font-medium'>
+                    Активные фильтры
+                  </label>
                   <div className='space-y-1'>
                     {searchQuery && (
                       <Badge variant='secondary' className='gap-1'>
-                        <Search className='h-3 w-3' />
-                        "{searchQuery}"
+                        <Search className='h-3 w-3' />"{searchQuery}"
                         <button
                           onClick={() => setSearchQuery('')}
-                          className='ml-1 hover:text-destructive'
+                          className='hover:text-destructive ml-1'
                         >
                           ×
                         </button>
@@ -590,11 +583,14 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                     )}
                     {selectedCategory !== 'all' && (
                       <Badge variant='secondary' className='gap-1'>
-                        {React.createElement(categoryIcons[selectedCategory] || Settings, { className: 'h-3 w-3' })}
+                        {React.createElement(
+                          categoryIcons[selectedCategory] || Settings,
+                          { className: 'h-3 w-3' }
+                        )}
                         {categoryLabels[selectedCategory]}
                         <button
                           onClick={() => setSelectedCategory('all')}
-                          className='ml-1 hover:text-destructive'
+                          className='hover:text-destructive ml-1'
                         >
                           ×
                         </button>
@@ -605,7 +601,7 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                         {difficultyLabels[selectedDifficulty]}
                         <button
                           onClick={() => setSelectedDifficulty('all')}
-                          className='ml-1 hover:text-destructive'
+                          className='hover:text-destructive ml-1'
                         >
                           ×
                         </button>
@@ -640,9 +636,10 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                   key={template.id}
                   template={template}
                   onInstall={openInstallDialog}
-                  onDelete={handleDeleteTemplate}
+                  onViewDetails={setSelectedTemplate}
+                  onLike={handleLikeTemplate}
                   isInstalling={installingTemplate === template.id}
-                  showAdminActions={true}
+                  isLiked={likedTemplates.has(template.id)}
                 />
               ))}
             </div>
@@ -650,9 +647,11 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
             /* Пустое состояние */
             <Card className='w-full'>
               <CardContent className='flex flex-col items-center justify-center py-12'>
-                <Search className='mb-4 h-12 w-12 text-muted-foreground' />
-                <h3 className='mb-2 text-lg font-semibold'>Шаблоны не найдены</h3>
-                <p className='text-center text-muted-foreground'>
+                <Search className='text-muted-foreground mb-4 h-12 w-12' />
+                <h3 className='mb-2 text-lg font-semibold'>
+                  Шаблоны не найдены
+                </h3>
+                <p className='text-muted-foreground text-center'>
                   Попробуйте изменить фильтры или поисковый запрос
                 </p>
               </CardContent>
@@ -667,95 +666,167 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
           open={!!selectedTemplate}
           onOpenChange={() => setSelectedTemplate(null)}
         >
-          <DialogContent className='max-w-2xl'>
+          <DialogContent className='max-h-[90vh] max-w-3xl overflow-y-auto'>
             <DialogHeader>
-              <DialogTitle className='flex items-center gap-3'>
-                <span className='text-2xl'>{selectedTemplate.icon}</span>
-                {selectedTemplate.name}
-              </DialogTitle>
+              <div className='flex items-start justify-between'>
+                <div className='flex items-center gap-4'>
+                  <div
+                    className='flex h-16 w-16 items-center justify-center rounded-xl text-3xl'
+                    style={{
+                      backgroundColor: selectedTemplate.color + '20',
+                      color: selectedTemplate.color
+                    }}
+                  >
+                    {selectedTemplate.icon}
+                  </div>
+                  <div>
+                    <DialogTitle className='text-2xl'>
+                      {selectedTemplate.name}
+                    </DialogTitle>
+                    <div className='mt-2 flex flex-wrap gap-2'>
+                      <Badge variant='secondary'>
+                        {React.createElement(
+                          categoryIcons[selectedTemplate.category] || Settings,
+                          { className: 'mr-1 h-3 w-3' }
+                        )}
+                        {categoryLabels[selectedTemplate.category]}
+                      </Badge>
+                      <Badge
+                        className={
+                          difficultyColors[selectedTemplate.difficulty]
+                        }
+                      >
+                        {difficultyLabels[selectedTemplate.difficulty]}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant='ghost'
+                  size='icon'
+                  onClick={() => handleLikeTemplate(selectedTemplate)}
+                >
+                  <Heart
+                    className={`h-5 w-5 ${likedTemplates.has(selectedTemplate.id) ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`}
+                  />
+                </Button>
+              </div>
             </DialogHeader>
 
-            <div className='space-y-6'>
+            <div className='mt-4 space-y-6'>
+              {/* Описание */}
               <div>
-                <p className='text-muted-foreground mb-4'>
+                <h4 className='text-muted-foreground mb-2 text-sm font-medium tracking-wide uppercase'>
+                  Описание
+                </h4>
+                <p className='text-foreground'>
                   {selectedTemplate.description}
                 </p>
+              </div>
 
-                <div className='mb-4 flex flex-wrap gap-2'>
-                  <Badge variant='secondary'>
-                    {categoryLabels[selectedTemplate.category]}
-                  </Badge>
-                  <Badge
-                    className={difficultyColors[selectedTemplate.difficulty]}
-                  >
-                    {difficultyLabels[selectedTemplate.difficulty]}
-                  </Badge>
-                  <Badge variant='outline'>
-                    <Clock className='mr-1 h-3 w-3' />
-                    {selectedTemplate.estimatedTime} мин
-                  </Badge>
+              {/* Статистика */}
+              <div className='bg-muted/50 grid grid-cols-4 gap-4 rounded-lg p-4'>
+                <div className='text-center'>
+                  <div className='flex items-center justify-center gap-1 text-2xl font-bold'>
+                    <Download className='text-muted-foreground h-5 w-5' />
+                    {selectedTemplate.installs}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>установок</div>
                 </div>
+                <div className='text-center'>
+                  <div className='flex items-center justify-center gap-1 text-2xl font-bold'>
+                    <Star className='h-5 w-5 fill-yellow-400 text-yellow-400' />
+                    {(selectedTemplate.rating || 0).toFixed(1)}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>
+                    {selectedTemplate.reviews} отзывов
+                  </div>
+                </div>
+                <div className='text-center'>
+                  <div className='flex items-center justify-center gap-1 text-2xl font-bold'>
+                    <Clock className='text-muted-foreground h-5 w-5' />
+                    {selectedTemplate.estimatedTime}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>
+                    мин настройки
+                  </div>
+                </div>
+                <div className='text-center'>
+                  <div className='text-2xl font-bold'>
+                    v{selectedTemplate.version}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>версия</div>
+                </div>
+              </div>
 
-                <div className='grid grid-cols-3 gap-4 text-center'>
-                  <div>
-                    <div className='text-2xl font-bold'>
-                      {selectedTemplate.installs}
-                    </div>
-                    <div className='text-muted-foreground text-xs'>
-                      установок
-                    </div>
-                  </div>
-                  <div>
-                    <div className='flex items-center justify-center gap-1 text-2xl font-bold'>
-                      <Star className='h-4 w-4 fill-yellow-400 text-yellow-400' />
-                      {(selectedTemplate.rating || 0).toFixed(1)}
-                    </div>
-                    <div className='text-muted-foreground text-xs'>
-                      {selectedTemplate.reviews} отзывов
-                    </div>
-                  </div>
-                  <div>
-                    <div className='text-2xl font-bold'>
-                      {selectedTemplate.version}
-                    </div>
-                    <div className='text-muted-foreground text-xs'>версия</div>
-                  </div>
+              {/* Теги */}
+              <div>
+                <h4 className='text-muted-foreground mb-2 text-sm font-medium tracking-wide uppercase'>
+                  Теги
+                </h4>
+                <div className='flex flex-wrap gap-2'>
+                  {selectedTemplate.tags.map((tag) => (
+                    <Badge key={tag} variant='outline'>
+                      {tag}
+                    </Badge>
+                  ))}
                 </div>
               </div>
 
               <Separator />
 
+              {/* Возможности */}
               <div>
-                <h4 className='mb-3 font-medium'>Возможности</h4>
-                <div className='grid gap-2'>
+                <h4 className='text-muted-foreground mb-3 text-sm font-medium tracking-wide uppercase'>
+                  Возможности
+                </h4>
+                <div className='grid gap-2 sm:grid-cols-2'>
                   {selectedTemplate.features.map((feature, index) => (
-                    <div key={index} className='flex items-center gap-2'>
-                      <CheckCircle className='h-4 w-4 text-green-500' />
+                    <div key={index} className='flex items-start gap-2'>
+                      <CheckCircle className='mt-0.5 h-4 w-4 shrink-0 text-green-500' />
                       <span className='text-sm'>{feature}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <h4 className='mb-3 font-medium'>Интеграции</h4>
-                <div className='flex flex-wrap gap-2'>
-                  {selectedTemplate.integrations.map((integration, index) => (
-                    <Badge key={index} variant='outline'>
-                      {integration}
-                    </Badge>
-                  ))}
+              {/* Интеграции */}
+              {selectedTemplate.integrations.length > 0 && (
+                <div>
+                  <h4 className='text-muted-foreground mb-3 text-sm font-medium tracking-wide uppercase'>
+                    Интеграции
+                  </h4>
+                  <div className='flex flex-wrap gap-2'>
+                    {selectedTemplate.integrations.map((integration, index) => (
+                      <Badge key={index} variant='secondary'>
+                        {integration}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <h4 className='mb-3 font-medium'>Сценарии использования</h4>
-                <ul className='text-muted-foreground list-inside list-disc space-y-1 text-sm'>
-                  {selectedTemplate.useCases.map((useCase, index) => (
-                    <li key={index}>{useCase}</li>
-                  ))}
-                </ul>
-              </div>
+              {/* Сценарии использования */}
+              {selectedTemplate.useCases.length > 0 && (
+                <div>
+                  <h4 className='text-muted-foreground mb-3 text-sm font-medium tracking-wide uppercase'>
+                    Сценарии использования
+                  </h4>
+                  <ul className='space-y-2'>
+                    {selectedTemplate.useCases.map((useCase, index) => (
+                      <li
+                        key={index}
+                        className='flex items-start gap-2 text-sm'
+                      >
+                        <Target className='text-primary mt-0.5 h-4 w-4 shrink-0' />
+                        {useCase}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <Separator />
 
               <div className='flex justify-end gap-2'>
                 <Button
@@ -764,7 +835,13 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                 >
                   Закрыть
                 </Button>
-                <Button onClick={() => openInstallDialog(selectedTemplate)}>
+                <Button
+                  onClick={() => {
+                    openInstallDialog(selectedTemplate);
+                    setSelectedTemplate(null);
+                  }}
+                >
+                  <Download className='mr-2 h-4 w-4' />
                   Установить шаблон
                 </Button>
               </div>
@@ -781,11 +858,12 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
           </DialogHeader>
           <div className='space-y-4'>
             <div>
-              <p className='text-sm text-muted-foreground mb-4'>
-                Вы устанавливаете шаблон <strong>{templateToInstall?.name}</strong>
+              <p className='text-muted-foreground mb-4 text-sm'>
+                Вы устанавливаете шаблон{' '}
+                <strong>{templateToInstall?.name}</strong>
               </p>
-              
-              <label className='text-sm font-medium mb-2 block'>
+
+              <label className='mb-2 block text-sm font-medium'>
                 Выберите проект для установки:
               </label>
               <Select
@@ -808,8 +886,8 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
             <Alert>
               <AlertCircle className='h-4 w-4' />
               <AlertDescription>
-                Шаблон будет создан как новый workflow в выбранном проекте. 
-                Вы сможете настроить его в конструкторе workflow.
+                Шаблон будет создан как новый workflow в выбранном проекте. Вы
+                сможете настроить его в конструкторе workflow.
               </AlertDescription>
             </Alert>
 
@@ -825,7 +903,10 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
               </Button>
               <Button
                 onClick={handleInstallTemplate}
-                disabled={!selectedProjectId || installingTemplate === templateToInstall?.id}
+                disabled={
+                  !selectedProjectId ||
+                  installingTemplate === templateToInstall?.id
+                }
               >
                 {installingTemplate === templateToInstall?.id ? (
                   <>
@@ -853,9 +934,13 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
             </DialogTitle>
           </DialogHeader>
           <div className='space-y-4 py-4'>
-            <p className='text-center text-sm text-muted-foreground'>
-              Шаблон <span className='font-semibold text-foreground'>"{installedTemplateName || 'шаблон'}"</span> успешно установлен в проект. 
-              Теперь вы можете настроить workflow в конструкторе.
+            <p className='text-muted-foreground text-center text-sm'>
+              Шаблон{' '}
+              <span className='text-foreground font-semibold'>
+                "{installedTemplateName || 'шаблон'}"
+              </span>{' '}
+              успешно установлен в проект. Теперь вы можете настроить workflow в
+              конструкторе.
             </p>
           </div>
           <div className='flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'>
@@ -869,9 +954,13 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
             <Button
               onClick={() => {
                 if (selectedProjectId && installedWorkflowId) {
-                  router.push(`/dashboard/projects/${selectedProjectId}/workflow?workflowId=${installedWorkflowId}`);
+                  router.push(
+                    `/dashboard/projects/${selectedProjectId}/workflow?workflowId=${installedWorkflowId}`
+                  );
                 } else if (selectedProjectId) {
-                  router.push(`/dashboard/projects/${selectedProjectId}/workflow`);
+                  router.push(
+                    `/dashboard/projects/${selectedProjectId}/workflow`
+                  );
                 }
                 setShowSuccessDialog(false);
                 setInstalledTemplateName(null);

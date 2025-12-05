@@ -9,7 +9,7 @@
 
 'use client';
 
-import { Bot, Globe } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
@@ -38,10 +38,7 @@ export function OperationModeSelector({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className='flex items-center text-lg'>
-          <Globe className='mr-2 h-5 w-5' />
-          Режим работы проекта
-        </CardTitle>
+        <CardTitle className='text-lg'>Режим работы проекта</CardTitle>
         <CardDescription>
           Выберите, как пользователи будут активировать свои профили для траты
           бонусов
@@ -103,7 +100,6 @@ export function OperationModeSelector({
                 htmlFor='without-bot'
                 className='flex cursor-pointer items-center text-base font-medium'
               >
-                <Globe className='mr-2 h-4 w-4 text-green-500' />
                 Без Telegram бота
               </Label>
               <p className='text-muted-foreground text-sm'>

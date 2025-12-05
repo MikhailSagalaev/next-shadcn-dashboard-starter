@@ -677,19 +677,6 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     <div
       className={`flex flex-1 flex-col space-y-6 ${selectedUsers.length > 0 ? 'pb-24' : ''}`}
     >
-      {/* Back Button */}
-      <div>
-        <Button
-          variant='ghost'
-          size='sm'
-          onClick={() => router.push('/dashboard/projects')}
-          className='mb-4'
-        >
-          <ArrowLeft className='mr-2 h-4 w-4' />
-          Назад к проектам
-        </Button>
-      </div>
-
       {/* Header */}
       <div className='flex items-center justify-between'>
         <div>
