@@ -69,7 +69,7 @@ function parseCSV(filePath: string): CsvRow[] {
 }
 
 async function main() {
-  const csvPath = path.join(process.cwd(), 'Users-Gift.csv');
+  const csvPath = path.join(process.cwd(), 'Users-Full.csv');
 
   if (!fs.existsSync(csvPath)) {
     console.error('Файл не найден:', csvPath);
