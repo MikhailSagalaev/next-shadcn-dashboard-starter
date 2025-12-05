@@ -44,6 +44,17 @@ export class UserService {
       }
       const normalizedEmail = (data.email || '').trim();
 
+      // Получаем проект для определения режима работы
+      const project = await db.project.findUnique({
+        where: { id: data.projectId },
+        select: { operationMode: true }
+      });
+
+      // Определяем isActive на основе operationMode проекта
+      // WITHOUT_BOT: автоматическая активация (isActive = true)
+      // WITH_BOT: требуется активация через Telegram (isActive = false)
+      const isActive = project?.operationMode === 'WITHOUT_BOT';
+
       // Ищем рефера только по utm_ref (теперь используем utmSource как utm_ref)
       let referredBy: string | undefined;
       if (data.utmSource) {
@@ -64,6 +75,8 @@ export class UserService {
           email: normalizedEmail,
           phone: normalizedPhone,
           referredBy,
+          // Устанавливаем isActive на основе режима работы проекта
+          isActive,
           // UTM метки сохраняются как есть из data
           totalPurchases: 0,
           currentLevel: 'Базовый'
@@ -82,6 +95,8 @@ export class UserService {
         projectId: data.projectId,
         hasReferrer: !!referredBy,
         utmSource: data.utmSource,
+        isActive,
+        operationMode: project?.operationMode || 'WITH_BOT',
         component: 'user-service'
       });
 

@@ -168,6 +168,21 @@ export async function PUT(
 
     const body = await request.json();
 
+    // Валидация operationMode
+    const validOperationModes = ['WITH_BOT', 'WITHOUT_BOT'];
+    if (
+      body.operationMode &&
+      !validOperationModes.includes(body.operationMode)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Недопустимое значение operationMode. Допустимые значения: WITH_BOT, WITHOUT_BOT'
+        },
+        { status: 400 }
+      );
+    }
+
     const updatedProject = await db.project.update({
       where: { id },
       data: {
@@ -176,9 +191,15 @@ export async function PUT(
         bonusPercentage: body.bonusPercentage,
         bonusExpiryDays: body.bonusExpiryDays,
         bonusBehavior: body.bonusBehavior,
-        // Убираем попытку upsert в BotSettings (конфликт типов Prisma)
+        operationMode: body.operationMode,
         isActive: body.isActive
       }
+    });
+
+    logger.info('Проект обновлен', {
+      projectId: id,
+      operationMode: body.operationMode,
+      component: 'projects-api'
     });
 
     if (body.welcomeBonusAmount !== undefined) {

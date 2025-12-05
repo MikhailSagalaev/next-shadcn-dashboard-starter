@@ -1335,6 +1335,12 @@ async function handleSpendBonuses(
     throw new Error('Должен быть указан email или телефон пользователя');
   }
 
+  // Получаем проект для проверки operationMode
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: { operationMode: true }
+  });
+
   // Находим пользователя
   const user = await UserService.findUserByContact(
     projectId,
@@ -1343,6 +1349,14 @@ async function handleSpendBonuses(
   );
   if (!user) {
     throw new Error('Пользователь не найден');
+  }
+
+  // Проверяем активацию пользователя в режиме WITH_BOT
+  // В режиме WITHOUT_BOT проверка активации не требуется
+  if (project?.operationMode === 'WITH_BOT' && !user.isActive) {
+    throw new Error(
+      'Пользователь не активирован. Для списания бонусов необходимо активировать профиль через Telegram бота.'
+    );
   }
 
   // Списываем бонусы

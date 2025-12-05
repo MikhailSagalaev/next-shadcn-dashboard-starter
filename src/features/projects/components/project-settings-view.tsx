@@ -58,6 +58,11 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import type { Project } from '@/types/bonus';
 import { ProjectDeleteDialog } from './project-delete-dialog';
+import {
+  OperationModeSelector,
+  type OperationMode
+} from './operation-mode-selector';
+import { OperationModeConfirmDialog } from './operation-mode-confirm-dialog';
 
 interface ProjectSettingsViewProps {
   projectId: string;
@@ -73,6 +78,9 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
   const [saving, setSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [hasLevels, setHasLevels] = useState(false);
+  const [usersCount, setUsersCount] = useState(0);
+  const [showModeConfirmDialog, setShowModeConfirmDialog] = useState(false);
+  const [pendingMode, setPendingMode] = useState<OperationMode | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -84,6 +92,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
       | 'SPEND_AND_EARN'
       | 'SPEND_ONLY'
       | 'EARN_ONLY',
+    operationMode: 'WITH_BOT' as OperationMode,
     isActive: true,
     welcomeBonusAmount: 0
   });
@@ -92,16 +101,24 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     try {
       setLoading(true);
 
-      // Загружаем проект и уровни параллельно
-      const [projectResponse, levelsResponse] = await Promise.all([
-        fetch(`/api/projects/${projectId}`),
-        fetch(`/api/projects/${projectId}/bonus-levels`)
-      ]);
+      // Загружаем проект, уровни и статистику параллельно
+      const [projectResponse, levelsResponse, statsResponse] =
+        await Promise.all([
+          fetch(`/api/projects/${projectId}`),
+          fetch(`/api/projects/${projectId}/bonus-levels`),
+          fetch(`/api/projects/${projectId}/stats`)
+        ]);
 
       // Проверяем наличие уровней
       if (levelsResponse.ok) {
         const levelsData = await levelsResponse.json();
         setHasLevels(Array.isArray(levelsData) && levelsData.length > 0);
+      }
+
+      // Получаем количество пользователей
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setUsersCount(statsData.totalUsers || 0);
       }
 
       if (projectResponse.ok) {
@@ -116,6 +133,8 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             | 'SPEND_AND_EARN'
             | 'SPEND_ONLY'
             | 'EARN_ONLY',
+          operationMode: (projectData.operationMode ||
+            'WITH_BOT') as OperationMode,
           isActive: projectData.isActive ?? true,
           welcomeBonusAmount: Number(
             projectData?.referralProgram?.welcomeBonus || 0
@@ -483,6 +502,19 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             </CardContent>
           </Card>
 
+          {/* Operation Mode Selector */}
+          <OperationModeSelector
+            value={formData.operationMode}
+            onChange={(mode) => {
+              if (mode !== formData.operationMode) {
+                setPendingMode(mode);
+                setShowModeConfirmDialog(true);
+              }
+            }}
+            hasExistingUsers={usersCount > 0}
+            disabled={saving}
+          />
+
           {/* Actions */}
           <div className='flex justify-end'>
             <div className='flex items-center gap-2'>
@@ -508,12 +540,15 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
               <CardTitle className='text-lg'>Быстрые действия</CardTitle>
             </CardHeader>
             <CardContent className='space-y-3'>
-              <Link href={`/dashboard/projects/${projectId}/bot`}>
-                <Button variant='outline' className='w-full justify-start'>
-                  <Bot className='mr-2 h-4 w-4' />
-                  Настройка Telegram бота
-                </Button>
-              </Link>
+              {/* Показываем настройку Telegram бота только в режиме WITH_BOT */}
+              {formData.operationMode === 'WITH_BOT' && (
+                <Link href={`/dashboard/projects/${projectId}/bot`}>
+                  <Button variant='outline' className='w-full justify-start'>
+                    <Bot className='mr-2 h-4 w-4' />
+                    Настройка Telegram бота
+                  </Button>
+                </Link>
+              )}
               <Link href={`/dashboard/projects/${projectId}/users`}>
                 <Button variant='outline' className='mt-2 w-full justify-start'>
                   <Users className='mr-2 h-4 w-4' />
@@ -662,6 +697,25 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           onOpenChange={setShowDeleteDialog}
           projectName={project.name}
           onConfirm={handleDeleteProject}
+        />
+      )}
+
+      {/* Диалог подтверждения изменения режима работы */}
+      {pendingMode && (
+        <OperationModeConfirmDialog
+          open={showModeConfirmDialog}
+          onOpenChange={(open) => {
+            setShowModeConfirmDialog(open);
+            if (!open) setPendingMode(null);
+          }}
+          currentMode={formData.operationMode}
+          newMode={pendingMode}
+          existingUsersCount={usersCount}
+          onConfirm={() => {
+            setFormData({ ...formData, operationMode: pendingMode });
+            setShowModeConfirmDialog(false);
+            setPendingMode(null);
+          }}
         />
       )}
     </div>

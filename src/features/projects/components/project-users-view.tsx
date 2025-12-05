@@ -1069,26 +1069,31 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                       : 'Не указана'}
                   </p>
                 </div>
-                <div>
-                  <Label className='text-sm font-medium'>
-                    Telegram Username
-                  </Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.telegramUsername
-                      ? `@${profileUser.telegramUsername}`
-                      : 'Не указан'}
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>Telegram ID</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.telegramId
-                      ? typeof profileUser.telegramId === 'bigint'
-                        ? profileUser.telegramId.toString()
-                        : String(profileUser.telegramId)
-                      : 'Не указан'}
-                  </p>
-                </div>
+                {/* Telegram поля показываем только в режиме WITH_BOT */}
+                {(project as any)?.operationMode !== 'WITHOUT_BOT' && (
+                  <>
+                    <div>
+                      <Label className='text-sm font-medium'>
+                        Telegram Username
+                      </Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.telegramUsername
+                          ? `@${profileUser.telegramUsername}`
+                          : 'Не указан'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className='text-sm font-medium'>Telegram ID</Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.telegramId
+                          ? typeof profileUser.telegramId === 'bigint'
+                            ? profileUser.telegramId.toString()
+                            : String(profileUser.telegramId)
+                          : 'Не указан'}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Metadata Section */}

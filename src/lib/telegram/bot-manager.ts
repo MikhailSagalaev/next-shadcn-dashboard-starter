@@ -1229,17 +1229,27 @@ class BotManager {
 
   /**
    * Загрузка всех активных ботов из базы данных
+   * Фильтрует только проекты с operationMode = WITH_BOT
    */
   async loadAllBots(): Promise<void> {
     try {
       const allBotSettings = await db.botSettings.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          // Загружаем боты только для проектов в режиме WITH_BOT
+          project: {
+            operationMode: 'WITH_BOT'
+          }
+        },
         include: { project: true }
       });
 
-      logger.info(`Загрузка ${allBotSettings.length} активных ботов...`, {
-        component: 'bot-manager'
-      });
+      logger.info(
+        `Загрузка ${allBotSettings.length} активных ботов (режим WITH_BOT)...`,
+        {
+          component: 'bot-manager'
+        }
+      );
 
       for (const botSettings of allBotSettings) {
         try {

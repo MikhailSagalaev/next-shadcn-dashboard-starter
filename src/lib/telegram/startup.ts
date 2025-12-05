@@ -21,12 +21,17 @@ export async function initializeAllBots() {
     });
 
     // Получаем все активные настройки ботов
+    // Фильтруем только проекты с operationMode = WITH_BOT
     let activeBotSettings;
     try {
       activeBotSettings = await db.botSettings.findMany({
         where: {
           isActive: true,
-          botToken: { not: '' }
+          botToken: { not: '' },
+          // Инициализируем боты только для проектов в режиме WITH_BOT
+          project: {
+            operationMode: 'WITH_BOT'
+          }
         },
         include: {
           project: {
@@ -36,7 +41,7 @@ export async function initializeAllBots() {
               webhookSecret: true,
               bonusPercentage: true,
               bonusExpiryDays: true,
-              // bonusBehavior: true,
+              operationMode: true,
               isActive: true,
               createdAt: true,
               updatedAt: true,
