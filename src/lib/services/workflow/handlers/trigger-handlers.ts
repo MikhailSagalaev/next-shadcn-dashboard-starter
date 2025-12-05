@@ -24,7 +24,10 @@ export class CommandTriggerHandler extends BaseNodeHandler {
     return nodeType === 'trigger.command';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     this.logStep(context, node, 'Executing command trigger', 'debug', {
       command: node.data.config?.['trigger.command']?.command
     });
@@ -61,7 +64,10 @@ export class MessageTriggerHandler extends BaseNodeHandler {
     return nodeType === 'trigger.message';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     this.logStep(context, node, 'Executing message trigger', 'debug', {
       pattern: node.data.config?.['trigger.message']?.pattern
     });
@@ -80,10 +86,16 @@ export class MessageTriggerHandler extends BaseNodeHandler {
     }
 
     // ✅ ReDoS защита: валидация regex паттерна
-    if (config?.pattern && typeof config.pattern === 'string' && config.pattern.trim()) {
+    if (
+      config?.pattern &&
+      typeof config.pattern === 'string' &&
+      config.pattern.trim()
+    ) {
       const validation = RegexValidator.validate(config.pattern, config.flags);
       if (!validation.isValid) {
-        errors.push(`Invalid or unsafe regex pattern: ${validation.error || 'Unknown error'}`);
+        errors.push(
+          `Invalid or unsafe regex pattern: ${validation.error || 'Unknown error'}`
+        );
       }
     }
 
@@ -102,7 +114,10 @@ export class CallbackTriggerHandler extends BaseNodeHandler {
     return nodeType === 'trigger.callback';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     this.logStep(context, node, 'Executing callback trigger', 'debug', {
       callbackData: node.data.config?.['trigger.callback']?.callbackData
     });
@@ -136,7 +151,10 @@ export class WebhookTriggerHandler extends BaseNodeHandler {
     return nodeType === 'trigger.webhook';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     this.logStep(context, node, 'Webhook trigger executed', 'debug', {
       method: node.data.config?.['trigger.webhook']?.method || 'POST'
     });
@@ -153,6 +171,37 @@ export class WebhookTriggerHandler extends BaseNodeHandler {
     return {
       isValid: errors.length === 0,
       errors
+    };
+  }
+}
+
+/**
+ * Обработчик для trigger.contact
+ * Срабатывает когда пользователь делится контактом (номером телефона)
+ */
+export class ContactTriggerHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'trigger.contact';
+  }
+
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
+    this.logStep(context, node, 'Contact trigger executed', 'debug', {
+      hasContact: !!(context as any).telegram?.contact
+    });
+
+    // Contact триггер активируется когда пользователь делится контактом
+    // Данные контакта уже доступны в context.telegram.contact
+    return null;
+  }
+
+  async validate(config: any): Promise<ValidationResult> {
+    // Contact trigger не требует конфигурации
+    return {
+      isValid: true,
+      errors: []
     };
   }
 }

@@ -202,6 +202,16 @@ export class SimpleWorkflowProcessor {
         logger.debug('No telegramUserId provided, skipping user lookup');
       }
 
+      // Извлекаем contact из сообщения если есть
+      const contact = ctx.message?.contact
+        ? {
+            phoneNumber: ctx.message.contact.phone_number,
+            firstName: ctx.message.contact.first_name,
+            lastName: ctx.message.contact.last_name,
+            telegramUserId: ctx.message.contact.user_id?.toString()
+          }
+        : undefined;
+
       context = await ExecutionContextManager.createContext(
         this.projectId,
         this.workflowVersion.workflowId,
@@ -212,7 +222,8 @@ export class SimpleWorkflowProcessor {
         telegramUserId, // Telegram ID передаем отдельно
         ctx.from?.username,
         ctx.message?.text,
-        ctx.callbackQuery?.data
+        ctx.callbackQuery?.data,
+        contact // Передаём contact
       );
 
       // ✅ КРИТИЧНО: Сохраняем callbackQueryId для answerCallbackQuery

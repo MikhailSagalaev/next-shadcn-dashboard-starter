@@ -20,6 +20,7 @@ export type WorkflowNodeType =
   | 'trigger.callback'
   | 'trigger.webhook'
   | 'trigger.email'
+  | 'trigger.contact'
   // Сообщения
   | 'message'
   | 'message.keyboard.inline'

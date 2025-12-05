@@ -9,10 +9,7 @@
 
 import { db } from '@/lib/db';
 import { createVariableManager } from './variable-manager';
-import type {
-  ExecutionContext,
-  TelegramContact
-} from '@/types/workflow';
+import type { ExecutionContext, TelegramContact } from '@/types/workflow';
 
 /**
  * Менеджер контекста выполнения workflow
@@ -31,7 +28,8 @@ export class ExecutionContextManager {
     telegramUserId?: string,
     telegramUsername?: string,
     messageText?: string,
-    callbackData?: string
+    callbackData?: string,
+    contact?: TelegramContact
   ): Promise<ExecutionContext> {
     // Получаем токен бота для проекта из BotSettings
     const botSettings = await db.botSettings.findUnique({
@@ -40,8 +38,13 @@ export class ExecutionContextManager {
     });
 
     if (!botSettings?.botToken) {
-      console.error('Bot token not found in bot settings for project:', projectId);
-      throw new Error(`Bot token not configured for project ${projectId}. Please set up bot token in project settings.`);
+      console.error(
+        'Bot token not found in bot settings for project:',
+        projectId
+      );
+      throw new Error(
+        `Bot token not configured for project ${projectId}. Please set up bot token in project settings.`
+      );
     }
 
     // Создаем запись о выполнении
@@ -57,7 +60,10 @@ export class ExecutionContextManager {
     } as const;
 
     try {
-      console.log('🧾 Creating workflow execution with payload:', executionPayload);
+      console.log(
+        '🧾 Creating workflow execution with payload:',
+        executionPayload
+      );
       execution = await db.workflowExecution.create({
         data: executionPayload
       });
@@ -86,10 +92,17 @@ export class ExecutionContextManager {
 
     // Создаем простой logger без зависимостей
     const simpleLogger = {
-      info: (message: string, data?: any) => console.log(`[INFO] ${execution?.id || 'unknown'}: ${message}`, data),
-      error: (message: string, data?: any) => console.error(`[ERROR] ${execution?.id || 'unknown'}: ${message}`, data),
-      warn: (message: string, data?: any) => console.warn(`[WARN] ${execution?.id || 'unknown'}: ${message}`, data),
-      debug: (message: string, data?: any) => console.debug(`[DEBUG] ${execution?.id || 'unknown'}: ${message}`, data)
+      info: (message: string, data?: any) =>
+        console.log(`[INFO] ${execution?.id || 'unknown'}: ${message}`, data),
+      error: (message: string, data?: any) =>
+        console.error(
+          `[ERROR] ${execution?.id || 'unknown'}: ${message}`,
+          data
+        ),
+      warn: (message: string, data?: any) =>
+        console.warn(`[WARN] ${execution?.id || 'unknown'}: ${message}`, data),
+      debug: (message: string, data?: any) =>
+        console.debug(`[DEBUG] ${execution?.id || 'unknown'}: ${message}`, data)
     };
 
     // Создаем контекст
@@ -109,7 +122,8 @@ export class ExecutionContextManager {
         message: {
           text: messageText,
           callbackData
-        }
+        },
+        contact: contact
       },
       variables: variableManager,
       logger: simpleLogger,
@@ -136,7 +150,6 @@ export class ExecutionContextManager {
     messageText?: string,
     callbackData?: string
   ): Promise<ExecutionContext> {
-    
     // Получаем существующий execution
     const execution = await db.workflowExecution.findUnique({
       where: { id: executionId }
@@ -152,7 +165,9 @@ export class ExecutionContextManager {
     });
 
     if (!botSettings?.botToken) {
-      throw new Error(`Bot token not configured for project ${execution.projectId}`);
+      throw new Error(
+        `Bot token not configured for project ${execution.projectId}`
+      );
     }
 
     // Создаем менеджер переменных для существующего execution
@@ -165,10 +180,14 @@ export class ExecutionContextManager {
 
     // Создаем простой logger
     const simpleLogger = {
-      info: (message: string, data?: any) => console.log(`[INFO] ${execution.id}: ${message}`, data),
-      error: (message: string, data?: any) => console.error(`[ERROR] ${execution.id}: ${message}`, data),
-      warn: (message: string, data?: any) => console.warn(`[WARN] ${execution.id}: ${message}`, data),
-      debug: (message: string, data?: any) => console.debug(`[DEBUG] ${execution.id}: ${message}`, data)
+      info: (message: string, data?: any) =>
+        console.log(`[INFO] ${execution.id}: ${message}`, data),
+      error: (message: string, data?: any) =>
+        console.error(`[ERROR] ${execution.id}: ${message}`, data),
+      warn: (message: string, data?: any) =>
+        console.warn(`[WARN] ${execution.id}: ${message}`, data),
+      debug: (message: string, data?: any) =>
+        console.debug(`[DEBUG] ${execution.id}: ${message}`, data)
     };
 
     // Создаем контекст для возобновления
@@ -180,7 +199,8 @@ export class ExecutionContextManager {
       sessionId: execution.sessionId,
       userId: execution.userId || undefined,
       telegram: {
-        chatId: telegramChatId || execution.telegramChatId || execution.sessionId,
+        chatId:
+          telegramChatId || execution.telegramChatId || execution.sessionId,
         userId: telegramUserId || '',
         username: telegramUsername,
         firstName: telegramUsername,
@@ -207,15 +227,36 @@ export class ExecutionContextManager {
   /**
    * Обновляет контекст для следующего шага
    */
-  static updateContextForStep(context: ExecutionContext, step: number, nodeId: string, nodeType: string): ExecutionContext {
+  static updateContextForStep(
+    context: ExecutionContext,
+    step: number,
+    nodeId: string,
+    nodeType: string
+  ): ExecutionContext {
     return {
       ...context,
       step,
       logger: {
-        info: (message: string, data?: any) => this.log(context.executionId, step, nodeId, 'info', message, { nodeType, ...data }),
-        error: (message: string, data?: any) => this.log(context.executionId, step, nodeId, 'error', message, { nodeType, ...data }),
-        warn: (message: string, data?: any) => this.log(context.executionId, step, nodeId, 'warn', message, { nodeType, ...data }),
-        debug: (message: string, data?: any) => this.log(context.executionId, step, nodeId, 'debug', message, { nodeType, ...data })
+        info: (message: string, data?: any) =>
+          this.log(context.executionId, step, nodeId, 'info', message, {
+            nodeType,
+            ...data
+          }),
+        error: (message: string, data?: any) =>
+          this.log(context.executionId, step, nodeId, 'error', message, {
+            nodeType,
+            ...data
+          }),
+        warn: (message: string, data?: any) =>
+          this.log(context.executionId, step, nodeId, 'warn', message, {
+            nodeType,
+            ...data
+          }),
+        debug: (message: string, data?: any) =>
+          this.log(context.executionId, step, nodeId, 'debug', message, {
+            nodeType,
+            ...data
+          })
       }
     };
   }
@@ -259,7 +300,9 @@ export class ExecutionContextManager {
         });
 
         if (finishedExecution?.telegramChatId && finishedExecution?.waitType) {
-          const { WorkflowRuntimeService } = await import('@/lib/services/workflow-runtime.service');
+          const { WorkflowRuntimeService } = await import(
+            '@/lib/services/workflow-runtime.service'
+          );
           await WorkflowRuntimeService.invalidateWaitingExecutionCache(
             finishedExecution.projectId,
             finishedExecution.telegramChatId,
@@ -267,7 +310,10 @@ export class ExecutionContextManager {
           );
         }
       } catch (cacheError) {
-        console.warn('Failed to invalidate waiting execution cache:', cacheError);
+        console.warn(
+          'Failed to invalidate waiting execution cache:',
+          cacheError
+        );
         // Не бросаем ошибку - инвалидация кеша не критична
       }
 
@@ -283,11 +329,11 @@ export class ExecutionContextManager {
           // Не бросаем ошибку, cleanup не критичен
         }
       }
-
     } catch (updateError) {
       console.error('Failed to complete execution:', {
         executionId: context.executionId,
-        error: updateError instanceof Error ? updateError.message : 'Unknown error'
+        error:
+          updateError instanceof Error ? updateError.message : 'Unknown error'
       });
     }
   }
@@ -326,8 +372,9 @@ export class ExecutionContextManager {
 
       // Также выводим в консоль для отладки
       const logLevel = level.toUpperCase();
-      console.log(`[${logLevel}] Execution ${executionId} Step ${step} Node ${nodeId}: ${message}`);
-
+      console.log(
+        `[${logLevel}] Execution ${executionId} Step ${step} Node ${nodeId}: ${message}`
+      );
     } catch (error) {
       console.error('Failed to log execution step:', error);
     }
@@ -367,4 +414,3 @@ export class ExecutionContextManager {
     };
   }
 }
-

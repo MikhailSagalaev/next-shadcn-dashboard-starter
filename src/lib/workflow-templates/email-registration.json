@@ -17,6 +17,102 @@
       "position": { "x": 0, "y": 307.5 }
     },
     {
+      "id": "contact-trigger",
+      "type": "trigger.contact",
+      "data": {
+        "label": "Получен контакт",
+        "config": {
+          "trigger.contact": {}
+        }
+      },
+      "position": { "x": 0, "y": 600 }
+    },
+    {
+      "id": "check-contact-user",
+      "type": "action.database_query",
+      "data": {
+        "label": "Найти пользователя для контакта",
+        "config": {
+          "action.database_query": {
+            "query": "check_user_by_telegram",
+            "assignTo": "contactUser",
+            "parameters": {
+              "projectId": "{{projectId}}",
+              "telegramId": "{{telegram.userId}}"
+            }
+          }
+        }
+      },
+      "position": { "x": 406, "y": 600 }
+    },
+    {
+      "id": "check-contact-user-exists",
+      "type": "condition",
+      "data": {
+        "label": "Пользователь найден?",
+        "config": {
+          "condition": {
+            "operator": "is_not_empty",
+            "variable": "contactUser"
+          }
+        }
+      },
+      "position": { "x": 812, "y": 600 }
+    },
+    {
+      "id": "save-contact-phone",
+      "type": "action.database_query",
+      "data": {
+        "label": "Сохранить телефон из контакта",
+        "config": {
+          "action.database_query": {
+            "query": "update_user_contact",
+            "parameters": {
+              "telegramId": "{{telegram.userId}}",
+              "projectId": "{{projectId}}",
+              "phone": "{{telegram.contact.phoneNumber}}"
+            }
+          }
+        }
+      },
+      "position": { "x": 1218, "y": 500 }
+    },
+    {
+      "id": "contact-saved-message",
+      "type": "message",
+      "data": {
+        "label": "Телефон сохранён",
+        "config": {
+          "message": {
+            "text": "✅ Номер телефона успешно сохранён!\n\n📱 Ваш телефон: {user.phone}\n\n💰 Баланс: {user.balanceFormatted}",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [{ "text": "📋 Главное меню", "callback_data": "menu_main" }]
+              ]
+            }
+          }
+        }
+      },
+      "position": { "x": 1624, "y": 500 }
+    },
+    {
+      "id": "contact-user-not-found",
+      "type": "message",
+      "data": {
+        "label": "Пользователь не найден для контакта",
+        "config": {
+          "message": {
+            "text": "⚠️ Сначала необходимо зарегистрироваться.\n\nНажмите /start для начала регистрации.",
+            "keyboard": {
+              "type": "remove"
+            }
+          }
+        }
+      },
+      "position": { "x": 1218, "y": 700 }
+    },
+    {
       "id": "check-telegram-user",
       "type": "action.database_query",
       "data": {
@@ -668,6 +764,11 @@
   ],
   "connections": [
     { "id": "c1", "source": "start-trigger", "target": "check-telegram-user" },
+    { "id": "c-contact-1", "source": "contact-trigger", "target": "check-contact-user" },
+    { "id": "c-contact-2", "source": "check-contact-user", "target": "check-contact-user-exists" },
+    { "id": "c-contact-3", "source": "check-contact-user-exists", "target": "save-contact-phone", "sourceHandle": "true" },
+    { "id": "c-contact-4", "source": "check-contact-user-exists", "target": "contact-user-not-found", "sourceHandle": "false" },
+    { "id": "c-contact-5", "source": "save-contact-phone", "target": "contact-saved-message" },
     { "id": "c2", "source": "check-telegram-user", "target": "check-user-status" },
     { "id": "c3", "source": "check-user-status", "target": "check-user-active", "sourceHandle": "true" },
     { "id": "c4", "source": "check-user-status", "target": "request-email", "sourceHandle": "false" },
