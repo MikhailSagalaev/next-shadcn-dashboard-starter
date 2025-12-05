@@ -127,17 +127,27 @@ export function UsersTable({
     lastName: '',
     email: '',
     phone: '',
+    birthDate: '',
     isActive: false
   });
   const [isSaving, setIsSaving] = useState(false);
 
   const handleEditUser = (user: User) => {
     setEditingUser(user);
+    // Форматируем дату рождения для input type="date"
+    let birthDateStr = '';
+    if ((user as any).birthDate) {
+      const bd = new Date((user as any).birthDate);
+      if (!isNaN(bd.getTime())) {
+        birthDateStr = bd.toISOString().split('T')[0];
+      }
+    }
     setEditForm({
       firstName: user.firstName || '',
       lastName: user.lastName || '',
       email: user.email || '',
       phone: user.phone || '',
+      birthDate: birthDateStr,
       isActive: user.isActive ?? false
     });
     setEditDialogOpen(true);
@@ -608,6 +618,20 @@ export function UsersTable({
                 value={editForm.phone}
                 onChange={(e) =>
                   setEditForm({ ...editForm, phone: e.target.value })
+                }
+                className='col-span-3'
+              />
+            </div>
+            <div className='grid grid-cols-4 items-center gap-4'>
+              <Label htmlFor='birthDate' className='text-right'>
+                День рождения
+              </Label>
+              <Input
+                id='birthDate'
+                type='date'
+                value={editForm.birthDate}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, birthDate: e.target.value })
                 }
                 className='col-span-3'
               />

@@ -1204,7 +1204,46 @@ export const SAFE_QUERIES = {
     // Парсим дату если передана строка
     let birthDate: Date;
     if (typeof params.birthDate === 'string') {
-      birthDate = new Date(params.birthDate);
+      const dateStr = params.birthDate.trim();
+
+      // Пробуем парсить форматы DD.MM, DD.MM.YYYY, DD/MM, DD/MM/YYYY
+      const patterns = [
+        /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/, // DD.MM.YYYY
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, // DD/MM/YYYY
+        /^(\d{1,2})-(\d{1,2})-(\d{4})$/, // DD-MM-YYYY
+        /^(\d{1,2})\.(\d{1,2})$/, // DD.MM (без года)
+        /^(\d{1,2})\/(\d{1,2})$/, // DD/MM (без года)
+        /^(\d{1,2})-(\d{1,2})$/ // DD-MM (без года)
+      ];
+
+      let parsed = false;
+      for (const pattern of patterns) {
+        const match = dateStr.match(pattern);
+        if (match) {
+          const day = parseInt(match[1], 10);
+          const month = parseInt(match[2], 10);
+          // Для дня рождения без года используем 1900 (чтобы не было "будущей даты")
+          const year = match[3] ? parseInt(match[3], 10) : 1900;
+
+          if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+            birthDate = new Date(year, month - 1, day);
+            parsed = true;
+            logger.info('Birthday parsed successfully', {
+              input: dateStr,
+              day,
+              month,
+              year,
+              result: birthDate.toISOString()
+            });
+            break;
+          }
+        }
+      }
+
+      if (!parsed) {
+        // Fallback на стандартный парсинг
+        birthDate = new Date(dateStr);
+      }
     } else {
       birthDate = params.birthDate;
     }
