@@ -1,6 +1,0 @@
-### Запуск бота
-POST http://localhost:5006/api/projects/cmgntgsdv0000v8mwfwwh30az/bot/restart
-Content-Type: application/json
-
-
-
