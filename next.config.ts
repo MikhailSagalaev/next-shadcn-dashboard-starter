@@ -8,9 +8,10 @@ const baseConfig: NextConfig = {
   // NOTE: отключаем standalone, чтобы prod запускался через `next start` (PM2)
   // output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
 
-  // Do not fail the production build on ESLint errors. We lint in CI/local.
-  // This unblocks server builds (e.g., when content contains quotes in JSX).
-  // NOTE: eslint config moved to next lint CLI options in Next.js 16+
+  // Do not fail the production build on ESLint/TS errors. We lint in CI/local.
+  eslint: {
+    ignoreDuringBuilds: true
+  },
   typescript: {
     ignoreBuildErrors: true
   },
