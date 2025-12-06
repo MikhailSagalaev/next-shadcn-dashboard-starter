@@ -10,9 +10,7 @@ const baseConfig: NextConfig = {
 
   // Do not fail the production build on ESLint errors. We lint in CI/local.
   // This unblocks server builds (e.g., when content contains quotes in JSX).
-  eslint: {
-    ignoreDuringBuilds: true
-  },
+  // NOTE: eslint config moved to next lint CLI options in Next.js 16+
   typescript: {
     ignoreBuildErrors: true
   },
