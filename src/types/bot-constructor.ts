@@ -68,6 +68,7 @@ export interface MessageConfig {
   parseMode?: 'Markdown' | 'HTML' | 'MarkdownV2';
   keyboard?: KeyboardConfig;
   attachments?: Attachment[];
+  waitForInput?: boolean;
   disablePreview?: boolean;
   protectContent?: boolean;
 }

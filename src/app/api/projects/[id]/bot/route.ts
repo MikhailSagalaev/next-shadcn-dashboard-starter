@@ -139,6 +139,7 @@ export async function GET(
     const botSettingsToken = botSettings?.botToken || null;
     // Используем токен из botSettings или проекта
     const finalBotToken = botSettingsToken || projectBotToken || null;
+    const operationMode = (project as any)?.operationMode || 'WITH_BOT';
 
     logger.info('Bot token resolution', {
       projectId: id,
@@ -158,14 +159,16 @@ export async function GET(
       botToken: finalBotToken, // Явно устанавливаем botToken после spread
       welcomeBonusAmount,
       botUsername: botUsername || (project as any)?.botUsername || null,
-      widgetSettings
+      widgetSettings,
+      operationMode
     };
 
     logger.info('API response structure', {
       projectId: id,
       hasBotToken: !!response.botToken,
       botTokenLength: response.botToken?.length || 0,
-      responseKeys: Object.keys(response)
+      responseKeys: Object.keys(response),
+      operationMode: response.operationMode
     });
 
     return NextResponse.json(response, { headers: createCorsHeaders(request) });

@@ -1056,6 +1056,12 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                       : 'Не указана'}
                   </p>
                 </div>
+                {(project as any)?.operationMode === 'WITHOUT_BOT' && (
+                  <div className='rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200'>
+                    Режим без Telegram бота: поля Telegram скрыты, пользователи
+                    активируются автоматически и могут тратить бонусы сразу.
+                  </div>
+                )}
                 {/* Telegram поля показываем только в режиме WITH_BOT */}
                 {(project as any)?.operationMode !== 'WITHOUT_BOT' && (
                   <>

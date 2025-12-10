@@ -12,6 +12,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { ProjectService } from '@/lib/services/project.service';
 import { getCurrentAdmin } from '@/lib/auth';
+import { botManager } from '@/lib/telegram/bot-manager';
 
 export async function GET(
   request: NextRequest,
@@ -166,6 +167,12 @@ export async function PUT(
     // Проверяем доступ к проекту
     await ProjectService.verifyProjectAccess(id, admin.sub);
 
+    // Фиксируем текущий режим для корректной остановки бота
+    const existingProject = await db.project.findUnique({
+      where: { id },
+      select: { operationMode: true }
+    });
+
     const body = await request.json();
 
     // Валидация operationMode
@@ -195,6 +202,27 @@ export async function PUT(
         isActive: body.isActive
       }
     });
+
+    // Если режим изменился с WITH_BOT на WITHOUT_BOT — останавливаем бот идемпотентно
+    if (
+      existingProject?.operationMode === 'WITH_BOT' &&
+      body.operationMode === 'WITHOUT_BOT'
+    ) {
+      try {
+        await botManager.stopBot(id);
+        logger.info('Бот остановлен после переключения на WITHOUT_BOT', {
+          projectId: id,
+          component: 'projects-api'
+        });
+      } catch (stopError) {
+        logger.warn('Не удалось остановить бота после смены режима', {
+          projectId: id,
+          error:
+            stopError instanceof Error ? stopError.message : String(stopError),
+          component: 'projects-api'
+        });
+      }
+    }
 
     logger.info('Проект обновлен', {
       projectId: id,

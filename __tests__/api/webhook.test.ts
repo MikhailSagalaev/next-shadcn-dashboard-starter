@@ -9,6 +9,7 @@
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/webhook/[webhookSecret]/route';
 import { db } from '@/lib/db';
+import { UserService, BonusService } from '@/lib/services/user.service';
 
 // Mock the database
 jest.mock('@/lib/db');
@@ -20,12 +21,14 @@ jest.mock('@/lib/logger');
 
 describe('Webhook API', () => {
   const mockDb = db as jest.Mocked<typeof db>;
+  const mockUserService = UserService as jest.Mocked<typeof UserService>;
+  const mockBonusService = BonusService as jest.Mocked<typeof BonusService>;
   const webhookSecret = 'test-webhook-secret';
   const projectId = 'test-project-id';
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Setup default mocks
     mockDb.project.findUnique = jest.fn().mockResolvedValue({
       id: projectId,
@@ -34,7 +37,10 @@ describe('Webhook API', () => {
       isActive: true,
       bonusPercentage: 5,
       bonusExpiryDays: 365,
+      operationMode: 'WITH_BOT'
     });
+    mockUserService.findUserByContact = jest.fn();
+    mockBonusService.spendBonuses = jest.fn();
   });
 
   describe('POST /api/webhook/[webhookSecret]', () => {
@@ -45,8 +51,8 @@ describe('Webhook API', () => {
           email: 'test@example.com',
           phone: '+79001234567',
           firstName: 'Test',
-          lastName: 'User',
-        },
+          lastName: 'User'
+        }
       };
 
       mockDb.user.findFirst = jest.fn().mockResolvedValue(null);
@@ -56,16 +62,19 @@ describe('Webhook API', () => {
         phone: '+79001234567',
         firstName: 'Test',
         lastName: 'User',
-        projectId,
+        projectId
       });
 
-      const request = new NextRequest('http://localhost:3000/api/webhook/test-webhook-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
 
       const response = await POST(request, { params: { webhookSecret } });
       const data = await response.json();
@@ -77,8 +86,8 @@ describe('Webhook API', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             email: 'test@example.com',
-            phone: '+79001234567',
-          }),
+            phone: '+79001234567'
+          })
         })
       );
     });
@@ -90,8 +99,8 @@ describe('Webhook API', () => {
           email: 'test@example.com',
           amount: 1000,
           orderId: 'ORDER-123',
-          description: 'Test purchase',
-        },
+          description: 'Test purchase'
+        }
       };
 
       mockDb.user.findFirst = jest.fn().mockResolvedValue({
@@ -99,7 +108,7 @@ describe('Webhook API', () => {
         email: 'test@example.com',
         projectId,
         totalPurchases: 0,
-        currentLevel: 'Базовый',
+        currentLevel: 'Базовый'
       });
 
       mockDb.bonus.create = jest.fn().mockResolvedValue({
@@ -107,23 +116,26 @@ describe('Webhook API', () => {
         userId: 'existing-user-id',
         amount: 50,
         type: 'PURCHASE',
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
       });
 
       mockDb.transaction.create = jest.fn().mockResolvedValue({
         id: 'transaction-id',
         userId: 'existing-user-id',
         amount: 50,
-        type: 'EARN',
+        type: 'EARN'
       });
 
-      const request = new NextRequest('http://localhost:3000/api/webhook/test-webhook-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
 
       const response = await POST(request, { params: { webhookSecret } });
       const data = await response.json();
@@ -140,46 +152,133 @@ describe('Webhook API', () => {
         action: 'spend_bonuses',
         payload: {
           email: 'test@example.com',
-          amount: 100,
-          orderId: 'SPEND-123',
-        },
+          bonusAmount: 100,
+          orderId: 'SPEND-123'
+        }
       };
 
-      mockDb.user.findFirst = jest.fn().mockResolvedValue({
+      mockUserService.findUserByContact = jest.fn().mockResolvedValue({
         id: 'existing-user-id',
         email: 'test@example.com',
         projectId,
-      });
+        isActive: true
+      } as any);
+      mockBonusService.spendBonuses = jest
+        .fn()
+        .mockResolvedValue([{ id: 't1', amount: 100 }] as any);
 
-      mockDb.bonus.findMany = jest.fn().mockResolvedValue([
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
         {
-          id: 'bonus-1',
-          userId: 'existing-user-id',
-          amount: 150,
-          isUsed: false,
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-      ]);
-
-      mockDb.$transaction = jest.fn().mockImplementation(async (callback) => {
-        return callback(mockDb);
-      });
-
-      const request = new NextRequest('http://localhost:3000/api/webhook/test-webhook-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
 
       const response = await POST(request, { params: { webhookSecret } });
       const data = await response.json();
 
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.spent).toBe(100);
-      expect(mockDb.$transaction).toHaveBeenCalled();
+      expect(data.spent.amount).toBe(100);
+      expect(data.spent.transactionsCount).toBe(1);
+      expect(mockBonusService.spendBonuses).toHaveBeenCalled();
+    });
+
+    it('should reject spend_bonuses for inactive user in WITH_BOT mode', async () => {
+      const requestBody = {
+        action: 'spend_bonuses',
+        payload: {
+          email: 'inactive@example.com',
+          bonusAmount: 50,
+          orderId: 'ORDER-INACTIVE'
+        }
+      };
+
+      mockDb.project.findUnique = jest.fn().mockResolvedValue({
+        id: projectId,
+        name: 'Test Project',
+        webhookSecret,
+        isActive: true,
+        bonusPercentage: 5,
+        bonusExpiryDays: 365,
+        operationMode: 'WITH_BOT'
+      });
+      mockUserService.findUserByContact = jest.fn().mockResolvedValue({
+        id: 'inactive-user-id',
+        projectId,
+        email: 'inactive@example.com',
+        isActive: false
+      } as any);
+
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      const response = await POST(request, { params: { webhookSecret } });
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.code).toBe('USER_NOT_ACTIVE');
+    });
+
+    it('should allow spend_bonuses in WITHOUT_BOT mode even if user inactive', async () => {
+      const requestBody = {
+        action: 'spend_bonuses',
+        payload: {
+          email: 'inactive@example.com',
+          bonusAmount: 70,
+          orderId: 'ORDER-WITHOUT-BOT'
+        }
+      };
+
+      mockDb.project.findUnique = jest.fn().mockResolvedValue({
+        id: projectId,
+        name: 'Test Project',
+        webhookSecret,
+        isActive: true,
+        bonusPercentage: 5,
+        bonusExpiryDays: 365,
+        operationMode: 'WITHOUT_BOT'
+      });
+      mockUserService.findUserByContact = jest.fn().mockResolvedValue({
+        id: 'inactive-user-id',
+        projectId,
+        email: 'inactive@example.com',
+        isActive: false
+      } as any);
+      mockBonusService.spendBonuses = jest
+        .fn()
+        .mockResolvedValue([{ id: 't1', amount: 70 }] as any);
+
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      const response = await POST(request, { params: { webhookSecret } });
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.spent.amount).toBe(70);
+      expect(mockBonusService.spendBonuses).toHaveBeenCalled();
     });
 
     it('should handle Tilda webhook format', async () => {
@@ -193,32 +292,35 @@ describe('Webhook API', () => {
             orderid: 'TILDA-123',
             products: [
               { name: 'Product 1', price: 3000 },
-              { name: 'Product 2', price: 2000 },
-            ],
-          },
-        },
+              { name: 'Product 2', price: 2000 }
+            ]
+          }
+        }
       ];
 
       mockDb.user.findFirst = jest.fn().mockResolvedValue(null);
       mockDb.user.create = jest.fn().mockResolvedValue({
         id: 'new-user-id',
         email: 'tilda@example.com',
-        projectId,
+        projectId
       });
 
       mockDb.bonus.create = jest.fn().mockResolvedValue({
         id: 'bonus-id',
         amount: 250,
-        type: 'PURCHASE',
+        type: 'PURCHASE'
       });
 
-      const request = new NextRequest('http://localhost:3000/api/webhook/test-webhook-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(tildaPayload),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(tildaPayload)
+        }
+      );
 
       const response = await POST(request, { params: { webhookSecret } });
       const data = await response.json();
@@ -232,15 +334,20 @@ describe('Webhook API', () => {
     it('should return 401 for invalid webhook secret', async () => {
       mockDb.project.findUnique = jest.fn().mockResolvedValue(null);
 
-      const request = new NextRequest('http://localhost:3000/api/webhook/invalid-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'register_user', payload: {} }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/invalid-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action: 'register_user', payload: {} })
+        }
+      );
 
-      const response = await POST(request, { params: { webhookSecret: 'invalid-secret' } });
+      const response = await POST(request, {
+        params: { webhookSecret: 'invalid-secret' }
+      });
       const data = await response.json();
 
       expect(response.status).toBe(401);
@@ -251,16 +358,19 @@ describe('Webhook API', () => {
       mockDb.project.findUnique = jest.fn().mockResolvedValue({
         id: projectId,
         webhookSecret,
-        isActive: false,
+        isActive: false
       });
 
-      const request = new NextRequest('http://localhost:3000/api/webhook/test-webhook-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'register_user', payload: {} }),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action: 'register_user', payload: {} })
+        }
+      );
 
       const response = await POST(request, { params: { webhookSecret } });
       const data = await response.json();
@@ -274,17 +384,20 @@ describe('Webhook API', () => {
         action: 'purchase',
         payload: {
           // Missing required fields
-          email: 'test@example.com',
-        },
+          email: 'test@example.com'
+        }
       };
 
-      const request = new NextRequest('http://localhost:3000/api/webhook/test-webhook-secret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(invalidPayload),
-      });
+      const request = new NextRequest(
+        'http://localhost:3000/api/webhook/test-webhook-secret',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(invalidPayload)
+        }
+      );
 
       const response = await POST(request, { params: { webhookSecret } });
       const data = await response.json();

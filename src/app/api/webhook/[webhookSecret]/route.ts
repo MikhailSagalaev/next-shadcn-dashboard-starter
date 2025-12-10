@@ -27,6 +27,24 @@ import type {
   WebhookSpendBonusesPayload
 } from '@/types/bonus';
 
+class WebhookHttpError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    details?: unknown
+  ) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
 // Функция логирования webhook запросов
 async function logWebhookRequest(
   projectId: string,
@@ -1131,6 +1149,15 @@ async function handlePOST(
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'webhook-handler'
     });
+    if (error instanceof WebhookHttpError) {
+      response = {
+        error: error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.details ? { details: error.details } : {})
+      };
+      status = error.status;
+      return NextResponse.json(response, { status });
+    }
     if (error instanceof ZodError) {
       response = {
         error: 'Ошибка валидации',
@@ -1354,8 +1381,11 @@ async function handleSpendBonuses(
   // Проверяем активацию пользователя в режиме WITH_BOT
   // В режиме WITHOUT_BOT проверка активации не требуется
   if (project?.operationMode === 'WITH_BOT' && !user.isActive) {
-    throw new Error(
-      'Пользователь не активирован. Для списания бонусов необходимо активировать профиль через Telegram бота.'
+    throw new WebhookHttpError(
+      403,
+      'Пользователь не активирован. Для списания бонусов необходимо активировать профиль через Telegram бота.',
+      'USER_NOT_ACTIVE',
+      { userId: user.id, operationMode: project.operationMode }
     );
   }
 

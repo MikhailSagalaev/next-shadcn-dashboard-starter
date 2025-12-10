@@ -55,6 +55,13 @@ export class UserService {
       // WITH_BOT: требуется активация через Telegram (isActive = false)
       const isActive = project?.operationMode === 'WITHOUT_BOT';
 
+      logger.info('Определен режим проекта для создания пользователя', {
+        projectId: data.projectId,
+        operationMode: project?.operationMode || 'WITH_BOT',
+        resolvedIsActive: isActive,
+        component: 'user-service/createUser'
+      });
+
       // Ищем рефера только по utm_ref (теперь используем utmSource как utm_ref)
       let referredBy: string | undefined;
       if (data.utmSource) {

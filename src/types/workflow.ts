@@ -166,6 +166,7 @@ export interface MessageConfig {
   parseMode?: 'Markdown' | 'HTML' | 'MarkdownV2';
   keyboard?: KeyboardConfig;
   attachments?: Attachment[];
+  waitForInput?: boolean;
 }
 
 export interface KeyboardConfig {

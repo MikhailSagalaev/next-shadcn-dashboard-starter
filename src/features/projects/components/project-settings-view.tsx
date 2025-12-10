@@ -501,6 +501,19 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             hasExistingUsers={usersCount > 0}
             disabled={saving}
           />
+          {formData.operationMode === 'WITHOUT_BOT' ? (
+            <div className='rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200'>
+              Telegram-настройки скрыты, активные боты будут остановлены, новые
+              пользователи активируются автоматически и могут тратить бонусы без
+              привязки к боту.
+            </div>
+          ) : (
+            <div className='rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100'>
+              Пользователи создаются неактивными и должны активировать профиль
+              через Telegram бота; без корректной настройки бота списания
+              бонусов будут отклоняться.
+            </div>
+          )}
 
           {/* Actions */}
           <div className='flex justify-end'>

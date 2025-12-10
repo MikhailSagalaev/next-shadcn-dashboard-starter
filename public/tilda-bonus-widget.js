@@ -149,7 +149,8 @@
       // Хранение оригинальных стилей поля промокода
       originalPromoStyles: null, // Сохраненные оригинальные стили .t-inputpromocode__wrapper
       intervals: [], // Массив интервалов для очистки
-      eventListeners: [] // Массив обработчиков событий для очистки
+      eventListeners: [], // Массив обработчиков событий для очистки
+      operationMode: 'WITH_BOT' // Режим работы проекта (WITH_BOT | WITHOUT_BOT)
     },
 
     // Инициализация виджета
@@ -890,6 +891,7 @@
 
             // Сохраняем настройки в state
             this.state.widgetSettings = settings.widgetSettings || {};
+            this.state.operationMode = settings.operationMode || 'WITH_BOT';
 
             // Сохраняем botUsername для использования в уведомлении о верификации
             if (settings.botUsername) {
@@ -918,6 +920,8 @@
             if (cachedSettings) {
               this.log('📋 Используем настройки из кэша как fallback');
               this.state.widgetSettings = cachedSettings.widgetSettings || {};
+              this.state.operationMode =
+                cachedSettings.operationMode || 'WITH_BOT';
               if (cachedSettings.botUsername) {
                 const cleanBotUsername = String(cachedSettings.botUsername)
                   .replace(/[<>'"&]/g, '')
@@ -1294,6 +1298,14 @@
       const bonusSection = document.getElementById('bonus-section');
       const balanceEl = document.querySelector('.bonus-balance');
       const verificationNotice = document.getElementById('verification-notice');
+
+      // В режиме WITHOUT_BOT не показываем плашку верификации
+      if (this.state.operationMode === 'WITHOUT_BOT') {
+        if (bonusSection) bonusSection.style.display = 'flex';
+        if (balanceEl) balanceEl.style.display = 'block';
+        if (verificationNotice) verificationNotice.style.display = 'none';
+        return;
+      }
 
       if (userState === 'registered_not_confirmed') {
         // Показываем уведомление о необходимости верификации
@@ -1902,7 +1914,8 @@
           const processedData = {
             welcomeBonusAmount: Number(data?.welcomeBonusAmount || 500),
             botUsername: data?.botUsername || null,
-            widgetSettings: data?.widgetSettings || null
+            widgetSettings: data?.widgetSettings || null,
+            operationMode: data?.operationMode || 'WITH_BOT'
           };
 
           this.log('🔧 Обработанные настройки для плашки:', processedData);
@@ -3969,6 +3982,14 @@
 
     // Определение состояния пользователя
     getUserState: function () {
+      // Если проект в режиме WITHOUT_BOT — считаем пользователя активным без Telegram
+      if (this.state.operationMode === 'WITHOUT_BOT') {
+        console.log(
+          '✅ getUserState: WITHOUT_BOT → fully_activated без Telegram'
+        );
+        return 'fully_activated';
+      }
+
       // Проверяем localStorage и куки
       const userEmail = this.getUserEmail();
       const telegramLinked = this.isTelegramLinked();
@@ -3997,6 +4018,9 @@
 
     // Проверка возможности использования бонусов
     canSpendBonuses: function () {
+      if (this.state.operationMode === 'WITHOUT_BOT') {
+        return true;
+      }
       const userState = this.getUserState();
       return userState === 'fully_activated'; // Только подтвердившие пользователи
     },

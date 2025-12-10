@@ -29,6 +29,7 @@ CREATE TABLE projects (
     webhook_secret      TEXT NOT NULL UNIQUE DEFAULT gen_random_uuid(),
     bonus_percentage    DECIMAL(5,2) NOT NULL DEFAULT 1.0,
     bonus_expiry_days   INTEGER NOT NULL DEFAULT 365,
+    operation_mode      operation_mode NOT NULL DEFAULT 'with_bot',
     owner_id            TEXT REFERENCES admin_accounts(id) ON DELETE CASCADE,
     is_active           BOOLEAN NOT NULL DEFAULT true,
     created_at          TIMESTAMP NOT NULL DEFAULT now(),
@@ -47,6 +48,7 @@ CREATE INDEX projects_owner_id_idx ON projects(owner_id);
 | `webhook_secret` | TEXT | Секретный ключ для webhook | UNIQUE, автогенерация |
 | `bonus_percentage` | DECIMAL(5,2) | Процент начисления бонусов | По умолчанию 1.0% |
 | `bonus_expiry_days` | INTEGER | Срок действия бонусов в днях | По умолчанию 365 |
+| `operation_mode` | ENUM(`with_bot`,`without_bot`) | Режим работы проекта (через Telegram бот или без него) | По умолчанию `with_bot` |
 | `owner_id` | TEXT | ID администратора-владельца | FK → admin_accounts, Cascade Delete |
 | `is_active` | BOOLEAN | Активность проекта | По умолчанию true |
 | `created_at` | TIMESTAMP | Дата создания | Автозаполнение |
