@@ -867,6 +867,7 @@ const ColorPickerRoot = React.memo((props: ColorPickerRootProps) => {
     </ColorPickerStoreContext.Provider>
   );
 });
+ColorPickerRoot.displayName = 'ColorPickerRoot';
 
 interface ColorPickerRootImplProps
   extends Omit<
