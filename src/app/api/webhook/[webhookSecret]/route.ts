@@ -286,26 +286,50 @@ async function handleTildaOrder(projectId: string, orderData: TildaOrder) {
 
     // ✅ КРИТИЧНО: Если пользователь найден, но email в запросе отличается от email в базе
     // Обновляем email, чтобы сохранить актуальные данные пользователя
-    if (user && email && email.trim() && user.email !== email.trim()) {
-      logger.info('📧 ОБНОВЛЕНИЕ EMAIL ПОЛЬЗОВАТЕЛЯ', {
-        projectId,
-        orderId,
-        userId: user.id,
-        oldEmail: user.email,
-        newEmail: email.trim(),
-        component: 'tilda-webhook-email-update'
+    const normalizedEmail = email?.trim().toLowerCase();
+    const userEmailNormalized = user?.email?.toLowerCase();
+
+    if (user && normalizedEmail && userEmailNormalized !== normalizedEmail) {
+      // Проверяем, нет ли уже пользователя с таким email в этом проекте
+      const existingUserWithEmail = await db.user.findFirst({
+        where: {
+          projectId,
+          email: { equals: normalizedEmail, mode: 'insensitive' },
+          id: { not: user.id }
+        }
       });
 
-      // Обновляем email пользователя
-      user = (await db.user.update({
-        where: { id: user.id },
-        data: { email: email.trim() },
-        include: {
-          project: true,
-          bonuses: true,
-          transactions: true
-        }
-      })) as any;
+      if (existingUserWithEmail) {
+        logger.warn('⚠️ EMAIL УЖЕ ЗАНЯТ ДРУГИМ ПОЛЬЗОВАТЕЛЕМ', {
+          projectId,
+          orderId,
+          currentUserId: user.id,
+          existingUserId: existingUserWithEmail.id,
+          email: normalizedEmail,
+          component: 'tilda-webhook-email-conflict'
+        });
+        // Не обновляем email, продолжаем с текущим пользователем
+      } else {
+        logger.info('📧 ОБНОВЛЕНИЕ EMAIL ПОЛЬЗОВАТЕЛЯ', {
+          projectId,
+          orderId,
+          userId: user.id,
+          oldEmail: user.email,
+          newEmail: normalizedEmail,
+          component: 'tilda-webhook-email-update'
+        });
+
+        // Обновляем email пользователя
+        user = (await db.user.update({
+          where: { id: user.id },
+          data: { email: normalizedEmail },
+          include: {
+            project: true,
+            bonuses: true,
+            transactions: true
+          }
+        })) as any;
+      }
     }
 
     // Если пользователь не найден, создаем его
