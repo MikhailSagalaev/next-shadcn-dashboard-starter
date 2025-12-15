@@ -7,6 +7,7 @@ export interface Project {
   bonusPercentage: number;
   bonusExpiryDays: number;
   // bonusBehavior: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY';
+  operationMode?: 'WITH_BOT' | 'WITHOUT_BOT';
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

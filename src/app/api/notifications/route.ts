@@ -115,6 +115,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    // Проверяем лимит уведомлений по владельцу проекта
+    const { BillingService } = await import('@/lib/services/billing.service');
+    const limitCheck = await BillingService.checkLimit(
+      project.ownerId,
+      'notifications'
+    );
+
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: `Лимит уведомлений исчерпан (${limitCheck.used}/${limitCheck.limit}). Обновите тарифный план для увеличения лимита.`,
+          limitReached: true,
+          currentUsage: limitCheck.used,
+          limit: limitCheck.limit,
+          planId: limitCheck.planId
+        },
+        { status: 402 }
+      );
+    }
+
     // Отправляем уведомление через существующую систему
     const { sendRichBroadcastMessage } = await import(
       '@/lib/telegram/notifications'

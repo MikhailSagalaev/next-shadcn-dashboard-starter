@@ -155,22 +155,44 @@ export function BillingTab() {
 
     try {
       setChangingPlanId(plan.id);
-      const response = await fetch('/api/billing/plan', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: plan.id })
-      });
+      // Если тариф платный — создаем платеж через ЮKassa
+      if (plan.price > 0) {
+        const response = await fetch('/api/billing/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planId: plan.id })
+        });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        toast.error(error.error || 'Ошибка обновления тарифного плана');
-        return;
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          toast.error(error.error || 'Не удалось создать платеж');
+          return;
+        }
+
+        const data = await response.json();
+        if (data.confirmationUrl) {
+          window.location.href = data.confirmationUrl;
+        } else {
+          toast.error('Не получена ссылка на оплату');
+        }
+      } else {
+        const response = await fetch('/api/billing/plan', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planId: plan.id })
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          toast.error(error.error || 'Ошибка обновления тарифного плана');
+          return;
+        }
+
+        const data = await response.json();
+        setCurrentPlan(data.plan);
+        toast.success(data.message);
+        await loadBillingData();
       }
-
-      const data = await response.json();
-      setCurrentPlan(data.plan);
-      toast.success(data.message);
-      await loadBillingData();
     } catch (error) {
       console.error('Error upgrading plan:', error);
       toast.error('Ошибка обновления тарифного плана');

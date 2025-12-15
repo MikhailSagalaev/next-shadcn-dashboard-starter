@@ -136,10 +136,12 @@ export function SubscriptionPlansTable() {
                       {plan.interval === 'year' ? 'год' : 'месяц'}
                     </div>
                   </TableCell>
-                  <TableCell className='text-sm text-muted-foreground'>
-                    <div>Проекты: {plan.maxProjects}</div>
-                    <div>Пользователей на проект: {plan.maxUsersPerProject}</div>
-                  </TableCell>
+                <TableCell className='text-sm text-muted-foreground'>
+                  <div>Проекты: {plan.maxProjects}</div>
+                  <div>Пользователей на проект: {plan.maxUsersPerProject}</div>
+                  <div>Ботов: {plan.maxBots ?? 0}</div>
+                  <div>Уведомления: {plan.maxNotifications ?? 0}</div>
+                </TableCell>
                   <TableCell>
                     <div className='flex flex-col gap-1'>
                       <Badge variant={plan.isActive ? 'default' : 'secondary'}>

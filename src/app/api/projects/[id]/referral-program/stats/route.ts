@@ -26,11 +26,23 @@ export async function GET(
 
     // Проверяем существование проекта
     const project = await db.project.findUnique({
-      where: { id: projectId }
+      where: { id: projectId },
+      select: { id: true, operationMode: true }
     });
 
     if (!project) {
       return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
+    }
+
+    // Проверяем режим работы проекта
+    if (project.operationMode === 'WITHOUT_BOT') {
+      return NextResponse.json(
+        { 
+          error: 'Статистика реферальной программы недоступна в режиме "Без Telegram бота"',
+          code: 'REFERRAL_DISABLED_WITHOUT_BOT'
+        }, 
+        { status: 403 }
+      );
     }
 
     // Определяем период в днях

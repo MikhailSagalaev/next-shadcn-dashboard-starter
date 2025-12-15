@@ -1,0 +1,623 @@
+# Webhook интеграция
+
+Полное руководство по интеграции Gupil с внешними системами через webhook.
+
+## Обзор
+
+Webhook интеграция позволяет автоматически синхронизировать данные между вашим сайтом/CRM и системой бонусов Gupil. При совершении определенных действий (покупка, регистрация) ваша система отправляет данные в Gupil для обработки.
+
+## Основы webhook
+
+### Что такое webhook?
+
+Webhook - это HTTP POST запрос, который ваша система отправляет на специальный URL в Gupil при наступлении определенных событий.
+
+### Принцип работы:
+
+1. **Событие происходит** на вашем сайте (покупка, регистрация)
+2. **Ваша система отправляет** HTTP POST запрос на webhook URL
+3. **Gupil обрабатывает** данные и выполняет действия
+4. **Возвращается ответ** о результате обработки
+
+## Настройка webhook
+
+### Получение webhook URL
+
+1. Перейдите в **Проекты → Выберите проект → Интеграция**
+2. Скопируйте **Webhook URL** - он имеет вид:
+   ```
+   https://yourdomain.com/api/webhook/abc123def456
+   ```
+3. Сохраните **секретный ключ** для безопасности
+
+### Настройка в вашей системе
+
+Настройте отправку POST запросов на webhook URL при следующих событиях:
+- Регистрация нового пользователя
+- Совершение покупки
+- Списание бонусов при оплате
+- Отмена заказа
+
+## Формат данных
+
+### Структура запроса
+
+Все webhook запросы должны содержать:
+
+```json
+{
+  "action": "тип_действия",
+  "payload": {
+    // данные события
+  }
+}
+```
+
+### Заголовки запроса
+
+```http
+POST /api/webhook/your-secret-key
+Content-Type: application/json
+X-Webhook-Signature: sha256=signature (опционально)
+```
+
+## Типы событий
+
+### 1. Регистрация пользователя
+
+**Action**: `register_user`
+
+Создает нового пользователя в системе бонусов.
+
+```json
+{
+  "action": "register_user",
+  "payload": {
+    "email": "user@example.com",
+    "phone": "+7 (999) 123-45-67",
+    "first_name": "Иван",
+    "last_name": "Петров",
+    "telegram_id": "123456789",
+    "telegram_username": "ivan_petrov",
+    "utm_source": "google",
+    "utm_medium": "cpc",
+    "utm_campaign": "winter_sale",
+    "referral_code": "FRIEND123"
+  }
+}
+```
+
+**Обязательные поля:**
+- `email` или `phone` - для идентификации пользователя
+
+**Опциональные поля:**
+- `first_name`, `last_name` - имя и фамилия
+- `telegram_id`, `telegram_username` - данные Telegram
+- `utm_*` - UTM метки для аналитики
+- `referral_code` - код реферера
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "user_id": "user_123",
+  "message": "Пользователь создан успешно"
+}
+```
+
+### 2. Совершение покупки
+
+**Action**: `purchase`
+
+Начисляет бонусы за покупку согласно настройкам проекта.
+
+```json
+{
+  "action": "purchase",
+  "payload": {
+    "user_email": "user@example.com",
+    "order_id": "ORDER-12345",
+    "amount": 5000,
+    "currency": "RUB",
+    "products": [
+      {
+        "id": "product_1",
+        "name": "Товар 1",
+        "price": 2500,
+        "quantity": 1,
+        "category": "electronics"
+      },
+      {
+        "id": "product_2", 
+        "name": "Товар 2",
+        "price": 2500,
+        "quantity": 1,
+        "category": "accessories"
+      }
+    ],
+    "bonuses_used": 0,
+    "payment_method": "card",
+    "order_date": "2024-12-13T10:30:00Z"
+  }
+}
+```
+
+**Обязательные поля:**
+- `user_email` или `user_phone` - идентификация пользователя
+- `order_id` - уникальный ID заказа
+- `amount` - сумма заказа
+
+**Опциональные поля:**
+- `currency` - валюта (по умолчанию RUB)
+- `products` - детали товаров
+- `bonuses_used` - использованные бонусы
+- `payment_method` - способ оплаты
+- `order_date` - дата заказа
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "bonuses_earned": 250,
+  "user_balance": 1750,
+  "message": "Бонусы начислены успешно"
+}
+```
+
+### 3. Списание бонусов
+
+**Action**: `spend_bonuses`
+
+Списывает бонусы при использовании их для оплаты.
+
+```json
+{
+  "action": "spend_bonuses",
+  "payload": {
+    "user_email": "user@example.com",
+    "order_id": "ORDER-12346",
+    "bonuses_amount": 500,
+    "order_total": 3000,
+    "remaining_amount": 2500
+  }
+}
+```
+
+**Обязательные поля:**
+- `user_email` или `user_phone` - идентификация пользователя
+- `bonuses_amount` - количество списываемых бонусов
+- `order_total` - общая сумма заказа
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "bonuses_spent": 500,
+  "user_balance": 1250,
+  "message": "Бонусы списаны успешно"
+}
+```
+
+### 4. Отмена заказа
+
+**Action**: `cancel_order`
+
+Отменяет начисленные бонусы при отмене заказа.
+
+```json
+{
+  "action": "cancel_order",
+  "payload": {
+    "user_email": "user@example.com",
+    "order_id": "ORDER-12345",
+    "reason": "customer_request"
+  }
+}
+```
+
+## Интеграция с популярными платформами
+
+### Tilda
+
+Для сайтов на Tilda у нас есть подробное пошаговое руководство с визуальными инструкциями.
+
+**[Полное руководство по интеграции с Tilda →](/tilda-integration)**
+
+#### Краткий обзор:
+
+1. **Webhook** — автоматическая передача данных о заказах
+
+![Подключение Webhook в Tilda](/Подключение%20Webhook%20тильда.jpg)
+
+2. **Виджет баланса** — отображение бонусов на сайте
+
+![Подключение виджета в футер Tilda](/Подключение%20виджета%20на%20сайт%20Tilda%20footer.png)
+
+3. **Промокоды** — списание бонусов при оплате
+
+![Подключение промокода в Tilda](/Подключение%20промокода%20Tilda.jpg)
+
+#### Быстрый старт:
+
+```html
+<!-- Вставьте в блок T123 (HTML) или в футер сайта -->
+<script src="https://yourdomain.com/tilda-bonus-widget.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', function() {
+  TildaBonusWidget.init({
+    projectId: 'your-project-id',
+    apiUrl: 'https://yourdomain.com/api',
+    webhookUrl: 'https://yourdomain.com/api/webhook/your-secret'
+  });
+});
+</script>
+```
+
+**[Подробные инструкции со скриншотами →](/tilda-integration)**
+
+### WooCommerce (WordPress)
+
+#### Установка плагина:
+
+```php
+// functions.php
+function gupil_send_webhook($order_id) {
+    $order = wc_get_order($order_id);
+    $user = $order->get_user();
+    
+    $data = array(
+        'action' => 'purchase',
+        'payload' => array(
+            'user_email' => $user->user_email,
+            'order_id' => $order_id,
+            'amount' => $order->get_total(),
+            'currency' => $order->get_currency()
+        )
+    );
+    
+    wp_remote_post('https://yourdomain.com/api/webhook/your-secret', array(
+        'body' => json_encode($data),
+        'headers' => array('Content-Type' => 'application/json')
+    ));
+}
+
+add_action('woocommerce_order_status_completed', 'gupil_send_webhook');
+```
+
+### Shopify
+
+#### Настройка webhook в админке:
+
+1. **Settings → Notifications**
+2. **Create webhook** для "Order paid"
+3. **URL**: ваш webhook URL
+4. **Format**: JSON
+
+#### Пример обработки Shopify webhook:
+
+```javascript
+// Обработчик для Shopify
+app.post('/shopify-webhook', (req, res) => {
+  const order = req.body;
+  
+  const gupilData = {
+    action: 'purchase',
+    payload: {
+      user_email: order.email,
+      order_id: order.order_number,
+      amount: parseFloat(order.total_price),
+      currency: order.currency,
+      products: order.line_items.map(item => ({
+        id: item.product_id,
+        name: item.name,
+        price: parseFloat(item.price),
+        quantity: item.quantity
+      }))
+    }
+  };
+  
+  // Отправка в Gupil
+  fetch('https://yourdomain.com/api/webhook/your-secret', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(gupilData)
+  });
+  
+  res.status(200).send('OK');
+});
+```
+
+### 1C-Битрикс
+
+#### Обработчик событий:
+
+```php
+// В файле init.php
+AddEventHandler("sale", "OnOrderAdd", "GupilSendWebhook");
+
+function GupilSendWebhook($ID, $arFields) {
+    $order = CSaleOrder::GetByID($ID);
+    $user = CUser::GetByID($order['USER_ID'])->Fetch();
+    
+    $data = array(
+        'action' => 'purchase',
+        'payload' => array(
+            'user_email' => $user['EMAIL'],
+            'order_id' => $ID,
+            'amount' => floatval($order['PRICE']),
+            'currency' => $order['CURRENCY']
+        )
+    );
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'https://yourdomain.com/api/webhook/your-secret');
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+    curl_exec($ch);
+    curl_close($ch);
+}
+```
+
+## Безопасность
+
+### Проверка подписи
+
+Для дополнительной безопасности используйте подпись webhook:
+
+```javascript
+const crypto = require('crypto');
+
+function verifyWebhookSignature(payload, signature, secret) {
+    const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payload)
+        .digest('hex');
+    
+    return signature === `sha256=${expectedSignature}`;
+}
+
+// Использование
+app.post('/webhook', (req, res) => {
+    const signature = req.headers['x-webhook-signature'];
+    const payload = JSON.stringify(req.body);
+    
+    if (!verifyWebhookSignature(payload, signature, 'your-secret-key')) {
+        return res.status(401).send('Unauthorized');
+    }
+    
+    // Обработка webhook
+});
+```
+
+### Рекомендации по безопасности:
+
+1. **Используйте HTTPS** для всех webhook URL
+2. **Проверяйте подпись** запросов
+3. **Валидируйте данные** перед обработкой
+4. **Ограничивайте доступ** по IP адресам
+5. **Логируйте все запросы** для аудита
+
+## Тестирование
+
+### Инструменты для тестирования:
+
+**Postman:**
+1. Создайте POST запрос на ваш webhook URL
+2. Установите заголовок `Content-Type: application/json`
+3. Добавьте тестовые данные в body
+4. Отправьте запрос и проверьте ответ
+
+**cURL:**
+```bash
+curl -X POST https://yourdomain.com/api/webhook/your-secret \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "purchase",
+    "payload": {
+      "user_email": "test@example.com",
+      "order_id": "TEST-123",
+      "amount": 1000
+    }
+  }'
+```
+
+**Webhook.site:**
+1. Создайте временный URL на webhook.site
+2. Настройте отправку на этот URL
+3. Проверьте какие данные отправляются
+4. Скорректируйте формат при необходимости
+
+### Тестовые сценарии:
+
+1. **Регистрация нового пользователя**
+2. **Покупка существующим пользователем**
+3. **Покупка с использованием бонусов**
+4. **Отмена заказа**
+5. **Некорректные данные**
+6. **Дублирование запросов**
+
+## Мониторинг и отладка
+
+### Логи webhook
+
+В разделе **Проекты → Логи** вы можете посмотреть:
+- Все входящие webhook запросы
+- Статус обработки (успех/ошибка)
+- Детали ошибок
+- Время обработки
+
+### Частые ошибки:
+
+**400 Bad Request:**
+- Неправильный формат JSON
+- Отсутствуют обязательные поля
+- Некорректные типы данных
+
+**401 Unauthorized:**
+- Неправильный секретный ключ
+- Неверная подпись запроса
+
+**404 Not Found:**
+- Неправильный webhook URL
+- Проект не найден
+
+**500 Internal Server Error:**
+- Ошибка на стороне Gupil
+- Проблемы с базой данных
+
+### Решение проблем:
+
+1. **Проверьте формат данных** - используйте JSON validator
+2. **Убедитесь в правильности URL** - скопируйте из настроек
+3. **Проверьте логи** - найдите детали ошибки
+4. **Тестируйте поэтапно** - начните с простых запросов
+5. **Обратитесь в поддержку** - приложите логи ошибок
+
+## Лучшие практики
+
+### Производительность:
+
+1. **Отправляйте webhook асинхронно** - не блокируйте основной процесс
+2. **Используйте очереди** для обработки больших объемов
+3. **Кэшируйте результаты** повторяющихся запросов
+4. **Оптимизируйте размер данных** - отправляйте только необходимое
+
+### Надежность:
+
+1. **Реализуйте retry логику** - повторные попытки при ошибках
+2. **Используйте idempotency keys** - для предотвращения дублирования
+3. **Валидируйте данные** перед отправкой
+4. **Мониторьте статус** отправки
+
+### Масштабируемость:
+
+1. **Используйте batch запросы** для множественных операций
+2. **Реализуйте rate limiting** - ограничение частоты запросов
+3. **Кэшируйте конфигурацию** - не запрашивайте настройки каждый раз
+4. **Оптимизируйте базу данных** - индексы для быстрого поиска
+
+## Примеры интеграции
+
+### Простая интеграция на PHP:
+
+```php
+<?php
+class GupilWebhook {
+    private $webhookUrl;
+    private $secretKey;
+    
+    public function __construct($webhookUrl, $secretKey) {
+        $this->webhookUrl = $webhookUrl;
+        $this->secretKey = $secretKey;
+    }
+    
+    public function sendPurchase($userEmail, $orderId, $amount) {
+        $data = [
+            'action' => 'purchase',
+            'payload' => [
+                'user_email' => $userEmail,
+                'order_id' => $orderId,
+                'amount' => $amount
+            ]
+        ];
+        
+        return $this->sendWebhook($data);
+    }
+    
+    private function sendWebhook($data) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->webhookUrl);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-Webhook-Signature: ' . $this->generateSignature($data)
+        ]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        return ['code' => $httpCode, 'response' => $response];
+    }
+    
+    private function generateSignature($data) {
+        return 'sha256=' . hash_hmac('sha256', json_encode($data), $this->secretKey);
+    }
+}
+
+// Использование
+$webhook = new GupilWebhook(
+    'https://yourdomain.com/api/webhook/your-secret',
+    'your-secret-key'
+);
+
+$result = $webhook->sendPurchase('user@example.com', 'ORDER-123', 5000);
+?>
+```
+
+### Интеграция на Node.js:
+
+```javascript
+const axios = require('axios');
+const crypto = require('crypto');
+
+class GupilWebhook {
+    constructor(webhookUrl, secretKey) {
+        this.webhookUrl = webhookUrl;
+        this.secretKey = secretKey;
+    }
+    
+    async sendPurchase(userEmail, orderId, amount) {
+        const data = {
+            action: 'purchase',
+            payload: {
+                user_email: userEmail,
+                order_id: orderId,
+                amount: amount
+            }
+        };
+        
+        return await this.sendWebhook(data);
+    }
+    
+    async sendWebhook(data) {
+        const payload = JSON.stringify(data);
+        const signature = this.generateSignature(payload);
+        
+        try {
+            const response = await axios.post(this.webhookUrl, data, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Webhook-Signature': signature
+                }
+            });
+            
+            return { success: true, data: response.data };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+    
+    generateSignature(payload) {
+        return 'sha256=' + crypto
+            .createHmac('sha256', this.secretKey)
+            .update(payload)
+            .digest('hex');
+    }
+}
+
+// Использование
+const webhook = new GupilWebhook(
+    'https://yourdomain.com/api/webhook/your-secret',
+    'your-secret-key'
+);
+
+webhook.sendPurchase('user@example.com', 'ORDER-123', 5000)
+    .then(result => console.log(result))
+    .catch(error => console.error(error));
+```
+
+Эта документация поможет вам успешно интегрировать Gupil с любой системой через webhook API.

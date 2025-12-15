@@ -57,6 +57,7 @@ export abstract class BaseNodeHandler implements NodeHandler {
       step: context.step,
       nodeId: node.id,
       nodeType: node.type,
+      status: level === 'error' ? 'error' : 'ok',
       ...data
     });
   }

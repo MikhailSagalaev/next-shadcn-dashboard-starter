@@ -23,7 +23,9 @@ import {
   DollarSign,
   Eye,
   Calendar,
-  Download
+  Download,
+  Bot,
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -110,6 +112,94 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
           <div className='h-4 w-1/2 rounded bg-gray-200'></div>
           <div className='h-32 rounded bg-gray-200'></div>
         </div>
+      </div>
+    );
+  }
+
+  // Заглушка для режима WITHOUT_BOT
+  if (project?.operationMode === 'WITHOUT_BOT') {
+    return (
+      <div className='flex flex-1 flex-col space-y-6'>
+        {/* Header */}
+        <div className='flex items-center justify-between'>
+          <div>
+            <Heading
+              title={`Реферальная программа: ${project?.name || 'Проект'}`}
+              description='Настройка и статистика привлечения новых пользователей'
+            />
+          </div>
+          <Badge variant='secondary'>Недоступно</Badge>
+        </div>
+
+        <Separator />
+
+        {/* Заглушка */}
+        <Card className='border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950'>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2 text-yellow-700 dark:text-yellow-300'>
+              <AlertCircle className='h-5 w-5' />
+              Реферальная программа недоступна
+            </CardTitle>
+            <CardDescription className='text-yellow-600 dark:text-yellow-400'>
+              Для использования реферальной программы необходим Telegram бот
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='text-sm text-yellow-700 dark:text-yellow-300'>
+              <p className='mb-3'>
+                Реферальная программа работает только в режиме <strong>"С Telegram ботом"</strong>, 
+                так как требует:
+              </p>
+              <ul className='list-inside list-disc space-y-1 pl-4'>
+                <li>Генерацию персональных реферальных ссылок</li>
+                <li>Уведомления о приглашённых пользователях</li>
+                <li>Интерфейс для получения реферальной ссылки</li>
+                <li>Отслеживание активности рефералов</li>
+              </ul>
+            </div>
+            
+            <div className='flex flex-col gap-3 pt-4 sm:flex-row'>
+              <Button
+                onClick={() => router.push(`/dashboard/projects/${projectId}/settings`)}
+                className='flex items-center gap-2'
+              >
+                <Bot className='h-4 w-4' />
+                Включить Telegram бота
+              </Button>
+              <Button
+                variant='outline'
+                onClick={() => router.push(`/dashboard/projects/${projectId}`)}
+              >
+                <ArrowLeft className='mr-2 h-4 w-4' />
+                Вернуться к проекту
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Дополнительная информация */}
+        <Card>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <Users className='h-5 w-5' />
+              Альтернативы для привлечения пользователей
+            </CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-3'>
+            <div className='text-sm text-muted-foreground'>
+              <p className='mb-3'>
+                В режиме "Без Telegram бота" вы можете использовать другие способы 
+                привлечения пользователей:
+              </p>
+              <ul className='list-inside list-disc space-y-1 pl-4'>
+                <li>UTM-метки для отслеживания источников трафика</li>
+                <li>Промокоды и скидки для новых пользователей</li>
+                <li>Email рассылки с персональными предложениями</li>
+                <li>Интеграция с внешними партнёрскими программами</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

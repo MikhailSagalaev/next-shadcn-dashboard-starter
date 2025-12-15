@@ -36,7 +36,6 @@ export class NodeHandlersRegistry {
       'trigger.message',
       'trigger.callback',
       'trigger.webhook',
-      'trigger.email',
       'trigger.contact',
       // Сообщения
       'message',

@@ -288,8 +288,6 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
         return 'Callback';
       case 'trigger.webhook':
         return 'Webhook';
-      case 'trigger.email':
-        return 'Email';
 
       // Сообщения
       case 'message':
@@ -361,8 +359,6 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
             method: 'POST'
           }
         };
-      case 'trigger.email':
-        return { 'trigger.email': { email: 'user@example.com' } };
 
       // Сообщения
       case 'message':

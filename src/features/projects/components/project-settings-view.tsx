@@ -561,12 +561,25 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   Уровни бонусов
                 </Button>
               </Link>
-              <Link href={`/dashboard/projects/${projectId}/referral`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
+              {project?.operationMode === 'WITH_BOT' ? (
+                <Link href={`/dashboard/projects/${projectId}/referral`}>
+                  <Button variant='outline' className='mt-2 w-full justify-start'>
+                    <Share2 className='mr-2 h-4 w-4' />
+                    Реферальная программа
+                  </Button>
+                </Link>
+              ) : (
+                <Button 
+                  variant='outline' 
+                  className='mt-2 w-full justify-start opacity-50 cursor-not-allowed' 
+                  disabled
+                  title='Реферальная программа доступна только с Telegram ботом'
+                >
                   <Share2 className='mr-2 h-4 w-4' />
                   Реферальная программа
+                  <span className='ml-auto text-xs text-muted-foreground'>Недоступно</span>
                 </Button>
-              </Link>
+              )}
               <Link href={`/dashboard/projects/${projectId}/analytics`}>
                 <Button variant='outline' className='mt-2 w-full justify-start'>
                   <BarChart3 className='mr-2 h-4 w-4' />

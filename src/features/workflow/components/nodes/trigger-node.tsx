@@ -27,8 +27,6 @@ export const TriggerNode = memo(({ data }: NodeProps) => {
         return `Команда: ${triggerValue}`;
       case 'trigger.message':
         return `Сообщение: ${triggerValue}`;
-      case 'trigger.email':
-        return 'Получение email';
       case 'trigger.callback':
         return `Callback: ${triggerValue}`;
       case 'trigger.webhook':

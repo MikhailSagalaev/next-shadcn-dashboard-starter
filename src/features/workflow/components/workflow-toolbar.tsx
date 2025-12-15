@@ -36,7 +36,6 @@ import {
   Database,
   Webhook,
   Variable,
-  Mail,
   PhoneForwarded,
   Phone,
   Keyboard,
@@ -50,7 +49,8 @@ import {
   Coins,
   BarChart3,
   User,
-  Users
+  Users,
+  Mail
 } from 'lucide-react';
 import type { WorkflowNodeType, Position } from '@/types/workflow';
 
@@ -104,14 +104,6 @@ const NODE_TEMPLATES: NodeTemplate[] = [
     color: '#f97316',
     category: 'triggers',
     description: 'Входящий запрос из внешней системы'
-  },
-  {
-    type: 'trigger.email',
-    label: 'Email',
-    icon: Mail,
-    color: '#db2777',
-    category: 'triggers',
-    description: 'Запуск по входящему письму'
   },
 
   // Messages

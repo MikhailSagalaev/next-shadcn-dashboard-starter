@@ -268,6 +268,7 @@ model AdminAccount {
   updatedAt                DateTime?      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
   projects                 Project[]
   subscriptions            Subscription[]
+  payments                 Payment[]
 
   @@map("admin_accounts")
 }
@@ -386,9 +387,15 @@ model WorkflowLog {
   step        Int
   nodeId      String            @map("node_id")
   nodeType    String            @map("node_type")
+  branchKey   String?           @map("branch_key")
+  status      String?           @map("status")
   timestamp   DateTime          @default(now())
   level       String            @default("info")
   message     String
+  input       Json?
+  output      Json?
+  error       Json?
+  durationMs  Int?              @map("duration_ms")
   data        Json?
   execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
@@ -528,6 +535,8 @@ model SubscriptionPlan {
   // Лимиты
   maxProjects        Int @map("max_projects")
   maxUsersPerProject Int @map("max_users_per_project")
+  maxBots            Int @default(0) @map("max_bots")
+  maxNotifications   Int @default(0) @map("max_notifications")
 
   // Фичи (JSON для гибкости)
   features Json
@@ -541,6 +550,7 @@ model SubscriptionPlan {
 
   subscriptions Subscription[]
   discounts     PlanDiscount[]
+  payments      Payment[]
 
   @@map("subscription_plans")
 }
@@ -577,6 +587,7 @@ model Subscription {
   plan         SubscriptionPlan      @relation(fields: [planId], references: [id])
   promoCode    PromoCode?            @relation(fields: [promoCodeId], references: [id])
   history      SubscriptionHistory[]
+  payments     Payment[]
 
   @@map("subscriptions")
 }
@@ -654,6 +665,31 @@ model PlanDiscount {
   plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@map("plan_discounts")
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  adminAccountId    String   @map("admin_account_id")
+  subscriptionId    String?  @map("subscription_id")
+  planId            String?  @map("plan_id")
+  amount            Decimal  @db.Decimal(10, 2)
+  currency          String   @default("RUB")
+  status            String   // created, pending, succeeded, canceled, failed
+  provider          String   @default("yookassa")
+  providerPaymentId String   @unique @map("provider_payment_id")
+  confirmationUrl   String?  @map("confirmation_url")
+  description       String?
+  metadata          Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  adminAccount AdminAccount   @relation(fields: [adminAccountId], references: [id], onDelete: Cascade)
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  plan         SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([adminAccountId])
+  @@index([subscriptionId])
+  @@map("payments")
 }
 
 model Order {

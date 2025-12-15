@@ -60,6 +60,8 @@ export async function PUT(
     if (body.interval !== undefined) updateData.interval = body.interval;
     if (body.maxProjects !== undefined) updateData.maxProjects = body.maxProjects;
     if (body.maxUsersPerProject !== undefined) updateData.maxUsersPerProject = body.maxUsersPerProject;
+    if (body.maxBots !== undefined) updateData.maxBots = body.maxBots;
+    if (body.maxNotifications !== undefined) updateData.maxNotifications = body.maxNotifications;
     if (body.features !== undefined) updateData.features = body.features;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
     if (body.isPublic !== undefined) updateData.isPublic = body.isPublic;

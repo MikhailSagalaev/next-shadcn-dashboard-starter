@@ -7,7 +7,7 @@
  * @author: AI Assistant + User
  */
 
-import Bull from 'bull';
+import { Queue, Worker, Job } from 'bullmq';
 import { logger } from '@/lib/logger';
 import { db } from '@/lib/db';
 import { UserService, BonusService } from '@/lib/services/user.service';
@@ -19,13 +19,41 @@ import type {
 } from '@/types/bonus';
 
 // Конфигурация Redis для очередей
-const redisConfig = {
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD
+const getRedisConfig = (): { connection: { host: string; port: number; password?: string } } | null => {
+  // Проверяем доступность Redis
+  const hasRedisUrl = !!process.env.REDIS_URL;
+  const hasRedisHost = !!process.env.REDIS_HOST;
+
+  if (!hasRedisUrl && !hasRedisHost) {
+    return null; // Redis недоступен
   }
+
+  if (process.env.REDIS_URL) {
+    // Парсим REDIS_URL в объект connection
+    try {
+      const url = new URL(process.env.REDIS_URL);
+      return {
+        connection: {
+          host: url.hostname || 'localhost',
+          port: parseInt(url.port || '6379'),
+          password: url.password || undefined
+        }
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    connection: {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD || undefined
+    }
+  };
 };
+
+const redisConfig = getRedisConfig();
 
 // Типы задач в очереди
 export interface WebhookJobData {
@@ -37,193 +65,218 @@ export interface WebhookJobData {
   retryCount?: number;
 }
 
-// Создаем очереди
-export const webhookQueue = new Bull<WebhookJobData>(
+// Создаем очереди (только если Redis доступен)
+export const webhookQueue = redisConfig ? new Queue<WebhookJobData>(
   'webhook-processing',
   redisConfig
-);
-export const notificationQueue = new Bull('notifications', redisConfig);
-export const analyticsQueue = new Bull('analytics-update', redisConfig);
+) : null;
+export const notificationQueue = redisConfig ? new Queue('notifications', redisConfig) : null;
+export const analyticsQueue = redisConfig ? new Queue('analytics-update', redisConfig) : null;
 
-// Обработчики задач webhook очереди
-webhookQueue.process('register_user', async (job) => {
-  const { projectId, payload } = job.data;
-  logger.info('Processing register_user job', { jobId: job.id, projectId });
+// Ленивая инициализация Workers
+let webhookWorker: Worker<WebhookJobData> | null = null;
 
-  try {
-    const result = await processUserRegistration(projectId, payload);
-
-    // Добавляем задачу на отправку приветственного уведомления
-    await notificationQueue.add(
-      'welcome',
-      {
-        userId: result.user.id,
-        projectId
-      },
-      {
-        delay: 1000 // Отправить через 1 секунду
-      }
-    );
-
-    return result;
-  } catch (error) {
-    logger.error('Failed to process register_user', {
-      jobId: job.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    throw error;
+export function getWebhookWorker(): Worker<WebhookJobData> | null {
+  if (!redisConfig) {
+    logger.warn('Webhook queue disabled: Redis not available');
+    return null;
   }
-});
 
-webhookQueue.process('purchase', async (job) => {
-  const { projectId, payload } = job.data;
-  logger.info('Processing purchase job', { jobId: job.id, projectId });
+  if (!webhookWorker) {
+    webhookWorker = new Worker<WebhookJobData>(
+      'webhook-processing',
+      async (job: Job<WebhookJobData>) => {
+    const { type, projectId, payload } = job.data;
+    logger.info(`Processing ${type} job`, { jobId: job.id, projectId });
 
-  try {
-    const result = await processPurchase(projectId, payload);
-
-    // Добавляем задачи на обновление аналитики и отправку уведомления
-    await Promise.all([
-      analyticsQueue.add('update-user-stats', {
-        userId: result.user.id,
-        projectId,
-        amount: payload.amount
-      }),
-      notificationQueue.add('bonus-earned', {
-        userId: result.user.id,
-        bonusId: result.bonus.id,
-        projectId
-      })
-    ]);
-
-    return result;
-  } catch (error) {
-    logger.error('Failed to process purchase', {
-      jobId: job.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    throw error;
-  }
-});
-
-webhookQueue.process('spend_bonuses', async (job) => {
-  const { projectId, payload } = job.data;
-  logger.info('Processing spend_bonuses job', { jobId: job.id, projectId });
-
-  try {
-    const result = await processSpendBonuses(projectId, payload);
-
-    // Добавляем задачу на отправку уведомления
-    await notificationQueue.add('bonus-spent', {
-      userId: result.user.id,
-      amount: payload.amount,
-      projectId
-    });
-
-    return result;
-  } catch (error) {
-    logger.error('Failed to process spend_bonuses', {
-      jobId: job.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    throw error;
-  }
-});
-
-// Обработчики для notification очереди
-notificationQueue.process('welcome', async (job) => {
-  const { userId, projectId } = job.data;
-
-  try {
-    // Здесь логика отправки приветственного сообщения
-    logger.info('Sending welcome notification', { userId, projectId });
-    // await sendWelcomeNotification(userId, projectId);
-  } catch (error) {
-    logger.error('Failed to send welcome notification', {
-      jobId: job.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    throw error;
-  }
-});
-
-notificationQueue.process('bonus-earned', async (job) => {
-  const { userId, bonusId, projectId } = job.data;
-
-  try {
-    const user = await db.user.findUnique({ where: { id: userId } });
-    const bonus = await db.bonus.findUnique({ where: { id: bonusId } });
-
-    if (user && bonus) {
-      await sendBonusNotification(user as any, bonus as any, projectId);
-    }
-  } catch (error) {
-    logger.error('Failed to send bonus notification', {
-      jobId: job.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    // Не пробрасываем ошибку, чтобы не блокировать основной процесс
-  }
-});
-
-// Обработчики для analytics очереди
-analyticsQueue.process('update-user-stats', async (job) => {
-  const { userId, projectId, amount } = job.data;
-
-  try {
-    // Обновляем статистику пользователя
-    await db.user.update({
-      where: { id: userId },
-      data: {
-        totalPurchases: {
-          increment: amount
-        }
-      }
-    });
-
-    // Инвалидируем кэш аналитики и проекта
     try {
-      const { CacheService } = await import('@/lib/redis');
-      await CacheService.invalidateProject(projectId);
-    } catch {}
-  } catch (error) {
-    logger.error('Failed to update user stats', {
-      jobId: job.id,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      let result;
+      
+      switch (type) {
+        case 'register_user':
+          result = await processUserRegistration(projectId, payload);
+          // Добавляем задачу на отправку приветственного уведомления (если очередь доступна)
+          if (notificationQueue) {
+            await notificationQueue.add(
+              'welcome',
+              {
+                userId: result.user.id,
+                projectId
+              },
+              {
+                delay: 1000 // Отправить через 1 секунду
+              }
+            );
+          }
+          break;
+          
+        case 'purchase':
+          result = await processPurchase(projectId, payload);
+          // Добавляем задачи на обновление аналитики и отправку уведомления (если очереди доступны)
+          const tasks = [];
+          if (analyticsQueue) {
+            tasks.push(analyticsQueue.add('update-user-stats', {
+              userId: result.user.id,
+              projectId,
+              amount: payload.amount
+            }));
+          }
+          if (notificationQueue) {
+            tasks.push(notificationQueue.add('bonus-earned', {
+              userId: result.user.id,
+              bonusId: result.bonus.id,
+              projectId
+            }));
+          }
+          if (tasks.length > 0) {
+            await Promise.all(tasks);
+          }
+          break;
+          
+        case 'spend_bonuses':
+          result = await processSpendBonuses(projectId, payload);
+          // Добавляем задачу на отправку уведомления (если очередь доступна)
+          if (notificationQueue) {
+            await notificationQueue.add('bonus-spent', {
+              userId: result.user.id,
+              amount: payload.amount,
+              projectId
+            });
+          }
+          break;
+          
+        default:
+          throw new Error(`Unknown job type: ${type}`);
+      }
+
+      return result;
+    } catch (error) {
+      logger.error(`Failed to process ${type}`, {
+        jobId: job.id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  },
+  redisConfig
+);
+
+    // Обработчики событий для Workers
+    webhookWorker.on('completed', (job) => {
+      logger.info('Webhook job completed', {
+        jobId: job.id,
+        type: job.data.type,
+        duration: Date.now() - job.data.timestamp
+      });
+    });
+
+    webhookWorker.on('failed', (job, err) => {
+      logger.error('Webhook job failed', {
+        jobId: job?.id,
+        type: job?.data?.type,
+        error: err.message,
+        attempts: job?.attemptsMade
+      });
+    });
+
+    webhookWorker.on('stalled', (jobId: string) => {
+      logger.warn('Webhook job stalled', {
+        jobId
+      });
     });
   }
-});
+  
+  return webhookWorker;
+}
 
-// Обработчики событий очередей
-webhookQueue.on('completed', (job, result) => {
-  logger.info('Webhook job completed', {
-    jobId: job.id,
-    type: job.data.type,
-    duration: Date.now() - job.data.timestamp
-  });
-});
+// Worker для notification очереди (только если Redis доступен)
+export const notificationWorker = redisConfig ? new Worker(
+  'notifications',
+  async (job: Job) => {
+    const { name, data } = job;
+    
+    try {
+      switch (name) {
+        case 'welcome':
+          const { userId, projectId } = data;
+          logger.info('Sending welcome notification', { userId, projectId });
+          // await sendWelcomeNotification(userId, projectId);
+          break;
+          
+        case 'bonus-earned':
+          const { userId: earnUserId, bonusId, projectId: earnProjectId } = data;
+          const user = await db.user.findUnique({ where: { id: earnUserId } });
+          const bonus = await db.bonus.findUnique({ where: { id: bonusId } });
+          
+          if (user && bonus) {
+            await sendBonusNotification(user as any, bonus as any, earnProjectId);
+          }
+          break;
+          
+        case 'bonus-spent':
+          const { userId: spentUserId, amount, projectId: spentProjectId } = data;
+          logger.info('Sending bonus spent notification', { 
+            userId: spentUserId, 
+            amount, 
+            projectId: spentProjectId 
+          });
+          break;
+          
+        default:
+          logger.warn(`Unknown notification job type: ${name}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to process notification ${name}`, {
+        jobId: job.id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Не пробрасываем ошибку для уведомлений
+    }
+  },
+  redisConfig
+) : null;
 
-webhookQueue.on('failed', (job, err) => {
-  logger.error('Webhook job failed', {
-    jobId: job.id,
-    type: job.data.type,
-    error: err.message,
-    attempts: job.attemptsMade
-  });
-});
+// Worker для analytics очереди (только если Redis доступен)
+export const analyticsWorker = redisConfig
+  ? new Worker(
+      'analytics-update',
+      async (job: Job) => {
+        const { userId, projectId, amount } = job.data;
 
-webhookQueue.on('stalled', (job) => {
-  logger.warn('Webhook job stalled', {
-    jobId: job.id,
-    type: job.data.type
-  });
-});
+        try {
+          // Обновляем статистику пользователя
+          await db.user.update({
+            where: { id: userId },
+            data: {
+              totalPurchases: {
+                increment: amount
+              }
+            }
+          });
 
-// Настройки повторных попыток
-const defaultJobOptions: Bull.JobOptions = {
+          // Инвалидируем кэш аналитики и проекта
+          try {
+            const { CacheService } = await import('@/lib/redis');
+            await CacheService.invalidateProject(projectId);
+          } catch {}
+        } catch (error) {
+          logger.error('Failed to update user stats', {
+            jobId: job.id,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      },
+      redisConfig
+    )
+  : null;
+
+
+
+// Настройки повторных попыток для BullMQ
+const defaultJobOptions = {
   attempts: 3,
   backoff: {
-    type: 'exponential',
+    type: 'exponential' as const,
     delay: 2000
   },
   removeOnComplete: 100, // Хранить последние 100 выполненных задач
@@ -235,8 +288,16 @@ export async function enqueueWebhookJob(
   type: WebhookJobData['type'],
   projectId: string,
   payload: any,
-  options: Bull.JobOptions = {}
-): Promise<Bull.Job<WebhookJobData>> {
+  options: any = {}
+): Promise<Job<WebhookJobData> | null> {
+  if (!webhookQueue) {
+    logger.warn('Webhook queue not available, cannot enqueue job', {
+      type,
+      projectId
+    });
+    return null;
+  }
+
   const jobData: WebhookJobData = {
     type,
     projectId,
@@ -419,6 +480,14 @@ async function processSpendBonuses(
 
 // Dashboard для мониторинга очередей
 export async function getQueueStats() {
+  if (!webhookQueue || !notificationQueue || !analyticsQueue) {
+    return {
+      webhook: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      notifications: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      analytics: { waiting: 0, active: 0, completed: 0, failed: 0 }
+    };
+  }
+
   const [webhookStats, notificationStats, analyticsStats] = await Promise.all([
     webhookQueue.getJobCounts(),
     notificationQueue.getJobCounts(),
@@ -434,9 +503,16 @@ export async function getQueueStats() {
 
 // Graceful shutdown
 export async function closeQueues() {
-  await Promise.all([
-    webhookQueue.close(),
-    notificationQueue.close(),
-    analyticsQueue.close()
-  ]);
+  const closeTasks = [];
+  
+  if (webhookQueue) closeTasks.push(webhookQueue.close());
+  if (notificationQueue) closeTasks.push(notificationQueue.close());
+  if (analyticsQueue) closeTasks.push(analyticsQueue.close());
+  if (webhookWorker) closeTasks.push(webhookWorker.close());
+  if (notificationWorker) closeTasks.push(notificationWorker.close());
+  if (analyticsWorker) closeTasks.push(analyticsWorker.close());
+  
+  if (closeTasks.length > 0) {
+    await Promise.all(closeTasks);
+  }
 }

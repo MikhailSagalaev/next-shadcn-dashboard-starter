@@ -328,28 +328,47 @@ export class MailingService {
             ...((recipient.metadata as Record<string, any>) || {})
           };
 
-          await mailingQueue.add(
-            {
+          // Добавляем задачу в очередь (если Redis доступен)
+          if (mailingQueue) {
+            await mailingQueue.add(
+              'send-message',
+              {
+                mailingId: mailing.id,
+                recipientId: recipient.id,
+                type: mailing.type,
+                recipient: {
+                  userId: recipient.userId || undefined,
+                  email: recipient.email || undefined,
+                  phone: recipient.phone || undefined
+                },
+                subject,
+                body,
+                metadata: combinedMetadata
+              },
+              {
+                attempts: 3,
+                backoff: {
+                  type: 'exponential',
+                  delay: 2000
+                }
+              }
+            );
+          } else {
+            logger.warn('Mailing queue not available, marking recipient as failed', {
               mailingId: mailing.id,
               recipientId: recipient.id,
-              type: mailing.type,
-              recipient: {
-                userId: recipient.userId || undefined,
-                email: recipient.email || undefined,
-                phone: recipient.phone || undefined
-              },
-              subject,
-              body,
-              metadata: combinedMetadata
-            },
-            {
-              attempts: 3,
-              backoff: {
-                type: 'exponential',
-                delay: 2000
+              component: 'mailing-service'
+            });
+            
+            // Помечаем получателя как неудачного
+            await db.mailingRecipient.update({
+              where: { id: recipient.id },
+              data: {
+                status: 'FAILED',
+                error: 'Очередь рассылок недоступна (Redis не подключен)'
               }
-            }
-          );
+            });
+          }
         }
       }
 

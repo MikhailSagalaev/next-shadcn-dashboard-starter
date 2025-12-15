@@ -14,14 +14,6 @@ export type PlanLimits = {
   notifications: number;
 };
 
-const PLAN_LIMIT_PRESETS: Record<string, Partial<PlanLimits>> = {
-  free: { projects: 1, users: 100, bots: 1, notifications: 1000 },
-  starter: { projects: 1, users: 100, bots: 1, notifications: 1000 },
-  pro: { projects: 5, users: 1000, bots: 5, notifications: 10000 },
-  professional: { projects: 5, users: 1000, bots: 5, notifications: 10000 },
-  enterprise: { projects: -1, users: -1, bots: -1, notifications: -1 }
-};
-
 export const POPULAR_PLAN_SLUGS = new Set(['pro', 'professional']);
 
 export const toNumber = (value: Prisma.Decimal | number | null | undefined) => {
@@ -46,32 +38,31 @@ export const parseFeatures = (features: Prisma.JsonValue | null): string[] => {
   return [];
 };
 
+const isSet = (value: number | null | undefined) =>
+  typeof value === 'number' && value !== 0;
+
 export const derivePlanLimits = (plan: {
   slug: string;
   maxProjects: number;
   maxUsersPerProject: number;
+  maxBots?: number | null;
+  maxNotifications?: number | null;
 }): PlanLimits => {
-  const preset =
-    PLAN_LIMIT_PRESETS[plan.slug] ||
-    PLAN_LIMIT_PRESETS[plan.slug?.toLowerCase?.() || ''] ||
-    {};
+  // Явные значения в модели имеют приоритет; -1 означает безлимит.
+  const projectsLimit = isSet(plan.maxProjects) ? plan.maxProjects : -1;
 
-  const projectsLimit =
-    typeof preset.projects === 'number'
-      ? preset.projects
-      : (plan.maxProjects ?? -1);
-  const botsLimit =
-    typeof preset.bots === 'number' ? preset.bots : projectsLimit;
+  const botsLimit = isSet(plan.maxBots)
+    ? (plan.maxBots as number)
+    : projectsLimit; // если не задано — следуем лимиту проектов
 
-  const notificationsLimit =
-    typeof preset.notifications === 'number' ? preset.notifications : -1;
+  const notificationsLimit = isSet(plan.maxNotifications)
+    ? (plan.maxNotifications as number)
+    : -1;
 
   let usersLimit: number;
-  if (typeof preset.users === 'number') {
-    usersLimit = preset.users;
-  } else if (plan.maxUsersPerProject && projectsLimit && projectsLimit > 0) {
+  if (isSet(plan.maxUsersPerProject) && projectsLimit > 0) {
     usersLimit = plan.maxUsersPerProject * projectsLimit;
-  } else if (plan.maxUsersPerProject) {
+  } else if (isSet(plan.maxUsersPerProject)) {
     usersLimit = plan.maxUsersPerProject;
   } else {
     usersLimit = -1;
@@ -97,6 +88,8 @@ export const formatPlan = (
     features: Prisma.JsonValue | null;
     maxProjects: number;
     maxUsersPerProject: number;
+  maxBots?: number | null;
+  maxNotifications?: number | null;
     isActive: boolean;
     isPublic: boolean;
     sortOrder: number;
@@ -124,6 +117,8 @@ export const formatPlan = (
     isActive: plan.isActive,
     isPublic: plan.isPublic,
     sortOrder: plan.sortOrder,
+    maxBots: plan.maxBots ?? null,
+    maxNotifications: plan.maxNotifications ?? null,
     status: options.status ?? null,
     startDate: options.startDate?.toISOString() ?? null,
     endDate: options.endDate?.toISOString() ?? null,

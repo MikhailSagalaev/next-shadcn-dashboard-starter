@@ -7,7 +7,7 @@
  * @author: AI Assistant + User
  */
 
-import Bull from 'bull';
+import { Queue, Worker, Job } from 'bullmq';
 import { logger } from '@/lib/logger';
 import { db } from '@/lib/db';
 import type { MailingType } from '@prisma/client';
@@ -15,6 +15,14 @@ import { botManager } from '@/lib/telegram/bot-manager';
 
 // Конфигурация Redis для очереди рассылок
 const getRedisConfig = () => {
+  // Проверяем доступность Redis
+  const hasRedisUrl = !!process.env.REDIS_URL;
+  const hasRedisHost = !!process.env.REDIS_HOST;
+  
+  if (!hasRedisUrl && !hasRedisHost) {
+    return null; // Redis недоступен
+  }
+
   if (process.env.REDIS_HOST) {
     return {
       redis: {
@@ -55,14 +63,30 @@ export interface MailingJobData {
   metadata?: Record<string, any>;
 }
 
-// Создаем очередь для рассылок
-export const mailingQueue = new Bull<MailingJobData>(
+// Создаем очередь для рассылок (только если Redis доступен)
+const redisConfig = getRedisConfig();
+export const mailingQueue = redisConfig ? new Queue<MailingJobData>(
   'mailing',
-  getRedisConfig()
-);
+  {
+    connection: typeof redisConfig.redis === 'string' 
+      ? { host: 'localhost', port: 6379 }
+      : redisConfig.redis
+  }
+) : null;
 
-// Обработчик задач рассылки
-mailingQueue.process(async (job: Bull.Job<MailingJobData>) => {
+// Ленивая инициализация Worker
+let mailingWorker: Worker<MailingJobData> | null = null;
+
+export function getMailingWorker(): Worker<MailingJobData> | null {
+  if (!redisConfig) {
+    logger.warn('Mailing queue disabled: Redis not available');
+    return null;
+  }
+
+  if (!mailingWorker) {
+    mailingWorker = new Worker<MailingJobData>(
+      'mailing',
+      async (job: Job<MailingJobData>) => {
   const { mailingId, recipientId, type, recipient, subject, body, metadata } =
     job.data;
 
@@ -287,21 +311,14 @@ mailingQueue.process(async (job: Bull.Job<MailingJobData>) => {
 
     throw error;
   }
-});
-
-// Обработка ошибок
-mailingQueue.on('failed', (job, error) => {
-  logger.error('Mailing job failed', {
-    jobId: job?.id,
-    error: error.message,
-    component: 'mailing-queue'
-  });
-});
-
-// Обработка завершения
-mailingQueue.on('completed', (job) => {
-  logger.info('Mailing job completed', {
-    jobId: job.id,
-    component: 'mailing-queue'
-  });
-});
+},
+{
+  connection: typeof redisConfig.redis === 'string' 
+    ? { host: 'localhost', port: 6379 }
+    : redisConfig.redis
+}
+);
+  }
+  
+  return mailingWorker;
+}

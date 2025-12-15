@@ -74,6 +74,7 @@ export interface Project {
   domain?: string;
   bonusPercentage: number;
   bonusExpiryDays: number;
+  operationMode?: 'WITH_BOT' | 'WITHOUT_BOT';
   isActive: boolean;
   webhookSecret: string;
   createdAt: Date;

@@ -26,18 +26,26 @@ export class RetailCrmSyncService {
         throw new Error('Синхронизация заказов отключена');
       }
 
-      // Добавляем задачу в очередь
-      await retailCrmSyncQueue.add({
-        type: 'sync_orders',
-        projectId,
-        sinceId,
-      }, {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
-      });
+      // Добавляем задачу в очередь (если Redis доступен)
+      if (retailCrmSyncQueue) {
+        await retailCrmSyncQueue.add('sync_orders', {
+          type: 'sync_orders',
+          projectId,
+          sinceId,
+        }, {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 5000,
+          },
+        });
+      } else {
+        logger.warn('RetailCRM sync queue not available, skipping sync', {
+          projectId,
+          component: 'retailcrm-sync-service',
+        });
+        throw new Error('Очередь синхронизации недоступна (Redis не подключен)');
+      }
 
       logger.info('Запущена синхронизация заказов с RetailCRM', {
         projectId,
@@ -68,18 +76,26 @@ export class RetailCrmSyncService {
         throw new Error('Синхронизация клиентов отключена');
       }
 
-      // Добавляем задачу в очередь
-      await retailCrmSyncQueue.add({
-        type: 'sync_customers',
-        projectId,
-        sinceId,
-      }, {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
-      });
+      // Добавляем задачу в очередь (если Redis доступен)
+      if (retailCrmSyncQueue) {
+        await retailCrmSyncQueue.add('sync_customers', {
+          type: 'sync_customers',
+          projectId,
+          sinceId,
+        }, {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 5000,
+          },
+        });
+      } else {
+        logger.warn('RetailCRM sync queue not available, skipping sync', {
+          projectId,
+          component: 'retailcrm-sync-service',
+        });
+        throw new Error('Очередь синхронизации недоступна (Redis не подключен)');
+      }
 
       logger.info('Запущена синхронизация клиентов с RetailCRM', {
         projectId,
@@ -120,34 +136,42 @@ export class RetailCrmSyncService {
    */
   static async schedulePeriodicSync(projectId: string, intervalMinutes: number = 60): Promise<void> {
     try {
-      // Добавляем повторяющуюся задачу
-      await retailCrmSyncQueue.add({
-        type: 'sync_orders',
-        projectId,
-      }, {
-        repeat: {
-          every: intervalMinutes * 60 * 1000, // Интервал в миллисекундах
-        },
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
-      });
+      // Добавляем повторяющуюся задачу (если Redis доступен)
+      if (retailCrmSyncQueue) {
+        await retailCrmSyncQueue.add('sync_orders', {
+          type: 'sync_orders',
+          projectId,
+        }, {
+          repeat: {
+            every: intervalMinutes * 60 * 1000, // Интервал в миллисекундах
+          },
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 5000,
+          },
+        });
 
-      await retailCrmSyncQueue.add({
-        type: 'sync_customers',
-        projectId,
-      }, {
-        repeat: {
-          every: intervalMinutes * 60 * 1000,
-        },
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
-      });
+        await retailCrmSyncQueue.add('sync_customers', {
+          type: 'sync_customers',
+          projectId,
+        }, {
+          repeat: {
+            every: intervalMinutes * 60 * 1000,
+          },
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 5000,
+          },
+        });
+      } else {
+        logger.warn('RetailCRM sync queue not available, cannot schedule periodic sync', {
+          projectId,
+          component: 'retailcrm-sync-service',
+        });
+        throw new Error('Очередь синхронизации недоступна (Redis не подключен)');
+      }
 
       logger.info('Настроена периодическая синхронизация с RetailCRM', {
         projectId,

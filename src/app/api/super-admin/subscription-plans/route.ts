@@ -72,7 +72,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Валидация обязательных полей
-    if (!body.name || !body.slug || !body.price || body.maxProjects === undefined || body.maxUsersPerProject === undefined) {
+    if (
+      !body.name ||
+      !body.slug ||
+      body.price === undefined ||
+      body.maxProjects === undefined ||
+      body.maxUsersPerProject === undefined
+    ) {
       return NextResponse.json(
         { error: 'Обязательные поля: name, slug, price, maxProjects, maxUsersPerProject' },
         { status: 400 }
@@ -101,6 +107,8 @@ export async function POST(request: NextRequest) {
         interval: body.interval || 'month',
         maxProjects: body.maxProjects,
         maxUsersPerProject: body.maxUsersPerProject,
+        maxBots: body.maxBots ?? 0,
+        maxNotifications: body.maxNotifications ?? 0,
         features: body.features || [],
         isActive: body.isActive !== false,
         isPublic: body.isPublic !== false,

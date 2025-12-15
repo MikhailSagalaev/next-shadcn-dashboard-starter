@@ -35,6 +35,8 @@ export interface SubscriptionPlan {
   interval: string;
   maxProjects: number;
   maxUsersPerProject: number;
+  maxBots?: number | null;
+  maxNotifications?: number | null;
   features: string[] | null;
   isActive: boolean;
   isPublic: boolean;
@@ -70,6 +72,8 @@ export function SubscriptionPlanDialog({
     interval: 'month',
     maxProjects: 1,
     maxUsersPerProject: 100,
+    maxBots: 0,
+    maxNotifications: 0,
     featuresText: '',
     isActive: true,
     isPublic: true,
@@ -89,6 +93,8 @@ export function SubscriptionPlanDialog({
           interval: plan.interval || 'month',
           maxProjects: plan.maxProjects,
           maxUsersPerProject: plan.maxUsersPerProject,
+          maxBots: plan.maxBots ?? 0,
+          maxNotifications: plan.maxNotifications ?? 0,
           featuresText: Array.isArray(plan.features) ? plan.features.join('\n') : '',
           isActive: plan.isActive,
           isPublic: plan.isPublic,
@@ -103,6 +109,8 @@ export function SubscriptionPlanDialog({
           price: 0,
           maxProjects: 1,
           maxUsersPerProject: 100,
+          maxBots: 0,
+          maxNotifications: 0,
           featuresText: '',
           isActive: true,
           isPublic: true,
@@ -145,6 +153,8 @@ export function SubscriptionPlanDialog({
         interval: form.interval,
         maxProjects: Number(form.maxProjects),
         maxUsersPerProject: Number(form.maxUsersPerProject),
+        maxBots: Number(form.maxBots),
+        maxNotifications: Number(form.maxNotifications),
         features: parsedFeatures,
         isActive: form.isActive,
         isPublic: form.isPublic,
@@ -272,6 +282,28 @@ export function SubscriptionPlanDialog({
               min='1'
               value={form.maxUsersPerProject}
               onChange={(e) => handleChange('maxUsersPerProject', Number(e.target.value))}
+            />
+          </div>
+
+          <div className='space-y-2'>
+            <Label htmlFor='plan-max-bots'>Ботов</Label>
+            <Input
+              id='plan-max-bots'
+              type='number'
+              min='0'
+              value={form.maxBots}
+              onChange={(e) => handleChange('maxBots', Number(e.target.value))}
+            />
+          </div>
+
+          <div className='space-y-2'>
+            <Label htmlFor='plan-max-notifications'>Уведомления</Label>
+            <Input
+              id='plan-max-notifications'
+              type='number'
+              min='0'
+              value={form.maxNotifications}
+              onChange={(e) => handleChange('maxNotifications', Number(e.target.value))}
             />
           </div>
 

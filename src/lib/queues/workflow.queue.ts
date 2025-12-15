@@ -7,20 +7,38 @@
  * @author: AI Assistant + User
  */
 
-import Bull from 'bull';
+import { Queue, Worker, Job } from 'bullmq';
 import { logger } from '@/lib/logger';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
 import { SimpleWorkflowProcessor } from '@/lib/services/simple-workflow-processor';
 import { ExecutionContextManager } from '@/lib/services/workflow/execution-context-manager';
 
-// Конфигурация Redis для очередей (используем существующую из webhook.queue.ts)
-const redisConfig = {
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD
+// Конфигурация Redis для очередей
+const getRedisConfig = () => {
+  // Проверяем доступность Redis
+  const hasRedisUrl = !!process.env.REDIS_URL;
+  const hasRedisHost = !!process.env.REDIS_HOST;
+  
+  if (!hasRedisUrl && !hasRedisHost) {
+    return null; // Redis недоступен
   }
+
+  if (process.env.REDIS_HOST) {
+    return {
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD
+      }
+    };
+  }
+
+  return {
+    connection: process.env.REDIS_URL || 'redis://localhost:6379'
+  };
 };
+
+const redisConfig = getRedisConfig();
 
 // Типы задач в workflow очереди
 export interface WorkflowJobData {
@@ -37,106 +55,101 @@ export interface WorkflowJobData {
   timestamp?: number;
 }
 
-// Создаем очередь для workflow операций
-export const workflowQueue = new Bull<WorkflowJobData>(
+// Создаем очередь для workflow операций (только если Redis доступен)
+export const workflowQueue = redisConfig ? new Queue<WorkflowJobData>(
   'workflow-processing',
   redisConfig
+) : null;
+
+// Ленивая инициализация Worker
+let workflowWorker: Worker<WorkflowJobData> | null = null;
+
+export function getWorkflowWorker(): Worker<WorkflowJobData> | null {
+  if (!redisConfig) {
+    logger.warn('Workflow queue disabled: Redis not available');
+    return null;
+  }
+
+  if (!workflowWorker) {
+    workflowWorker = new Worker<WorkflowJobData>(
+      'workflow-processing',
+      async (job: Job<WorkflowJobData>) => {
+    const { type, projectId, executionId, context, trigger, userId, timestamp } = job.data;
+    
+    try {
+      switch (type) {
+        case 'heavy_workflow_execution':
+          logger.info('Processing heavy workflow execution job', {
+            jobId: job.id,
+            projectId,
+            executionId,
+            trigger
+          });
+          
+          const result = await WorkflowRuntimeService.executeWorkflow(
+            projectId,
+            trigger || 'message',
+            context
+          );
+
+          logger.info('Heavy workflow execution completed', {
+            jobId: job.id,
+            projectId,
+            executionId,
+            result,
+            processingTime: Date.now() - (timestamp || 0)
+          });
+          
+          return result;
+          
+        case 'user_variables_update':
+          logger.info('Processing user variables update job', {
+            jobId: job.id,
+            projectId,
+            userId
+          });
+          
+          logger.info('User variables update completed', {
+            jobId: job.id,
+            projectId,
+            userId,
+            processingTime: Date.now() - (timestamp || 0)
+          });
+          
+          return { success: true };
+          
+        case 'statistics_aggregation':
+          logger.info('Processing statistics aggregation job', {
+            jobId: job.id,
+            projectId
+          });
+          
+          logger.info('Statistics aggregation completed', {
+            jobId: job.id,
+            projectId,
+            processingTime: Date.now() - (timestamp || 0)
+          });
+          
+          return { success: true };
+          
+        default:
+          throw new Error(`Unknown workflow job type: ${type}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to process workflow job ${type}`, {
+        jobId: job.id,
+        projectId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  },
+  redisConfig
 );
-
-// Обработчики задач workflow очереди
-workflowQueue.process('heavy_workflow_execution', async (job) => {
-  const { projectId, executionId, context, trigger } = job.data;
-  logger.info('Processing heavy workflow execution job', {
-    jobId: job.id,
-    projectId,
-    executionId,
-    trigger
-  });
-
-  try {
-    // Выполняем тяжелую workflow операцию асинхронно
-    const result = await WorkflowRuntimeService.executeWorkflow(
-      projectId,
-      trigger || 'message',
-      context
-    );
-
-    logger.info('Heavy workflow execution completed', {
-      jobId: job.id,
-      projectId,
-      executionId,
-      result,
-      processingTime: Date.now() - job.timestamp
-    });
-
-    return result;
-  } catch (error) {
-    logger.error('Failed to process heavy workflow execution', {
-      jobId: job.id,
-      projectId,
-      executionId,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    throw error;
   }
-});
-
-workflowQueue.process('user_variables_update', async (job) => {
-  const { projectId, userId } = job.data;
-  logger.info('Processing user variables update job', {
-    jobId: job.id,
-    projectId,
-    userId
-  });
-
-  try {
-    // Здесь можно реализовать обновление кеша user variables
-    // Пока просто логируем
-    logger.info('User variables update completed', {
-      jobId: job.id,
-      projectId,
-      userId,
-      processingTime: Date.now() - job.timestamp
-    });
-
-    return { success: true };
-  } catch (error) {
-    logger.error('Failed to process user variables update', {
-      jobId: job.id,
-      projectId,
-      userId,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    throw error;
-  }
-});
-
-workflowQueue.process('statistics_aggregation', async (job) => {
-  const { projectId } = job.data;
-  logger.info('Processing statistics aggregation job', {
-    jobId: job.id,
-    projectId
-  });
-
-  try {
-    // Здесь можно реализовать агрегацию статистики проекта
-    // Пока просто логируем
-    logger.info('Statistics aggregation completed', {
-      jobId: job.id,
-      projectId,
-      processingTime: Date.now() - job.timestamp
-    });
-
-    return { success: true };
-  } catch (error) {
-    logger.error('Failed to process statistics aggregation', {
-      jobId: job.id,
-      projectId,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    throw error;
-  }
-});
+  
+  return workflowWorker;
+}
 
 // Функции для добавления задач в очередь
 export const addHeavyWorkflowJob = async (
@@ -145,6 +158,14 @@ export const addHeavyWorkflowJob = async (
   context: any,
   trigger: 'start' | 'message' | 'callback' = 'message'
 ): Promise<void> => {
+  if (!workflowQueue) {
+    logger.warn('Workflow queue not available, skipping heavy workflow job', {
+      projectId,
+      executionId
+    });
+    return;
+  }
+
   try {
     await workflowQueue.add(
       'heavy_workflow_execution',
@@ -186,6 +207,14 @@ export const addUserVariablesUpdateJob = async (
   projectId: string,
   userId: string
 ): Promise<void> => {
+  if (!workflowQueue) {
+    logger.warn('Workflow queue not available, skipping user variables update job', {
+      projectId,
+      userId
+    });
+    return;
+  }
+
   try {
     await workflowQueue.add(
       'user_variables_update',
@@ -219,6 +248,13 @@ export const addUserVariablesUpdateJob = async (
 export const addStatisticsAggregationJob = async (
   projectId: string
 ): Promise<void> => {
+  if (!workflowQueue) {
+    logger.warn('Workflow queue not available, skipping statistics aggregation job', {
+      projectId
+    });
+    return;
+  }
+
   try {
     await workflowQueue.add(
       'statistics_aggregation',
@@ -246,32 +282,35 @@ export const addStatisticsAggregationJob = async (
   }
 };
 
-// Мониторинг очереди
-workflowQueue.on('completed', (job, result) => {
-  logger.debug('Workflow job completed', {
-    jobId: job.id,
-    type: job.data.type,
-    projectId: job.data.projectId,
-    processingTime: Date.now() - job.timestamp
-  });
-});
+// Мониторинг Worker (только если Redis доступен)
+if (redisConfig) {
+  const worker = getWorkflowWorker();
+  if (worker) {
+    worker.on('completed', (job) => {
+      logger.debug('Workflow job completed', {
+        jobId: job.id,
+        type: job.data.type,
+        projectId: job.data.projectId,
+        processingTime: Date.now() - (job.data.timestamp || 0)
+      });
+    });
 
-workflowQueue.on('failed', (job, err) => {
-  logger.error('Workflow job failed', {
-    jobId: job?.id,
-    type: job?.data?.type,
-    projectId: job?.data?.projectId,
-    error: err.message,
-    attempts: job?.attemptsMade
-  });
-});
+    worker.on('failed', (job, err) => {
+      logger.error('Workflow job failed', {
+        jobId: job?.id,
+        type: job?.data?.type,
+        projectId: job?.data?.projectId,
+        error: err.message,
+        attempts: job?.attemptsMade
+      });
+    });
 
-workflowQueue.on('stalled', (job) => {
-  logger.warn('Workflow job stalled', {
-    jobId: job?.id,
-    type: job?.data?.type,
-    projectId: job?.data?.projectId
-  });
-});
+    worker.on('stalled', (jobId: string) => {
+      logger.warn('Workflow job stalled', {
+        jobId
+      });
+    });
+  }
+}
 
 export default workflowQueue;

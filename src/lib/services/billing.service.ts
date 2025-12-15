@@ -59,6 +59,7 @@ export class BillingService {
     maxProjects: number;
     maxUsersPerProject: number;
     maxBots?: number;
+    maxNotifications?: number;
   }> {
     const subscription = await this.getActiveSubscription(adminId);
 
@@ -67,7 +68,8 @@ export class BillingService {
       return {
         maxProjects: 1,
         maxUsersPerProject: 10,
-        maxBots: undefined
+        maxBots: undefined,
+        maxNotifications: undefined
       };
     }
 
@@ -86,14 +88,19 @@ export class BillingService {
         maxUsersPerProject:
           custom.maxUsersPerProject || subscription.plan.maxUsersPerProject,
         maxBots:
-          typeof custom.maxBots === 'number' ? custom.maxBots : planMaxBots
+          typeof custom.maxBots === 'number' ? custom.maxBots : planMaxBots,
+        maxNotifications:
+          typeof custom.maxNotifications === 'number'
+            ? custom.maxNotifications
+            : subscription.plan.maxNotifications || undefined
       };
     }
 
     return {
       maxProjects: subscription.plan.maxProjects,
       maxUsersPerProject: subscription.plan.maxUsersPerProject,
-      maxBots: planMaxBots
+      maxBots: planMaxBots,
+      maxNotifications: subscription.plan.maxNotifications || undefined
     };
   }
 
@@ -102,7 +109,7 @@ export class BillingService {
    */
   static async checkLimit(
     adminId: string,
-    type: 'projects' | 'users' | 'bots'
+    type: 'projects' | 'users' | 'bots' | 'notifications'
   ): Promise<{
     allowed: boolean;
     used: number;
@@ -163,6 +170,35 @@ export class BillingService {
         allowed: botsCount < maxBots,
         used: botsCount,
         limit: maxBots,
+        planId: subscription?.planId
+      };
+    }
+
+    if (type === 'notifications') {
+      const maxNotifications =
+        typeof limits.maxNotifications === 'number'
+          ? limits.maxNotifications
+          : undefined;
+
+      if (!maxNotifications) {
+        return {
+          allowed: true,
+          used: 0,
+          limit: Number.MAX_SAFE_INTEGER,
+          planId: subscription?.planId
+        };
+      }
+
+      const notificationsCount = await db.notification.count({
+        where: {
+          project: { ownerId: adminId }
+        }
+      });
+
+      return {
+        allowed: notificationsCount < maxNotifications,
+        used: notificationsCount,
+        limit: maxNotifications,
         planId: subscription?.planId
       };
     }
@@ -410,8 +446,14 @@ export class BillingService {
         limits: {
           projects: subscription.plan.maxProjects,
           users: subscription.plan.maxUsersPerProject,
-          bots: 5, // TODO: Добавить в план
-          notifications: 10000 // TODO: Добавить в план
+          bots:
+            typeof subscription.plan.maxBots === 'number'
+              ? subscription.plan.maxBots
+              : 5,
+          notifications:
+            typeof subscription.plan.maxNotifications === 'number'
+              ? subscription.plan.maxNotifications
+              : 10000
         }
       };
     }
@@ -441,15 +483,19 @@ export class BillingService {
       select: { id: true }
     });
 
-    const [projectsCount, usersCount, botsCount] = await Promise.all([
+    const [projectsCount, usersCount, botsCount, notificationsCount] =
+      await Promise.all([
       db.project.count({ where: { ownerId: adminId } }),
       db.user.count({
         where: { projectId: { in: projects.map((p) => p.id) } }
       }),
       db.botSettings.count({
         where: { projectId: { in: projects.map((p) => p.id) } }
-      })
-    ]);
+        }),
+        db.notification.count({
+          where: { projectId: { in: projects.map((p) => p.id) } }
+        })
+      ]);
 
     const usage: UsageStats = {
       projects: {
@@ -465,7 +511,7 @@ export class BillingService {
         limit: plan.limits.bots === -1 ? -1 : plan.limits.bots
       },
       notifications: {
-        used: 0, // TODO: Подсчет уведомлений
+        used: notificationsCount,
         limit: plan.limits.notifications === -1 ? -1 : plan.limits.notifications
       }
     };

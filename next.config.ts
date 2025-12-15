@@ -9,9 +9,6 @@ const baseConfig: NextConfig = {
   // output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
 
   // Do not fail the production build on ESLint/TS errors. We lint in CI/local.
-  eslint: {
-    ignoreDuringBuilds: true
-  },
   typescript: {
     ignoreBuildErrors: true
   },
@@ -27,15 +24,15 @@ const baseConfig: NextConfig = {
   },
   transpilePackages: isTest ? [] : ['geist'],
 
-  // Performance optimizations
-  turbopack: {
-    rules: {
-      '*.svg': {
-        loaders: ['@svgr/webpack'],
-        as: '*.js'
-      }
-    }
-  },
+  // Performance optimizations - отключено для совместимости с Bull
+  // turbopack: {
+  //   rules: {
+  //     '*.svg': {
+  //       loaders: ['@svgr/webpack'],
+  //       as: '*.js'
+  //     }
+  //   }
+  // },
 
   // Security headers
   async headers() {

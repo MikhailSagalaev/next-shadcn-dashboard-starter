@@ -389,6 +389,16 @@ export class ExecutionContextManager {
       else if (nodeId.includes('action')) nodeType = 'action';
       else if (nodeId.includes('flow')) nodeType = 'flow';
 
+      const safeData = data ? JSON.parse(JSON.stringify(data)) : null;
+      const maskedInput =
+        safeData?.input && typeof safeData.input === 'string'
+          ? safeData.input.slice(0, 2000)
+          : safeData?.input;
+      const maskedOutput =
+        safeData?.output && typeof safeData.output === 'string'
+          ? safeData.output.slice(0, 2000)
+          : safeData?.output;
+
       await db.workflowLog.create({
         data: {
           executionId,
@@ -397,7 +407,13 @@ export class ExecutionContextManager {
           nodeType,
           level,
           message,
-          data: data ? JSON.parse(JSON.stringify(data)) : null
+          branchKey: safeData?.branchKey,
+          status: safeData?.status,
+          input: maskedInput || null,
+          output: maskedOutput || null,
+          error: safeData?.error || null,
+          durationMs: safeData?.durationMs || null,
+          data: safeData && !safeData.data ? safeData : safeData?.data || null
         }
       });
 

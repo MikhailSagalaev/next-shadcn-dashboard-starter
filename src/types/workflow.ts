@@ -19,7 +19,6 @@ export type WorkflowNodeType =
   | 'trigger.message'
   | 'trigger.callback'
   | 'trigger.webhook'
-  | 'trigger.email'
   | 'trigger.contact'
   // Сообщения
   | 'message'
@@ -93,7 +92,6 @@ export interface WorkflowNodeConfig {
   'trigger.message'?: MessageTriggerConfig;
   'trigger.callback'?: CallbackTriggerConfig;
   'trigger.webhook'?: WebhookTriggerConfig;
-  'trigger.email'?: EmailTriggerConfig;
 
   // Сообщения
   message?: MessageConfig;
@@ -154,11 +152,6 @@ export interface WebhookTriggerConfig {
   webhookUrl: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
-}
-
-export interface EmailTriggerConfig {
-  email: string;
-  subject?: string;
 }
 
 export interface MessageConfig {

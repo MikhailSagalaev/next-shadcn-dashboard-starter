@@ -7,7 +7,7 @@
  * @author: AI Assistant + User
  */
 
-import Bull from 'bull';
+import { Queue, Worker, Job } from 'bullmq';
 import { logger } from '@/lib/logger';
 import { RetailCrmClientService } from '@/lib/services/retailcrm-client.service';
 import { OrderService } from '@/lib/services/order.service';
@@ -17,6 +17,14 @@ import { OrderStatus } from '@prisma/client';
 
 // Конфигурация Redis для очереди синхронизации
 const getRedisConfig = () => {
+  // Проверяем доступность Redis
+  const hasRedisUrl = !!process.env.REDIS_URL;
+  const hasRedisHost = !!process.env.REDIS_HOST;
+  
+  if (!hasRedisUrl && !hasRedisHost) {
+    return null; // Redis недоступен
+  }
+
   if (process.env.REDIS_HOST) {
     return {
       redis: {
@@ -53,84 +61,18 @@ export interface RetailCrmSyncJobData {
   sinceId?: number;
 }
 
-// Создаем очередь для синхронизации
-export const retailCrmSyncQueue = new Bull<RetailCrmSyncJobData>(
+// Создаем очередь для синхронизации (только если Redis доступен)
+const redisConfig = getRedisConfig();
+export const retailCrmSyncQueue = redisConfig ? new Queue<RetailCrmSyncJobData>(
   'retailcrm-sync',
-  getRedisConfig()
-);
-
-// Обработчик задач синхронизации
-retailCrmSyncQueue.process(async (job: Bull.Job<RetailCrmSyncJobData>) => {
-  const {
-    type,
-    projectId,
-    orderId,
-    customerId,
-    retailCrmOrderId,
-    retailCrmCustomerId,
-    sinceId
-  } = job.data;
-
-  try {
-    logger.info('Processing RetailCRM sync job', {
-      jobId: job.id,
-      type,
-      projectId,
-      component: 'retailcrm-sync-queue'
-    });
-
-    const client = await RetailCrmClientService.create(projectId);
-
-    switch (type) {
-      case 'sync_orders':
-        await syncOrders(client, projectId, sinceId);
-        break;
-
-      case 'sync_customers':
-        await syncCustomers(client, projectId, sinceId);
-        break;
-
-      case 'sync_order':
-        if (retailCrmOrderId) {
-          await syncSingleOrder(client, projectId, retailCrmOrderId);
-        }
-        break;
-
-      case 'sync_customer':
-        if (retailCrmCustomerId) {
-          await syncSingleCustomer(client, projectId, retailCrmCustomerId);
-        }
-        break;
-
-      default:
-        throw new Error(`Неизвестный тип синхронизации: ${type}`);
-    }
-
-    // Обновляем время последней синхронизации
-    await db.retailCrmIntegration.update({
-      where: { projectId },
-      data: {
-        lastSyncAt: new Date()
-      }
-    });
-
-    logger.info('RetailCRM sync job completed', {
-      jobId: job.id,
-      type,
-      projectId,
-      component: 'retailcrm-sync-queue'
-    });
-  } catch (error) {
-    logger.error('Error processing RetailCRM sync job', {
-      jobId: job.id,
-      type,
-      projectId,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      component: 'retailcrm-sync-queue'
-    });
-    throw error;
+  {
+    connection: typeof redisConfig.redis === 'string' 
+      ? { host: 'localhost', port: 6379 }
+      : redisConfig.redis
   }
-});
+) : null;
+
+// Worker создается в конце файла
 
 // Синхронизация заказов
 async function syncOrders(
@@ -293,19 +235,111 @@ function mapRetailCrmStatusToOrderStatus(retailCrmStatus: string): OrderStatus {
   return statusMap[normalized] ?? OrderStatus.PENDING;
 }
 
-// Обработка ошибок
-retailCrmSyncQueue.on('failed', (job, error) => {
-  logger.error('RetailCRM sync job failed', {
-    jobId: job?.id,
-    error: error.message,
-    component: 'retailcrm-sync-queue'
-  });
-});
+// Ленивая инициализация Worker
+let retailCrmSyncWorker: Worker<RetailCrmSyncJobData> | null = null;
 
-// Обработка завершения
-retailCrmSyncQueue.on('completed', (job) => {
-  logger.info('RetailCRM sync job completed', {
-    jobId: job.id,
-    component: 'retailcrm-sync-queue'
-  });
-});
+export function getRetailCrmSyncWorker(): Worker<RetailCrmSyncJobData> | null {
+  if (!redisConfig) {
+    logger.warn('RetailCRM sync queue disabled: Redis not available');
+    return null;
+  }
+
+  if (!retailCrmSyncWorker) {
+    retailCrmSyncWorker = new Worker<RetailCrmSyncJobData>(
+      'retailcrm-sync',
+      async (job: Job<RetailCrmSyncJobData>) => {
+        const {
+          type,
+          projectId,
+          retailCrmOrderId,
+          retailCrmCustomerId,
+          sinceId
+        } = job.data;
+
+        try {
+          logger.info('Processing RetailCRM sync job', {
+            jobId: job.id,
+            type,
+            projectId,
+            component: 'retailcrm-sync-queue'
+          });
+
+          const client = await RetailCrmClientService.create(projectId);
+
+          switch (type) {
+            case 'sync_orders':
+              await syncOrders(client, projectId, sinceId);
+              break;
+
+            case 'sync_customers':
+              await syncCustomers(client, projectId, sinceId);
+              break;
+
+            case 'sync_order':
+              if (retailCrmOrderId) {
+                await syncSingleOrder(client, projectId, retailCrmOrderId);
+              }
+              break;
+
+            case 'sync_customer':
+              if (retailCrmCustomerId) {
+                await syncSingleCustomer(client, projectId, retailCrmCustomerId);
+              }
+              break;
+
+            default:
+              throw new Error(`Неизвестный тип синхронизации: ${type}`);
+          }
+
+          // Обновляем время последней синхронизации
+          await db.retailCrmIntegration.update({
+            where: { projectId },
+            data: {
+              lastSyncAt: new Date()
+            }
+          });
+
+          logger.info('RetailCRM sync job completed', {
+            jobId: job.id,
+            type,
+            projectId,
+            component: 'retailcrm-sync-queue'
+          });
+        } catch (error) {
+          logger.error('Error processing RetailCRM sync job', {
+            jobId: job.id,
+            type,
+            projectId,
+            error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+            component: 'retailcrm-sync-queue'
+          });
+          throw error;
+        }
+      },
+      {
+        connection: typeof redisConfig.redis === 'string' 
+          ? { host: 'localhost', port: 6379 }
+          : redisConfig.redis
+      }
+    );
+
+    // Обработка ошибок
+    retailCrmSyncWorker.on('failed', (job, error) => {
+      logger.error('RetailCRM sync job failed', {
+        jobId: job?.id,
+        error: error.message,
+        component: 'retailcrm-sync-queue'
+      });
+    });
+
+    // Обработка завершения
+    retailCrmSyncWorker.on('completed', (job) => {
+      logger.info('RetailCRM sync job completed', {
+        jobId: job.id,
+        component: 'retailcrm-sync-queue'
+      });
+    });
+  }
+
+  return retailCrmSyncWorker;
+}
