@@ -251,7 +251,7 @@ export function ReferralSettingsForm({
                     className='flex items-center space-x-2'
                   >
                     <Gift className='h-4 w-4 text-emerald-600' />
-                    <span>Приветственный бонус (₽)</span>
+                    <span>Приветственный бонус</span>
                   </Label>
                   <Input
                     id='welcomeBonus'
@@ -281,7 +281,7 @@ export function ReferralSettingsForm({
                     className='flex items-center space-x-2'
                   >
                     <DollarSign className='h-4 w-4 text-purple-600' />
-                    <span>Минимальная сумма покупки (₽)</span>
+                    <span>Минимальная сумма покупки (руб.)</span>
                   </Label>
                   <Input
                     id='minPurchaseAmount'
@@ -436,29 +436,29 @@ export function ReferralSettingsForm({
           <CardContent className='space-y-4'>
             <div className='grid grid-cols-1 gap-4 text-sm md:grid-cols-2'>
               <div className='rounded-lg border p-3'>
-                <p className='mb-2 font-medium'>Покупка на 5 000 ₽</p>
+                <p className='mb-2 font-medium'>Покупка на 5 000 руб.</p>
                 <div className='space-y-1 text-gray-600'>
                   <p>
                     Рефер получит:{' '}
-                    {(((levelOnePercent || 0) * 5000) / 100).toFixed(0)} ₽
+                    {(((levelOnePercent || 0) * 5000) / 100).toFixed(0)} бонусов
                   </p>
                   <p>
                     Новый пользователь:{' '}
-                    {(((watch('refereeBonus') || 0) * 5000) / 100).toFixed(0)} ₽
+                    {(((watch('refereeBonus') || 0) * 5000) / 100).toFixed(0)} бонусов
                   </p>
                 </div>
               </div>
               <div className='rounded-lg border p-3'>
-                <p className='mb-2 font-medium'>Покупка на 10 000 ₽</p>
+                <p className='mb-2 font-medium'>Покупка на 10 000 руб.</p>
                 <div className='space-y-1 text-gray-600'>
                   <p>
                     Рефер получит:{' '}
-                    {(((levelOnePercent || 0) * 10000) / 100).toFixed(0)} ₽
+                    {(((levelOnePercent || 0) * 10000) / 100).toFixed(0)} бонусов
                   </p>
                   <p>
                     Новый пользователь:{' '}
                     {(((watch('refereeBonus') || 0) * 10000) / 100).toFixed(0)}{' '}
-                    ₽
+                    бонусов
                   </p>
                 </div>
               </div>

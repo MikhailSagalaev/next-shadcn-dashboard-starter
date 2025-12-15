@@ -332,7 +332,7 @@ export function UsersTable({
         const balance = row.getValue('bonusBalance') as number;
         return (
           <Badge variant={balance > 0 ? 'default' : 'secondary'}>
-            {balance.toFixed(0)} ₽
+            {balance.toFixed(0)} бонусов
           </Badge>
         );
       },

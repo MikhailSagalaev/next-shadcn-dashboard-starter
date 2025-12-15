@@ -205,7 +205,7 @@ export class UserVariablesService {
             minute: '2-digit'
           }).format(new Date(t.createdAt));
           
-          return `${index + 1}. ${icon} ${sign}${Math.abs(amount)} ₽ • ${t.description || 'Операция'}\n   📅 ${date}`;
+          return `${index + 1}. ${icon} ${sign}${Math.abs(amount)} бонусов • ${t.description || 'Операция'}\n   📅 ${date}`;
         }).join('\n\n');
       };
 
@@ -244,7 +244,7 @@ export class UserVariablesService {
         'user.totalPurchases': profile.totalPurchases,
         'user.totalPurchasesFormatted': `${profile.totalPurchases} руб.`,
         'user.expiringBonuses': profile.expiringBonuses || 0, // ✨ НОВОЕ
-        'user.expiringBonusesFormatted': `${Number(profile.expiringBonuses || 0)}₽`,
+        'user.expiringBonusesFormatted': `${Number(profile.expiringBonuses || 0)} бонусов`,
 
         // Уровень и рефералы
         // Маппинг для преобразования цифр в названия уровней
@@ -297,7 +297,7 @@ export class UserVariablesService {
         // Реферальная статистика по проекту (для блоков статистики)
         'user.referralCount': referralCount,
         'user.referralBonusTotal': referralBonusTotal,
-        'user.referralBonusTotalFormatted': `${referralBonusTotal}₽`,
+        'user.referralBonusTotalFormatted': `${referralBonusTotal} бонусов`,
 
         // Дополнительные переменные для удобства
         'user.hasReferralCode': profile.referralCode ? 'Да' : 'Нет',
@@ -375,10 +375,10 @@ export class UserVariablesService {
         'user.totalEarnedFormatted': '0 бонусов',
         'user.totalSpentFormatted': '0 бонусов',
         'user.totalPurchasesFormatted': '0 руб.',
-        'user.expiringBonusesFormatted': '0₽',
+        'user.expiringBonusesFormatted': '0 бонусов',
         'user.referralCount': 0,
         'user.referralBonusTotal': 0,
-        'user.referralBonusTotalFormatted': '0₽',
+        'user.referralBonusTotalFormatted': '0 бонусов',
         'user.progressPercent': 0,
         'user.progressBar': '▓▓▓▓▓▓▓▓▓▓ 0%',
         'user.levelBonusPercent': 0,

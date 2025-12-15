@@ -206,11 +206,11 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
           </CardHeader>
           <CardContent>
             <div className='text-2xl font-bold'>
-              {formatNumber(Number(overview.totalBonuses))}₽
+              {formatNumber(Number(overview.totalBonuses))} бонусов
             </div>
             <div className='text-muted-foreground flex items-center space-x-2 text-xs'>
               <span>
-                Активных: {formatNumber(Number(overview.activeBonuses))}₽
+                Активных: {formatNumber(Number(overview.activeBonuses))} бонусов
               </span>
             </div>
           </CardContent>
@@ -259,8 +259,8 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
             <div className='text-muted-foreground text-xs'>
               {formatNumber(
                 Number(analytics.referralStats?.totalBonusPaid || 0)
-              )}
-              ₽ выплачено
+              )}{' '}
+              бонусов выплачено
             </div>
           </CardContent>
         </Card>
@@ -274,7 +274,7 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
           </CardHeader>
           <CardContent>
             <div className='text-warning text-2xl font-bold'>
-              {formatNumber(Number(overview.expiringBonuses.amount))}₽
+              {formatNumber(Number(overview.expiringBonuses.amount))} бонусов
             </div>
             <div className='text-muted-foreground text-xs'>
               {overview.expiringBonuses.count} бонусов
@@ -424,7 +424,7 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
                               Пользователей: {data.value}
                             </div>
                             <div className='text-muted-foreground text-sm'>
-                              Ср. покупки: {formatNumber(data.avgPurchases)}₽
+                              Ср. покупки: {formatNumber(data.avgPurchases)} руб.
                             </div>
                           </div>
                         );
@@ -491,7 +491,7 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
                               Количество: {data.value}
                             </div>
                             <div className='text-muted-foreground text-sm'>
-                              Сумма: {formatNumber(data.amount)}₽
+                              Сумма: {formatNumber(data.amount)} бонусов
                             </div>
                           </div>
                         );
@@ -538,7 +538,7 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
                 </div>
                 <div className='bg-muted/50 rounded-lg border p-3 text-center'>
                   <div className='text-lg font-semibold'>
-                    {formatNumber(analytics.referralStats.totalBonusPaid)}₽
+                    {formatNumber(analytics.referralStats.totalBonusPaid)} бонусов
                   </div>
                   <div className='text-muted-foreground text-sm'>
                     Выплачено реферальных бонусов
@@ -627,13 +627,13 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
                       </div>
                       <div>
                         <div className='font-medium text-green-600'>
-                          +{formatNumber(user.totalEarned)}₽
+                          +{formatNumber(user.totalEarned)} бонусов
                         </div>
                         <div className='text-muted-foreground'>начислено</div>
                       </div>
                       <div>
                         <div className='font-medium text-red-600'>
-                          -{formatNumber(user.totalSpent)}₽
+                          -{formatNumber(user.totalSpent)} бонусов
                         </div>
                         <div className='text-muted-foreground'>потрачено</div>
                       </div>

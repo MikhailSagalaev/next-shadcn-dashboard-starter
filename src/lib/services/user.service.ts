@@ -924,7 +924,7 @@ export class BonusService {
       type: bonusType,
       description:
         description ||
-        `Бонус за покупку на сумму ${purchaseAmount}₽ (заказ ${orderId})`,
+        `Бонус за покупку на сумму ${purchaseAmount} руб. (заказ ${orderId})`,
       metadata: {
         ...metadata,
         orderId,

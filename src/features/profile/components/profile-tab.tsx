@@ -180,7 +180,7 @@ export function ProfileTab() {
               <div className='flex justify-between text-sm'>
                 <span className='text-muted-foreground'>Общие бонусы:</span>
                 <span className='font-medium'>
-                  {stats.system.totalBonuses.toLocaleString()} ₽
+                  {stats.system.totalBonuses.toLocaleString()} бонусов
                 </span>
               </div>
             </div>

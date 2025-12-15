@@ -46,7 +46,7 @@ import type { BonusType } from '@/types/bonus';
 const bonusAwardSchema = z.object({
   amount: z.number()
     .min(1, 'Сумма должна быть больше 0')
-    .max(100000, 'Максимальная сумма 100,000₽'),
+    .max(100000, 'Максимальная сумма 100,000 бонусов'),
   type: z.enum(['PURCHASE', 'BIRTHDAY', 'MANUAL', 'REFERRAL'], {
     required_error: 'Выберите тип бонуса'
   }),
@@ -126,7 +126,7 @@ export function BonusAwardDialog({
 
       toast({
         title: 'Успех',
-        description: `Начислено ${data.amount}₽ бонусов пользователю ${userName}`,
+        description: `Начислено ${data.amount} бонусов пользователю ${userName}`,
       });
 
       onSuccess();
@@ -208,7 +208,7 @@ export function BonusAwardDialog({
                           className="pr-8"
                         />
                         <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-                          ₽
+                          бонусов
                         </span>
                       </div>
                     </FormControl>
@@ -288,7 +288,7 @@ export function BonusAwardDialog({
                 </div>
                 <div className="text-sm space-y-1">
                   <div>
-                    <strong>Сумма:</strong> {form.watch('amount')}₽
+                    <strong>Сумма:</strong> {form.watch('amount')} бонусов
                   </div>
                   <div>
                     <strong>Тип:</strong> {bonusTypeLabels[watchedType]}
@@ -312,7 +312,7 @@ export function BonusAwardDialog({
                 Отмена
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? 'Начисление...' : `Начислить ${form.watch('amount') || 0}₽`}
+                {loading ? 'Начисление...' : `Начислить ${form.watch('amount') || 0} бонусов`}
               </Button>
             </DialogFooter>
           </form>

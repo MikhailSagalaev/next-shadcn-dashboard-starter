@@ -769,8 +769,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             <div className='text-2xl font-bold'>
               {Number(
                 users.reduce((sum, user) => sum + (user.totalBonuses || 0), 0)
-              ).toFixed(2)}
-              ₽
+              ).toFixed(2)}{' '}
+              бонусов
             </div>
           </CardContent>
         </Card>
@@ -785,8 +785,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             <div className='text-2xl font-bold'>
               {Number(
                 users.reduce((sum, user) => sum + (user.activeBonuses || 0), 0)
-              ).toFixed(2)}
-              ₽
+              ).toFixed(2)}{' '}
+              бонусов
             </div>
           </CardContent>
         </Card>
@@ -1019,7 +1019,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 <div>
                   <Label className='text-sm font-medium'>Активные бонусы</Label>
                   <p className='text-muted-foreground text-sm'>
-                    {profileUser.bonusBalance || 0} ₽
+                    {profileUser.bonusBalance || 0} бонусов
                   </p>
                 </div>
                 <div>
@@ -1027,7 +1027,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     Всего заработано
                   </Label>
                   <p className='text-muted-foreground text-sm'>
-                    {profileUser.totalEarned || 0} ₽
+                    {profileUser.totalEarned || 0} бонусов
                   </p>
                 </div>
                 <div>
@@ -1121,7 +1121,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   ? `${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim()
                   : 'Без имени'}
                 <br />
-                Доступно: {selectedUser.activeBonuses}₽
+                Доступно: {selectedUser.activeBonuses} бонусов
               </DialogDescription>
             </DialogHeader>
 
@@ -1370,7 +1370,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                           </TableCell>
                           <TableCell className='text-right font-medium'>
                             {t.type === 'EARN' ? '+' : '-'}
-                            {Number(t.amount).toFixed(2)}₽
+                            {Number(t.amount).toFixed(2)} бонусов
                           </TableCell>
                           <TableCell
                             className='text-sm break-words'
@@ -1397,7 +1397,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                                       )}
                                     </span>
                                     <span className='text-destructive font-medium'>
-                                      -{Number(child.amount).toFixed(2)}₽
+                                      -{Number(child.amount).toFixed(2)} бонусов
                                     </span>
                                     {child.metadata?.spentFromBonusId ? (
                                       <span className='opacity-70'>

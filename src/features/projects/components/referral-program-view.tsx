@@ -315,7 +315,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                   {Number(referralProgram?.welcomeBonus || 0).toLocaleString(
                     'ru-RU'
                   )}{' '}
-                  ₽
+                  бонусов
                 </p>
               </div>
               <div>
@@ -324,7 +324,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                   {Number(
                     referralProgram?.minPurchaseAmount || 0
                   ).toLocaleString('ru-RU')}{' '}
-                  ₽
+                  руб.
                 </p>
               </div>
               <div>

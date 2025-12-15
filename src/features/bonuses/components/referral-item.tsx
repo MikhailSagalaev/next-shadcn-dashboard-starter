@@ -83,7 +83,7 @@ export function ReferralItem({
       {/* Stats */}
       <div className='flex shrink-0 items-center gap-2'>
         <div className='text-right'>
-          <div className='text-sm font-medium'>{formatted.bonusBalance} ₽</div>
+          <div className='text-sm font-medium'>{formatted.bonusBalance} бонусов</div>
           <div className='text-muted-foreground text-xs'>
             {formatted.formattedDate}
           </div>

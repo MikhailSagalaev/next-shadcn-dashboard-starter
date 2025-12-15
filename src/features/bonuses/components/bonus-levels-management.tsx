@@ -271,8 +271,8 @@ export function BonusLevelsManagement({
                     </TableCell>
                     <TableCell className='font-medium'>{level.name}</TableCell>
                     <TableCell>
-                      {level.minAmount} ₽
-                      {level.maxAmount && ` - ${level.maxAmount} ₽`}
+                      {level.minAmount} руб.
+                      {level.maxAmount && ` - ${level.maxAmount} руб.`}
                       {!level.maxAmount &&
                         index === levels.length - 1 &&
                         ' и выше'}

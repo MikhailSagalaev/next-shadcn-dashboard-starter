@@ -49,7 +49,7 @@ export async function sendBonusNotification(
 
     const message =
       `${emoji} *Новые бонусы начислены!*\n\n` +
-      `💰 Сумма: *+${bonus.amount}₽*\n` +
+      `💰 Сумма: *+${bonus.amount} бонусов*\n` +
       `📝 Тип: ${typeText}\n` +
       `📄 Описание: ${bonus.description || 'Без описания'}\n\n` +
       `⏰ Срок действия: ${bonus.expiresAt ? bonus.expiresAt.toLocaleDateString('ru-RU') : 'Бессрочно'}`;
@@ -93,7 +93,7 @@ export async function sendBonusSpentNotification(
 
     const message =
       `💸 *Бонусы потрачены*\n\n` +
-      `💰 Сумма: *-${amount}₽*\n` +
+      `💰 Сумма: *-${amount} бонусов*\n` +
       `📄 За: ${description}\n\n` +
       `Спасибо за покупку!`;
 
@@ -132,7 +132,7 @@ export async function sendBonusExpiryWarning(
 
     const message =
       `⚠️ *Внимание! Бонусы скоро истекут*\n\n` +
-      `💰 Сумма: *${expiringAmount}₽*\n` +
+      `💰 Сумма: *${expiringAmount} бонусов*\n` +
       `📅 Истекают: ${expiryDate.toLocaleDateString('ru-RU')}\n` +
       `⏰ Осталось дней: *${daysLeft}*\n\n` +
       `Поспешите воспользоваться бонусами! 🏃‍♂️`;

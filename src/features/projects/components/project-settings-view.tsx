@@ -361,7 +361,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
                   <div className='space-y-2'>
                     <Label htmlFor='welcomeBonusAmount'>
-                      Приветственный бонус при регистрации (₽)
+                      Приветственный бонус при регистрации
                     </Label>
                     <Input
                       id='welcomeBonusAmount'

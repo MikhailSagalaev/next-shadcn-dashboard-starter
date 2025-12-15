@@ -796,7 +796,7 @@ export function BonusManagementPageRefactored({
                 <div>
                   <Label className='text-sm font-medium'>Активные бонусы</Label>
                   <p className='text-muted-foreground text-sm'>
-                    {profileUser.bonusBalance} ₽
+                    {profileUser.bonusBalance} бонусов
                   </p>
                 </div>
                 <div>
@@ -804,7 +804,7 @@ export function BonusManagementPageRefactored({
                     Всего заработано
                   </Label>
                   <p className='text-muted-foreground text-sm'>
-                    {profileUser.totalEarned} ₽
+                    {profileUser.totalEarned} бонусов
                   </p>
                 </div>
                 <div>
@@ -933,7 +933,7 @@ export function BonusManagementPageRefactored({
                             </TableCell>
                             <TableCell className='text-right font-medium'>
                               {t.type === 'EARN' ? '+' : '-'}
-                              {Number(t.amount).toFixed(2)}₽
+                              {Number(t.amount).toFixed(2)} бонусов
                             </TableCell>
                             <TableCell
                               className='text-sm break-words'
@@ -961,7 +961,7 @@ export function BonusManagementPageRefactored({
                                           ).toLocaleString('ru-RU')}
                                         </span>
                                         <span className='text-destructive font-medium'>
-                                          -{Number(child.amount).toFixed(2)}₽
+                                          -{Number(child.amount).toFixed(2)} бонусов
                                         </span>
                                         {child.metadata?.spentFromBonusId ? (
                                           <span className='opacity-70'>
@@ -1173,7 +1173,7 @@ const UsersDisplayArea = memo<UsersDisplayAreaProps>(
                   <Badge
                     variant={user.bonusBalance > 0 ? 'default' : 'secondary'}
                   >
-                    {user.bonusBalance.toFixed(0)} ₽
+                    {user.bonusBalance.toFixed(0)} бонусов
                   </Badge>
                 </TableCell>
                 <TableCell className='text-muted-foreground text-sm'>

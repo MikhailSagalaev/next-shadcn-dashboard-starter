@@ -74,7 +74,7 @@ const commandTemplates = [
     description: 'Профиль пользователя',
     command: 'profile',
     template:
-      '👤 Ваш профиль\n\nИмя: {firstName}\nБонусы: {bonusBalance} ₽\nСтатус: {status}',
+      '👤 Ваш профиль\n\nИмя: {firstName}\nБонусы: {bonusBalance} бонусов\nСтатус: {status}',
     icon: Users,
     category: 'user'
   },
@@ -83,7 +83,7 @@ const commandTemplates = [
     description: 'Баланс бонусов',
     command: 'bonuses',
     template:
-      '💰 Ваши бонусы\n\nТекущий баланс: {bonusBalance} ₽\nВсего заработано: {totalEarned} ₽\nПотрачено: {totalSpent} ₽',
+      '💰 Ваши бонусы\n\nТекущий баланс: {bonusBalance} бонусов\nВсего заработано: {totalEarned} бонусов\nПотрачено: {totalSpent} бонусов',
     icon: Gift,
     category: 'bonuses'
   },
@@ -92,7 +92,7 @@ const commandTemplates = [
     description: 'Оплата бонусами',
     command: 'pay',
     template:
-      '💳 Оплата бонусами\n\nДоступно: {bonusBalance} ₽\nВведите сумму оплаты:',
+      '💳 Оплата бонусами\n\nДоступно: {bonusBalance} бонусов\nВведите сумму оплаты:',
     icon: CreditCard,
     category: 'payment'
   }

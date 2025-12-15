@@ -96,10 +96,10 @@ export const BonusStatsCards = memo<BonusStatsCardsProps>(
       },
       {
         title: 'Общий баланс бонусов',
-        value: `${Number(stats.totalBonuses).toFixed(2)}₽`,
+        value: `${Number(stats.totalBonuses).toFixed(2)} бонусов`,
         subtitle:
           averageBonusPerUser > 0
-            ? `${averageBonusPerUser.toFixed(2)}₽ на пользователя`
+            ? `${averageBonusPerUser.toFixed(2)} бонусов на пользователя`
             : undefined,
         icon: Coins,
         variant: 'success'

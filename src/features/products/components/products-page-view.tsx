@@ -59,7 +59,7 @@ export function ProductsPageView({ projectId }: ProductsPageViewProps) {
               {products.map((product) => (
                 <div key={product.id} className='border rounded p-4'>
                   <div className='font-medium'>{product.name}</div>
-                  <div className='text-sm text-muted-foreground'>{product.price}₽</div>
+                  <div className='text-sm text-muted-foreground'>{product.price} руб.</div>
                 </div>
               ))}
             </div>

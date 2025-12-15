@@ -210,7 +210,7 @@ export function BonusLevelDialog({
                 name='minAmount'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Мин. сумма заказа (₽)</FormLabel>
+                    <FormLabel>Мин. сумма заказа (руб.)</FormLabel>
                     <FormControl>
                       <Input
                         type='number'
@@ -231,7 +231,7 @@ export function BonusLevelDialog({
                 name='maxAmount'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Макс. сумма заказа (₽)</FormLabel>
+                    <FormLabel>Макс. сумма заказа (руб.)</FormLabel>
                     <FormControl>
                       <Input
                         type='number'
