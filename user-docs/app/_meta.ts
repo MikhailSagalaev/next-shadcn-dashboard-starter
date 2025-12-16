@@ -17,13 +17,18 @@ export default {
   'telegram-bots': {
     title: 'Telegram боты'
   },
+  'workflow-constructor': {
+    title: 'Конструктор сценариев'
+  },
   'webhook-integration': {
     title: 'Webhook интеграция'
+  },
+  'tilda-integration': {
+    title: 'Интеграция с Tilda'
   },
   'bonus-system': {
     title: 'Бонусная система'
   },
-
   'api-reference': {
     title: 'API справочник'
   },
