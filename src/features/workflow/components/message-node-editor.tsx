@@ -295,23 +295,20 @@ export function MessageNodeEditor({
       </div>
 
       {/* Клавиатура */}
-      {nodeConfig.message?.keyboard && (
-        <div>
-          <Label>Клавиатура</Label>
-          <KeyboardEditor
-            value={nodeConfig.message.keyboard}
-            onChange={(keyboard) => {
-              setNodeConfig((prevConfig) => ({
-                ...prevConfig,
-                message: {
-                  ...prevConfig.message,
-                  keyboard: keyboard || undefined
-                }
-              }));
-            }}
-          />
-        </div>
-      )}
+      <div>
+        <KeyboardEditor
+          value={nodeConfig.message?.keyboard || null}
+          onChange={(keyboard) => {
+            setNodeConfig((prevConfig) => ({
+              ...prevConfig,
+              message: {
+                ...prevConfig.message,
+                keyboard: keyboard || undefined
+              }
+            }));
+          }}
+        />
+      </div>
     </div>
   );
 }
