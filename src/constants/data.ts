@@ -61,7 +61,7 @@ export const recentSalesData: SaleUser[] = [
     id: 1,
     name: 'Ольга Мартина',
     email: 'olivia.martin@email.com',
-    amount: '+1,999₽',
+    amount: '+1,999 бонусов',
     image: 'https://api.slingacademy.com/public/sample-users/1.png',
     initials: 'ОМ'
   },
@@ -69,7 +69,7 @@ export const recentSalesData: SaleUser[] = [
     id: 2,
     name: 'Джексон Ли',
     email: 'jackson.lee@email.com',
-    amount: '+39₽',
+    amount: '+39 бонусов',
     image: 'https://api.slingacademy.com/public/sample-users/2.png',
     initials: 'ДЛ'
   },
@@ -77,7 +77,7 @@ export const recentSalesData: SaleUser[] = [
     id: 3,
     name: 'Изабелла Нгуен',
     email: 'isabella.nguyen@email.com',
-    amount: '+299₽',
+    amount: '+299 бонусов',
     image: 'https://api.slingacademy.com/public/sample-users/3.png',
     initials: 'ИН'
   },
@@ -85,7 +85,7 @@ export const recentSalesData: SaleUser[] = [
     id: 4,
     name: 'Вильям Ким',
     email: 'will@email.com',
-    amount: '+99₽',
+    amount: '+99 бонусов',
     image: 'https://api.slingacademy.com/public/sample-users/4.png',
     initials: 'ВК'
   },
@@ -93,7 +93,7 @@ export const recentSalesData: SaleUser[] = [
     id: 5,
     name: 'София Дэвис',
     email: 'sofia.davis@email.com',
-    amount: '+39₽',
+    amount: '+39 бонусов',
     image: 'https://api.slingacademy.com/public/sample-users/5.png',
     initials: 'СД'
   }

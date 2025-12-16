@@ -147,7 +147,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className='text-2xl font-bold'>
-              {stats?.totalBonuses || 0}₽
+              {stats?.totalBonuses || 0} бонусов
             </div>
             <p className='text-muted-foreground text-xs'>
               Всего начислено бонусов
