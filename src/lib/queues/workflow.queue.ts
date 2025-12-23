@@ -18,7 +18,7 @@ const getRedisConfig = () => {
   // Проверяем доступность Redis
   const hasRedisUrl = !!process.env.REDIS_URL;
   const hasRedisHost = !!process.env.REDIS_HOST;
-  
+
   if (!hasRedisUrl && !hasRedisHost) {
     return null; // Redis недоступен
   }
@@ -56,10 +56,9 @@ export interface WorkflowJobData {
 }
 
 // Создаем очередь для workflow операций (только если Redis доступен)
-export const workflowQueue = redisConfig ? new Queue<WorkflowJobData>(
-  'workflow-processing',
-  redisConfig
-) : null;
+export const workflowQueue = redisConfig
+  ? new Queue<WorkflowJobData>('workflow-processing', redisConfig as any)
+  : null;
 
 // Ленивая инициализация Worker
 let workflowWorker: Worker<WorkflowJobData> | null = null;
@@ -74,80 +73,88 @@ export function getWorkflowWorker(): Worker<WorkflowJobData> | null {
     workflowWorker = new Worker<WorkflowJobData>(
       'workflow-processing',
       async (job: Job<WorkflowJobData>) => {
-    const { type, projectId, executionId, context, trigger, userId, timestamp } = job.data;
-    
-    try {
-      switch (type) {
-        case 'heavy_workflow_execution':
-          logger.info('Processing heavy workflow execution job', {
-            jobId: job.id,
-            projectId,
-            executionId,
-            trigger
-          });
-          
-          const result = await WorkflowRuntimeService.executeWorkflow(
-            projectId,
-            trigger || 'message',
-            context
-          );
+        const {
+          type,
+          projectId,
+          executionId,
+          context,
+          trigger,
+          userId,
+          timestamp
+        } = job.data;
 
-          logger.info('Heavy workflow execution completed', {
+        try {
+          switch (type) {
+            case 'heavy_workflow_execution':
+              logger.info('Processing heavy workflow execution job', {
+                jobId: job.id,
+                projectId,
+                executionId,
+                trigger
+              });
+
+              const result = await WorkflowRuntimeService.executeWorkflow(
+                projectId,
+                trigger || 'message',
+                context
+              );
+
+              logger.info('Heavy workflow execution completed', {
+                jobId: job.id,
+                projectId,
+                executionId,
+                result,
+                processingTime: Date.now() - (timestamp || 0)
+              });
+
+              return result;
+
+            case 'user_variables_update':
+              logger.info('Processing user variables update job', {
+                jobId: job.id,
+                projectId,
+                userId
+              });
+
+              logger.info('User variables update completed', {
+                jobId: job.id,
+                projectId,
+                userId,
+                processingTime: Date.now() - (timestamp || 0)
+              });
+
+              return { success: true };
+
+            case 'statistics_aggregation':
+              logger.info('Processing statistics aggregation job', {
+                jobId: job.id,
+                projectId
+              });
+
+              logger.info('Statistics aggregation completed', {
+                jobId: job.id,
+                projectId,
+                processingTime: Date.now() - (timestamp || 0)
+              });
+
+              return { success: true };
+
+            default:
+              throw new Error(`Unknown workflow job type: ${type}`);
+          }
+        } catch (error) {
+          logger.error(`Failed to process workflow job ${type}`, {
             jobId: job.id,
             projectId,
-            executionId,
-            result,
-            processingTime: Date.now() - (timestamp || 0)
+            error: error instanceof Error ? error.message : 'Unknown error'
           });
-          
-          return result;
-          
-        case 'user_variables_update':
-          logger.info('Processing user variables update job', {
-            jobId: job.id,
-            projectId,
-            userId
-          });
-          
-          logger.info('User variables update completed', {
-            jobId: job.id,
-            projectId,
-            userId,
-            processingTime: Date.now() - (timestamp || 0)
-          });
-          
-          return { success: true };
-          
-        case 'statistics_aggregation':
-          logger.info('Processing statistics aggregation job', {
-            jobId: job.id,
-            projectId
-          });
-          
-          logger.info('Statistics aggregation completed', {
-            jobId: job.id,
-            projectId,
-            processingTime: Date.now() - (timestamp || 0)
-          });
-          
-          return { success: true };
-          
-        default:
-          throw new Error(`Unknown workflow job type: ${type}`);
-      }
-    } catch (error) {
-      logger.error(`Failed to process workflow job ${type}`, {
-        jobId: job.id,
-        projectId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
-    }
-  },
-  redisConfig
-);
+          throw error;
+        }
+      },
+      redisConfig as any
+    );
   }
-  
+
   return workflowWorker;
 }
 
@@ -168,7 +175,7 @@ export const addHeavyWorkflowJob = async (
 
   try {
     await workflowQueue.add(
-      'heavy_workflow_execution',
+      'heavy_workflow_execution' as any,
       {
         type: 'heavy_workflow_execution',
         projectId,
@@ -208,16 +215,19 @@ export const addUserVariablesUpdateJob = async (
   userId: string
 ): Promise<void> => {
   if (!workflowQueue) {
-    logger.warn('Workflow queue not available, skipping user variables update job', {
-      projectId,
-      userId
-    });
+    logger.warn(
+      'Workflow queue not available, skipping user variables update job',
+      {
+        projectId,
+        userId
+      }
+    );
     return;
   }
 
   try {
     await workflowQueue.add(
-      'user_variables_update',
+      'user_variables_update' as any,
       {
         type: 'user_variables_update',
         projectId,
@@ -249,15 +259,18 @@ export const addStatisticsAggregationJob = async (
   projectId: string
 ): Promise<void> => {
   if (!workflowQueue) {
-    logger.warn('Workflow queue not available, skipping statistics aggregation job', {
-      projectId
-    });
+    logger.warn(
+      'Workflow queue not available, skipping statistics aggregation job',
+      {
+        projectId
+      }
+    );
     return;
   }
 
   try {
     await workflowQueue.add(
-      'statistics_aggregation',
+      'statistics_aggregation' as any,
       {
         type: 'statistics_aggregation',
         projectId,
