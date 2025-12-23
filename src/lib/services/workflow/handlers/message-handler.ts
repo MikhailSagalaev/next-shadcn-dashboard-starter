@@ -287,7 +287,11 @@ export class MessageHandler extends BaseNodeHandler {
       const keyboardConfig =
         messageConfig?.keyboard || (node.data?.config as any)?.keyboard;
       if (keyboardConfig) {
-        const keyboard = this.buildKeyboard(keyboardConfig);
+        const keyboard = await this.buildKeyboard(
+          keyboardConfig,
+          context,
+          additionalVariables
+        );
         if (keyboard) {
           payload.reply_markup = keyboard;
         }
@@ -422,7 +426,11 @@ export class MessageHandler extends BaseNodeHandler {
   /**
    * ✨ НОВОЕ: Построение клавиатуры из конфигурации
    */
-  private buildKeyboard(config: any): any {
+  private async buildKeyboard(
+    config: any,
+    context: ExecutionContext,
+    additionalVariables: Record<string, string>
+  ): Promise<any> {
     if (!config || !config.buttons || !Array.isArray(config.buttons)) {
       return null;
     }
@@ -430,62 +438,129 @@ export class MessageHandler extends BaseNodeHandler {
     const keyboardType = config.type || 'inline';
 
     if (keyboardType === 'inline') {
-      return this.buildInlineKeyboard(config.buttons);
+      return await this.buildInlineKeyboard(
+        config.buttons,
+        context,
+        additionalVariables
+      );
     } else if (keyboardType === 'reply') {
-      return this.buildReplyKeyboard(config.buttons, config);
+      return await this.buildReplyKeyboard(
+        config.buttons,
+        config,
+        context,
+        additionalVariables
+      );
     }
 
     return null;
   }
 
   /**
-   * ✨ НОВОЕ: Построение inline клавиатуры
+   * ✨ НОВОЕ: Построение inline клавиатуры с резолвом переменных
    */
-  private buildInlineKeyboard(buttons: InlineButton[][]): any {
-    const keyboard = buttons.map((row) =>
-      row.map((button) => {
-        const btn: any = { text: button.text };
+  private async buildInlineKeyboard(
+    buttons: InlineButton[][],
+    context: ExecutionContext,
+    additionalVariables: Record<string, string>
+  ): Promise<any> {
+    const keyboard = await Promise.all(
+      buttons.map(
+        async (row) =>
+          await Promise.all(
+            row.map(async (button) => {
+              const btn: any = {
+                text: await ProjectVariablesService.replaceVariablesInText(
+                  context.projectId,
+                  button.text,
+                  additionalVariables
+                )
+              };
 
-        if (button.callback_data) {
-          btn.callback_data = button.callback_data;
-        } else if (button.url) {
-          btn.url = button.url;
-        } else if (button.web_app) {
-          btn.web_app = button.web_app;
-        } else if (button.login_url) {
-          btn.login_url = button.login_url;
-        } else if (button.goto_node) {
-          // Для goto_node используем callback_data с префиксом
-          btn.callback_data = `goto:${button.goto_node}`;
-        }
+              if (button.callback_data) {
+                btn.callback_data =
+                  await ProjectVariablesService.replaceVariablesInText(
+                    context.projectId,
+                    button.callback_data,
+                    additionalVariables
+                  );
+              } else if (button.url) {
+                btn.url = await ProjectVariablesService.replaceVariablesInText(
+                  context.projectId,
+                  button.url,
+                  additionalVariables
+                );
+              } else if (button.web_app) {
+                btn.web_app = {
+                  url: await ProjectVariablesService.replaceVariablesInText(
+                    context.projectId,
+                    button.web_app.url,
+                    additionalVariables
+                  )
+                };
+              } else if (button.login_url) {
+                btn.login_url = {
+                  url: await ProjectVariablesService.replaceVariablesInText(
+                    context.projectId,
+                    button.login_url.url,
+                    additionalVariables
+                  )
+                };
+              } else if (button.goto_node) {
+                // Для goto_node используем callback_data с префиксом
+                btn.callback_data = `goto:${button.goto_node}`;
+              }
 
-        return btn;
-      })
+              return btn;
+            })
+          )
+      )
     );
 
     return { inline_keyboard: keyboard };
   }
 
   /**
-   * ✨ НОВОЕ: Построение reply клавиатуры
+   * ✨ НОВОЕ: Построение reply клавиатуры с резолвом переменных
    */
-  private buildReplyKeyboard(buttons: ReplyButton[][], config: any): any {
-    const keyboard = buttons.map((row) =>
-      row.map((button) => {
-        const btn: any = { text: button.text };
+  private async buildReplyKeyboard(
+    buttons: ReplyButton[][],
+    config: any,
+    context: ExecutionContext,
+    additionalVariables: Record<string, string>
+  ): Promise<any> {
+    const keyboard = await Promise.all(
+      buttons.map(
+        async (row) =>
+          await Promise.all(
+            row.map(async (button) => {
+              const btn: any = {
+                text: await ProjectVariablesService.replaceVariablesInText(
+                  context.projectId,
+                  button.text,
+                  additionalVariables
+                )
+              };
 
-        if (button.request_contact) {
-          btn.request_contact = true;
-        } else if (button.request_location) {
-          btn.request_location = true;
-        } else if (button.request_poll) {
-          btn.request_poll = button.request_poll;
-        } else if (button.web_app) {
-          btn.web_app = button.web_app;
-        }
+              if (button.request_contact) {
+                btn.request_contact = true;
+              } else if (button.request_location) {
+                btn.request_location = true;
+              } else if (button.request_poll) {
+                btn.request_poll = button.request_poll;
+              } else if (button.web_app) {
+                btn.web_app = {
+                  url: await ProjectVariablesService.replaceVariablesInText(
+                    context.projectId,
+                    button.web_app.url,
+                    additionalVariables
+                  )
+                };
+              }
 
-        return btn;
-      })
+              return btn;
+            })
+          )
+      )
     );
 
     return {

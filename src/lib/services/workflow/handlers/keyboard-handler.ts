@@ -9,7 +9,10 @@
 
 import { BaseNodeHandler } from './base-handler';
 import { ProjectVariablesService } from '@/lib/services/project-variables.service';
-import { ButtonActionsExecutor, type ButtonAction } from '../button-actions-executor';
+import {
+  ButtonActionsExecutor,
+  type ButtonAction
+} from '../button-actions-executor';
 import { ButtonActionsRegistry } from '../button-actions-registry';
 import type {
   WorkflowNode,
@@ -38,7 +41,7 @@ export interface InlineButton {
  */
 export interface InlineKeyboardConfig {
   text: string;
-  buttons: InlineButton[][];  // Массив рядов кнопок
+  buttons: InlineButton[][]; // Массив рядов кнопок
   parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
   disable_web_page_preview?: boolean;
 }
@@ -51,9 +54,14 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
     return nodeType === 'message.keyboard.inline';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
-      const config = node.data?.config?.['message.keyboard.inline'] as InlineKeyboardConfig;
+      const config = node.data?.config?.[
+        'message.keyboard.inline'
+      ] as InlineKeyboardConfig;
 
       if (!config) {
         throw new Error('Inline keyboard configuration is missing');
@@ -77,13 +85,25 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
       );
 
       // Обрабатываем кнопки - разрешаем переменные
-      const processedButtons = await this.processButtons(config.buttons, context);
+      const processedButtons = await this.processButtons(
+        config.buttons,
+        context
+      );
 
-      this.logStep(context, node, 'Sending message with inline keyboard', 'info', {
-        text: messageText.substring(0, 50),
-        buttonRows: processedButtons.length,
-        totalButtons: processedButtons.reduce((sum, row) => sum + row.length, 0)
-      });
+      this.logStep(
+        context,
+        node,
+        'Sending message with inline keyboard',
+        'info',
+        {
+          text: messageText.substring(0, 50),
+          buttonRows: processedButtons.length,
+          totalButtons: processedButtons.reduce(
+            (sum, row) => sum + row.length,
+            0
+          )
+        }
+      );
 
       // Формируем inline клавиатуру
       const inlineKeyboard = {
@@ -102,7 +122,9 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
       });
 
       if (!response.data.ok) {
-        throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
+        throw new Error(
+          `Telegram API error: ${response.data.description || 'Unknown error'}`
+        );
       }
 
       this.logStep(context, node, 'Inline keyboard sent successfully', 'info', {
@@ -111,15 +133,17 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
 
       // Следующий нод определяется по connections
       return null;
-
     } catch (error) {
-      this.logStep(context, node, 'Failed to send inline keyboard', 'error', { error });
+      this.logStep(context, node, 'Failed to send inline keyboard', 'error', {
+        error
+      });
       throw error;
     }
   }
 
   /**
    * Обрабатывает кнопки - разрешает переменные в тексте и callback_data
+   * Использует ProjectVariablesService для резолва project.* переменных
    */
   private async processButtons(
     buttons: InlineButton[][],
@@ -127,47 +151,86 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
   ): Promise<InlineButton[][]> {
     const processedRows: InlineButton[][] = [];
 
+    // Дополнительные переменные из telegram контекста
+    const additionalVariables: Record<string, string> = {
+      username: context.telegram.username || '',
+      first_name: context.telegram.firstName || '',
+      user_id: context.telegram.userId || '',
+      chat_id: context.telegram.chatId || ''
+    };
+
     for (const row of buttons) {
       const processedRow: InlineButton[] = [];
 
       for (const button of row) {
+        // Резолвим текст кнопки через ProjectVariablesService
+        const resolvedText =
+          await ProjectVariablesService.replaceVariablesInText(
+            context.projectId,
+            button.text,
+            additionalVariables
+          );
+
         const processedButton: InlineButton = {
-          text: this.resolveValue(button.text, context) as string
+          text: resolvedText
         };
 
         // Обрабатываем различные типы кнопок
         if (button.callback_data) {
-          processedButton.callback_data = this.resolveValue(button.callback_data, context) as string;
+          processedButton.callback_data =
+            await ProjectVariablesService.replaceVariablesInText(
+              context.projectId,
+              button.callback_data,
+              additionalVariables
+            );
         }
 
         if (button.url) {
-          processedButton.url = this.resolveValue(button.url, context) as string;
+          // URL кнопки - резолвим через ProjectVariablesService
+          processedButton.url =
+            await ProjectVariablesService.replaceVariablesInText(
+              context.projectId,
+              button.url,
+              additionalVariables
+            );
         }
 
         if (button.web_app) {
           processedButton.web_app = {
-            url: this.resolveValue(button.web_app.url, context) as string
+            url: await ProjectVariablesService.replaceVariablesInText(
+              context.projectId,
+              button.web_app.url,
+              additionalVariables
+            )
           };
         }
 
         if (button.login_url) {
           processedButton.login_url = {
-            url: this.resolveValue(button.login_url.url, context) as string
+            url: await ProjectVariablesService.replaceVariablesInText(
+              context.projectId,
+              button.login_url.url,
+              additionalVariables
+            )
           };
         }
 
         if (button.switch_inline_query !== undefined) {
-          processedButton.switch_inline_query = this.resolveValue(
-            button.switch_inline_query,
-            context
-          ) as string;
+          processedButton.switch_inline_query =
+            await ProjectVariablesService.replaceVariablesInText(
+              context.projectId,
+              button.switch_inline_query,
+              additionalVariables
+            );
         }
 
         if (button.switch_inline_query_current_chat !== undefined) {
-          processedButton.switch_inline_query_current_chat = this.resolveValue(
-            button.switch_inline_query_current_chat,
-            context
-          ) as string;
+          processedButton.switch_inline_query_current_chat =
+            await ProjectVariablesService.replaceVariablesInText(
+              context.projectId,
+              button.switch_inline_query_current_chat,
+              additionalVariables
+            );
         }
 
         if (button.pay) {
@@ -215,7 +278,9 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
           const button = row[btnIndex];
 
           if (!button.text || typeof button.text !== 'string') {
-            errors.push(`Button [${rowIndex}][${btnIndex}] must have a text property`);
+            errors.push(
+              `Button [${rowIndex}][${btnIndex}] must have a text property`
+            );
           }
 
           // Проверяем, что есть хотя бы одно действие
@@ -232,14 +297,17 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
           if (!hasAction) {
             errors.push(
               `Button [${rowIndex}][${btnIndex}] must have at least one action ` +
-              `(callback_data, url, web_app, etc.)`
+                `(callback_data, url, web_app, etc.)`
             );
           }
         }
       }
     }
 
-    if (config.parse_mode && !['HTML', 'Markdown', 'MarkdownV2'].includes(config.parse_mode)) {
+    if (
+      config.parse_mode &&
+      !['HTML', 'Markdown', 'MarkdownV2'].includes(config.parse_mode)
+    ) {
       errors.push('parse_mode must be one of: HTML, Markdown, MarkdownV2');
     }
 
@@ -285,9 +353,14 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
     return nodeType === 'message.keyboard.reply';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
-      const config = node.data?.config?.['message.keyboard.reply'] as ReplyKeyboardConfig;
+      const config = node.data?.config?.[
+        'message.keyboard.reply'
+      ] as ReplyKeyboardConfig;
 
       if (!config) {
         throw new Error('Reply keyboard configuration is missing');
@@ -317,10 +390,16 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
       // ✨ НОВОЕ: Регистрируем actions для кнопок
       this.registerButtonActions(buttons, context);
 
-      this.logStep(context, node, 'Sending message with reply keyboard', 'info', {
-        text: messageText.substring(0, 50),
-        buttonRows: processedButtons.length
-      });
+      this.logStep(
+        context,
+        node,
+        'Sending message with reply keyboard',
+        'info',
+        {
+          text: messageText.substring(0, 50),
+          buttonRows: processedButtons.length
+        }
+      );
 
       // Формируем reply клавиатуру
       const replyKeyboard = {
@@ -342,7 +421,9 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
       });
 
       if (!response.data.ok) {
-        throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
+        throw new Error(
+          `Telegram API error: ${response.data.description || 'Unknown error'}`
+        );
       }
 
       this.logStep(context, node, 'Reply keyboard sent successfully', 'info', {
@@ -350,9 +431,10 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
       });
 
       return null;
-
     } catch (error) {
-      this.logStep(context, node, 'Failed to send reply keyboard', 'error', { error });
+      this.logStep(context, node, 'Failed to send reply keyboard', 'error', {
+        error
+      });
       throw error;
     }
   }
@@ -418,8 +500,10 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
             button.actions
           );
 
-          this.logStep(context, { id: 'register-actions', type: 'action' } as any, 
-            `Registered ${button.actions.length} actions for button "${button.text}"`, 
+          this.logStep(
+            context,
+            { id: 'register-actions', type: 'action' } as any,
+            `Registered ${button.actions.length} actions for button "${button.text}"`,
             'info'
           );
         }
@@ -454,7 +538,9 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
           const button = row[btnIndex];
 
           if (!button.text || typeof button.text !== 'string') {
-            errors.push(`Button [${rowIndex}][${btnIndex}] must have a text property`);
+            errors.push(
+              `Button [${rowIndex}][${btnIndex}] must have a text property`
+            );
           }
         }
       }
@@ -466,4 +552,3 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
     };
   }
 }
-
