@@ -199,6 +199,13 @@ export class ProjectVariablesService {
         value: project.domain ? `https://${project.domain}` : '',
         description: 'Сайт компании',
         isSystem: false
+      },
+      {
+        projectId,
+        key: 'telegramChannel',
+        value: '',
+        description: 'Username Telegram канала для подписки (без @)',
+        isSystem: false
       }
     ];
 

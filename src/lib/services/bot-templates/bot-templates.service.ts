@@ -1986,7 +1986,7 @@ class BotTemplatesService {
                       [
                         {
                           text: '📺 Подписаться на канал',
-                          url: 'https://t.me/your_channel'
+                          url: 'https://t.me/{{project.telegramChannel}}'
                         }
                       ],
                       [
@@ -2040,7 +2040,7 @@ class BotTemplatesService {
               label: 'Проверить подписку на канал',
               config: {
                 'action.check_channel_subscription': {
-                  channelId: '@your_channel',
+                  channelId: '@{{project.telegramChannel}}',
                   assignTo: 'isChannelSubscribed'
                 }
               }
@@ -2094,7 +2094,7 @@ class BotTemplatesService {
                       [
                         {
                           text: '📺 Подписаться на канал',
-                          url: 'https://t.me/your_channel'
+                          url: 'https://t.me/{{project.telegramChannel}}'
                         }
                       ],
                       [
