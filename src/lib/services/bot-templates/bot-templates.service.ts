@@ -2560,6 +2560,353 @@ class BotTemplatesService {
               y: 307.5
             },
             selected: false
+          },
+          {
+            id: 'menu-balance-trigger',
+            data: {
+              label: 'Триггер: Баланс',
+              config: {
+                'trigger.callback': {
+                  callbackData: 'menu_balance'
+                }
+              }
+            },
+            type: 'trigger.callback',
+            dragging: false,
+            measured: {
+              width: 256,
+              height: 122
+            },
+            position: {
+              x: 0,
+              y: 549.5
+            },
+            selected: false
+          },
+          {
+            id: 'show-balance-details',
+            data: {
+              label: 'Показать баланс',
+              config: {
+                message: {
+                  text: '<b>💰 Ваш баланс бонусов</b>\n\n💵 <b>Текущий баланс:</b> {user.balanceFormatted}\n📈 <b>Всего заработано:</b> {user.totalEarnedFormatted}\n📉 <b>Всего потрачено:</b> {user.totalSpentFormatted}\n🛍️ <b>Покупок на сумму:</b> {user.totalPurchasesFormatted}\n\n✨ Продолжайте совершать покупки для накопления бонусов!',
+                  keyboard: {
+                    type: 'inline',
+                    buttons: [
+                      [
+                        {
+                          text: '⬅️ Назад в меню',
+                          callback_data: 'back_to_menu'
+                        }
+                      ]
+                    ]
+                  },
+                  parseMode: 'HTML'
+                }
+              }
+            },
+            type: 'message',
+            dragging: false,
+            measured: {
+              width: 320,
+              height: 204
+            },
+            position: {
+              x: 406,
+              y: 549.5
+            },
+            selected: false
+          },
+          {
+            id: 'menu-history-trigger',
+            data: {
+              label: 'Триггер: История',
+              config: {
+                'trigger.callback': {
+                  callbackData: 'menu_history'
+                }
+              }
+            },
+            type: 'trigger.callback',
+            dragging: false,
+            measured: {
+              width: 256,
+              height: 122
+            },
+            position: {
+              x: 0,
+              y: 791.5
+            },
+            selected: false
+          },
+          {
+            id: 'show-history-list',
+            data: {
+              label: 'Показать историю',
+              config: {
+                message: {
+                  text: '<b>📜 История операций</b>\n\n<b>Последние 10 операций:</b>\n\n{transactions.formatted}\n\nПоказаны последние 10 операций.\n\n💡 Для полной истории посетите личный кабинет на сайте.',
+                  keyboard: {
+                    type: 'inline',
+                    buttons: [
+                      [
+                        {
+                          text: '⬅️ Назад в меню',
+                          callback_data: 'back_to_menu'
+                        }
+                      ]
+                    ]
+                  },
+                  parseMode: 'HTML'
+                }
+              }
+            },
+            type: 'message',
+            dragging: false,
+            measured: {
+              width: 320,
+              height: 204
+            },
+            position: {
+              x: 406,
+              y: 791.5
+            },
+            selected: false
+          },
+          {
+            id: 'menu-level-trigger',
+            data: {
+              label: 'Триггер: Уровень',
+              config: {
+                'trigger.callback': {
+                  callbackData: 'menu_level'
+                }
+              }
+            },
+            type: 'trigger.callback',
+            dragging: false,
+            measured: {
+              width: 256,
+              height: 122
+            },
+            position: {
+              x: 0,
+              y: 1033.5
+            },
+            selected: false
+          },
+          {
+            id: 'show-level-info',
+            data: {
+              label: 'Показать уровень',
+              config: {
+                message: {
+                  text: '<b>🏆 Ваш уровень:</b> {user.currentLevel}\n\n<b>📊 Прогресс к следующему уровню:</b>\n{user.progressBar} ({user.progressPercent}%)\n\n<b>💰 Бонусный процент:</b> {user.levelBonusPercent}%\n<b>💵 Процент оплаты бонусами:</b> {user.levelPaymentPercent}%\n\n<b>Следующий уровень:</b> {user.nextLevelName}\n<b>Нужно покупок на сумму:</b> {user.nextLevelAmountFormatted}\n\n🎯 Продолжайте совершать покупки для повышения уровня!',
+                  keyboard: {
+                    type: 'inline',
+                    buttons: [
+                      [
+                        {
+                          text: '⬅️ Назад в меню',
+                          callback_data: 'back_to_menu'
+                        }
+                      ]
+                    ]
+                  },
+                  parseMode: 'HTML'
+                }
+              }
+            },
+            type: 'message',
+            dragging: false,
+            measured: {
+              width: 320,
+              height: 204
+            },
+            position: {
+              x: 406,
+              y: 1033.5
+            },
+            selected: false
+          },
+          {
+            id: 'menu-referrals-trigger',
+            data: {
+              label: 'Триггер: Рефералы',
+              config: {
+                'trigger.callback': {
+                  callbackData: 'menu_referrals'
+                }
+              }
+            },
+            type: 'trigger.callback',
+            dragging: false,
+            measured: {
+              width: 256,
+              height: 142
+            },
+            position: {
+              x: 0,
+              y: 1275.5
+            },
+            selected: false
+          },
+          {
+            id: 'show-referrals-stats',
+            data: {
+              label: 'Показать рефералы',
+              config: {
+                message: {
+                  text: '<b>👥 Реферальная программа</b>\n\n<b>📊 Статистика по проекту:</b>\n👤 <b>Приглашено пользователей:</b> {user.referralCount}\n💰 <b>Бонусов от рефералов:</b> {user.referralBonusTotalFormatted}\n\n<b>🔗 Ваша реферальная ссылка:</b>\n{user.referralLink}\n\n📱 Поделитесь ссылкой с друзьями и получайте бонусы за их покупки!\n\n💡 Приглашайте друзей и зарабатывайте вместе!',
+                  keyboard: {
+                    type: 'inline',
+                    buttons: [
+                      [
+                        {
+                          text: '⬅️ Назад в меню',
+                          callback_data: 'back_to_menu'
+                        }
+                      ]
+                    ]
+                  },
+                  parseMode: 'HTML'
+                }
+              }
+            },
+            type: 'message',
+            dragging: false,
+            measured: {
+              width: 320,
+              height: 204
+            },
+            position: {
+              x: 406,
+              y: 1275.5
+            },
+            selected: false
+          },
+          {
+            id: 'menu-invite-trigger',
+            data: {
+              label: 'Триггер: Пригласить',
+              config: {
+                'trigger.callback': {
+                  callbackData: 'menu_invite'
+                }
+              }
+            },
+            type: 'trigger.callback',
+            dragging: false,
+            measured: {
+              width: 256,
+              height: 142
+            },
+            position: {
+              x: 0,
+              y: 1517.5
+            },
+            selected: false
+          },
+          {
+            id: 'show-invite-info',
+            data: {
+              label: 'Показать приглашение',
+              config: {
+                message: {
+                  text: '<b>🔗 Пригласите друзей и получайте бонусы!</b>\n\nПоделитесь персональной ссылкой и получайте вознаграждение за каждую покупку приглашённых пользователей.\n\n<b>Ваша ссылка:</b>\n{user.referralLink}\n\n1️⃣ Скопируйте ссылку\n2️⃣ Отправьте друзьям в мессенджерах или соцсетях\n3️⃣ Получайте бонусы автоматически\n\n🎁 Больше друзей — больше бонусов!',
+                  keyboard: {
+                    type: 'inline',
+                    buttons: [
+                      [
+                        {
+                          text: '⬅️ Назад в меню',
+                          callback_data: 'back_to_menu'
+                        }
+                      ]
+                    ]
+                  },
+                  parseMode: 'HTML'
+                }
+              }
+            },
+            type: 'message',
+            dragging: false,
+            measured: {
+              width: 320,
+              height: 224
+            },
+            position: {
+              x: 406,
+              y: 1517.5
+            },
+            selected: false
+          },
+          {
+            id: 'menu-help-trigger',
+            data: {
+              label: 'Триггер: Помощь',
+              config: {
+                'trigger.callback': {
+                  callbackData: 'menu_help'
+                }
+              }
+            },
+            type: 'trigger.callback',
+            dragging: false,
+            measured: {
+              width: 256,
+              height: 122
+            },
+            position: {
+              x: 0,
+              y: 1759.5
+            },
+            selected: false
+          },
+          {
+            id: 'show-help-info',
+            data: {
+              label: 'Показать помощь',
+              config: {
+                message: {
+                  text: '<b>❓ Помощь</b>\n\n<b>🎯 Как работает бонусная система:</b>\n\n💰 <b>Бонусы</b> - накапливайте бонусы за покупки\n🛒 <b>Списание</b> - оплачивайте часть покупки бонусами\n🏆 <b>Уровни</b> - повышайте уровень для лучших условий\n👥 <b>Рефералы</b> - приглашайте друзей и получайте бонусы\n\n<b>📱 Команды:</b>\n• /start - начать работу с ботом\n• 💰 Баланс - посмотреть текущий баланс\n• 📜 История - история операций\n• 🏆 Уровень - ваш текущий уровень\n• 👥 Рефералы - реферальная программа\n• 🔗 Пригласить - пригласить друга\n\n💬 Если возникли вопросы, напишите в поддержку!',
+                  parseMode: 'HTML'
+                }
+              }
+            },
+            type: 'message',
+            dragging: false,
+            measured: {
+              width: 320,
+              height: 204
+            },
+            position: {
+              x: 406,
+              y: 1759.5
+            },
+            selected: false
+          },
+          {
+            id: 'back-to-menu-trigger',
+            data: {
+              label: 'Триггер: Назад в меню',
+              config: {
+                'trigger.callback': {
+                  callbackData: 'back_to_menu'
+                }
+              }
+            },
+            type: 'trigger.callback',
+            dragging: false,
+            measured: {
+              width: 256,
+              height: 142
+            },
+            position: {
+              x: 1218,
+              y: 494
+            },
+            selected: false
           }
         ],
         connections: [
@@ -2769,6 +3116,55 @@ class BotTemplatesService {
             type: 'default',
             source: 'check-again-trigger',
             target: 'request-contact-confirmation',
+            animated: true
+          },
+          {
+            id: 'edge-menu-balance-trigger-show-balance-details',
+            type: 'default',
+            source: 'menu-balance-trigger',
+            target: 'show-balance-details',
+            animated: true
+          },
+          {
+            id: 'edge-menu-history-trigger-show-history-list',
+            type: 'default',
+            source: 'menu-history-trigger',
+            target: 'show-history-list',
+            animated: true
+          },
+          {
+            id: 'edge-menu-level-trigger-show-level-info',
+            type: 'default',
+            source: 'menu-level-trigger',
+            target: 'show-level-info',
+            animated: true
+          },
+          {
+            id: 'edge-menu-referrals-trigger-show-referrals-stats',
+            type: 'default',
+            source: 'menu-referrals-trigger',
+            target: 'show-referrals-stats',
+            animated: true
+          },
+          {
+            id: 'edge-menu-invite-trigger-show-invite-info',
+            type: 'default',
+            source: 'menu-invite-trigger',
+            target: 'show-invite-info',
+            animated: true
+          },
+          {
+            id: 'edge-menu-help-trigger-show-help-info',
+            type: 'default',
+            source: 'menu-help-trigger',
+            target: 'show-help-info',
+            animated: true
+          },
+          {
+            id: 'edge-back-to-menu-trigger-active-user-profile',
+            type: 'default',
+            source: 'back-to-menu-trigger',
+            target: 'active-user-profile',
             animated: true
           }
         ],
