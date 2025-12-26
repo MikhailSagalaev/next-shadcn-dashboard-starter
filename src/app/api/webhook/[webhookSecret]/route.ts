@@ -1359,24 +1359,20 @@ async function handlePurchase(
   const isFirstPurchase = Number(user.totalPurchases) === 0;
 
   if (isFirstPurchase) {
-    // Получаем настройки реферальной программы для проверки скидки
-    const referralProgramRaw = await db.referralProgram.findUnique({
-      where: { projectId }
+    // Получаем настройки проекта для проверки скидки на первую покупку
+    const projectSettingsRaw = await db.project.findUnique({
+      where: { id: projectId }
     });
-
-    // Type assertion для новых полей (после миграции БД)
-    const referralProgram = referralProgramRaw as unknown as {
-      isActive: boolean;
+    const projectSettings = projectSettingsRaw as unknown as {
       welcomeRewardType: 'BONUS' | 'DISCOUNT';
       firstPurchaseDiscountPercent: number;
     } | null;
 
     if (
-      referralProgram?.isActive &&
-      referralProgram.welcomeRewardType === 'DISCOUNT' &&
-      referralProgram.firstPurchaseDiscountPercent > 0
+      projectSettings?.welcomeRewardType === 'DISCOUNT' &&
+      projectSettings.firstPurchaseDiscountPercent > 0
     ) {
-      const discountPercent = referralProgram.firstPurchaseDiscountPercent;
+      const discountPercent = projectSettings.firstPurchaseDiscountPercent;
       const discountAmount = (purchaseAmount * discountPercent) / 100;
 
       firstPurchaseDiscount = {

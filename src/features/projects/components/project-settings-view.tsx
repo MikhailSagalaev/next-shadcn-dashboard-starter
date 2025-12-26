@@ -31,7 +31,9 @@ import {
   ShoppingBag,
   Users2,
   Mail,
-  MessageSquare
+  MessageSquare,
+  Gift,
+  Percent
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,7 +58,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import type { Project } from '@/types/bonus';
+import type { Project, WelcomeRewardType } from '@/types/bonus';
 import { ProjectDeleteDialog } from './project-delete-dialog';
 import {
   OperationModeSelector,
@@ -94,7 +96,9 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
       | 'EARN_ONLY',
     operationMode: 'WITH_BOT' as OperationMode,
     isActive: true,
-    welcomeBonusAmount: 0
+    welcomeBonusAmount: 0,
+    welcomeRewardType: 'BONUS' as WelcomeRewardType,
+    firstPurchaseDiscountPercent: 10
   });
 
   const loadProject = async () => {
@@ -136,9 +140,11 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           operationMode: (projectData.operationMode ||
             'WITH_BOT') as OperationMode,
           isActive: projectData.isActive ?? true,
-          welcomeBonusAmount: Number(
-            projectData?.referralProgram?.welcomeBonus || 0
-          )
+          welcomeBonusAmount: Number(projectData.welcomeBonus || 0),
+          welcomeRewardType: (projectData.welcomeRewardType ||
+            'BONUS') as WelcomeRewardType,
+          firstPurchaseDiscountPercent:
+            projectData.firstPurchaseDiscountPercent || 10
         });
       } else if (projectResponse.status === 403) {
         // Проект не принадлежит текущему админу
@@ -359,24 +365,121 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   </div>
                 </div>
                 <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <Label htmlFor='welcomeBonusAmount'>
-                      Приветственный бонус при регистрации
-                    </Label>
-                    <Input
-                      id='welcomeBonusAmount'
-                      type='number'
-                      step='0.01'
-                      min='0'
-                      value={formData.welcomeBonusAmount}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          welcomeBonusAmount: parseFloat(e.target.value) || 0
-                        })
-                      }
-                      placeholder='0.00'
-                    />
+                  {/* Приветственное вознаграждение */}
+                  <div className='col-span-2 space-y-4 rounded-lg border p-4'>
+                    <div>
+                      <Label className='flex items-center space-x-2 text-base'>
+                        <Gift className='h-4 w-4 text-emerald-600' />
+                        <span>
+                          Приветственное вознаграждение при регистрации
+                        </span>
+                      </Label>
+                      <p className='mt-1 text-sm text-gray-600'>
+                        Выберите тип вознаграждения для новых пользователей
+                      </p>
+                    </div>
+
+                    {/* Переключатель типа */}
+                    <div className='grid grid-cols-2 gap-3'>
+                      <button
+                        type='button'
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            welcomeRewardType: 'BONUS'
+                          })
+                        }
+                        className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                          formData.welcomeRewardType === 'BONUS'
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className='flex items-center space-x-2'>
+                          <Gift className='h-5 w-5 text-emerald-600' />
+                          <span className='font-medium'>Бонусы</span>
+                        </div>
+                        <p className='mt-1 text-xs text-gray-600'>
+                          Начислить фиксированную сумму бонусов
+                        </p>
+                      </button>
+                      <button
+                        type='button'
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            welcomeRewardType: 'DISCOUNT'
+                          })
+                        }
+                        className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                          formData.welcomeRewardType === 'DISCOUNT'
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-950'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className='flex items-center space-x-2'>
+                          <Percent className='h-5 w-5 text-purple-600' />
+                          <span className='font-medium'>Скидка</span>
+                        </div>
+                        <p className='mt-1 text-xs text-gray-600'>
+                          Процентная скидка на первую покупку
+                        </p>
+                      </button>
+                    </div>
+
+                    {/* Поле значения в зависимости от типа */}
+                    {formData.welcomeRewardType === 'BONUS' ? (
+                      <div className='space-y-2'>
+                        <Label htmlFor='welcomeBonusAmount'>
+                          Сумма приветственных бонусов
+                        </Label>
+                        <Input
+                          id='welcomeBonusAmount'
+                          type='number'
+                          step='1'
+                          min='0'
+                          value={formData.welcomeBonusAmount}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              welcomeBonusAmount:
+                                parseFloat(e.target.value) || 0
+                            })
+                          }
+                          placeholder='0'
+                        />
+                        <p className='text-xs text-gray-600'>
+                          Фиксированное начисление при регистрации. Срок
+                          действия — как указано выше.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className='space-y-2'>
+                        <Label htmlFor='firstPurchaseDiscountPercent'>
+                          Скидка на первую покупку (%)
+                        </Label>
+                        <Input
+                          id='firstPurchaseDiscountPercent'
+                          type='number'
+                          step='1'
+                          min='0'
+                          max='100'
+                          value={formData.firstPurchaseDiscountPercent}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              firstPurchaseDiscountPercent:
+                                parseInt(e.target.value) || 0
+                            })
+                          }
+                          placeholder='10'
+                        />
+                        <p className='text-xs text-gray-600'>
+                          Процент скидки на первую покупку нового пользователя.
+                          Действует однократно.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className='space-y-2'>
@@ -563,21 +666,26 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
               </Link>
               {project?.operationMode === 'WITH_BOT' ? (
                 <Link href={`/dashboard/projects/${projectId}/referral`}>
-                  <Button variant='outline' className='mt-2 w-full justify-start'>
+                  <Button
+                    variant='outline'
+                    className='mt-2 w-full justify-start'
+                  >
                     <Share2 className='mr-2 h-4 w-4' />
                     Реферальная программа
                   </Button>
                 </Link>
               ) : (
-                <Button 
-                  variant='outline' 
-                  className='mt-2 w-full justify-start opacity-50 cursor-not-allowed' 
+                <Button
+                  variant='outline'
+                  className='mt-2 w-full cursor-not-allowed justify-start opacity-50'
                   disabled
                   title='Реферальная программа доступна только с Telegram ботом'
                 >
                   <Share2 className='mr-2 h-4 w-4' />
                   Реферальная программа
-                  <span className='ml-auto text-xs text-muted-foreground'>Недоступно</span>
+                  <span className='text-muted-foreground ml-auto text-xs'>
+                    Недоступно
+                  </span>
                 </Button>
               )}
               <Link href={`/dashboard/projects/${projectId}/analytics`}>

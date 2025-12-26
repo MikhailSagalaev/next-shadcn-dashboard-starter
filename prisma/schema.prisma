@@ -8,21 +8,24 @@ datasource db {
 }
 
 model Project {
-  id                   String                @id @default(cuid())
-  name                 String
-  domain               String?               @unique
-  webhookSecret        String                @unique @default(cuid()) @map("webhook_secret")
-  bonusPercentage      Decimal               @default(1.0) @map("bonus_percentage") @db.Decimal(5, 2)
-  bonusExpiryDays      Int                   @default(365) @map("bonus_expiry_days")
-  bonusBehavior        BonusBehavior         @default(SPEND_AND_EARN) @map("bonus_behavior")
-  operationMode        OperationMode         @default(WITH_BOT) @map("operation_mode")
-  isActive             Boolean               @default(true) @map("is_active")
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
-  botStatus            BotStatus             @default(INACTIVE) @map("bot_status")
-  botToken             String?               @map("bot_token")
-  botUsername          String?               @map("bot_username")
-  ownerId              String?               @map("owner_id")
+  id                            String                @id @default(cuid())
+  name                          String
+  domain                        String?               @unique
+  webhookSecret                 String                @unique @default(cuid()) @map("webhook_secret")
+  bonusPercentage               Decimal               @default(1.0) @map("bonus_percentage") @db.Decimal(5, 2)
+  bonusExpiryDays               Int                   @default(365) @map("bonus_expiry_days")
+  bonusBehavior                 BonusBehavior         @default(SPEND_AND_EARN) @map("bonus_behavior")
+  operationMode                 OperationMode         @default(WITH_BOT) @map("operation_mode")
+  welcomeBonus                  Decimal               @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
+  welcomeRewardType             WelcomeRewardType     @default(BONUS) @map("welcome_reward_type")
+  firstPurchaseDiscountPercent  Int                   @default(0) @map("first_purchase_discount_percent")
+  isActive                      Boolean               @default(true) @map("is_active")
+  createdAt                     DateTime              @default(now()) @map("created_at")
+  updatedAt                     DateTime              @updatedAt @map("updated_at")
+  botStatus                     BotStatus             @default(INACTIVE) @map("bot_status")
+  botToken                      String?               @map("bot_token")
+  botUsername                   String?               @map("bot_username")
+  ownerId                       String?               @map("owner_id")
   bonusLevels          BonusLevel[]
   botFlows             BotFlow[]
   botSettings          BotSettings?

@@ -8,6 +8,9 @@ export interface Project {
   bonusExpiryDays: number;
   // bonusBehavior: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY';
   operationMode?: 'WITH_BOT' | 'WITHOUT_BOT';
+  welcomeBonus: number;
+  welcomeRewardType: WelcomeRewardType;
+  firstPurchaseDiscountPercent: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

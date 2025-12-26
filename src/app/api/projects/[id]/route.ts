@@ -199,7 +199,14 @@ export async function PUT(
         bonusExpiryDays: body.bonusExpiryDays,
         bonusBehavior: body.bonusBehavior,
         operationMode: body.operationMode,
-        isActive: body.isActive
+        isActive: body.isActive,
+        // Приветственное вознаграждение
+        welcomeBonus:
+          body.welcomeBonusAmount !== undefined
+            ? body.welcomeBonusAmount
+            : undefined,
+        welcomeRewardType: body.welcomeRewardType,
+        firstPurchaseDiscountPercent: body.firstPurchaseDiscountPercent
       }
     });
 
@@ -227,32 +234,9 @@ export async function PUT(
     logger.info('Проект обновлен', {
       projectId: id,
       operationMode: body.operationMode,
+      welcomeRewardType: body.welcomeRewardType,
       component: 'projects-api'
     });
-
-    if (body.welcomeBonusAmount !== undefined) {
-      const amount = Number(body.welcomeBonusAmount);
-      try {
-        await db.referralProgram.upsert({
-          where: { projectId: id },
-          update: { welcomeBonus: amount },
-          create: {
-            projectId: id,
-            isActive: true,
-            bonusPercent: body.bonusPercentage ?? 5,
-            referrerBonus: 0,
-            minPurchaseAmount: 0,
-            cookieLifetime: 30,
-            welcomeBonus: amount
-          }
-        });
-      } catch (e) {
-        logger.warn('Не удалось синхронизировать welcomeBonus', {
-          projectId: id,
-          error: e instanceof Error ? e.message : String(e)
-        });
-      }
-    }
 
     return NextResponse.json(updatedProject);
   } catch (error) {
