@@ -62,53 +62,46 @@ export async function GET(
       where: { projectId: id }
     });
 
-    // Получаем welcomeBonusAmount из botSettings.functionalSettings или ReferralProgram
-    let welcomeBonusAmount = 0;
-    let botUsername = null;
+    // Получаем настройки приветственного вознаграждения из Project
+    const projectData = (await db.project.findUnique({
+      where: { id },
+      select: {
+        welcomeBonus: true,
+        welcomeRewardType: true,
+        firstPurchaseDiscountPercent: true,
+        botToken: true,
+        botUsername: true,
+        operationMode: true
+      }
+    })) as {
+      welcomeBonus: { toNumber: () => number } | number;
+      welcomeRewardType: 'BONUS' | 'DISCOUNT';
+      firstPurchaseDiscountPercent: number;
+      botToken: string | null;
+      botUsername: string | null;
+      operationMode: string;
+    } | null;
+
+    const welcomeBonusAmount =
+      typeof projectData?.welcomeBonus === 'object'
+        ? projectData.welcomeBonus.toNumber()
+        : Number(projectData?.welcomeBonus || 0);
+    const welcomeRewardType = projectData?.welcomeRewardType || 'BONUS';
+    const firstPurchaseDiscountPercent =
+      projectData?.firstPurchaseDiscountPercent || 0;
+    let botUsername = projectData?.botUsername || null;
 
     if (botSettings) {
-      botUsername = botSettings.botUsername;
-
-      // Пытаемся получить из functionalSettings
-      try {
-        const functionalSettings = botSettings.functionalSettings as any;
-        if (functionalSettings && functionalSettings.welcomeBonusAmount) {
-          welcomeBonusAmount = Number(functionalSettings.welcomeBonusAmount);
-        }
-
-        // Извлекаем настройки виджета для шаблона регистрации
-        const widgetSettings = functionalSettings?.widgetSettings;
-      } catch (e) {
-        logger.warn('Ошибка парсинга functionalSettings', { error: e });
+      if (botSettings.botUsername) {
+        botUsername = botSettings.botUsername;
       }
-    }
-
-    // Если не нашли в botSettings, пытаемся получить из ReferralProgram
-    if (welcomeBonusAmount === 0) {
-      try {
-        const referralProgram = await db.referralProgram.findUnique({
-          where: { projectId: id },
-          select: { welcomeBonus: true }
-        });
-
-        if (referralProgram?.welcomeBonus) {
-          welcomeBonusAmount = Number(referralProgram.welcomeBonus);
-        }
-      } catch (e) {
-        logger.warn('Ошибка получения welcomeBonus из ReferralProgram', {
-          error: e
-        });
-      }
-    }
-
-    // Если все еще 0, пытаемся получить из project.meta (для обратной совместимости)
-    if (welcomeBonusAmount === 0) {
-      welcomeBonusAmount = Number((project as any).meta?.welcomeBonus || 0);
     }
 
     logger.info('Bot settings loaded', {
       projectId: id,
       welcomeBonusAmount,
+      welcomeRewardType,
+      firstPurchaseDiscountPercent,
       botUsername,
       hasBotSettings: !!botSettings
     });
@@ -158,7 +151,12 @@ export async function GET(
       ...(botSettings || {}),
       botToken: finalBotToken, // Явно устанавливаем botToken после spread
       welcomeBonusAmount,
-      botUsername: botUsername || (project as any)?.botUsername || null,
+      welcomeRewardType,
+      firstPurchaseDiscountPercent,
+      botUsername:
+        botUsername ||
+        (project as unknown as { botUsername?: string })?.botUsername ||
+        null,
       widgetSettings,
       operationMode
     };

@@ -1467,6 +1467,10 @@
         if (settings) {
           return {
             welcomeBonusAmount: Number(settings?.welcomeBonusAmount || 0),
+            welcomeRewardType: settings?.welcomeRewardType || 'BONUS',
+            firstPurchaseDiscountPercent: Number(
+              settings?.firstPurchaseDiscountPercent || 0
+            ),
             botUsername: settings?.botUsername || null,
             widgetSettings: settings?.functionalSettings?.widgetSettings || {}
           };
@@ -1480,7 +1484,13 @@
       }
       // Возвращаем значения по умолчанию в случае ошибки
       this.log('Используем значения по умолчанию для настроек проекта');
-      return { welcomeBonusAmount: 0, botUsername: null, widgetSettings: {} };
+      return {
+        welcomeBonusAmount: 0,
+        welcomeRewardType: 'BONUS',
+        firstPurchaseDiscountPercent: 0,
+        botUsername: null,
+        widgetSettings: {}
+      };
     },
 
     // Применить настройки стилей виджета через CSS переменные
@@ -1813,6 +1823,8 @@
             // Показываем плашку с базовыми данными
             const defaultSettings = {
               welcomeBonusAmount: 500, // Базовое значение
+              welcomeRewardType: 'BONUS',
+              firstPurchaseDiscountPercent: 0,
               botUsername: null,
               widgetSettings: {}
             };
@@ -1856,6 +1868,8 @@
         // Возвращаем значения по умолчанию
         const defaultSettings = {
           welcomeBonusAmount: 500, // Базовое значение
+          welcomeRewardType: 'BONUS',
+          firstPurchaseDiscountPercent: 0,
           botUsername: null,
           widgetSettings: {}
         };
@@ -1913,6 +1927,10 @@
 
           const processedData = {
             welcomeBonusAmount: Number(data?.welcomeBonusAmount || 500),
+            welcomeRewardType: data?.welcomeRewardType || 'BONUS',
+            firstPurchaseDiscountPercent: Number(
+              data?.firstPurchaseDiscountPercent || 0
+            ),
             botUsername: data?.botUsername || null,
             widgetSettings: data?.widgetSettings || null,
             operationMode: data?.operationMode || 'WITH_BOT'
@@ -1980,6 +1998,10 @@
 
         // Экранируем данные для безопасности
         const welcomeBonusAmount = Number(settings.welcomeBonusAmount || 500);
+        const welcomeRewardType = settings.welcomeRewardType || 'BONUS';
+        const firstPurchaseDiscountPercent = Number(
+          settings.firstPurchaseDiscountPercent || 0
+        );
         const botUsername = String(settings.botUsername || '')
           .replace(/[<>'"&]/g, '') // Экранируем HTML
           .replace('@', ''); // Убираем @ из имени бота
@@ -1987,6 +2009,8 @@
         // Сохраняем настройки в state для использования в других частях виджета
         this.state.widgetSettings = settings.widgetSettings || {};
         this.state.botUsername = botUsername;
+        this.state.welcomeRewardType = welcomeRewardType;
+        this.state.firstPurchaseDiscountPercent = firstPurchaseDiscountPercent;
 
         // Применяем стили виджета сразу после загрузки настроек
         if (settings.widgetSettings) {
@@ -1995,13 +2019,29 @@
 
         // Используем настройки шаблона или значения по умолчанию
         const widgetSettings = settings.widgetSettings || {};
+
+        // Определяем тексты в зависимости от типа приветственного вознаграждения
+        const isDiscountMode =
+          welcomeRewardType === 'DISCOUNT' && firstPurchaseDiscountPercent > 0;
+
+        // Дефолтные тексты для бонусов и скидки
+        const defaultBonusTitle =
+          'Зарегистрируйся и получи {bonusAmount} бонусов!';
+        const defaultDiscountTitle =
+          'Зарегистрируйся и получи скидку {discountPercent}% на первую покупку!';
+        const defaultBonusDescription =
+          'Зарегистрируйся в нашей бонусной программе';
+        const defaultDiscountDescription =
+          'Скидка будет применена автоматически при первой покупке';
+
         const templates = {
-          registrationTitle:
-            widgetSettings.registrationTitle ||
-            'Зарегистрируйся и получи {bonusAmount} бонусов!',
-          registrationDescription:
-            widgetSettings.registrationDescription ||
-            'Зарегистрируйся в нашей бонусной программе',
+          registrationTitle: isDiscountMode
+            ? widgetSettings.registrationDiscountTitle || defaultDiscountTitle
+            : widgetSettings.registrationTitle || defaultBonusTitle,
+          registrationDescription: isDiscountMode
+            ? widgetSettings.registrationDiscountDescription ||
+              defaultDiscountDescription
+            : widgetSettings.registrationDescription || defaultBonusDescription,
           registrationButtonText:
             widgetSettings.registrationButtonText || 'Зарегистрироваться',
           registrationButtonUrl: widgetSettings.registrationButtonUrl || '', // Кастомная ссылка
@@ -2012,6 +2052,9 @@
 
         this.log('🔧 Обработанные данные:', {
           welcomeBonusAmount,
+          welcomeRewardType,
+          firstPurchaseDiscountPercent,
+          isDiscountMode,
           botUsername
         });
 
@@ -2126,7 +2169,7 @@
               font-weight: ${styles.titleFontWeight};
               margin-bottom: 8px;
               color: ${styles.titleColor};
-            ">${templates.registrationTitle.replace('{bonusAmount}', welcomeBonusAmount)}</div>`;
+            ">${templates.registrationTitle.replace('{bonusAmount}', welcomeBonusAmount).replace('{discountPercent}', firstPurchaseDiscountPercent)}</div>`;
         }
 
         // Описание
@@ -2193,6 +2236,8 @@
 
         this.log('✅ Плашка регистрации успешно отображена:', {
           welcomeBonusAmount,
+          welcomeRewardType,
+          firstPurchaseDiscountPercent,
           botUsername,
           hasButton: !!botUsername
         });
