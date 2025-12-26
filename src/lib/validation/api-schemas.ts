@@ -115,6 +115,8 @@ export const ReferralProgramSchema = z.object({
   minPurchaseAmount: z.number().min(0).optional(),
   cookieLifetime: z.number().int().min(1).max(365).optional(),
   welcomeBonus: z.number().min(0).optional(),
+  welcomeRewardType: z.enum(['BONUS', 'DISCOUNT']).optional(),
+  firstPurchaseDiscountPercent: z.number().int().min(0).max(100).optional(),
   description: z.string().max(500).optional(),
   levels: z.array(ReferralLevelSettingsSchema).max(3).optional()
 });

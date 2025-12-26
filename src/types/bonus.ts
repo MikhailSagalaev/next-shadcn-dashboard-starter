@@ -54,6 +54,9 @@ export interface BonusLevel {
   project?: Project;
 }
 
+// Тип приветственного вознаграждения
+export type WelcomeRewardType = 'BONUS' | 'DISCOUNT';
+
 // Реферальная программа
 export interface ReferralProgram {
   id: string;
@@ -63,7 +66,9 @@ export interface ReferralProgram {
   refereeBonus: number; // % бонуса новому пользователю от покупки
   minPurchaseAmount: number; // минимальная сумма покупки для начисления бонусов
   cookieLifetime: number; // время жизни cookie в днях
-  welcomeBonus: number; // фиксированный бонус при регистрации по реферальной ссылке
+  welcomeBonus: number; // фиксированный бонус при регистрации
+  welcomeRewardType: WelcomeRewardType; // тип приветственного вознаграждения
+  firstPurchaseDiscountPercent: number; // % скидки на первую покупку (если тип DISCOUNT)
   description?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -297,6 +302,8 @@ export interface CreateReferralProgramInput {
   minPurchaseAmount?: number;
   cookieLifetime?: number;
   welcomeBonus?: number;
+  welcomeRewardType?: WelcomeRewardType;
+  firstPurchaseDiscountPercent?: number;
   description?: string;
   levels?: ReferralLevelInput[];
 }
@@ -308,6 +315,8 @@ export interface UpdateReferralProgramInput {
   minPurchaseAmount?: number;
   cookieLifetime?: number;
   welcomeBonus?: number;
+  welcomeRewardType?: WelcomeRewardType;
+  firstPurchaseDiscountPercent?: number;
   description?: string;
   levels?: ReferralLevelInput[];
 }

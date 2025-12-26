@@ -147,8 +147,8 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
           <CardContent className='space-y-4'>
             <div className='text-sm text-yellow-700 dark:text-yellow-300'>
               <p className='mb-3'>
-                Реферальная программа работает только в режиме <strong>"С Telegram ботом"</strong>, 
-                так как требует:
+                Реферальная программа работает только в режиме{' '}
+                <strong>"С Telegram ботом"</strong>, так как требует:
               </p>
               <ul className='list-inside list-disc space-y-1 pl-4'>
                 <li>Генерацию персональных реферальных ссылок</li>
@@ -157,10 +157,12 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                 <li>Отслеживание активности рефералов</li>
               </ul>
             </div>
-            
+
             <div className='flex flex-col gap-3 pt-4 sm:flex-row'>
               <Button
-                onClick={() => router.push(`/dashboard/projects/${projectId}/settings`)}
+                onClick={() =>
+                  router.push(`/dashboard/projects/${projectId}/settings`)
+                }
                 className='flex items-center gap-2'
               >
                 <Bot className='h-4 w-4' />
@@ -186,10 +188,10 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className='space-y-3'>
-            <div className='text-sm text-muted-foreground'>
+            <div className='text-muted-foreground text-sm'>
               <p className='mb-3'>
-                В режиме "Без Telegram бота" вы можете использовать другие способы 
-                привлечения пользователей:
+                В режиме "Без Telegram бота" вы можете использовать другие
+                способы привлечения пользователей:
               </p>
               <ul className='list-inside list-disc space-y-1 pl-4'>
                 <li>UTM-метки для отслеживания источников трафика</li>
@@ -309,13 +311,23 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
               </div>
               <div>
                 <label className='text-sm font-medium'>
-                  Приветственный бонус
+                  Приветственное вознаграждение
                 </label>
                 <p className='text-muted-foreground text-sm'>
-                  {Number(referralProgram?.welcomeBonus || 0).toLocaleString(
-                    'ru-RU'
-                  )}{' '}
-                  бонусов
+                  {referralProgram?.welcomeRewardType === 'DISCOUNT' ? (
+                    <>
+                      Скидка{' '}
+                      {referralProgram?.firstPurchaseDiscountPercent || 0}% на
+                      первую покупку
+                    </>
+                  ) : (
+                    <>
+                      {Number(
+                        referralProgram?.welcomeBonus || 0
+                      ).toLocaleString('ru-RU')}{' '}
+                      бонусов
+                    </>
+                  )}
                 </p>
               </div>
               <div>

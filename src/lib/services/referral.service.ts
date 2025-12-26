@@ -791,6 +791,12 @@ export class ReferralService {
           ? input.cookieLifetime
           : (existing?.cookieLifetime ?? 30),
       welcomeBonus: toDecimal(input.welcomeBonus, existing?.welcomeBonus, 0),
+      welcomeRewardType:
+        input.welcomeRewardType ?? existing?.welcomeRewardType ?? 'BONUS',
+      firstPurchaseDiscountPercent:
+        input.firstPurchaseDiscountPercent ??
+        existing?.firstPurchaseDiscountPercent ??
+        0,
       description:
         input.description !== undefined
           ? input.description
@@ -903,6 +909,8 @@ export class ReferralService {
       minPurchaseAmount: Number(program.minPurchaseAmount),
       cookieLifetime: program.cookieLifetime,
       welcomeBonus: Number(program.welcomeBonus),
+      welcomeRewardType: program.welcomeRewardType as 'BONUS' | 'DISCOUNT',
+      firstPurchaseDiscountPercent: program.firstPurchaseDiscountPercent,
       description: program.description,
       createdAt: program.createdAt,
       updatedAt: program.updatedAt,

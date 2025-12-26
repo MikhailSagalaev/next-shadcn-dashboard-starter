@@ -26,8 +26,19 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Save, AlertCircle, Users, Gift, DollarSign } from 'lucide-react';
-import type { ReferralProgram, Project } from '@/types/bonus';
+import {
+  Save,
+  AlertCircle,
+  Users,
+  Gift,
+  DollarSign,
+  Percent
+} from 'lucide-react';
+import type {
+  ReferralProgram,
+  Project,
+  WelcomeRewardType
+} from '@/types/bonus';
 import { getReferralLinkExample } from '@/lib/utils/referral-link';
 
 const referralLevelSchema = z.object({
@@ -49,10 +60,17 @@ const referralProgramSchema = z.object({
     .number()
     .min(0, 'Бонус новому пользователю не может быть отрицательным')
     .max(50, 'Бонус новому пользователю не может быть больше 50%'),
+  welcomeRewardType: z.enum(['BONUS', 'DISCOUNT']).default('BONUS'),
   welcomeBonus: z
     .number()
     .min(0, 'Приветственный бонус не может быть отрицательным')
     .max(100000, 'Слишком большой бонус')
+    .default(0),
+  firstPurchaseDiscountPercent: z
+    .number()
+    .int()
+    .min(0, 'Скидка не может быть отрицательной')
+    .max(100, 'Скидка не может быть больше 100%')
     .default(0),
   minPurchaseAmount: z
     .number()
@@ -110,6 +128,8 @@ export function ReferralSettingsForm({
       isActive: referralProgram?.isActive ?? false,
       referrerBonus: referralProgram?.referrerBonus ?? 10,
       refereeBonus: referralProgram?.refereeBonus ?? 5,
+      welcomeRewardType:
+        (referralProgram?.welcomeRewardType as WelcomeRewardType) ?? 'BONUS',
       welcomeBonus: (() => {
         try {
           if (typeof referralProgram?.welcomeBonus === 'number') {
@@ -123,6 +143,8 @@ export function ReferralSettingsForm({
           return 0;
         }
       })(),
+      firstPurchaseDiscountPercent:
+        referralProgram?.firstPurchaseDiscountPercent ?? 10,
       minPurchaseAmount: referralProgram?.minPurchaseAmount ?? 0,
       cookieLifetime: referralProgram?.cookieLifetime ?? 30,
       levels: initialLevels
@@ -244,33 +266,107 @@ export function ReferralSettingsForm({
               </div>
 
               {/* Welcome Bonus */}
-              <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                <div className='space-y-2'>
-                  <Label
-                    htmlFor='welcomeBonus'
-                    className='flex items-center space-x-2'
-                  >
+              <div className='space-y-4 rounded-lg border p-4'>
+                <div>
+                  <Label className='flex items-center space-x-2 text-base'>
                     <Gift className='h-4 w-4 text-emerald-600' />
-                    <span>Приветственный бонус</span>
+                    <span>Приветственное вознаграждение</span>
                   </Label>
-                  <Input
-                    id='welcomeBonus'
-                    type='number'
-                    step='1'
-                    min='0'
-                    placeholder='0'
-                    {...register('welcomeBonus', { valueAsNumber: true })}
-                  />
-                  {errors.welcomeBonus && (
-                    <p className='text-sm text-red-600'>
-                      {errors.welcomeBonus.message}
-                    </p>
-                  )}
-                  <p className='text-xs text-gray-600'>
-                    Фиксированное начисление при регистрации нового
-                    пользователя. Срок действия — как в настройке проекта.
+                  <p className='mt-1 text-sm text-gray-600'>
+                    Выберите тип вознаграждения для новых пользователей при
+                    регистрации
                   </p>
                 </div>
+
+                {/* Reward Type Selector */}
+                <div className='grid grid-cols-2 gap-3'>
+                  <button
+                    type='button'
+                    onClick={() => setValue('welcomeRewardType', 'BONUS')}
+                    className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                      watch('welcomeRewardType') === 'BONUS'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className='flex items-center space-x-2'>
+                      <Gift className='h-5 w-5 text-emerald-600' />
+                      <span className='font-medium'>Бонусы</span>
+                    </div>
+                    <p className='mt-1 text-xs text-gray-600'>
+                      Начислить фиксированную сумму бонусов при регистрации
+                    </p>
+                  </button>
+                  <button
+                    type='button'
+                    onClick={() => setValue('welcomeRewardType', 'DISCOUNT')}
+                    className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                      watch('welcomeRewardType') === 'DISCOUNT'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-950'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className='flex items-center space-x-2'>
+                      <Percent className='h-5 w-5 text-purple-600' />
+                      <span className='font-medium'>Скидка</span>
+                    </div>
+                    <p className='mt-1 text-xs text-gray-600'>
+                      Процентная скидка на первую покупку
+                    </p>
+                  </button>
+                </div>
+
+                {/* Conditional Fields */}
+                {watch('welcomeRewardType') === 'BONUS' ? (
+                  <div className='space-y-2'>
+                    <Label htmlFor='welcomeBonus'>
+                      Сумма приветственных бонусов
+                    </Label>
+                    <Input
+                      id='welcomeBonus'
+                      type='number'
+                      step='1'
+                      min='0'
+                      placeholder='0'
+                      {...register('welcomeBonus', { valueAsNumber: true })}
+                    />
+                    {errors.welcomeBonus && (
+                      <p className='text-sm text-red-600'>
+                        {errors.welcomeBonus.message}
+                      </p>
+                    )}
+                    <p className='text-xs text-gray-600'>
+                      Фиксированное начисление при регистрации. Срок действия —
+                      как в настройке проекта.
+                    </p>
+                  </div>
+                ) : (
+                  <div className='space-y-2'>
+                    <Label htmlFor='firstPurchaseDiscountPercent'>
+                      Скидка на первую покупку (%)
+                    </Label>
+                    <Input
+                      id='firstPurchaseDiscountPercent'
+                      type='number'
+                      step='1'
+                      min='0'
+                      max='100'
+                      placeholder='10'
+                      {...register('firstPurchaseDiscountPercent', {
+                        valueAsNumber: true
+                      })}
+                    />
+                    {errors.firstPurchaseDiscountPercent && (
+                      <p className='text-sm text-red-600'>
+                        {errors.firstPurchaseDiscountPercent.message}
+                      </p>
+                    )}
+                    <p className='text-xs text-gray-600'>
+                      Процент скидки, который будет применён к первой покупке
+                      нового пользователя. Скидка действует однократно.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
@@ -444,7 +540,8 @@ export function ReferralSettingsForm({
                   </p>
                   <p>
                     Новый пользователь:{' '}
-                    {(((watch('refereeBonus') || 0) * 5000) / 100).toFixed(0)} бонусов
+                    {(((watch('refereeBonus') || 0) * 5000) / 100).toFixed(0)}{' '}
+                    бонусов
                   </p>
                 </div>
               </div>
@@ -453,7 +550,8 @@ export function ReferralSettingsForm({
                 <div className='space-y-1 text-gray-600'>
                   <p>
                     Рефер получит:{' '}
-                    {(((levelOnePercent || 0) * 10000) / 100).toFixed(0)} бонусов
+                    {(((levelOnePercent || 0) * 10000) / 100).toFixed(0)}{' '}
+                    бонусов
                   </p>
                   <p>
                     Новый пользователь:{' '}

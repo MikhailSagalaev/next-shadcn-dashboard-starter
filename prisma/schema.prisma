@@ -71,19 +71,21 @@ model BonusLevel {
 }
 
 model ReferralProgram {
-  id                String        @id @default(cuid())
-  projectId         String        @unique @map("project_id")
-  isActive          Boolean       @default(true) @map("is_active")
-  bonusPercent      Int           @default(5) @map("bonus_percent")
-  referrerBonus     Decimal       @default(0) @map("referrer_bonus") @db.Decimal(10, 2)
-  minPurchaseAmount Decimal       @default(0) @map("min_purchase_amount") @db.Decimal(10, 2)
-  cookieLifetime    Int           @default(30) @map("cookie_lifetime")
-  welcomeBonus      Decimal       @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
-  description       String?
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
-  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  levels            ReferralLevel[]
+  id                         String            @id @default(cuid())
+  projectId                  String            @unique @map("project_id")
+  isActive                   Boolean           @default(true) @map("is_active")
+  bonusPercent               Int               @default(5) @map("bonus_percent")
+  referrerBonus              Decimal           @default(0) @map("referrer_bonus") @db.Decimal(10, 2)
+  minPurchaseAmount          Decimal           @default(0) @map("min_purchase_amount") @db.Decimal(10, 2)
+  cookieLifetime             Int               @default(30) @map("cookie_lifetime")
+  welcomeBonus               Decimal           @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
+  welcomeRewardType          WelcomeRewardType @default(BONUS) @map("welcome_reward_type")
+  firstPurchaseDiscountPercent Int             @default(0) @map("first_purchase_discount_percent")
+  description                String?
+  createdAt                  DateTime          @default(now()) @map("created_at")
+  updatedAt                  DateTime          @updatedAt @map("updated_at")
+  project                    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  levels                     ReferralLevel[]
 
   @@map("referral_programs")
 }
@@ -486,6 +488,11 @@ enum AlphaTesterStatus {
   REJECTED
   ACTIVE
   INACTIVE
+}
+
+enum WelcomeRewardType {
+  BONUS   @map("bonus")
+  DISCOUNT @map("discount")
 }
 
 enum OrderStatus {

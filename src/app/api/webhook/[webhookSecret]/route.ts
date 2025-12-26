@@ -1349,6 +1349,53 @@ async function handlePurchase(
     throw new Error('Пользователь не найден');
   }
 
+  // Проверяем, является ли это первой покупкой и есть ли скидка
+  let firstPurchaseDiscount: {
+    isFirstPurchase: boolean;
+    discountPercent: number;
+    discountAmount: number;
+  } | null = null;
+
+  const isFirstPurchase = Number(user.totalPurchases) === 0;
+
+  if (isFirstPurchase) {
+    // Получаем настройки реферальной программы для проверки скидки
+    const referralProgramRaw = await db.referralProgram.findUnique({
+      where: { projectId }
+    });
+
+    // Type assertion для новых полей (после миграции БД)
+    const referralProgram = referralProgramRaw as unknown as {
+      isActive: boolean;
+      welcomeRewardType: 'BONUS' | 'DISCOUNT';
+      firstPurchaseDiscountPercent: number;
+    } | null;
+
+    if (
+      referralProgram?.isActive &&
+      referralProgram.welcomeRewardType === 'DISCOUNT' &&
+      referralProgram.firstPurchaseDiscountPercent > 0
+    ) {
+      const discountPercent = referralProgram.firstPurchaseDiscountPercent;
+      const discountAmount = (purchaseAmount * discountPercent) / 100;
+
+      firstPurchaseDiscount = {
+        isFirstPurchase: true,
+        discountPercent,
+        discountAmount
+      };
+
+      logger.info('Применена скидка на первую покупку', {
+        userId: user.id,
+        projectId,
+        purchaseAmount,
+        discountPercent,
+        discountAmount,
+        component: 'webhook/handlePurchase'
+      });
+    }
+  }
+
   // Начисляем бонусы за покупку с учётом уровня и реферальной системы
   const result = await BonusService.awardPurchaseBonus(
     user.id,
@@ -1367,6 +1414,7 @@ async function handlePurchase(
     },
     levelInfo: result.levelInfo,
     referralInfo: result.referralInfo,
+    firstPurchaseDiscount,
     user: {
       id: user.id,
       email: user.email,
