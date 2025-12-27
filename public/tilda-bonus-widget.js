@@ -129,6 +129,7 @@
       _cartObserver: null,
       mode: 'bonus',
       levelInfo: null, // информация об уровне пользователя
+      firstPurchaseDiscount: null, // информация о скидке на первую покупку
       originalCartTotal: 0, // изначальная сумма корзины без бонусов
       // Новые поля для управления памятью
       timers: new Set(), // Храним все активные таймеры
@@ -1248,6 +1249,19 @@
           <button id="promo-tab" type="button" class="bonus-toggle-btn" onclick="TildaBonusWidget.switchMode('promo')">Промокод</button>
         </div>
         <div id="bonus-content-area">
+          <div id="first-purchase-discount-section" style="display: none;">
+            <div style="padding: 12px; background: linear-gradient(135deg, #10B981 0%, #059669 100%); border-radius: 8px; margin-bottom: 12px; text-align: center;">
+              <p style="margin: 0 0 8px 0; color: white; font-weight: 600; font-size: 14px;">🎉 Скидка на первый заказ!</p>
+              <p style="margin: 0 0 12px 0; color: rgba(255,255,255,0.9); font-size: 13px;">Вам доступна скидка <span id="first-discount-percent">0</span>% на первую покупку</p>
+              <button type="button" id="apply-first-discount-btn" 
+                      style="background: white; color: #059669; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; transition: all 0.2s;"
+                      onmouseover="this.style.background='#f0fdf4'; this.style.transform='scale(1.02)'"
+                      onmouseout="this.style.background='white'; this.style.transform='scale(1)'"
+                      onclick="TildaBonusWidget.applyFirstPurchaseDiscount()">
+                Применить скидку
+              </button>
+            </div>
+          </div>
           <div class="bonus-balance" style="display: none;">
             Ваш баланс: <span class="bonus-balance-amount">0</span> бонусов
           </div>
@@ -1298,12 +1312,38 @@
       const bonusSection = document.getElementById('bonus-section');
       const balanceEl = document.querySelector('.bonus-balance');
       const verificationNotice = document.getElementById('verification-notice');
+      const firstDiscountSection = document.getElementById(
+        'first-purchase-discount-section'
+      );
+
+      // Проверяем наличие скидки на первую покупку
+      const hasFirstPurchaseDiscount =
+        this.state.firstPurchaseDiscount &&
+        this.state.firstPurchaseDiscount.available &&
+        this.state.firstPurchaseDiscount.discountPercent > 0;
+
+      // Обновляем процент скидки в плашке
+      if (hasFirstPurchaseDiscount && firstDiscountSection) {
+        const discountPercentEl = document.getElementById(
+          'first-discount-percent'
+        );
+        if (discountPercentEl) {
+          discountPercentEl.textContent =
+            this.state.firstPurchaseDiscount.discountPercent;
+        }
+      }
 
       // В режиме WITHOUT_BOT не показываем плашку верификации
       if (this.state.operationMode === 'WITHOUT_BOT') {
         if (bonusSection) bonusSection.style.display = 'flex';
         if (balanceEl) balanceEl.style.display = 'block';
         if (verificationNotice) verificationNotice.style.display = 'none';
+        // Показываем скидку на первую покупку если доступна
+        if (firstDiscountSection) {
+          firstDiscountSection.style.display = hasFirstPurchaseDiscount
+            ? 'block'
+            : 'none';
+        }
         return;
       }
 
@@ -1314,6 +1354,7 @@
         );
         if (bonusSection) bonusSection.style.display = 'none';
         if (balanceEl) balanceEl.style.display = 'none';
+        if (firstDiscountSection) firstDiscountSection.style.display = 'none';
         if (verificationNotice) {
           verificationNotice.style.display = 'block';
           // Используем отдельную ссылку для верификации (verificationButtonUrl),
@@ -1343,6 +1384,18 @@
         if (bonusSection) bonusSection.style.display = 'flex';
         if (balanceEl) balanceEl.style.display = 'block';
         if (verificationNotice) verificationNotice.style.display = 'none';
+        // Показываем скидку на первую покупку если доступна
+        if (firstDiscountSection) {
+          firstDiscountSection.style.display = hasFirstPurchaseDiscount
+            ? 'block'
+            : 'none';
+          console.log(
+            '🎁 Скидка на первую покупку:',
+            hasFirstPurchaseDiscount
+              ? `${this.state.firstPurchaseDiscount.discountPercent}%`
+              : 'недоступна'
+          );
+        }
       }
     },
 
@@ -3319,11 +3372,14 @@
             // Всегда обновляем баланс из API, даже если он 0
             this.state.bonusBalance = Number(data.balance) || 0;
             this.state.levelInfo = data.levelInfo || null;
+            this.state.firstPurchaseDiscount =
+              data.firstPurchaseDiscount || null;
 
             this.log('📊 Баланс загружен из API:', {
               balance: this.state.bonusBalance,
               telegramLinked: data.user.telegramLinked,
-              userId: data.user.id
+              userId: data.user.id,
+              firstPurchaseDiscount: this.state.firstPurchaseDiscount
             });
 
             // Применяем кастомные стили виджета если есть
@@ -4025,6 +4081,105 @@
         this.log('Бонусы не применены, применяем');
         this.applyBonuses();
       }
+    },
+
+    // Применение скидки на первую покупку
+    applyFirstPurchaseDiscount: function () {
+      try {
+        const discount = this.state.firstPurchaseDiscount;
+        if (!discount || !discount.available || !discount.discountPercent) {
+          this.showError('Скидка на первую покупку недоступна');
+          return;
+        }
+
+        const discountPercent = discount.discountPercent;
+        this.log(
+          '🎁 Применяем скидку на первую покупку:',
+          discountPercent + '%'
+        );
+
+        // Формируем данные промокода для Tilda
+        const promocode = {
+          message: 'OK',
+          promocode: 'FIRST_ORDER',
+          discountpercent: discountPercent
+        };
+
+        // Применяем через Tilda API
+        if (typeof window.t_input_promocode__addPromocode === 'function') {
+          window.t_input_promocode__addPromocode(promocode);
+          this.log('✅ Скидка применена через t_input_promocode__addPromocode');
+
+          // Скрываем плашку скидки после применения
+          const firstDiscountSection = document.getElementById(
+            'first-purchase-discount-section'
+          );
+          if (firstDiscountSection) {
+            firstDiscountSection.innerHTML = `
+              <div style="padding: 12px; background: #D1FAE5; border: 1px solid #10B981; border-radius: 8px; margin-bottom: 12px; text-align: center;">
+                <p style="margin: 0; color: #065F46; font-weight: 600; font-size: 14px;">✅ Скидка ${discountPercent}% применена!</p>
+              </div>
+            `;
+          }
+
+          // Меняем текст "Промокод:" на "Скидка на первый заказ:"
+          this.observeAndReplacePromoLabel();
+
+          // Пересчитываем суммы
+          if (typeof window.tcart__calcAmountWithDiscounts === 'function') {
+            try {
+              window.tcart__calcAmountWithDiscounts();
+            } catch (_) {}
+          }
+
+          this.showSuccess(
+            'Скидка ' + discountPercent + '% успешно применена!'
+          );
+        } else {
+          // Fallback: пробуем через событие
+          window.PROMO_DATA = {
+            name: 'FIRST_ORDER',
+            type: 'percent',
+            amount: discountPercent
+          };
+          document.dispatchEvent(new Event('promoDataLoaded'));
+          this.log('⚠️ Скидка применена через событие promoDataLoaded');
+          this.showSuccess('Скидка ' + discountPercent + '% применена!');
+        }
+      } catch (error) {
+        this.logError('Ошибка применения скидки на первую покупку', error);
+        this.showError('Не удалось применить скидку');
+      }
+    },
+
+    // Наблюдатель для замены текста "Промокод:" на "Скидка на первый заказ:"
+    observeAndReplacePromoLabel: function () {
+      const replacePromoText = () => {
+        const promoLabels = document.querySelectorAll(
+          '.t706__cartwin-totalamount-info_label'
+        );
+        promoLabels.forEach((label) => {
+          if (label.textContent.trim() === 'Промокод:') {
+            label.textContent = 'Скидка на первый заказ:';
+          }
+        });
+      };
+
+      replacePromoText();
+
+      // Наблюдаем за изменениями DOM
+      const observer = new MutationObserver(() => {
+        replacePromoText();
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
+      });
+
+      // Сохраняем observer для очистки
+      this.state.observers.add(observer);
     },
 
     // Определение состояния пользователя

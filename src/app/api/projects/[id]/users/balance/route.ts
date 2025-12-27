@@ -37,11 +37,12 @@ export async function GET(
       if (!originToCheck) return false;
       try {
         const hostname = new URL(originToCheck).hostname;
-        const normalizedHost = hostname
-          .replace(/^www\./i, '')
-          .toLowerCase();
+        const normalizedHost = hostname.replace(/^www\./i, '').toLowerCase();
         // allow exact host or any subdomain of the allowed host
-        return normalizedHost === allowedHost || normalizedHost.endsWith('.' + allowedHost);
+        return (
+          normalizedHost === allowedHost ||
+          normalizedHost.endsWith('.' + allowedHost)
+        );
       } catch {
         return false;
       }
@@ -108,13 +109,44 @@ export async function GET(
       Number(user.totalPurchases)
     );
 
+    // Проверяем право на скидку первой покупки
+    const { db } = await import('@/lib/db');
+    const projectSettings = await db.project.findUnique({
+      where: { id: projectId },
+      select: {
+        welcomeRewardType: true,
+        firstPurchaseDiscountPercent: true
+      }
+    });
+
+    const isFirstPurchase = Number(user.totalPurchases) === 0;
+    const hasFirstPurchaseDiscount =
+      isFirstPurchase &&
+      projectSettings?.welcomeRewardType === 'DISCOUNT' &&
+      Number(projectSettings?.firstPurchaseDiscountPercent || 0) > 0;
+
+    const firstPurchaseDiscount = hasFirstPurchaseDiscount
+      ? {
+          available: true,
+          discountPercent: Number(
+            projectSettings?.firstPurchaseDiscountPercent || 0
+          )
+        }
+      : {
+          available: false,
+          discountPercent: 0
+        };
+
     logger.info('User balance retrieved', {
       projectId,
       userId: user.id,
       email: user.email,
       phone: user.phone,
       balance: userBalance.currentBalance,
-      level: currentLevel?.name
+      level: currentLevel?.name,
+      firstPurchaseDiscount: firstPurchaseDiscount.available
+        ? `${firstPurchaseDiscount.discountPercent}%`
+        : 'none'
     });
 
     return NextResponse.json(
@@ -146,7 +178,8 @@ export async function GET(
                 ? Number(currentLevel.maxAmount)
                 : null
             }
-          : null
+          : null,
+        firstPurchaseDiscount
       },
       { headers: corsHeaders }
     );
@@ -161,7 +194,10 @@ export async function GET(
     } catch (paramsError) {
       logger.error('Error retrieving user balance (failed to get projectId)', {
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        paramsError: paramsError instanceof Error ? paramsError.message : String(paramsError)
+        paramsError:
+          paramsError instanceof Error
+            ? paramsError.message
+            : String(paramsError)
       });
     }
 
