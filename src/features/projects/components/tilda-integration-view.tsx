@@ -67,7 +67,8 @@ export function ProjectIntegrationView({
     registrationTitle: 'Зарегистрируйся и получи {bonusAmount} бонусов!',
     registrationDescription: 'Зарегистрируйся в нашей бонусной программе',
     registrationButtonText: 'Для участия в акции перейдите в бота',
-    registrationButtonUrl: '', // Кастомная ссылка (если пустая - используется ссылка на бота)
+    registrationButtonUrl: '', // Кастомная ссылка для регистрации (если пустая - используется ссылка на бота)
+    verificationButtonUrl: '', // Кастомная ссылка для верификации (если пустая - используется ссылка на бота)
     registrationFallbackText: 'Свяжитесь с администратором для регистрации',
 
     // Настройки видимости элементов плашки
@@ -231,6 +232,8 @@ export function ProjectIntegrationView({
                 'Для участия в акции перейдите в бота',
               registrationButtonUrl:
                 functionalSettings.widgetSettings.registrationButtonUrl || '',
+              verificationButtonUrl:
+                functionalSettings.widgetSettings.verificationButtonUrl || '',
               registrationFallbackText:
                 functionalSettings.widgetSettings.registrationFallbackText ||
                 'Свяжитесь с администратором для регистрации',
@@ -750,8 +753,30 @@ export function ProjectIntegrationView({
                                 placeholder='https://example.com/register'
                               />
                               <p className='text-muted-foreground text-xs'>
-                                Если не указано, используется ссылка на Telegram
-                                бота
+                                Ссылка для незарегистрированных пользователей
+                              </p>
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='verificationButtonUrl'>
+                                Ссылка для верификации
+                                <span className='text-muted-foreground ml-2 text-xs'>
+                                  (опционально, по умолчанию - ссылка на бота)
+                                </span>
+                              </Label>
+                              <Input
+                                id='verificationButtonUrl'
+                                value={widgetSettings.verificationButtonUrl}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    verificationButtonUrl: e.target.value
+                                  })
+                                }
+                                placeholder='https://t.me/your_bot'
+                              />
+                              <p className='text-muted-foreground text-xs'>
+                                Ссылка для подтверждения аккаунта в Telegram
+                                боте
                               </p>
                             </div>
                           </div>

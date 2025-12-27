@@ -1316,9 +1316,10 @@
         if (balanceEl) balanceEl.style.display = 'none';
         if (verificationNotice) {
           verificationNotice.style.display = 'block';
-          // Используем кастомную ссылку или ссылку на бота
+          // Используем отдельную ссылку для верификации (verificationButtonUrl),
+          // а не registrationButtonUrl которая для регистрации
           const verificationButtonUrl =
-            this.state.widgetSettings?.registrationButtonUrl ||
+            this.state.widgetSettings?.verificationButtonUrl ||
             (this.state.botUsername
               ? `https://t.me/${this.state.botUsername}`
               : null);
@@ -2044,7 +2045,8 @@
             : widgetSettings.registrationDescription || defaultBonusDescription,
           registrationButtonText:
             widgetSettings.registrationButtonText || 'Зарегистрироваться',
-          registrationButtonUrl: widgetSettings.registrationButtonUrl || '', // Кастомная ссылка
+          registrationButtonUrl: widgetSettings.registrationButtonUrl || '', // Кастомная ссылка для регистрации
+          verificationButtonUrl: widgetSettings.verificationButtonUrl || '', // Кастомная ссылка для верификации
           registrationFallbackText:
             widgetSettings.registrationFallbackText ||
             'Свяжитесь с администратором для регистрации'
@@ -4080,9 +4082,9 @@
         const userState = this.getUserState();
         console.log('👤 applyBonuses: userState =', userState);
 
-        // Формируем ссылку на бота
+        // Формируем ссылку на бота для верификации
         const botUrl =
-          this.state.widgetSettings?.registrationButtonUrl ||
+          this.state.widgetSettings?.verificationButtonUrl ||
           (this.state.botUsername
             ? `https://t.me/${this.state.botUsername}`
             : null);
