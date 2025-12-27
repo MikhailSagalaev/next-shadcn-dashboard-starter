@@ -95,20 +95,19 @@ export function WorkflowProperties({
     switch (node.type) {
       case 'trigger.command':
         return (
-          <div>
+          <div className='space-y-2'>
             <Label htmlFor='command'>Команда</Label>
             <Input
               id='command'
               value={nodeConfig['trigger.command']?.command || ''}
               onChange={(e) => handleConfigChange('command', e.target.value)}
-              className='mt-1'
               placeholder='/start'
             />
           </div>
         );
       case 'trigger.message':
         return (
-          <div>
+          <div className='space-y-2'>
             <Label htmlFor='pattern'>
               Шаблон сообщения (регулярное выражение)
             </Label>
@@ -116,14 +115,13 @@ export function WorkflowProperties({
               id='pattern'
               value={nodeConfig['trigger.message']?.pattern || ''}
               onChange={(e) => handleConfigChange('pattern', e.target.value)}
-              className='mt-1'
               placeholder='.*'
             />
           </div>
         );
       case 'trigger.callback':
         return (
-          <div>
+          <div className='space-y-2'>
             <Label htmlFor='callbackData'>Callback данные</Label>
             <Input
               id='callbackData'
@@ -131,7 +129,6 @@ export function WorkflowProperties({
               onChange={(e) =>
                 handleConfigChange('callbackData', e.target.value)
               }
-              className='mt-1'
               placeholder='btn_click'
             />
           </div>
@@ -146,7 +143,7 @@ export function WorkflowProperties({
       case 'condition':
         return (
           <div className='space-y-4'>
-            <div>
+            <div className='space-y-2'>
               <Label htmlFor='conditionExpression'>
                 Выражение (опционально)
               </Label>
@@ -156,60 +153,67 @@ export function WorkflowProperties({
                 onChange={(e) =>
                   handleConfigChange('expression', e.target.value)
                 }
-                className='mt-1'
                 placeholder='get("balance") > 100 && notEmpty(get("user"))'
                 rows={3}
               />
-              <p className='text-muted-foreground mt-1 text-xs'>
+              <p className='text-muted-foreground text-xs'>
                 JavaScript выражение. Доступны: get(), isEmpty(), notEmpty(),
                 Math.*, etc.
               </p>
             </div>
 
             <div className='border-t pt-4'>
-              <p className='text-muted-foreground mb-3 text-sm'>
+              <p className='text-muted-foreground mb-4 text-sm'>
                 Или используйте простой формат:
               </p>
 
-              <Label htmlFor='conditionVariable'>Переменная</Label>
-              <Input
-                id='conditionVariable'
-                value={nodeConfig.condition?.variable || ''}
-                onChange={(e) => handleConfigChange('variable', e.target.value)}
-                className='mt-1'
-                placeholder='balance'
-              />
+              <div className='space-y-4'>
+                <div className='space-y-2'>
+                  <Label htmlFor='conditionVariable'>Переменная</Label>
+                  <Input
+                    id='conditionVariable'
+                    value={nodeConfig.condition?.variable || ''}
+                    onChange={(e) =>
+                      handleConfigChange('variable', e.target.value)
+                    }
+                    placeholder='balance'
+                  />
+                </div>
 
-              <Label htmlFor='conditionOperator' className='mt-3 block'>
-                Оператор
-              </Label>
-              <select
-                id='conditionOperator'
-                value={nodeConfig.condition?.operator || ''}
-                onChange={(e) => handleConfigChange('operator', e.target.value)}
-                className='border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm'
-              >
-                <option value=''>Выберите оператор</option>
-                <option value='equals'>Равно (===)</option>
-                <option value='not_equals'>Не равно (!==)</option>
-                <option value='contains'>Содержит</option>
-                <option value='not_contains'>Не содержит</option>
-                <option value='greater'>Больше (&gt;)</option>
-                <option value='less'>Меньше (&lt;)</option>
-                <option value='is_empty'>Пустое</option>
-                <option value='is_not_empty'>Не пустое</option>
-              </select>
+                <div className='space-y-2'>
+                  <Label htmlFor='conditionOperator'>Оператор</Label>
+                  <select
+                    id='conditionOperator'
+                    value={nodeConfig.condition?.operator || ''}
+                    onChange={(e) =>
+                      handleConfigChange('operator', e.target.value)
+                    }
+                    className='border-input bg-background w-full rounded-md border px-3 py-2 text-sm'
+                  >
+                    <option value=''>Выберите оператор</option>
+                    <option value='equals'>Равно (===)</option>
+                    <option value='not_equals'>Не равно (!==)</option>
+                    <option value='contains'>Содержит</option>
+                    <option value='not_contains'>Не содержит</option>
+                    <option value='greater'>Больше (&gt;)</option>
+                    <option value='less'>Меньше (&lt;)</option>
+                    <option value='is_empty'>Пустое</option>
+                    <option value='is_not_empty'>Не пустое</option>
+                  </select>
+                </div>
 
-              <Label htmlFor='conditionValue' className='mt-3 block'>
-                Значение
-              </Label>
-              <Input
-                id='conditionValue'
-                value={nodeConfig.condition?.value || ''}
-                onChange={(e) => handleConfigChange('value', e.target.value)}
-                className='mt-1'
-                placeholder='100'
-              />
+                <div className='space-y-2'>
+                  <Label htmlFor='conditionValue'>Значение</Label>
+                  <Input
+                    id='conditionValue'
+                    value={nodeConfig.condition?.value || ''}
+                    onChange={(e) =>
+                      handleConfigChange('value', e.target.value)
+                    }
+                    placeholder='100'
+                  />
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -235,29 +239,29 @@ export function WorkflowProperties({
         );
       case 'action.set_variable':
         return (
-          <div>
-            <Label htmlFor='variableName'>Имя переменной</Label>
-            <Input
-              id='variableName'
-              value={nodeConfig['action.set_variable']?.variableName || ''}
-              onChange={(e) =>
-                handleConfigChange('variableName', e.target.value)
-              }
-              className='mt-1'
-              placeholder='myVar'
-            />
-            <Label htmlFor='variableValue' className='mt-3 block'>
-              Значение
-            </Label>
-            <Input
-              id='variableValue'
-              value={nodeConfig['action.set_variable']?.variableValue || ''}
-              onChange={(e) =>
-                handleConfigChange('variableValue', e.target.value)
-              }
-              className='mt-1'
-              placeholder='value'
-            />
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='variableName'>Имя переменной</Label>
+              <Input
+                id='variableName'
+                value={nodeConfig['action.set_variable']?.variableName || ''}
+                onChange={(e) =>
+                  handleConfigChange('variableName', e.target.value)
+                }
+                placeholder='myVar'
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='variableValue'>Значение</Label>
+              <Input
+                id='variableValue'
+                value={nodeConfig['action.set_variable']?.variableValue || ''}
+                onChange={(e) =>
+                  handleConfigChange('variableValue', e.target.value)
+                }
+                placeholder='value'
+              />
+            </div>
           </div>
         );
       case 'action.check_channel_subscription':
@@ -319,7 +323,7 @@ export function WorkflowProperties({
         );
       case 'flow.delay':
         return (
-          <div>
+          <div className='space-y-2'>
             <Label htmlFor='delayMs'>Задержка (мс)</Label>
             <Input
               id='delayMs'
@@ -328,7 +332,6 @@ export function WorkflowProperties({
               onChange={(e) =>
                 handleConfigChange('delayMs', parseInt(e.target.value))
               }
-              className='mt-1'
             />
           </div>
         );
@@ -360,35 +363,33 @@ export function WorkflowProperties({
         </Button>
 
         {/* Scrollable content */}
-        <div className='flex-1 overflow-y-auto p-4 pr-6'>
-          <h3 className='mb-4 text-lg font-semibold'>
+        <div className='flex-1 overflow-y-auto p-6'>
+          <h3 className='mb-6 text-lg font-semibold'>
             Свойства ноды: {node.type}
           </h3>
 
-          <div className='space-y-4'>
-            <div>
+          <div className='space-y-6'>
+            <div className='space-y-2'>
               <Label htmlFor='nodeLabel'>Название ноды</Label>
               <Input
                 id='nodeLabel'
                 value={nodeLabel}
                 onChange={(e) => setNodeLabel(e.target.value)}
-                className='mt-1'
               />
             </div>
-            <div>
+            <div className='space-y-2'>
               <Label htmlFor='nodeDescription'>Описание</Label>
               <Textarea
                 id='nodeDescription'
                 value={nodeDescription}
                 onChange={(e) => setNodeDescription(e.target.value)}
-                className='mt-1'
               />
             </div>
 
             <Separator />
 
             <h4 className='text-md font-semibold'>Конфигурация ноды</h4>
-            {renderConfigEditor()}
+            <div className='space-y-4'>{renderConfigEditor()}</div>
           </div>
         </div>
 

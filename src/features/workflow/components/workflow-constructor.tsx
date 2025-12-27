@@ -695,7 +695,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
             <WorkflowToolbar onAddNode={handleAddNode} />
           </div>
           {/* Auto layout button */}
-          <div className='absolute top-4 right-4 z-[1]'>
+          <div className='absolute top-4 right-4 z-[5]'>
             <Button
               variant='outline'
               size='sm'
@@ -744,7 +744,28 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               </Panel>
               <Background variant={BackgroundVariant.Dots} />
               <Controls />
-              <MiniMap />
+              <MiniMap
+                className='!bg-background !border-border'
+                maskColor='rgba(0, 0, 0, 0.2)'
+                nodeColor={(node) => {
+                  switch (node.type) {
+                    case 'trigger.command':
+                    case 'trigger.message':
+                    case 'trigger.callback':
+                    case 'trigger.webhook':
+                      return '#22c55e';
+                    case 'message':
+                      return '#3b82f6';
+                    case 'condition':
+                      return '#f97316';
+                    case 'flow.delay':
+                    case 'flow.end':
+                      return '#8b5cf6';
+                    default:
+                      return '#a855f7';
+                  }
+                }}
+              />
 
               {/* Properties panel */}
               {selectedNode && (

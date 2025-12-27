@@ -31,7 +31,7 @@ export const MessageNode = memo(({ data }: NodeProps) => {
       </CardHeader>
       <CardContent className='space-y-2'>
         {/* Превью сообщения */}
-        <div className='text-muted-foreground rounded border bg-gray-50 p-2 text-sm'>
+        <div className='text-muted-foreground bg-muted rounded border p-2 text-sm'>
           {plainText ? (
             <div className='line-clamp-3'>
               {plainText.replace(/\{[^}]+\}/g, '🔗')}
