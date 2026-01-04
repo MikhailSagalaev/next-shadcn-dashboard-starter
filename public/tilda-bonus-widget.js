@@ -4098,10 +4098,10 @@
           discountPercent + '%'
         );
 
-        // Формируем данные промокода для Tilda
+        // Формируем данные промокода для Tilda (используем единый промокод GUPIL)
         const promocode = {
           message: 'OK',
-          promocode: 'FIRST_ORDER',
+          promocode: 'GUPIL',
           discountpercent: discountPercent
         };
 
@@ -4138,7 +4138,7 @@
         } else {
           // Fallback: пробуем через событие
           window.PROMO_DATA = {
-            name: 'FIRST_ORDER',
+            name: 'GUPIL',
             type: 'percent',
             amount: discountPercent
           };
