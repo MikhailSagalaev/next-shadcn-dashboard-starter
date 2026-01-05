@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Trash2, Copy, Edit, AlignVerticalJustifyCenter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 // Components
 import { WorkflowToolbar } from './workflow-toolbar';
@@ -71,6 +72,8 @@ interface WorkflowConstructorProps {
 }
 
 export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
+  const { toast } = useToast();
+
   // State
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(
     null
@@ -82,6 +85,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
     x: number;
     y: number;
   } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
@@ -520,23 +524,38 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
   // Save current workflow
   const handleSaveWorkflow = useCallback(async () => {
     if (currentWorkflow) {
-      const updatedWorkflow: Workflow = {
-        ...currentWorkflow,
-        nodes: nodes,
-        connections: edges.map((edge) => ({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle,
-          type: (edge.type as WorkflowConnectionType) || 'default',
-          animated: edge.animated,
-          style: edge.style
-        })) as any // Cast to match expected type
-      };
-      await saveWorkflow(updatedWorkflow);
+      setIsSaving(true);
+      try {
+        const updatedWorkflow: Workflow = {
+          ...currentWorkflow,
+          nodes: nodes,
+          connections: edges.map((edge) => ({
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            sourceHandle: edge.sourceHandle,
+            targetHandle: edge.targetHandle,
+            type: (edge.type as WorkflowConnectionType) || 'default',
+            animated: edge.animated,
+            style: edge.style
+          })) as any // Cast to match expected type
+        };
+        await saveWorkflow(updatedWorkflow);
+        toast({
+          title: 'Сохранено',
+          description: `Workflow "${currentWorkflow.name}" успешно сохранён`
+        });
+      } catch (error) {
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось сохранить workflow',
+          variant: 'destructive'
+        });
+      } finally {
+        setIsSaving(false);
+      }
     }
-  }, [currentWorkflow, nodes, edges, saveWorkflow]);
+  }, [currentWorkflow, nodes, edges, saveWorkflow, toast]);
 
   // Toggle workflow active state
   const handleToggleActive = useCallback(
@@ -669,7 +688,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
           onWorkflowExport={exportWorkflow}
           onWorkflowImport={importWorkflow}
           onWorkflowToggleActive={handleToggleActive}
-          isSaving={false}
+          isSaving={isSaving}
         />
       </div>
 

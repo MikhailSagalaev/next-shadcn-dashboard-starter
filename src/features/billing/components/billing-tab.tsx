@@ -30,9 +30,13 @@ import {
   CheckCircle,
   Crown,
   Zap,
-  Star
+  Star,
+  AlertTriangle,
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type PlanLimits = {
   projects: number;
@@ -74,6 +78,18 @@ type PaymentHistoryEntry = {
   currency: string;
   status: 'paid' | 'pending' | 'failed';
   description: string;
+  invoiceNumber?: string;
+  canDownload?: boolean;
+};
+
+type SubscriptionInfo = {
+  id: string;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+  nextPaymentDate: string | null;
+  daysUntilExpiration: number | null;
+  expirationWarning: string | null;
 };
 
 const formatCurrency = (value: number, currency: string) =>
@@ -104,8 +120,13 @@ export function BillingTab() {
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryEntry[]>(
     []
   );
+  const [subscriptionInfo, setSubscriptionInfo] =
+    useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [changingPlanId, setChangingPlanId] = useState<string | null>(null);
+  const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(
+    null
+  );
 
   const loadBillingData = useCallback(async () => {
     try {
@@ -118,7 +139,28 @@ export function BillingTab() {
       const data = await response.json();
       setCurrentPlan(data.currentPlan);
       setUsageStats(data.usageStats);
-      setPaymentHistory(data.paymentHistory || []);
+      setSubscriptionInfo(data.subscription);
+      // Используем paymentsWithInvoices если есть, иначе paymentHistory
+      const payments = data.paymentsWithInvoices || data.paymentHistory || [];
+      setPaymentHistory(
+        payments.map((p: Record<string, unknown>) => {
+          const status = p.status as string;
+          return {
+            id: p.id as string,
+            date: p.date as string,
+            amount: p.amount as number,
+            currency: p.currency as string,
+            description: p.description as string,
+            invoiceNumber: p.invoiceNumber as string | undefined,
+            canDownload: p.canDownload as boolean | undefined,
+            status: (status === 'succeeded'
+              ? 'paid'
+              : status === 'canceled'
+                ? 'failed'
+                : status) as 'paid' | 'pending' | 'failed'
+          };
+        })
+      );
     } catch (error) {
       console.error('Error loading billing data:', error);
       toast.error('Ошибка загрузки данных биллинга');
@@ -146,6 +188,48 @@ export function BillingTab() {
     loadBillingData();
     loadPlanCatalog();
   }, [loadBillingData, loadPlanCatalog]);
+
+  const handleDownloadInvoice = async (
+    paymentId: string,
+    invoiceNumber: string
+  ) => {
+    try {
+      setDownloadingInvoice(paymentId);
+      const response = await fetch(`/api/billing/invoice/${paymentId}`);
+
+      if (!response.ok) {
+        toast.error('Не удалось загрузить счет');
+        return;
+      }
+
+      const html = await response.text();
+
+      // Открываем в новом окне для печати/сохранения как PDF
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+      } else {
+        // Fallback: скачиваем как HTML файл
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${invoiceNumber}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      toast.success('Счет открыт для печати');
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      toast.error('Ошибка загрузки счета');
+    } finally {
+      setDownloadingInvoice(null);
+    }
+  };
 
   const handleUpgradePlan = async (plan: BillingPlan) => {
     if (plan.slug === currentPlan?.slug) {
@@ -216,6 +300,29 @@ export function BillingTab() {
 
   return (
     <div className='space-y-6'>
+      {/* Предупреждение об истечении подписки */}
+      {subscriptionInfo?.expirationWarning && (
+        <Alert
+          variant={
+            subscriptionInfo.daysUntilExpiration &&
+            subscriptionInfo.daysUntilExpiration <= 0
+              ? 'destructive'
+              : 'default'
+          }
+        >
+          <AlertTriangle className='h-4 w-4' />
+          <AlertTitle>
+            {subscriptionInfo.daysUntilExpiration &&
+            subscriptionInfo.daysUntilExpiration <= 0
+              ? 'Подписка истекла'
+              : 'Подписка скоро истекает'}
+          </AlertTitle>
+          <AlertDescription>
+            {subscriptionInfo.expirationWarning}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className='flex items-center gap-2'>
@@ -303,14 +410,14 @@ export function BillingTab() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue='plans' className='space-y-4'>
-        <TabsList>
-          <TabsTrigger value='plans'>
-            <Star className='mr-2 h-4 w-4' />
+      <Tabs defaultValue='plans' className='w-full space-y-4'>
+        <TabsList className='grid w-full grid-cols-2'>
+          <TabsTrigger value='plans' className='flex items-center gap-2'>
+            <Star className='h-4 w-4' />
             Тарифные планы
           </TabsTrigger>
-          <TabsTrigger value='history'>
-            <Calendar className='mr-2 h-4 w-4' />
+          <TabsTrigger value='history' className='flex items-center gap-2'>
+            <Calendar className='h-4 w-4' />
             История платежей
           </TabsTrigger>
         </TabsList>
@@ -405,7 +512,10 @@ export function BillingTab() {
         <TabsContent value='history'>
           <Card>
             <CardHeader>
-              <CardTitle>История платежей</CardTitle>
+              <CardTitle className='flex items-center gap-2'>
+                <FileText className='h-5 w-5' />
+                История платежей
+              </CardTitle>
               <CardDescription>Последние операции по подписке</CardDescription>
             </CardHeader>
             <CardContent>
@@ -444,18 +554,46 @@ export function BillingTab() {
                                 : 'Ошибка'}
                           </Badge>
                         </div>
-                        <div className='text-muted-foreground flex items-center gap-2 text-sm'>
-                          <Calendar className='h-3 w-3' />
-                          {formatDate(payment.date)}
+                        <div className='text-muted-foreground flex items-center gap-4 text-sm'>
+                          <span className='flex items-center gap-1'>
+                            <Calendar className='h-3 w-3' />
+                            {formatDate(payment.date)}
+                          </span>
+                          {payment.invoiceNumber && (
+                            <span className='flex items-center gap-1'>
+                              <FileText className='h-3 w-3' />
+                              {payment.invoiceNumber}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className='flex items-center gap-4'>
                         <div className='text-right font-semibold'>
                           {formatCurrency(payment.amount, payment.currency)}
                         </div>
-                        <Button variant='ghost' size='sm' disabled>
-                          <Download className='mr-2 h-3 w-3' />
-                          Счет недоступен
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          disabled={
+                            !payment.canDownload ||
+                            downloadingInvoice === payment.id
+                          }
+                          onClick={() =>
+                            payment.invoiceNumber &&
+                            handleDownloadInvoice(
+                              payment.id,
+                              payment.invoiceNumber
+                            )
+                          }
+                        >
+                          {downloadingInvoice === payment.id ? (
+                            <Loader2 className='mr-2 h-3 w-3 animate-spin' />
+                          ) : (
+                            <Download className='mr-2 h-3 w-3' />
+                          )}
+                          {payment.canDownload
+                            ? 'Скачать счет'
+                            : 'Счет недоступен'}
                         </Button>
                       </div>
                     </div>

@@ -58,25 +58,16 @@ export default function SettingsPage() {
           onValueChange={handleTabChange}
           className='w-full'
         >
-          <TabsList className='flex w-full'>
-            <TabsTrigger
-              value='profile'
-              className='flex flex-1 items-center justify-center gap-2'
-            >
+          <TabsList className='grid w-full grid-cols-3'>
+            <TabsTrigger value='profile' className='flex items-center gap-2'>
               <User className='h-4 w-4' />
               Профиль
             </TabsTrigger>
-            <TabsTrigger
-              value='settings'
-              className='flex flex-1 items-center justify-center gap-2'
-            >
+            <TabsTrigger value='settings' className='flex items-center gap-2'>
               <Settings className='h-4 w-4' />
               Настройки
             </TabsTrigger>
-            <TabsTrigger
-              value='billing'
-              className='flex flex-1 items-center justify-center gap-2'
-            >
+            <TabsTrigger value='billing' className='flex items-center gap-2'>
               <CreditCard className='h-4 w-4' />
               Биллинг
             </TabsTrigger>

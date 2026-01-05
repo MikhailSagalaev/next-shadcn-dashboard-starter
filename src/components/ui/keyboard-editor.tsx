@@ -199,7 +199,7 @@ export function KeyboardEditor({
       {/* Заголовок */}
       <div className='flex items-center justify-between'>
         <div className='flex items-center gap-2'>
-          <Keyboard className='h-4 w-4 text-gray-500' />
+          <Keyboard className='text-muted-foreground h-4 w-4' />
           <span className='text-sm font-medium'>Клавиатура</span>
           <Badge variant='outline' className='text-xs'>
             {keyboard.buttons.length} рядов
@@ -210,7 +210,7 @@ export function KeyboardEditor({
           variant='ghost'
           size='sm'
           onClick={handleRemoveKeyboard}
-          className='text-red-500 hover:bg-red-50 hover:text-red-700'
+          className='text-destructive hover:bg-destructive/10 hover:text-destructive'
         >
           <Trash2 className='h-4 w-4' />
         </Button>
@@ -276,7 +276,7 @@ export function KeyboardEditor({
         {keyboard.buttons.map((row, rowIndex) => (
           <Card
             key={rowIndex}
-            className='relative border border-gray-200 transition-colors hover:border-gray-300'
+            className='hover:border-primary/50 relative border transition-colors'
           >
             <CardHeader className='pb-2'>
               <div className='flex items-center justify-between'>
@@ -314,7 +314,7 @@ export function KeyboardEditor({
                     variant='ghost'
                     size='sm'
                     onClick={() => handleRemoveRow(rowIndex)}
-                    className='h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-700'
+                    className='text-destructive hover:bg-destructive/10 hover:text-destructive h-7 w-7 p-0'
                   >
                     <Trash2 className='h-3 w-3' />
                   </Button>
@@ -325,7 +325,7 @@ export function KeyboardEditor({
               {row.map((button, buttonIndex) => (
                 <div
                   key={buttonIndex}
-                  className='space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3'
+                  className='bg-muted/50 space-y-3 rounded-lg border p-3'
                 >
                   <div className='flex items-center justify-between'>
                     <div className='flex items-center gap-2'>
@@ -335,7 +335,7 @@ export function KeyboardEditor({
                       {button.hide_after_click && (
                         <Badge
                           variant='secondary'
-                          className='bg-orange-100 px-1.5 py-0.5 text-[9px] text-orange-700'
+                          className='bg-orange-500/20 px-1.5 py-0.5 text-[9px] text-orange-600 dark:text-orange-400'
                         >
                           Исчезнет
                         </Badge>
@@ -346,7 +346,7 @@ export function KeyboardEditor({
                       variant='ghost'
                       size='sm'
                       onClick={() => handleRemoveButton(rowIndex, buttonIndex)}
-                      className='h-6 w-6 p-0 text-red-500 hover:bg-red-50 hover:text-red-700'
+                      className='text-destructive hover:bg-destructive/10 hover:text-destructive h-6 w-6 p-0'
                     >
                       <Trash2 className='h-3 w-3' />
                     </Button>
@@ -493,7 +493,7 @@ export function KeyboardEditor({
                   )}
 
                   {/* ✨ НОВОЕ: Настройка скрытия кнопки после нажатия */}
-                  <div className='flex items-center justify-between rounded border bg-gray-50 p-2'>
+                  <div className='bg-muted flex items-center justify-between rounded border p-2'>
                     <div className='flex items-center gap-2'>
                       <input
                         type='checkbox'
@@ -502,11 +502,11 @@ export function KeyboardEditor({
                         onChange={() =>
                           toggleHideAfterClick(rowIndex, buttonIndex)
                         }
-                        className='h-3 w-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500'
+                        className='border-border text-primary focus:ring-primary h-3 w-3 rounded'
                       />
                       <Label
                         htmlFor={`hide-${rowIndex}-${buttonIndex}`}
-                        className='cursor-pointer text-xs text-gray-700'
+                        className='text-foreground cursor-pointer text-xs'
                       >
                         Скрыть кнопку после нажатия
                       </Label>
@@ -514,7 +514,7 @@ export function KeyboardEditor({
                     {button.hide_after_click && (
                       <Badge
                         variant='secondary'
-                        className='bg-orange-100 px-1.5 py-0.5 text-[9px] text-orange-700'
+                        className='bg-orange-500/20 px-1.5 py-0.5 text-[9px] text-orange-600 dark:text-orange-400'
                       >
                         Исчезнет
                       </Badge>

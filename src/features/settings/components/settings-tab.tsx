@@ -506,18 +506,21 @@ export function SettingsTab() {
         </Button>
       </div>
 
-      <Tabs defaultValue='personal' className='space-y-4'>
-        <TabsList>
-          <TabsTrigger value='personal'>
-            <User className='mr-2 h-4 w-4' />
+      <Tabs defaultValue='personal' className='w-full space-y-4'>
+        <TabsList className='grid w-full grid-cols-3'>
+          <TabsTrigger value='personal' className='flex items-center gap-2'>
+            <User className='h-4 w-4' />
             Личная информация
           </TabsTrigger>
-          <TabsTrigger value='security'>
-            <Shield className='mr-2 h-4 w-4' />
+          <TabsTrigger value='security' className='flex items-center gap-2'>
+            <Shield className='h-4 w-4' />
             Безопасность
           </TabsTrigger>
-          <TabsTrigger value='notifications'>
-            <Bell className='mr-2 h-4 w-4' />
+          <TabsTrigger
+            value='notifications'
+            className='flex items-center gap-2'
+          >
+            <Bell className='h-4 w-4' />
             Уведомления
           </TabsTrigger>
         </TabsList>

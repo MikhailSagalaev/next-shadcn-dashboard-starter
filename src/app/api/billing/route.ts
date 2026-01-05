@@ -12,6 +12,7 @@ import { db } from '@/lib/db';
 import { verifyJwt } from '@/lib/jwt';
 import { logger } from '@/lib/logger';
 import { formatPlan, toNumber } from '@/lib/services/billing-plan.utils';
+import { InvoiceService } from '@/lib/services/invoice.service';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trial', 'paused'];
 
@@ -191,17 +192,44 @@ export async function GET(request: NextRequest) {
 
     const paymentHistory = await buildPaymentHistory(subscription, currentPlan);
 
+    // Получаем платежи с инвойсами
+    const paymentsWithInvoices = await InvoiceService.getPaymentsWithInvoices(
+      admin.id
+    );
+
+    // Вычисляем дни до истечения подписки
+    let daysUntilExpiration: number | null = null;
+    let expirationWarning: string | null = null;
+
+    if (subscription?.endDate) {
+      const now = new Date();
+      const endDate = new Date(subscription.endDate);
+      const diffTime = endDate.getTime() - now.getTime();
+      daysUntilExpiration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (daysUntilExpiration <= 0) {
+        expirationWarning =
+          'Ваша подписка истекла. Продлите её для доступа к платным функциям.';
+      } else if (daysUntilExpiration <= 7) {
+        expirationWarning = `Ваша подписка истекает через ${daysUntilExpiration} ${getDaysWord(daysUntilExpiration)}. Не забудьте продлить!`;
+      }
+    }
+
     return NextResponse.json({
       currentPlan,
       usageStats,
       paymentHistory,
+      paymentsWithInvoices,
       subscription: subscription
         ? {
             id: subscription.id,
             status: subscription.status,
             startDate: subscription.startDate?.toISOString() ?? null,
             endDate: subscription.endDate?.toISOString() ?? null,
-            nextPaymentDate: subscription.nextPaymentDate?.toISOString() ?? null
+            nextPaymentDate:
+              subscription.nextPaymentDate?.toISOString() ?? null,
+            daysUntilExpiration,
+            expirationWarning
           }
         : null
     });
@@ -212,4 +240,13 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Склонение слова "день"
+ */
+function getDaysWord(days: number): string {
+  if (days === 1) return 'день';
+  if (days >= 2 && days <= 4) return 'дня';
+  return 'дней';
 }

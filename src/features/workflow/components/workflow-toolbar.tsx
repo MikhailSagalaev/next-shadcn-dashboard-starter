@@ -418,7 +418,7 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
 
   return (
     <TooltipProvider>
-      <div className='bg-background flex h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] flex-col gap-3 rounded-md border p-3 shadow-lg'>
+      <div className='bg-background flex h-[calc(100vh-180px)] max-h-[calc(100vh-180px)] flex-col gap-3 rounded-md border p-3 shadow-lg'>
         <div className='flex flex-shrink-0 flex-col gap-2'>
           <span className='text-muted-foreground text-xs font-medium uppercase'>
             Добавить ноду

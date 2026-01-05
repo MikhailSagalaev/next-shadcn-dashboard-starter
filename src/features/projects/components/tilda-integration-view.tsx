@@ -547,7 +547,7 @@ export function ProjectIntegrationView({
 
   return (
     <PageContainer>
-      <div className='space-y-6'>
+      <div className='w-full space-y-6'>
         {/* Заголовок */}
         <div>
           <h1 className='text-3xl font-bold tracking-tight'>
