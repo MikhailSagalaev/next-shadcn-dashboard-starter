@@ -1,0 +1,465 @@
+{
+  "name": "Gupil",
+  "nodes": [
+    {
+      "id": "51:2",
+      "name": "GUPIL.RU",
+      "type": "SECTION",
+      "layout": "layout_2O4ZH3",
+      "fills": "fill_B0Z5K2",
+      "strokes": "stroke_W31KJM",
+      "children": [
+        {
+          "id": "51:3",
+          "name": "1920w light",
+          "type": "FRAME",
+          "layout": "layout_Y2MPVX",
+          "fills": "trymeridian.com/White",
+          "children": [
+            {
+              "id": "51:4",
+              "name": "Container",
+              "type": "FRAME",
+              "layout": "layout_MMYECL",
+              "children": [
+                {
+                  "id": "51:5",
+                  "name": "Main",
+                  "type": "FRAME",
+                  "layout": "layout_FVTMBT",
+                  "children": [
+                    {
+                      "id": "51:6",
+                      "name": "Section",
+                      "type": "FRAME",
+                      "layout": "layout_95EU6Z"
+                    },
+                    {
+                      "id": "51:87",
+                      "name": "Section",
+                      "type": "FRAME",
+                      "layout": "layout_UER36R"
+                    },
+                    {
+                      "id": "51:519",
+                      "name": "Section",
+                      "type": "FRAME",
+                      "layout": "layout_18YV38"
+                    },
+                    {
+                      "id": "56:1284",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_9L13N0"
+                    },
+                    {
+                      "id": "56:1467",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_M5T7IE"
+                    },
+                    {
+                      "id": "56:1770",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_KXTBB2"
+                    },
+                    {
+                      "id": "56:1890",
+                      "name": "Section",
+                      "type": "FRAME",
+                      "layout": "layout_GK5FO0"
+                    },
+                    {
+                      "id": "56:2007",
+                      "name": "Section",
+                      "type": "FRAME",
+                      "layout": "layout_40B5KI"
+                    },
+                    {
+                      "id": "56:2055",
+                      "name": "Section",
+                      "type": "FRAME",
+                      "layout": "layout_8XHC6W"
+                    }
+                  ]
+                },
+                {
+                  "id": "51:568",
+                  "name": "Container",
+                  "type": "FRAME",
+                  "layout": "layout_PKG4U9",
+                  "children": [
+                    {
+                      "id": "51:569",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_KIPIJ2",
+                      "opacity": 0
+                    },
+                    {
+                      "id": "51:571",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_KIPIJ2"
+                    },
+                    {
+                      "id": "51:573",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_KIPIJ2"
+                    },
+                    {
+                      "id": "51:575",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_KIPIJ2"
+                    }
+                  ]
+                },
+                {
+                  "id": "51:577",
+                  "name": "Margin",
+                  "type": "FRAME",
+                  "layout": "layout_IH0V3J",
+                  "children": [
+                    {
+                      "id": "51:578",
+                      "name": "Footer",
+                      "type": "FRAME",
+                      "layout": "layout_DX1IL4",
+                      "fills": "trymeridian.com/Black"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "51:676",
+              "name": "Container",
+              "type": "FRAME",
+              "layout": "layout_E4JE9R",
+              "children": [
+                {
+                  "id": "51:677",
+                  "name": "Banner",
+                  "type": "FRAME",
+                  "layout": "layout_6ER12Y",
+                  "children": [
+                    {
+                      "id": "51:678",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_LJ01OG"
+                    },
+                    {
+                      "id": "51:709",
+                      "name": "Container",
+                      "type": "FRAME",
+                      "layout": "layout_AMR8FN"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "components": {},
+  "componentSets": {},
+  "globalVars": {
+    "styles": {
+      "layout_2O4ZH3": {
+        "mode": "none",
+        "sizing": {
+          "horizontal": "hug",
+          "vertical": "hug"
+        }
+      },
+      "fill_B0Z5K2": [
+        "#FFFFFF"
+      ],
+      "stroke_W31KJM": {
+        "colors": [
+          "rgba(0, 0, 0, 0.1)"
+        ],
+        "strokeWeight": "1px"
+      },
+      "layout_Y2MPVX": {
+        "mode": "column",
+        "overflowScroll": [
+          "y"
+        ],
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "dimensions": {
+          "width": 1920
+        }
+      },
+      "trymeridian.com/White": [
+        "#FFFFFF"
+      ],
+      "layout_MMYECL": {
+        "mode": "column",
+        "alignSelf": "stretch",
+        "sizing": {
+          "horizontal": "fill",
+          "vertical": "hug"
+        }
+      },
+      "layout_FVTMBT": {
+        "mode": "none",
+        "sizing": {
+          "horizontal": "fill",
+          "vertical": "fill"
+        }
+      },
+      "layout_95EU6Z": {
+        "mode": "column",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "fixed"
+        },
+        "locationRelativeToParent": {
+          "x": 0,
+          "y": 0
+        },
+        "dimensions": {
+          "width": 1920,
+          "height": 1000
+        }
+      },
+      "layout_UER36R": {
+        "mode": "row",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": -200,
+          "y": 1068
+        },
+        "dimensions": {
+          "width": 4537.17
+        }
+      },
+      "layout_18YV38": {
+        "mode": "column",
+        "alignItems": "center",
+        "padding": "68px 0px",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": 0,
+          "y": 8559.3
+        },
+        "dimensions": {
+          "width": 1920
+        }
+      },
+      "layout_9L13N0": {
+        "mode": "column",
+        "gap": "60px",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": 193,
+          "y": 1242
+        },
+        "dimensions": {
+          "width": 1440
+        }
+      },
+      "layout_M5T7IE": {
+        "mode": "column",
+        "gap": "60px",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": 240,
+          "y": 2523
+        },
+        "dimensions": {
+          "width": 1440
+        }
+      },
+      "layout_KXTBB2": {
+        "mode": "column",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": 378,
+          "y": 3549
+        },
+        "dimensions": {
+          "width": 1164
+        }
+      },
+      "layout_GK5FO0": {
+        "mode": "column",
+        "alignItems": "center",
+        "padding": "68px 0px",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": 0,
+          "y": 4840
+        },
+        "dimensions": {
+          "width": 1920
+        }
+      },
+      "layout_40B5KI": {
+        "mode": "column",
+        "alignItems": "center",
+        "padding": "68px 0px",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": -10,
+          "y": 6241
+        },
+        "dimensions": {
+          "width": 1920
+        }
+      },
+      "layout_8XHC6W": {
+        "mode": "column",
+        "alignItems": "center",
+        "padding": "68px 0px",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "locationRelativeToParent": {
+          "x": -10,
+          "y": 6999.28
+        },
+        "dimensions": {
+          "width": 1920
+        }
+      },
+      "layout_PKG4U9": {
+        "mode": "row",
+        "justifyContent": "center",
+        "gap": "20px",
+        "padding": "0px 10px 0px 0px",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "fixed"
+        },
+        "position": "absolute",
+        "locationRelativeToParent": {
+          "x": 230,
+          "y": 0
+        },
+        "dimensions": {
+          "width": 1440,
+          "height": 9477
+        }
+      },
+      "layout_KIPIJ2": {
+        "mode": "none",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "fill"
+        },
+        "dimensions": {
+          "width": 345
+        }
+      },
+      "layout_IH0V3J": {
+        "mode": "column",
+        "alignSelf": "stretch",
+        "padding": "68px 0px 0px",
+        "sizing": {
+          "horizontal": "fill",
+          "vertical": "hug"
+        }
+      },
+      "layout_DX1IL4": {
+        "mode": "column",
+        "alignItems": "center",
+        "alignSelf": "stretch",
+        "gap": "429.5px",
+        "padding": "119px 0px 32px",
+        "sizing": {
+          "horizontal": "fill",
+          "vertical": "hug"
+        }
+      },
+      "trymeridian.com/Black": [
+        "#000000"
+      ],
+      "layout_E4JE9R": {
+        "mode": "column",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "position": "absolute",
+        "locationRelativeToParent": {
+          "x": 0,
+          "y": 0
+        },
+        "dimensions": {
+          "width": 1920
+        }
+      },
+      "layout_6ER12Y": {
+        "mode": "column",
+        "alignItems": "center",
+        "alignSelf": "stretch",
+        "padding": "16px 0px",
+        "sizing": {
+          "horizontal": "fill",
+          "vertical": "hug"
+        }
+      },
+      "layout_LJ01OG": {
+        "mode": "none",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "fixed"
+        },
+        "position": "absolute",
+        "locationRelativeToParent": {
+          "x": 0,
+          "y": 0
+        },
+        "dimensions": {
+          "width": 1920,
+          "height": 191.99
+        }
+      },
+      "layout_AMR8FN": {
+        "mode": "column",
+        "sizing": {
+          "horizontal": "fixed",
+          "vertical": "hug"
+        },
+        "dimensions": {
+          "width": 1440
+        }
+      }
+    }
+  }
+}

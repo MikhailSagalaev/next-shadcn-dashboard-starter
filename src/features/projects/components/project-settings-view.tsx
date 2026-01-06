@@ -98,7 +98,10 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     isActive: true,
     welcomeBonusAmount: 0,
     welcomeRewardType: 'BONUS' as WelcomeRewardType,
-    firstPurchaseDiscountPercent: 10
+    firstPurchaseDiscountPercent: 10,
+    // ✨ НОВОЕ: Workflow лимиты
+    workflowMaxSteps: 100,
+    workflowTimeoutMs: 30000
   });
 
   const loadProject = async () => {
@@ -144,7 +147,10 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           welcomeRewardType: (projectData.welcomeRewardType ||
             'BONUS') as WelcomeRewardType,
           firstPurchaseDiscountPercent:
-            projectData.firstPurchaseDiscountPercent || 10
+            projectData.firstPurchaseDiscountPercent || 10,
+          // ✨ НОВОЕ: Workflow лимиты
+          workflowMaxSteps: projectData.workflowMaxSteps || 100,
+          workflowTimeoutMs: projectData.workflowTimeoutMs || 30000
         });
       } else if (projectResponse.status === 403) {
         // Проект не принадлежит текущему админу
@@ -617,6 +623,68 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
               бонусов будут отклоняться.
             </div>
           )}
+
+          {/* ✨ НОВОЕ: Workflow Limits Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className='flex items-center'>
+                <Workflow className='mr-2 h-5 w-5' />
+                Лимиты Workflow
+              </CardTitle>
+              <CardDescription>
+                Настройки ограничений для выполнения сценариев бота
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+                <div className='space-y-2'>
+                  <Label htmlFor='workflowMaxSteps'>
+                    Максимум шагов выполнения
+                  </Label>
+                  <Input
+                    id='workflowMaxSteps'
+                    type='number'
+                    min='10'
+                    max='1000'
+                    value={formData.workflowMaxSteps}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        workflowMaxSteps: parseInt(e.target.value) || 100
+                      })
+                    }
+                    placeholder='100'
+                  />
+                  <p className='text-muted-foreground text-xs'>
+                    Защита от бесконечных циклов (10-1000)
+                  </p>
+                </div>
+                <div className='space-y-2'>
+                  <Label htmlFor='workflowTimeoutMs'>
+                    Таймаут выполнения (мс)
+                  </Label>
+                  <Input
+                    id='workflowTimeoutMs'
+                    type='number'
+                    min='5000'
+                    max='300000'
+                    step='1000'
+                    value={formData.workflowTimeoutMs}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        workflowTimeoutMs: parseInt(e.target.value) || 30000
+                      })
+                    }
+                    placeholder='30000'
+                  />
+                  <p className='text-muted-foreground text-xs'>
+                    Максимальное время выполнения (5-300 сек)
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Actions */}
           <div className='flex justify-end'>

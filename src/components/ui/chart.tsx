@@ -119,13 +119,26 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
+}: Omit<
+  React.ComponentProps<typeof RechartsPrimitive.Tooltip>,
+  'payload' | 'label'
+> &
   React.ComponentProps<'div'> & {
     hideLabel?: boolean;
     hideIndicator?: boolean;
     indicator?: 'line' | 'dot' | 'dashed';
     nameKey?: string;
     labelKey?: string;
+    payload?: Array<{
+      dataKey?: string | number;
+      name?: string;
+      value?: number | string;
+      color?: string;
+      payload?: Record<string, unknown>;
+      fill?: string;
+      graphicalItemId?: string;
+    }>;
+    label?: string;
   }) {
   const { config } = useChart();
 
@@ -145,7 +158,10 @@ function ChartTooltipContent({
     if (labelFormatter) {
       return (
         <div className={cn('font-medium', labelClassName)}>
-          {labelFormatter(value, payload)}
+          {labelFormatter(
+            value,
+            payload as Parameters<typeof labelFormatter>[1]
+          )}
         </div>
       );
     }
@@ -194,7 +210,13 @@ function ChartTooltipContent({
               )}
             >
               {formatter && item?.value !== undefined && item.name ? (
-                formatter(item.value, item.name, item, index, item.payload)
+                formatter(
+                  item.value,
+                  item.name,
+                  item as Parameters<typeof formatter>[2],
+                  index,
+                  payload as Parameters<typeof formatter>[4]
+                )
               ) : (
                 <>
                   {itemConfig?.icon ? (
@@ -251,17 +273,24 @@ function ChartTooltipContent({
 
 const ChartLegend = RechartsPrimitive.Legend;
 
+interface LegendPayloadItem {
+  dataKey?: string | number;
+  value?: string;
+  color?: string;
+}
+
 function ChartLegendContent({
   className,
   hideIcon = false,
   payload,
   verticalAlign = 'bottom',
   nameKey
-}: React.ComponentProps<'div'> &
-  Pick<RechartsPrimitive.LegendProps, 'payload' | 'verticalAlign'> & {
-    hideIcon?: boolean;
-    nameKey?: string;
-  }) {
+}: React.ComponentProps<'div'> & {
+  hideIcon?: boolean;
+  nameKey?: string;
+  payload?: LegendPayloadItem[];
+  verticalAlign?: 'top' | 'bottom' | 'middle';
+}) {
   const { config } = useChart();
 
   if (!payload?.length) {

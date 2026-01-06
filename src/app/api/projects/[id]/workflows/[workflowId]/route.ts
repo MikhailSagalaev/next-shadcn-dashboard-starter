@@ -2,8 +2,9 @@
  * @file: src/app/api/projects/[id]/workflows/[workflowId]/route.ts
  * @description: API endpoints для управления конкретным workflow
  * @project: SaaS Bonus System
- * @dependencies: Next.js, Prisma, Workflow types
+ * @dependencies: Next.js, Prisma, Workflow types, WorkflowValidator
  * @created: 2025-01-11
+ * @updated: 2026-01-06
  * @author: AI Assistant + User
  */
 
@@ -12,6 +13,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import type { UpdateWorkflowRequest } from '@/types/workflow';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
+import { validateWorkflow } from '@/lib/services/workflow/workflow-validator';
 
 // GET /api/projects/[id]/workflows/[workflowId] - Получить workflow
 export async function GET(
@@ -86,7 +88,42 @@ export async function PUT(
     }
 
     // Проверяем, нужно ли создавать новую версию
-    const hasWorkflowData = data.nodes !== undefined || data.connections !== undefined || data.variables !== undefined || data.settings !== undefined;
+    const hasWorkflowData =
+      data.nodes !== undefined ||
+      data.connections !== undefined ||
+      data.variables !== undefined ||
+      data.settings !== undefined;
+
+    // ✨ НОВОЕ: Валидация workflow перед сохранением (включая goto_node)
+    if (hasWorkflowData && data.nodes && data.connections) {
+      const validationResult = validateWorkflow(data.nodes, data.connections);
+
+      // Возвращаем ошибки валидации (только критические)
+      const criticalErrors = validationResult.errors.filter(
+        (e) => e.type === 'error'
+      );
+      if (criticalErrors.length > 0) {
+        return NextResponse.json(
+          {
+            error: 'Ошибка валидации workflow',
+            validationErrors: criticalErrors
+          },
+          { status: 400 }
+        );
+      }
+
+      // Логируем предупреждения
+      const warnings = validationResult.errors.filter(
+        (e) => e.type === 'warning'
+      );
+      if (warnings.length > 0) {
+        logger.warn('Workflow validation warnings', {
+          projectId,
+          workflowId,
+          warnings
+        });
+      }
+    }
 
     // Если активируем workflow и нет активной версии, создаем версию на основе текущих данных
     const needsVersion = data.isActive && !hasWorkflowData;
@@ -101,7 +138,9 @@ export async function PUT(
         hasWorkflowData,
         needsVersion,
         dataNodesCount: data.nodes?.length,
-        existingNodesCount: Array.isArray(existingWorkflow.nodes) ? existingWorkflow.nodes.length : 0,
+        existingNodesCount: Array.isArray(existingWorkflow.nodes)
+          ? existingWorkflow.nodes.length
+          : 0,
         nodesLength: nodes.length,
         nodesTypes: nodes.map((n: any) => n.type)
       });
@@ -120,7 +159,10 @@ export async function PUT(
         );
       }
 
-      console.log('Entry node found:', { id: entryNode.id, type: entryNode.type });
+      console.log('Entry node found:', {
+        id: entryNode.id,
+        type: entryNode.type
+      });
 
       // Создаем новую версию workflow
       const currentVersion = await db.workflowVersion.findFirst({
@@ -134,15 +176,26 @@ export async function PUT(
         data: {
           workflowId,
           version: newVersionNumber,
-          nodes: JSON.parse(JSON.stringify(data.nodes || existingWorkflow.nodes)) as any,
-          variables: JSON.parse(JSON.stringify(data.variables || existingWorkflow.variables)) as any,
-          settings: JSON.parse(JSON.stringify(data.settings || existingWorkflow.settings)) as any,
+          nodes: JSON.parse(
+            JSON.stringify(data.nodes || existingWorkflow.nodes)
+          ) as any,
+          variables: JSON.parse(
+            JSON.stringify(data.variables || existingWorkflow.variables)
+          ) as any,
+          settings: JSON.parse(
+            JSON.stringify(data.settings || existingWorkflow.settings)
+          ) as any,
           entryNodeId: entryNode.id,
           isActive: true
         }
       });
 
-      console.log('New workflow version created:', version.id, 'version:', newVersionNumber);
+      console.log(
+        'New workflow version created:',
+        version.id,
+        'version:',
+        newVersionNumber
+      );
 
       // Деактивируем предыдущую активную версию
       if (currentVersion) {
@@ -166,7 +219,9 @@ export async function PUT(
       updateData.nodes = JSON.parse(JSON.stringify(data.nodes)) as any;
     }
     if (data.connections !== undefined) {
-      updateData.connections = JSON.parse(JSON.stringify(data.connections)) as any;
+      updateData.connections = JSON.parse(
+        JSON.stringify(data.connections)
+      ) as any;
     }
     if (data.variables !== undefined) {
       updateData.variables = JSON.parse(JSON.stringify(data.variables)) as any;
@@ -184,34 +239,37 @@ export async function PUT(
 
     // Инвалидируем кэш workflow для проекта
     await WorkflowRuntimeService.invalidateCache(projectId);
-    
+
     // ✅ КРИТИЧНО: Если workflow активен и бот запущен, перезапускаем бота
     // чтобы он загрузил актуальную версию workflow
     if (workflow.isActive) {
       try {
         const { botManager } = await import('@/lib/telegram/bot-manager');
         const botInstance = botManager.getBot(projectId);
-        
+
         if (botInstance && botInstance.isActive) {
-          logger.info('🔄 Перезапускаем активный бот для загрузки обновленного workflow', {
-            projectId,
-            workflowId
-          });
-          
+          logger.info(
+            '🔄 Перезапускаем активный бот для загрузки обновленного workflow',
+            {
+              projectId,
+              workflowId
+            }
+          );
+
           // Получаем настройки бота
           const project = await db.project.findUnique({
             where: { id: projectId },
             include: { botSettings: true }
           });
-          
+
           if (project?.botSettings) {
             // Останавливаем текущий бот
             await botManager.stopBot(projectId);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+
             // Запускаем бот заново с новым workflow
             await botManager.createBot(projectId, project.botSettings as any);
-            
+
             logger.info('✅ Бот перезапущен с обновленным workflow', {
               projectId,
               workflowId

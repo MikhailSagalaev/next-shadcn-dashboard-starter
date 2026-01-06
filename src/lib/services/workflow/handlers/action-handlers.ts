@@ -526,22 +526,20 @@ export class RequestContactHandler extends BaseNodeHandler {
 
     this.logStep(context, node, 'Requesting contact from user', 'info');
 
-    // Импортируем здесь чтобы избежать circular dependencies
-    const { db } = await import('@/lib/db');
-
-    // Устанавливаем состояние ожидания контакта
+    // Устанавливаем состояние ожидания контакта с использованием транзакции
     try {
-      await db.workflowExecution.update({
-        where: { id: context.executionId },
-        data: {
-          status: 'waiting',
-          waitType: 'contact',
-          currentNodeId: node.id,
-          waitPayload: {
-            nodeId: node.id,
-            config: config,
-            requestedAt: new Date()
-          }
+      const { ExecutionContextManager } = await import(
+        '../execution-context-manager'
+      );
+
+      await ExecutionContextManager.updateExecutionState(context, {
+        status: 'waiting',
+        waitType: 'contact',
+        currentNodeId: node.id,
+        waitPayload: {
+          nodeId: node.id,
+          config: config,
+          requestedAt: new Date()
         }
       });
 
@@ -592,6 +590,7 @@ export class ApiRequestHandler extends BaseNodeHandler {
     node: WorkflowNode,
     context: ExecutionContext
   ): Promise<string | null> {
+    const startTime = Date.now();
     const config = node.data.config?.['action.api_request'];
 
     if (!config) {
@@ -665,6 +664,10 @@ export class ApiRequestHandler extends BaseNodeHandler {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
 
+    // Подготавливаем данные для расширенного логирования HTTP
+    let httpRequestData: any = null;
+    let httpResponseData: any = null;
+
     try {
       const normalizedHeaders: Record<string, string> = Object.entries(
         headers || {}
@@ -696,6 +699,14 @@ export class ApiRequestHandler extends BaseNodeHandler {
         }
       }
 
+      // ✅ Сохраняем данные HTTP запроса для логирования
+      httpRequestData = {
+        url: safeUrl,
+        method,
+        headers: normalizedHeaders,
+        body: body
+      };
+
       const response = await fetch(safeUrl, options);
       const contentType = response.headers.get('content-type') || '';
       let responseData: any = null;
@@ -704,6 +715,42 @@ export class ApiRequestHandler extends BaseNodeHandler {
         responseData = await response.json().catch(() => null);
       } else {
         responseData = await response.text().catch(() => null);
+      }
+
+      // ✅ Сохраняем данные HTTP ответа для логирования
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
+      httpResponseData = {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+        body: responseData
+      };
+
+      // ✅ Логируем полный HTTP payload через ExecutionContextManager
+      const durationMs = Date.now() - startTime;
+      try {
+        const { ExecutionContextManager } = await import(
+          '../execution-context-manager'
+        );
+        await ExecutionContextManager.logStepWithPayload(context.executionId, {
+          nodeId: node.id,
+          nodeType: 'action.api_request',
+          step: context.step,
+          level: response.ok ? 'info' : 'error',
+          message: response.ok ? 'API request completed' : 'API request failed',
+          status: response.ok ? 'success' : 'error',
+          inputData: { url: safeUrl, method, body },
+          outputData: responseData,
+          httpRequest: httpRequestData,
+          httpResponse: httpResponseData,
+          durationMs
+        });
+      } catch (logError) {
+        console.error('Failed to log HTTP payload:', logError);
       }
 
       if (!response.ok) {
@@ -717,7 +764,8 @@ export class ApiRequestHandler extends BaseNodeHandler {
 
       this.logStep(context, node, 'API request completed', 'info', {
         status: response.status,
-        hasResponseData: responseData !== null
+        hasResponseData: responseData !== null,
+        durationMs
       });
 
       if (config.responseMapping && responseData) {
@@ -740,6 +788,33 @@ export class ApiRequestHandler extends BaseNodeHandler {
 
       return null;
     } catch (error) {
+      // ✅ Логируем ошибку с HTTP данными
+      const durationMs = Date.now() - startTime;
+      try {
+        const { ExecutionContextManager } = await import(
+          '../execution-context-manager'
+        );
+        await ExecutionContextManager.logStepWithPayload(context.executionId, {
+          nodeId: node.id,
+          nodeType: 'action.api_request',
+          step: context.step,
+          level: 'error',
+          message:
+            error instanceof Error ? error.message : 'API request failed',
+          status: 'error',
+          inputData: { url: safeUrl, method, body },
+          httpRequest: httpRequestData,
+          httpResponse: httpResponseData,
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          },
+          durationMs
+        });
+      } catch (logError) {
+        console.error('Failed to log HTTP error:', logError);
+      }
+
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`API request timeout reached (${timeout} ms)`);
       }

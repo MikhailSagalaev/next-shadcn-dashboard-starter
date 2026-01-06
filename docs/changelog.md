@@ -4,6 +4,240 @@
 
 ---
 
+## [2026-01-06] - Завершение спецификации workflow-improvements
+
+### 🎯 Добавлено
+- **Unit тесты для ConditionEvaluator** — тесты validateAST, проверка AST node types, идентификаторов с $ prefix
+- **Unit тесты для WorkflowValidator** — тесты validateGotoNodes, getGotoNodeReferences
+- **Unit тесты для node-utils** — тесты normalizeNodes, serializeNodes, round-trip conversion
+- **Unit тесты для VariableManager** — тесты getSync, cache, preloadCache, updateCache
+
+### 📁 Файлы
+- `__tests__/services/condition-evaluator.test.ts`
+- `__tests__/services/workflow-validator.test.ts`
+- `__tests__/services/node-utils.test.ts`
+- `__tests__/services/variable-manager.test.ts`
+
+---
+
+## [2026-01-06] - Светлый лендинг /homepage
+
+### 🎯 Добавлено
+- **Новый лендинг /homepage** — светлая тема по дизайну из Figma (trymeridian.com стиль)
+- **HomepageNavbar** — навигация с логотипом Gupil, меню и CTA кнопками
+- **HomepageHero** — hero секция с аналитической карточкой и статистикой
+- **HomepageFeatures** — 4 карточки возможностей (аналитика, автоматизация, товарная аналитика, интеграции)
+- **HomepageSteps** — секция "Установка в четыре шага" (Настройка → Сайт → Бот → Результат)
+- **HomepagePricing** — 3 тарифных плана (Foundations, Growth, Enterprise)
+- **HomepageFooter** — тёмный футер с CTA и ссылками
+
+### 📁 Файлы
+- `src/app/homepage/page.tsx`
+- `src/app/homepage/layout.tsx`
+- `src/components/homepage/homepage-page.tsx`
+- `src/components/homepage/homepage-navbar.tsx`
+- `src/components/homepage/homepage-hero.tsx`
+- `src/components/homepage/homepage-features.tsx`
+- `src/components/homepage/homepage-steps.tsx`
+- `src/components/homepage/homepage-pricing.tsx`
+- `src/components/homepage/homepage-footer.tsx`
+- `src/components/homepage/index.ts`
+
+---
+
+## [2026-01-06] - Phase 4: История выполнения Workflow (Backend + UI)
+
+### 🎯 Добавлено
+- **Database Schema**: Поля `parentExecutionId`, `restartedFromNodeId` в WorkflowExecution
+- **Database Schema**: Поля `inputData`, `outputData`, `variablesBefore`, `variablesAfter`, `httpRequest`, `httpResponse`, `duration` в WorkflowLog
+- **ExecutionContextManager**: Метод `logStepWithPayload()` для расширенного логирования с полным payload
+- **ExecutionContextManager**: Метод `captureVariablesState()` для захвата состояния переменных
+- **ExecutionContextManager**: Функция `sanitizeData()` для маскирования чувствительных данных (токены, пароли)
+- **ApiRequestHandler**: Логирование HTTP запросов/ответов с полным payload
+- **WorkflowExecutionService**: Поддержка full payload в `transformLogsToSteps()`
+- **WorkflowExecutionService**: Создание нового execution с `parentExecutionId` при перезапуске
+- **Cron Job**: `/api/cron/cleanup-executions` для очистки выполнений старше 7 дней
+- **UI Component**: `ExecutionsList` - список выполнений с пагинацией и фильтрами
+- **UI Component**: `ExecutionCanvas` - визуализация пути выполнения (n8n-style highlighting)
+- **UI Component**: `StepInspector` - инспектор шага с полным payload (Input/Output/Variables/HTTP/Error)
+- **UI Component**: `WorkflowPageTabs` - интеграция табов Editor/Executions
+- **Hook**: `useExecutionStream` - SSE клиент для real-time обновлений
+
+### 🔄 Изменено
+- **API Endpoints**: Все endpoints уже существовали, обновлены для поддержки full payload
+- **restartExecution**: Теперь создает новое выполнение вместо обновления существующего
+
+### 📁 Файлы
+- `prisma/schema.prisma`
+- `prisma/migrations/20260106_add_execution_history_fields/migration.sql`
+- `src/lib/services/workflow/execution-context-manager.ts`
+- `src/lib/services/workflow/handlers/action-handlers.ts`
+- `src/lib/services/workflow/execution-service.ts`
+- `src/app/api/cron/cleanup-executions/route.ts`
+- `src/features/workflow/components/executions-list.tsx`
+- `src/features/workflow/components/execution-canvas.tsx`
+- `src/features/workflow/components/step-inspector.tsx`
+- `src/features/workflow/components/workflow-page-tabs.tsx`
+- `src/features/workflow/hooks/use-execution-stream.ts`
+
+---
+
+## [2026-01-06] - Конфигурируемые лимиты Workflow
+
+### 🎯 Добавлено
+- Поля `workflowMaxSteps` и `workflowTimeoutMs` в модель Project (Prisma)
+- UI для настройки лимитов workflow в Project Settings
+- Использование настроек проекта в ExecutionContextManager
+
+### 🔄 Изменено
+- **ExecutionContextManager** — теперь загружает лимиты из настроек проекта
+- **API /api/projects/[id]** — сохраняет workflow лимиты
+
+### 📁 Файлы
+- `prisma/schema.prisma`
+- `src/lib/services/workflow/execution-context-manager.ts`
+- `src/features/projects/components/project-settings-view.tsx`
+- `src/app/api/projects/[id]/route.ts`
+
+---
+
+## [2026-01-06] - Валидация goto_node в кнопках
+
+### 🎯 Добавлено
+- **validateGotoNodes()** — метод валидации ссылок goto_node в WorkflowValidator
+- **getGotoNodeReferences()** — получение всех ссылок на ноду
+- **checkNodeReferences()** — проверка ссылок при удалении ноды
+- Валидация inline keyboard buttons на существование target node
+- Валидация flow.jump на существование target node
+- Валидация callback_data с префиксом `goto:`
+
+### 🔄 Изменено
+- **Workflow API** — теперь вызывает валидацию при сохранении workflow
+
+### 📁 Файлы
+- `src/lib/services/workflow/workflow-validator.ts`
+- `src/app/api/projects/[id]/workflows/[workflowId]/route.ts`
+
+---
+
+## [2026-01-06] - Централизация логики клавиатур
+
+### 🎯 Добавлено
+- **KeyboardBuilder** — централизованный класс для построения клавиатур
+  - Статический метод `buildInlineKeyboard()` для inline клавиатур
+  - Статический метод `buildReplyKeyboard()` для reply клавиатур
+  - Универсальный метод `buildKeyboard()` для любого типа клавиатуры
+  - Метод `getContextVariables()` для получения стандартных переменных из контекста
+  - Интерфейс `KeyboardVariables` для типизации переменных
+
+### 🔄 Изменено
+- **MessageHandler** — теперь делегирует построение клавиатур KeyboardBuilder
+  - Удалены дублирующиеся методы `buildInlineKeyboard()` и `buildReplyKeyboard()`
+  - Метод `buildKeyboard()` помечен как deprecated и делегирует KeyboardBuilder
+- **InlineKeyboardHandler** — использует KeyboardBuilder для обработки кнопок
+- **ReplyKeyboardHandler** — использует KeyboardBuilder для обработки кнопок
+
+### 📁 Файлы
+- `src/lib/services/workflow/handlers/keyboard-handler.ts`
+- `src/lib/services/workflow/handlers/message-handler.ts`
+
+---
+
+## [2026-01-06] - Унифицированная обработка waitForInput
+
+### 🎯 Добавлено
+- **WaitForInputHandler** — унифицированный обработчик для ожидания ввода пользователя
+  - Централизованная логика определения необходимости ожидания
+  - Поддержка всех типов ожидания: contact, callback, input, location, poll
+  - Интерфейс `WaitForInputConfig` для конфигурации ожидания
+  - Методы `checkIfNeedsWaiting()`, `setWaitingState()`, `handleWaitForInput()`
+
+### 🔄 Изменено
+- **MessageHandler** — теперь использует WaitForInputHandler для обработки waitForInput
+- **InlineKeyboardHandler** — интегрирован с WaitForInputHandler
+- **ReplyKeyboardHandler** — интегрирован с WaitForInputHandler
+
+### 📁 Файлы
+- `src/lib/services/workflow/handlers/wait-for-input-handler.ts` (новый)
+- `src/lib/services/workflow/handlers/message-handler.ts`
+- `src/lib/services/workflow/handlers/keyboard-handler.ts`
+
+---
+
+## [2026-01-06] - Обновление зависимостей проекта
+
+### 🔄 Изменено
+- **Next.js** 16.0.10 → 16.1.1
+- **TypeScript** 5.7.2 → 5.9.3
+- **Prisma** 6.13.0 → 6.19.0
+- **recharts** 2.15.1 → 3.6.0
+- **react-hook-form** 7.54.1 → 7.70.0
+- **@hookform/resolvers** 3.9.1 → 5.2.2
+- **framer-motion** 12.23.19 → 12.24.0
+- **zustand** 5.0.2 → 5.0.9
+- **nuqs** 2.4.1 → 2.8.6
+- **lexical** 0.38.2 → 0.39.0 (все @lexical/* пакеты)
+- **@tanstack/react-table** 8.21.2 → 8.21.3
+- **tsx** 4.19.0 → 4.21.0
+- **lint-staged** 15.2.11 → 16.2.7
+- **eslint-config-next** 15.3.6 → 16.1.1
+
+### 🎯 Добавлено
+- **react-is** 19.2.3 — peer dependency для recharts
+- **@typescript-eslint/parser** 6.21.0 — peer dependency для eslint
+
+### 🐛 Исправлено
+- Типы в `chart.tsx` для совместимости с recharts v3
+- Типы в `bonus-level.service.ts` и `referral.service.ts` для Decimal → number конвертации
+- Типы в `bot-analytics-dashboard.tsx` для Buffer → Uint8Array
+
+---
+
+## [2026-01-06] - Исправление Race Condition в SessionId
+
+### 🐛 Исправлено
+- **Race Condition в SessionId** — переменные теперь сохраняются между взаимодействиями пользователя
+  - Создан метод `getOrCreateSessionId()` вместо `generateSessionId()`
+  - Проверка активного выполнения для пользователя перед созданием новой сессии
+  - Использование существующего sessionId для активных выполнений (status: running/waiting)
+  - Создание нового sessionId только для новых выполнений
+
+### 📁 Файлы
+- `src/lib/services/simple-workflow-processor.ts`
+
+---
+
+## [2026-01-05] - Спецификация workflow-improvements
+
+### 🎯 Добавлено
+- **Единая спецификация workflow-improvements** — исправление 10 багов + история выполнения
+
+**Исправление багов:**
+- Race Condition в SessionId (потеря переменных между взаимодействиями)
+- getSync в VariableManager всегда возвращает undefined
+- Несоответствие типа nodes в WorkflowVersion (array vs object)
+- Дублирование логики клавиатур в handlers
+- Отсутствие валидации goto_node в кнопках
+- Неконсистентная обработка waitForInput
+- Truncated condition-evaluator.ts
+- Отсутствие транзакций при обновлении состояния
+- Hardcoded лимиты вместо конфигурации
+- Заглушка flow.sub_workflow
+
+**История выполнения (n8n-style):**
+- Подсветка нод на canvas (green=success, red=error, pulse=running, gray=skipped)
+- Полное логирование payload (input/output, variables, HTTP)
+- Real-time обновления через SSE
+- Перезапуск с конкретной ноды (Replay)
+- Хранение истории 7 дней с автоочисткой
+
+### 📁 Файлы
+- `.kiro/specs/workflow-improvements/requirements.md`
+- `.kiro/specs/workflow-improvements/design.md`
+- `.kiro/specs/workflow-improvements/tasks.md`
+
+---
+
 ## [2026-01-05] - Уведомления об истечении подписки, инвойсы и исправление вёрстки
 
 ### 🎯 Добавлено

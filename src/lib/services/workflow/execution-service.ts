@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { SimpleWorkflowProcessor } from '@/lib/services/simple-workflow-processor';
 import { ExecutionContextManager } from '@/lib/services/workflow/execution-context-manager';
+import { normalizeNodes } from '@/lib/services/workflow/utils/node-utils';
 import type {
   WorkflowConnection,
   WorkflowNode,
@@ -37,7 +38,12 @@ export interface RestartExecutionOptions {
   skipCompleted?: boolean;
 }
 
-type ExecutionStatus = 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+type ExecutionStatus =
+  | 'running'
+  | 'waiting'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export class WorkflowExecutionService {
   /**
@@ -49,7 +55,8 @@ export class WorkflowExecutionService {
     params: ExecutionListParams
   ) {
     const page = params.page && params.page > 0 ? params.page : 1;
-    const limit = params.limit && params.limit > 0 ? Math.min(params.limit, 100) : 20;
+    const limit =
+      params.limit && params.limit > 0 ? Math.min(params.limit, 100) : 20;
 
     const whereClause: any = {
       projectId,
@@ -78,7 +85,12 @@ export class WorkflowExecutionService {
       const searchValue = params.search.trim();
       whereClause.OR = [
         { sessionId: { contains: searchValue, mode: 'insensitive' as const } },
-        { telegramChatId: { contains: searchValue, mode: 'insensitive' as const } }
+        {
+          telegramChatId: {
+            contains: searchValue,
+            mode: 'insensitive' as const
+          }
+        }
       ];
     }
 
@@ -94,7 +106,9 @@ export class WorkflowExecutionService {
       db.workflowExecution.count({ where: whereClause })
     ]);
 
-    const formatted = executions.map((execution) => WorkflowExecutionService.formatExecutionSummary(execution));
+    const formatted = executions.map((execution) =>
+      WorkflowExecutionService.formatExecutionSummary(execution)
+    );
 
     return {
       executions: formatted,
@@ -141,7 +155,8 @@ export class WorkflowExecutionService {
     ]);
 
     const steps = WorkflowExecutionService.transformLogsToSteps(logs);
-    const variablesByScope = WorkflowExecutionService.groupVariablesByScope(variables);
+    const variablesByScope =
+      WorkflowExecutionService.groupVariablesByScope(variables);
 
     return {
       execution: WorkflowExecutionService.formatExecutionDetails(execution),
@@ -154,10 +169,7 @@ export class WorkflowExecutionService {
   /**
    * Возвращает список логов после указанного момента времени (для SSE)
    */
-  static async getExecutionLogs(
-    executionId: string,
-    since?: Date
-  ) {
+  static async getExecutionLogs(executionId: string, since?: Date) {
     return db.workflowLog.findMany({
       where: {
         executionId,
@@ -188,6 +200,7 @@ export class WorkflowExecutionService {
 
   /**
    * Перезапуск выполнения workflow
+   * Создает новое выполнение, связанное с оригинальным через parentExecutionId
    */
   static async restartExecution(
     projectId: string,
@@ -204,7 +217,10 @@ export class WorkflowExecutionService {
     });
 
     if (!execution) {
-      return NextResponse.json({ error: 'Workflow execution not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Workflow execution not found' },
+        { status: 404 }
+      );
     }
 
     const versionRecord = await db.workflowVersion.findFirst({
@@ -218,49 +234,67 @@ export class WorkflowExecutionService {
     });
 
     if (!versionRecord) {
-      return NextResponse.json({ error: 'Workflow version not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Workflow version not found' },
+        { status: 404 }
+      );
     }
 
-    const formattedVersion = WorkflowExecutionService.buildWorkflowVersion(versionRecord);
+    const formattedVersion =
+      WorkflowExecutionService.buildWorkflowVersion(versionRecord);
 
     if (!formattedVersion.entryNodeId && !options.fromNodeId) {
-      return NextResponse.json({ error: 'Entry node is not defined for workflow version' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Entry node is not defined for workflow version' },
+        { status: 400 }
+      );
     }
 
     const startNodeId = options.fromNodeId || formattedVersion.entryNodeId!;
 
-    await db.$transaction(async (tx) => {
-      await tx.workflowExecution.update({
-        where: { id: executionId },
+    // ✅ Создаем НОВОЕ выполнение, связанное с оригинальным через parentExecutionId
+    const newExecution = await db.$transaction(async (tx) => {
+      // Создаем новое выполнение с ссылкой на родительское
+      const created = await tx.workflowExecution.create({
         data: {
+          projectId,
+          workflowId,
+          version: execution.version,
+          sessionId: execution.sessionId,
+          userId: execution.userId,
+          telegramChatId: execution.telegramChatId,
           status: 'running',
-          error: null,
-          finishedAt: null,
-          startedAt: new Date(),
-          stepCount: 0,
           currentNodeId: startNodeId,
-          waitType: null,
-          waitPayload: null
+          parentExecutionId: executionId,
+          restartedFromNodeId: options.fromNodeId || null
         }
       });
 
-      if (options.resetVariables) {
-        await tx.workflowVariable.deleteMany({
+      // Если не сбрасываем переменные, копируем их для нового выполнения
+      if (!options.resetVariables) {
+        const existingVariables = await tx.workflowVariable.findMany({
           where: {
             projectId,
             sessionId: execution.sessionId
           }
         });
+
+        // Переменные уже привязаны к sessionId, поэтому они будут доступны
+        // Если нужно изолировать, можно создать новый sessionId
       }
+
+      return created;
     });
 
-    const context = await ExecutionContextManager.resumeContext(executionId);
+    const context = await ExecutionContextManager.resumeContext(
+      newExecution.id
+    );
     const processor = new SimpleWorkflowProcessor(formattedVersion, projectId);
 
     // Перезапуск выполняем асинхронно, чтобы не держать запрос
     processor.resumeWorkflow(context, startNodeId).catch(async (error) => {
       await db.workflowExecution.update({
-        where: { id: executionId },
+        where: { id: newExecution.id },
         data: {
           status: 'failed',
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -268,12 +302,19 @@ export class WorkflowExecutionService {
       });
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      executionId: newExecution.id,
+      parentExecutionId: executionId,
+      restartedFromNodeId: options.fromNodeId || null
+    });
   }
 
   private static formatExecutionSummary(execution: PrismaWorkflowExecution) {
     const finishedAt = execution.finishedAt ?? undefined;
-    const duration = finishedAt ? finishedAt.getTime() - execution.startedAt.getTime() : undefined;
+    const duration = finishedAt
+      ? finishedAt.getTime() - execution.startedAt.getTime()
+      : undefined;
 
     return {
       id: execution.id,
@@ -331,6 +372,15 @@ export class WorkflowExecutionService {
       lastMessage?: string;
       data?: any;
       variables?: Record<string, any>;
+      // Full payload fields
+      inputData?: any;
+      outputData?: any;
+      variablesBefore?: Record<string, any>;
+      variablesAfter?: Record<string, any>;
+      httpRequest?: any;
+      httpResponse?: any;
+      error?: any;
+      durationMs?: number;
     }
 
     const map = new Map<string, StepAggregation>();
@@ -348,9 +398,10 @@ export class WorkflowExecutionService {
 
       existing.lastMessage = log.message;
 
-      const logData = (typeof log.data === 'object' && log.data !== null
-        ? (log.data as Record<string, any>)
-        : null);
+      const logData =
+        typeof log.data === 'object' && log.data !== null
+          ? (log.data as Record<string, any>)
+          : null;
 
       if (logData) {
         existing.data = logData;
@@ -358,8 +409,37 @@ export class WorkflowExecutionService {
           existing.nodeLabel = logData.nodeLabel;
         }
         if (logData.variables) {
-          existing.variables = { ...(existing.variables || {}), ...logData.variables };
+          existing.variables = {
+            ...(existing.variables || {}),
+            ...logData.variables
+          };
         }
+      }
+
+      // ✅ Добавляем full payload данные
+      if ((log as any).inputData) {
+        existing.inputData = (log as any).inputData;
+      }
+      if ((log as any).outputData) {
+        existing.outputData = (log as any).outputData;
+      }
+      if ((log as any).variablesBefore) {
+        existing.variablesBefore = (log as any).variablesBefore;
+      }
+      if ((log as any).variablesAfter) {
+        existing.variablesAfter = (log as any).variablesAfter;
+      }
+      if ((log as any).httpRequest) {
+        existing.httpRequest = (log as any).httpRequest;
+      }
+      if ((log as any).httpResponse) {
+        existing.httpResponse = (log as any).httpResponse;
+      }
+      if (log.error) {
+        existing.error = log.error;
+      }
+      if (log.durationMs || (log as any).duration) {
+        existing.durationMs = log.durationMs || (log as any).duration;
       }
 
       if (!existing.nodeType && log.nodeType) {
@@ -369,7 +449,10 @@ export class WorkflowExecutionService {
       if (log.level === 'error') {
         existing.status = 'error';
         existing.completedAt = log.timestamp;
-      } else if (log.message?.toLowerCase().includes('completed') || log.level === 'info') {
+      } else if (
+        log.message?.toLowerCase().includes('completed') ||
+        log.level === 'info'
+      ) {
         existing.status = existing.status === 'error' ? 'error' : 'completed';
         existing.completedAt = log.timestamp;
       }
@@ -388,29 +471,37 @@ export class WorkflowExecutionService {
         status: step.status,
         startedAt: step.startedAt.toISOString(),
         completedAt: step.completedAt?.toISOString(),
-        duration: step.completedAt ? step.completedAt.getTime() - step.startedAt.getTime() : undefined,
+        duration:
+          step.durationMs ??
+          (step.completedAt
+            ? step.completedAt.getTime() - step.startedAt.getTime()
+            : undefined),
         message: step.lastMessage,
         data: step.data ?? null,
-        variables: step.variables ?? undefined
+        variables: step.variables ?? undefined,
+        // Full payload
+        inputData: step.inputData ?? null,
+        outputData: step.outputData ?? null,
+        variablesBefore: step.variablesBefore ?? null,
+        variablesAfter: step.variablesAfter ?? null,
+        httpRequest: step.httpRequest ?? null,
+        httpResponse: step.httpResponse ?? null,
+        error: step.error ?? null
       }));
   }
 
-  private static buildWorkflowVersion(versionRecord: PrismaWorkflowVersion & { workflow?: { connections?: any } }): WorkflowVersion {
-    const nodesSourceRaw = versionRecord.nodes as unknown;
-    const nodesSource = typeof nodesSourceRaw === 'string'
-      ? JSON.parse(nodesSourceRaw)
-      : nodesSourceRaw;
-    const nodes: Record<string, WorkflowNode> = Array.isArray(nodesSource)
-      ? nodesSource.reduce((acc: Record<string, WorkflowNode>, node: WorkflowNode) => {
-          acc[node.id] = node;
-          return acc;
-        }, {})
-      : (nodesSource as Record<string, WorkflowNode>);
+  private static buildWorkflowVersion(
+    versionRecord: PrismaWorkflowVersion & { workflow?: { connections?: any } }
+  ): WorkflowVersion {
+    // Используем утилиту normalizeNodes для конвертации nodes в Record<string, WorkflowNode>
+    const nodes = normalizeNodes(versionRecord.nodes);
 
-    const connectionsSourceRaw = versionRecord.workflow?.connections ?? (versionRecord as any).connections;
-    const parsedConnections = typeof connectionsSourceRaw === 'string'
-      ? JSON.parse(connectionsSourceRaw)
-      : connectionsSourceRaw;
+    const connectionsSourceRaw =
+      versionRecord.workflow?.connections ?? (versionRecord as any).connections;
+    const parsedConnections =
+      typeof connectionsSourceRaw === 'string'
+        ? JSON.parse(connectionsSourceRaw)
+        : connectionsSourceRaw;
     const connections: WorkflowConnection[] = Array.isArray(parsedConnections)
       ? parsedConnections
       : [];
@@ -429,5 +520,3 @@ export class WorkflowExecutionService {
     } as WorkflowVersion;
   }
 }
-
-

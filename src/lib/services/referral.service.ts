@@ -917,7 +917,11 @@ export class ReferralService {
       project: program.project
         ? {
             ...program.project,
-            bonusPercentage: Number(program.project.bonusPercentage)
+            bonusPercentage: Number(program.project.bonusPercentage),
+            welcomeBonus: Number(program.project.welcomeBonus),
+            firstPurchaseDiscountPercent: Number(
+              program.project.firstPurchaseDiscountPercent
+            )
           }
         : undefined,
       levels

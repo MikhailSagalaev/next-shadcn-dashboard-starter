@@ -21,6 +21,7 @@ import { TelegramRichEditor } from '@/components/ui/telegram-rich-editor';
 import { KeyboardEditor } from '@/components/ui/keyboard-editor';
 import { DatabaseQueryEditor } from '@/features/bot-constructor/components/editors/database-query-editor';
 import { MessageNodeEditor } from './message-node-editor';
+import { SubWorkflowConfig } from './node-config-panels/sub-workflow-config';
 import type {
   WorkflowNode,
   WorkflowNodeData,
@@ -33,13 +34,17 @@ interface WorkflowPropertiesProps {
   onNodeUpdate: (node: WorkflowNode) => void;
   onClose: () => void;
   allNodes?: WorkflowNode[];
+  projectId?: string;
+  workflowId?: string;
 }
 
 export function WorkflowProperties({
   node,
   onNodeUpdate,
   onClose,
-  allNodes = []
+  allNodes = [],
+  projectId,
+  workflowId
 }: WorkflowPropertiesProps) {
   const [nodeData, setNodeData] = useState<WorkflowNodeData>(node.data);
   const [nodeLabel, setNodeLabel] = useState(node.data.label);
@@ -335,6 +340,24 @@ export function WorkflowProperties({
             />
           </div>
         );
+      case 'flow.sub_workflow':
+        return projectId ? (
+          <SubWorkflowConfig
+            config={nodeConfig['flow.sub_workflow']}
+            onChange={(newConfig) => {
+              setNodeConfig((prevConfig) => ({
+                ...prevConfig,
+                'flow.sub_workflow': newConfig
+              }));
+            }}
+            projectId={projectId}
+            currentWorkflowId={workflowId}
+          />
+        ) : (
+          <p className='text-muted-foreground text-sm'>
+            Для настройки sub-workflow необходим ID проекта.
+          </p>
+        );
       case 'flow.end':
         return (
           <p className='text-muted-foreground text-sm'>
@@ -348,7 +371,7 @@ export function WorkflowProperties({
           </p>
         );
     }
-  }, [node.type, nodeConfig, handleConfigChange]);
+  }, [node.type, nodeConfig, handleConfigChange, projectId, workflowId]);
 
   return (
     <div className='absolute top-4 right-4 z-20'>

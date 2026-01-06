@@ -8,7 +8,10 @@
  */
 
 import { db } from '@/lib/db';
-import type { VariableManager as IVariableManager, VariableScope } from '@/types/workflow';
+import type {
+  VariableManager as IVariableManager,
+  VariableScope
+} from '@/types/workflow';
 
 /**
  * Реализация менеджера переменных
@@ -18,6 +21,12 @@ export class VariableManager implements IVariableManager {
   private workflowId?: string;
   private userId?: string;
   private sessionId?: string;
+
+  /**
+   * In-memory кэш для синхронного доступа к переменным
+   * Ключ формата: `${scope}:${name}`
+   */
+  private cache: Map<string, any> = new Map();
 
   constructor(
     projectId: string,
@@ -32,12 +41,67 @@ export class VariableManager implements IVariableManager {
   }
 
   /**
+   * Предзагружает переменные из БД в in-memory кэш
+   * Должен вызываться при создании ExecutionContext
+   */
+  async preloadCache(): Promise<void> {
+    try {
+      const variables = await db.workflowVariable.findMany({
+        where: {
+          projectId: this.projectId,
+          sessionId: this.sessionId,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+        }
+      });
+
+      // Очищаем кэш перед загрузкой
+      this.cache.clear();
+
+      // Загружаем переменные в кэш
+      for (const variable of variables) {
+        const cacheKey = `${variable.scope}:${variable.key}`;
+        this.cache.set(cacheKey, variable.value);
+      }
+
+      console.log(
+        `[VariableManager] Preloaded ${variables.length} variables into cache for session ${this.sessionId}`
+      );
+    } catch (error) {
+      console.error('[VariableManager] Failed to preload cache:', error);
+      // Не бросаем ошибку, чтобы не блокировать выполнение
+    }
+  }
+
+  /**
    * Получить значение переменной (синхронная версия для выражений)
+   * Возвращает значение из in-memory кэша
    */
   getSync(name: string, scope: VariableScope = 'session'): any {
-    // Для синхронной версии возвращаем кэшированное значение или undefined
-    // В реальной реализации здесь может быть кэш
-    return undefined; // Пока возвращаем undefined для безопасности
+    const cacheKey = `${scope}:${name}`;
+    return this.cache.get(cacheKey);
+  }
+
+  /**
+   * Обновляет значение в кэше без записи в БД
+   * Используется для синхронизации кэша после транзакций
+   */
+  updateCache(
+    name: string,
+    value: any,
+    scope: VariableScope = 'session'
+  ): void {
+    const cacheKey = `${scope}:${name}`;
+    const serializedValue = this.serializeValue(value);
+    this.cache.set(cacheKey, serializedValue);
+  }
+
+  /**
+   * Удаляет значение из кэша без записи в БД
+   * Используется для синхронизации кэша после транзакций
+   */
+  removeFromCache(name: string, scope: VariableScope = 'session'): void {
+    const cacheKey = `${scope}:${name}`;
+    this.cache.delete(cacheKey);
   }
 
   /**
@@ -62,7 +126,6 @@ export class VariableManager implements IVariableManager {
       }
 
       return variable.value;
-
     } catch (error) {
       console.error('Failed to get variable:', { name, scope, error });
       return undefined;
@@ -72,12 +135,21 @@ export class VariableManager implements IVariableManager {
   /**
    * Устанавливает значение переменной
    */
-  async set(name: string, value: any, scope: VariableScope = 'session', ttl?: number): Promise<void> {
+  async set(
+    name: string,
+    value: any,
+    scope: VariableScope = 'session',
+    ttl?: number
+  ): Promise<void> {
     try {
       const expiresAt = ttl ? new Date(Date.now() + ttl * 1000) : null;
-      
+
       // Преобразуем BigInt в строки для сериализации
       const serializedValue = this.serializeValue(value);
+
+      // Синхронно обновляем кэш
+      const cacheKey = `${scope}:${name}`;
+      this.cache.set(cacheKey, serializedValue);
 
       // Используем upsert для создания или обновления
       // Проверяем существует ли переменная
@@ -117,7 +189,6 @@ export class VariableManager implements IVariableManager {
           }
         });
       }
-
     } catch (error) {
       console.error('Failed to set variable:', { name, scope, value, error });
       throw error;
@@ -134,9 +205,12 @@ export class VariableManager implements IVariableManager {
       });
 
       return count > 0;
-
     } catch (error) {
-      console.error('Failed to check variable existence:', { name, scope, error });
+      console.error('Failed to check variable existence:', {
+        name,
+        scope,
+        error
+      });
       return false;
     }
   }
@@ -146,10 +220,13 @@ export class VariableManager implements IVariableManager {
    */
   async delete(name: string, scope: VariableScope = 'session'): Promise<void> {
     try {
+      // Удаляем из кэша
+      const cacheKey = `${scope}:${name}`;
+      this.cache.delete(cacheKey);
+
       await db.workflowVariable.deleteMany({
         where: this.buildWhereClause(name, scope)
       });
-
     } catch (error) {
       console.error('Failed to delete variable:', { name, scope, error });
       // Не бросаем ошибку, так как удаление может быть не критичным
@@ -168,10 +245,7 @@ export class VariableManager implements IVariableManager {
           userId: scope === 'user' ? this.userId : undefined,
           sessionId: scope === 'session' ? this.sessionId : undefined,
           scope,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } }
-          ]
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
         }
       });
 
@@ -182,7 +256,6 @@ export class VariableManager implements IVariableManager {
       }
 
       return result;
-
     } catch (error) {
       console.error('Failed to list variables:', { scope, error });
       return {};
@@ -235,17 +308,27 @@ export class VariableManager implements IVariableManager {
     }
 
     if (Array.isArray(value)) {
-      return value.map(item => this.serializeValue(item)).filter(item => item !== undefined);
+      return value
+        .map((item) => this.serializeValue(item))
+        .filter((item) => item !== undefined);
     }
 
     if (typeof value === 'object') {
       // Проверяем, является ли это Prisma объектом с внутренними полями
-      if (value.constructor && value.constructor.name && value.constructor.name.includes('Prisma')) {
+      if (
+        value.constructor &&
+        value.constructor.name &&
+        value.constructor.name.includes('Prisma')
+      ) {
         // Создаем чистый объект только с данными
         const serialized: any = {};
         for (const [key, val] of Object.entries(value)) {
           // Пропускаем служебные поля Prisma
-          if (key.startsWith('_') || key === 'constructor' || typeof val === 'function') {
+          if (
+            key.startsWith('_') ||
+            key === 'constructor' ||
+            typeof val === 'function'
+          ) {
             continue;
           }
           const serializedVal = this.serializeValue(val);
@@ -285,10 +368,7 @@ export class VariableManager implements IVariableManager {
       sessionId: scope === 'session' ? this.sessionId : undefined,
       scope,
       key: name,
-      OR: [
-        { expiresAt: null },
-        { expiresAt: { gt: new Date() } }
-      ]
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
     };
   }
 }

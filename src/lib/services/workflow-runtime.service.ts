@@ -14,6 +14,7 @@ import { initializeNodeHandlers } from './workflow/handlers';
 import { MenuCommandHandler } from './workflow/handlers/action-handlers';
 import { nodeHandlersRegistry } from './workflow/node-handlers-registry';
 import { ExecutionContextManager } from './workflow/execution-context-manager';
+import { normalizeNodes } from './workflow/utils/node-utils';
 import { CacheService } from '@/lib/redis';
 import { validateEmail, looksLikeEmail } from '@/lib/utils/email-validator';
 import { parseBirthday } from '@/lib/services/date-parser';
@@ -337,13 +338,8 @@ export class WorkflowRuntimeService {
         return null;
       }
 
-      // Преобразуем ноды из массива в объект для совместимости с типами
-      const nodesArray = (activeVersion.nodes as any) || [];
-      const nodesObject: Record<string, any> = {};
-
-      nodesArray.forEach((node: any) => {
-        nodesObject[node.id] = node;
-      });
+      // Используем утилиту normalizeNodes для конвертации nodes в Record<string, WorkflowNode>
+      const nodesObject = normalizeNodes(activeVersion.nodes);
 
       // Преобразуем в WorkflowVersion
       const workflowVersion: WorkflowVersion = {
@@ -751,24 +747,12 @@ export class WorkflowRuntimeService {
                 : Object.keys(versionRecord.nodes || {}).length
             );
 
-            // Convert nodes array to object if needed
-            let nodesObject: Record<string, any>;
-            if (Array.isArray(versionRecord.nodes)) {
-              nodesObject = {};
-              (versionRecord.nodes as any[]).forEach((node: any) => {
-                nodesObject[node.id] = node;
-              });
-              console.log(
-                '🔧 Converted array to object, node count:',
-                Object.keys(nodesObject).length
-              );
-            } else {
-              nodesObject = (versionRecord.nodes as Record<string, any>) || {};
-              console.log(
-                '🔧 Nodes already object, node count:',
-                Object.keys(nodesObject).length
-              );
-            }
+            // Используем утилиту normalizeNodes для конвертации nodes
+            const nodesObject = normalizeNodes(versionRecord.nodes);
+            console.log(
+              '🔧 Normalized nodes, node count:',
+              Object.keys(nodesObject).length
+            );
 
             const connections = ((versionRecord.workflow as any)?.connections ||
               []) as WorkflowConnection[];
@@ -794,7 +778,7 @@ export class WorkflowRuntimeService {
               id: versionRecord.id,
               workflowId: versionRecord.workflowId,
               version: versionRecord.version,
-              nodes: nodesObject as unknown as Record<string, WorkflowNode>,
+              nodes: nodesObject,
               entryNodeId: versionRecord.entryNodeId,
               variables: versionRecord.variables as any,
               settings: versionRecord.settings as any,
@@ -1707,22 +1691,14 @@ export class WorkflowRuntimeService {
         );
       }
 
-      // Преобразуем nodes в нужный формат
-      let nodesObject: Record<string, WorkflowNode>;
-      if (Array.isArray(versionRecord.nodes)) {
-        nodesObject = {};
-        (versionRecord.nodes as any[]).forEach((node: any) => {
-          nodesObject[node.id] = node;
-        });
-      } else {
-        nodesObject = (versionRecord.nodes as Record<string, any>) || {};
-      }
+      // Используем утилиту normalizeNodes для конвертации nodes
+      const nodesObject = normalizeNodes(versionRecord.nodes);
 
       const workflowVersion: WorkflowVersion = {
         id: versionRecord.id,
         workflowId: versionRecord.workflowId,
         version: versionRecord.version,
-        nodes: nodesObject as Record<string, WorkflowNode>,
+        nodes: nodesObject,
         entryNodeId: versionRecord.entryNodeId,
         variables:
           (versionRecord.variables as unknown as WorkflowVersion['variables']) ||

@@ -117,7 +117,11 @@ export class BonusLevelService {
         project: level.project
           ? {
               ...level.project,
-              bonusPercentage: Number(level.project.bonusPercentage)
+              bonusPercentage: Number(level.project.bonusPercentage),
+              welcomeBonus: Number(level.project.welcomeBonus),
+              firstPurchaseDiscountPercent: Number(
+                level.project.firstPurchaseDiscountPercent
+              )
             }
           : undefined
       };
@@ -170,7 +174,11 @@ export class BonusLevelService {
         project: level.project
           ? {
               ...level.project,
-              bonusPercentage: Number(level.project.bonusPercentage)
+              bonusPercentage: Number(level.project.bonusPercentage),
+              welcomeBonus: Number(level.project.welcomeBonus),
+              firstPurchaseDiscountPercent: Number(
+                level.project.firstPurchaseDiscountPercent
+              )
             }
           : undefined
       };

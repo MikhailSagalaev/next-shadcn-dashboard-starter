@@ -2,9 +2,13 @@
  * @file: src/lib/services/workflow/handlers/message-handler.ts
  * @description: Обработчик для message нод
  * @project: SaaS Bonus System
- * @dependencies: BaseNodeHandler, ExecutionContext
+ * @dependencies: BaseNodeHandler, ExecutionContext, WaitForInputHandler, KeyboardBuilder
  * @created: 2025-01-13
+ * @updated: 2026-01-06
  * @author: AI Assistant + User
+ *
+ * ВАЖНО: Логика построения клавиатур делегируется KeyboardBuilder из keyboard-handler.ts
+ * для избежания дублирования кода.
  */
 
 import { BaseNodeHandler } from './base-handler';
@@ -12,6 +16,11 @@ import { ProjectVariablesService } from '@/lib/services/project-variables.servic
 import { UserVariablesService } from '../user-variables.service';
 import { QueryExecutor } from '../query-executor';
 import { logger } from '@/lib/logger';
+import {
+  WaitForInputHandler,
+  WAITING_FOR_USER_INPUT
+} from './wait-for-input-handler';
+import { KeyboardBuilder } from './keyboard-handler';
 import type {
   WorkflowNode,
   WorkflowNodeType,
@@ -19,7 +28,6 @@ import type {
   ValidationResult,
   MessageConfig
 } from '@/types/workflow';
-import type { InlineButton, ReplyButton } from './keyboard-handler';
 
 /**
  * Обработчик для message нод
@@ -283,13 +291,13 @@ export class MessageHandler extends BaseNodeHandler {
         parse_mode: messageConfig?.parseMode || 'HTML'
       };
 
-      // ✨ НОВОЕ: Добавляем клавиатуру если она настроена
+      // ✨ Добавляем клавиатуру если она настроена (делегируем KeyboardBuilder)
       const keyboardConfig =
         messageConfig?.keyboard || (node.data?.config as any)?.keyboard;
       if (keyboardConfig) {
-        const keyboard = await this.buildKeyboard(
+        const keyboard = await KeyboardBuilder.buildKeyboard(
           keyboardConfig,
-          context,
+          context.projectId,
           additionalVariables
         );
         if (keyboard) {
@@ -306,80 +314,36 @@ export class MessageHandler extends BaseNodeHandler {
       });
 
       // ✨ НОВОЕ: Проверяем, нужно ли ждать ответа пользователя
-      // 1. Проверяем явный флаг waitForInput в конфигурации сообщения
-      const waitForInput = messageConfig?.waitForInput === true;
-
-      // 2. Проверяем клавиатуру на необходимость ожидания
-      const needsWaiting = keyboardConfig
-        ? this.checkIfNeedsWaiting(keyboardConfig)
-        : { shouldWait: false, waitType: null };
+      // Используем унифицированный WaitForInputHandler
 
       // 🔍 DEBUG: Логируем проверку waitForInput
-      console.log('🔍 MESSAGE HANDLER: Checking wait conditions', {
-        nodeId: node.id,
-        nodeLabel: node.data?.label,
-        waitForInput,
-        messageConfigWaitForInput: messageConfig?.waitForInput,
-        keyboardType: keyboardConfig?.type,
-        needsWaitingShouldWait: needsWaiting.shouldWait,
-        needsWaitingType: needsWaiting.waitType
-      });
+      console.log(
+        '🔍 MESSAGE HANDLER: Checking wait conditions via WaitForInputHandler',
+        {
+          nodeId: node.id,
+          nodeLabel: node.data?.label,
+          hasKeyboard: !!keyboardConfig
+        }
+      );
 
-      // ✅ КРИТИЧНО: Если waitForInput=true, всегда ждём ввода пользователя
-      // ✅ ИСПРАВЛЕНО: Если клавиатура содержит request_contact, используем 'contact' как waitType
-      if (waitForInput || needsWaiting.shouldWait) {
-        // Приоритет: contact > callback > input
-        const waitType =
-          needsWaiting.waitType === 'contact'
-            ? 'contact'
-            : waitForInput
-              ? 'input'
-              : needsWaiting.waitType;
+      // Используем унифицированный обработчик для проверки и установки состояния ожидания
+      const waitResult = await WaitForInputHandler.handleWaitForInput(
+        node,
+        context,
+        keyboardConfig
+      );
 
+      if (waitResult === WAITING_FOR_USER_INPUT) {
         this.logStep(
           context,
           node,
-          `Setting waiting state: ${waitType}`,
+          `Waiting for user input via WaitForInputHandler`,
           'info',
           {
-            waitForInput,
-            keyboardWaiting: needsWaiting.shouldWait,
             nodeId: node.id
           }
         );
-
-        // Импортируем здесь чтобы избежать circular dependencies
-        const { db } = await import('@/lib/db');
-
-        // Устанавливаем состояние ожидания
-        await db.workflowExecution.update({
-          where: { id: context.executionId },
-          data: {
-            status: 'waiting',
-            waitType: waitType,
-            currentNodeId: node.id,
-            waitPayload: {
-              nodeId: node.id,
-              keyboard: keyboardConfig,
-              waitForInput: waitForInput,
-              requestedAt: new Date()
-            }
-          }
-        });
-
-        // ✅ КЕШИРУЕМ WAITING EXECUTION В REDIS
-        const { WorkflowRuntimeService } = await import(
-          '../../workflow-runtime.service'
-        );
-        await WorkflowRuntimeService.cacheWaitingExecution(
-          context.executionId,
-          context.projectId,
-          context.telegram.chatId || '',
-          waitType as 'contact' | 'callback' | 'input'
-        );
-
-        // Возвращаем специальный результат, который означает "остановиться и ждать"
-        return '__WAITING_FOR_USER_INPUT__';
+        return WAITING_FOR_USER_INPUT;
       }
 
       return null;
@@ -390,185 +354,34 @@ export class MessageHandler extends BaseNodeHandler {
   }
 
   /**
-   * Проверяет, нужно ли ждать ответа пользователя после отправки сообщения
+   * @deprecated Use WaitForInputHandler.checkKeyboardForWaiting instead
+   * Kept for backward compatibility
    */
   private checkIfNeedsWaiting(keyboardConfig: any): {
     shouldWait: boolean;
     waitType: 'contact' | 'callback' | 'input' | null;
   } {
-    if (!keyboardConfig || !keyboardConfig.buttons) {
-      return { shouldWait: false, waitType: null };
-    }
-
-    const buttons = keyboardConfig.buttons;
-
-    // Проверяем все кнопки на наличие request_contact
-    for (const row of buttons) {
-      for (const button of row) {
-        if (button.request_contact) {
-          return { shouldWait: true, waitType: 'contact' };
-        }
-        // Для inline кнопок с callback_data тоже ждём
-        if (button.callback_data && keyboardConfig.type === 'inline') {
-          return { shouldWait: true, waitType: 'callback' };
-        }
-      }
-    }
-
-    // Для reply клавиатур без специальных кнопок - ждём обычный ввод
-    if (keyboardConfig.type === 'reply') {
-      return { shouldWait: true, waitType: 'input' };
-    }
-
-    return { shouldWait: false, waitType: null };
+    const result = WaitForInputHandler.checkKeyboardForWaiting(keyboardConfig);
+    return {
+      shouldWait: result.shouldWait,
+      waitType: result.waitType as 'contact' | 'callback' | 'input' | null
+    };
   }
 
   /**
-   * ✨ НОВОЕ: Построение клавиатуры из конфигурации
+   * @deprecated Use KeyboardBuilder.buildKeyboard instead
+   * Kept for backward compatibility - delegates to KeyboardBuilder
    */
   private async buildKeyboard(
     config: any,
     context: ExecutionContext,
     additionalVariables: Record<string, string>
   ): Promise<any> {
-    if (!config || !config.buttons || !Array.isArray(config.buttons)) {
-      return null;
-    }
-
-    const keyboardType = config.type || 'inline';
-
-    if (keyboardType === 'inline') {
-      return await this.buildInlineKeyboard(
-        config.buttons,
-        context,
-        additionalVariables
-      );
-    } else if (keyboardType === 'reply') {
-      return await this.buildReplyKeyboard(
-        config.buttons,
-        config,
-        context,
-        additionalVariables
-      );
-    }
-
-    return null;
-  }
-
-  /**
-   * ✨ НОВОЕ: Построение inline клавиатуры с резолвом переменных
-   */
-  private async buildInlineKeyboard(
-    buttons: InlineButton[][],
-    context: ExecutionContext,
-    additionalVariables: Record<string, string>
-  ): Promise<any> {
-    const keyboard = await Promise.all(
-      buttons.map(
-        async (row) =>
-          await Promise.all(
-            row.map(async (button) => {
-              const btn: any = {
-                text: await ProjectVariablesService.replaceVariablesInText(
-                  context.projectId,
-                  button.text,
-                  additionalVariables
-                )
-              };
-
-              if (button.callback_data) {
-                btn.callback_data =
-                  await ProjectVariablesService.replaceVariablesInText(
-                    context.projectId,
-                    button.callback_data,
-                    additionalVariables
-                  );
-              } else if (button.url) {
-                btn.url = await ProjectVariablesService.replaceVariablesInText(
-                  context.projectId,
-                  button.url,
-                  additionalVariables
-                );
-              } else if (button.web_app) {
-                btn.web_app = {
-                  url: await ProjectVariablesService.replaceVariablesInText(
-                    context.projectId,
-                    button.web_app.url,
-                    additionalVariables
-                  )
-                };
-              } else if (button.login_url) {
-                btn.login_url = {
-                  url: await ProjectVariablesService.replaceVariablesInText(
-                    context.projectId,
-                    button.login_url.url,
-                    additionalVariables
-                  )
-                };
-              } else if (button.goto_node) {
-                // Для goto_node используем callback_data с префиксом
-                btn.callback_data = `goto:${button.goto_node}`;
-              }
-
-              return btn;
-            })
-          )
-      )
+    return KeyboardBuilder.buildKeyboard(
+      config,
+      context.projectId,
+      additionalVariables
     );
-
-    return { inline_keyboard: keyboard };
-  }
-
-  /**
-   * ✨ НОВОЕ: Построение reply клавиатуры с резолвом переменных
-   */
-  private async buildReplyKeyboard(
-    buttons: ReplyButton[][],
-    config: any,
-    context: ExecutionContext,
-    additionalVariables: Record<string, string>
-  ): Promise<any> {
-    const keyboard = await Promise.all(
-      buttons.map(
-        async (row) =>
-          await Promise.all(
-            row.map(async (button) => {
-              const btn: any = {
-                text: await ProjectVariablesService.replaceVariablesInText(
-                  context.projectId,
-                  button.text,
-                  additionalVariables
-                )
-              };
-
-              if (button.request_contact) {
-                btn.request_contact = true;
-              } else if (button.request_location) {
-                btn.request_location = true;
-              } else if (button.request_poll) {
-                btn.request_poll = button.request_poll;
-              } else if (button.web_app) {
-                btn.web_app = {
-                  url: await ProjectVariablesService.replaceVariablesInText(
-                    context.projectId,
-                    button.web_app.url,
-                    additionalVariables
-                  )
-                };
-              }
-
-              return btn;
-            })
-          )
-      )
-    );
-
-    return {
-      keyboard,
-      resize_keyboard: config.resize_keyboard !== false,
-      one_time_keyboard: config.one_time_keyboard === true,
-      selective: config.selective === true
-    };
   }
 
   async validate(config: any): Promise<ValidationResult> {

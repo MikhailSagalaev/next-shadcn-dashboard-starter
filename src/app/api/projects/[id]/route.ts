@@ -206,7 +206,16 @@ export async function PUT(
             ? body.welcomeBonusAmount
             : undefined,
         welcomeRewardType: body.welcomeRewardType,
-        firstPurchaseDiscountPercent: body.firstPurchaseDiscountPercent
+        firstPurchaseDiscountPercent: body.firstPurchaseDiscountPercent,
+        // ✨ НОВОЕ: Workflow лимиты
+        workflowMaxSteps:
+          body.workflowMaxSteps !== undefined
+            ? body.workflowMaxSteps
+            : undefined,
+        workflowTimeoutMs:
+          body.workflowTimeoutMs !== undefined
+            ? body.workflowTimeoutMs
+            : undefined
       }
     });
 

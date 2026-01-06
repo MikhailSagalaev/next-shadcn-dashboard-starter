@@ -1,10 +1,15 @@
 /**
  * @file: src/lib/services/workflow/handlers/keyboard-handler.ts
- * @description: Обработчики для клавиатур (inline и reply)
+ * @description: Централизованные обработчики для клавиатур (inline и reply)
  * @project: SaaS Bonus System
- * @dependencies: BaseNodeHandler, ExecutionContext
+ * @dependencies: BaseNodeHandler, ExecutionContext, WaitForInputHandler, ProjectVariablesService
  * @created: 2025-10-14
+ * @updated: 2026-01-06
  * @author: AI Assistant + User
+ *
+ * ВАЖНО: Вся логика построения клавиатур централизована в этом файле.
+ * MessageHandler и другие обработчики должны делегировать построение клавиатур
+ * статическим методам KeyboardBuilder.
  */
 
 import { BaseNodeHandler } from './base-handler';
@@ -14,6 +19,10 @@ import {
   type ButtonAction
 } from '../button-actions-executor';
 import { ButtonActionsRegistry } from '../button-actions-registry';
+import {
+  WaitForInputHandler,
+  WAITING_FOR_USER_INPUT
+} from './wait-for-input-handler';
 import type {
   WorkflowNode,
   WorkflowNodeType,
@@ -47,6 +56,313 @@ export interface InlineKeyboardConfig {
 }
 
 /**
+ * Дополнительные переменные для резолва в клавиатурах
+ */
+export interface KeyboardVariables {
+  username?: string;
+  first_name?: string;
+  user_id?: string;
+  chat_id?: string;
+  workflow_id?: string;
+  execution_id?: string;
+  session_id?: string;
+  [key: string]: string | undefined;
+}
+
+/**
+ * ✨ ЦЕНТРАЛИЗОВАННЫЙ BUILDER ДЛЯ КЛАВИАТУР
+ * Все обработчики должны использовать эти статические методы
+ * для построения клавиатур вместо дублирования логики.
+ */
+export class KeyboardBuilder {
+  /**
+   * Построение inline клавиатуры с резолвом переменных
+   * @param buttons - Массив рядов кнопок
+   * @param projectId - ID проекта для резолва переменных
+   * @param additionalVariables - Дополнительные переменные для подстановки
+   * @returns Объект inline_keyboard для Telegram API
+   */
+  static async buildInlineKeyboard(
+    buttons: InlineButton[][],
+    projectId: string,
+    additionalVariables: KeyboardVariables = {}
+  ): Promise<{ inline_keyboard: InlineButton[][] }> {
+    const processedRows: InlineButton[][] = [];
+
+    for (const row of buttons) {
+      const processedRow: InlineButton[] = [];
+
+      for (const button of row) {
+        const processedButton = await KeyboardBuilder.processInlineButton(
+          button,
+          projectId,
+          additionalVariables
+        );
+        processedRow.push(processedButton);
+      }
+
+      processedRows.push(processedRow);
+    }
+
+    return { inline_keyboard: processedRows };
+  }
+
+  /**
+   * Обработка одной inline кнопки с резолвом переменных
+   */
+  private static async processInlineButton(
+    button: InlineButton,
+    projectId: string,
+    additionalVariables: KeyboardVariables
+  ): Promise<InlineButton> {
+    // Резолвим текст кнопки
+    const resolvedText = await ProjectVariablesService.replaceVariablesInText(
+      projectId,
+      button.text,
+      additionalVariables as Record<string, string>
+    );
+
+    const processedButton: InlineButton = {
+      text: resolvedText
+    };
+
+    // Обрабатываем различные типы кнопок
+    if (button.callback_data) {
+      processedButton.callback_data =
+        await ProjectVariablesService.replaceVariablesInText(
+          projectId,
+          button.callback_data,
+          additionalVariables as Record<string, string>
+        );
+    }
+
+    if (button.url) {
+      processedButton.url =
+        await ProjectVariablesService.replaceVariablesInText(
+          projectId,
+          button.url,
+          additionalVariables as Record<string, string>
+        );
+    }
+
+    if (button.web_app) {
+      processedButton.web_app = {
+        url: await ProjectVariablesService.replaceVariablesInText(
+          projectId,
+          button.web_app.url,
+          additionalVariables as Record<string, string>
+        )
+      };
+    }
+
+    if (button.login_url) {
+      processedButton.login_url = {
+        url: await ProjectVariablesService.replaceVariablesInText(
+          projectId,
+          button.login_url.url,
+          additionalVariables as Record<string, string>
+        )
+      };
+    }
+
+    if (button.switch_inline_query !== undefined) {
+      processedButton.switch_inline_query =
+        await ProjectVariablesService.replaceVariablesInText(
+          projectId,
+          button.switch_inline_query,
+          additionalVariables as Record<string, string>
+        );
+    }
+
+    if (button.switch_inline_query_current_chat !== undefined) {
+      processedButton.switch_inline_query_current_chat =
+        await ProjectVariablesService.replaceVariablesInText(
+          projectId,
+          button.switch_inline_query_current_chat,
+          additionalVariables as Record<string, string>
+        );
+    }
+
+    if (button.pay) {
+      processedButton.pay = true;
+    }
+
+    // Для goto_node используем callback_data с префиксом
+    if (button.goto_node) {
+      processedButton.callback_data = `goto:${button.goto_node}`;
+    }
+
+    return processedButton;
+  }
+
+  /**
+   * Построение reply клавиатуры с резолвом переменных
+   * @param buttons - Массив рядов кнопок
+   * @param config - Дополнительные настройки клавиатуры
+   * @param projectId - ID проекта для резолва переменных
+   * @param additionalVariables - Дополнительные переменные для подстановки
+   * @returns Объект reply_markup для Telegram API
+   */
+  static async buildReplyKeyboard(
+    buttons: ReplyButton[][],
+    config: {
+      resize_keyboard?: boolean;
+      one_time_keyboard?: boolean;
+      input_field_placeholder?: string;
+      selective?: boolean;
+    },
+    projectId: string,
+    additionalVariables: KeyboardVariables = {}
+  ): Promise<{
+    keyboard: ReplyButton[][];
+    resize_keyboard: boolean;
+    one_time_keyboard: boolean;
+    input_field_placeholder?: string;
+    selective: boolean;
+  }> {
+    const processedRows: ReplyButton[][] = [];
+
+    for (const row of buttons) {
+      const processedRow: ReplyButton[] = [];
+
+      for (const button of row) {
+        const processedButton = await KeyboardBuilder.processReplyButton(
+          button,
+          projectId,
+          additionalVariables
+        );
+        processedRow.push(processedButton);
+      }
+
+      processedRows.push(processedRow);
+    }
+
+    return {
+      keyboard: processedRows,
+      resize_keyboard: config.resize_keyboard !== false, // По умолчанию true
+      one_time_keyboard: config.one_time_keyboard || false,
+      input_field_placeholder: config.input_field_placeholder,
+      selective: config.selective || false
+    };
+  }
+
+  /**
+   * Обработка одной reply кнопки с резолвом переменных
+   */
+  private static async processReplyButton(
+    button: ReplyButton,
+    projectId: string,
+    additionalVariables: KeyboardVariables
+  ): Promise<ReplyButton> {
+    // Резолвим текст кнопки
+    const resolvedText = await ProjectVariablesService.replaceVariablesInText(
+      projectId,
+      button.text,
+      additionalVariables as Record<string, string>
+    );
+
+    const processedButton: ReplyButton = {
+      text: resolvedText
+    };
+
+    if (button.request_contact) {
+      processedButton.request_contact = true;
+    }
+
+    if (button.request_location) {
+      processedButton.request_location = true;
+    }
+
+    if (button.request_poll) {
+      processedButton.request_poll = button.request_poll;
+    }
+
+    if (button.web_app) {
+      processedButton.web_app = {
+        url: await ProjectVariablesService.replaceVariablesInText(
+          projectId,
+          button.web_app.url,
+          additionalVariables as Record<string, string>
+        )
+      };
+    }
+
+    // Сохраняем actions для регистрации
+    if (button.actions) {
+      processedButton.actions = button.actions;
+    }
+
+    return processedButton;
+  }
+
+  /**
+   * Универсальный метод для построения клавиатуры любого типа
+   * @param config - Конфигурация клавиатуры с типом и кнопками
+   * @param projectId - ID проекта
+   * @param additionalVariables - Дополнительные переменные
+   * @returns Объект reply_markup для Telegram API или null
+   */
+  static async buildKeyboard(
+    config:
+      | {
+          type?: 'inline' | 'reply';
+          buttons?: InlineButton[][] | ReplyButton[][];
+          resize_keyboard?: boolean;
+          one_time_keyboard?: boolean;
+          input_field_placeholder?: string;
+          selective?: boolean;
+        }
+      | null
+      | undefined,
+    projectId: string,
+    additionalVariables: KeyboardVariables = {}
+  ): Promise<any | null> {
+    if (!config || !config.buttons || !Array.isArray(config.buttons)) {
+      return null;
+    }
+
+    const keyboardType = config.type || 'inline';
+
+    if (keyboardType === 'inline') {
+      return await KeyboardBuilder.buildInlineKeyboard(
+        config.buttons as InlineButton[][],
+        projectId,
+        additionalVariables
+      );
+    } else if (keyboardType === 'reply') {
+      return await KeyboardBuilder.buildReplyKeyboard(
+        config.buttons as ReplyButton[][],
+        {
+          resize_keyboard: config.resize_keyboard,
+          one_time_keyboard: config.one_time_keyboard,
+          input_field_placeholder: config.input_field_placeholder,
+          selective: config.selective
+        },
+        projectId,
+        additionalVariables
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * Создание стандартных переменных из ExecutionContext
+   */
+  static getContextVariables(context: ExecutionContext): KeyboardVariables {
+    return {
+      username: context.telegram.username || '',
+      first_name: context.telegram.firstName || '',
+      user_id: context.telegram.userId || '',
+      chat_id: context.telegram.chatId || '',
+      workflow_id: context.workflowId,
+      execution_id: context.executionId,
+      session_id: context.sessionId
+    };
+  }
+}
+
+/**
  * Обработчик для message.keyboard.inline
  */
 export class InlineKeyboardHandler extends BaseNodeHandler {
@@ -67,27 +383,21 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
         throw new Error('Inline keyboard configuration is missing');
       }
 
-      // Разрешаем переменные в тексте сообщения
-      const additionalVariables: Record<string, string> = {
-        username: context.telegram.username || '',
-        first_name: context.telegram.firstName || '',
-        user_id: context.telegram.userId || '',
-        chat_id: context.telegram.chatId || '',
-        workflow_id: context.workflowId,
-        execution_id: context.executionId,
-        session_id: context.sessionId
-      };
+      // Получаем стандартные переменные из контекста
+      const additionalVariables = KeyboardBuilder.getContextVariables(context);
 
+      // Разрешаем переменные в тексте сообщения
       let messageText = await ProjectVariablesService.replaceVariablesInText(
         context.projectId,
         config.text,
-        additionalVariables
+        additionalVariables as Record<string, string>
       );
 
-      // Обрабатываем кнопки - разрешаем переменные
-      const processedButtons = await this.processButtons(
+      // ✨ ИСПОЛЬЗУЕМ ЦЕНТРАЛИЗОВАННЫЙ KeyboardBuilder
+      const inlineKeyboard = await KeyboardBuilder.buildInlineKeyboard(
         config.buttons,
-        context
+        context.projectId,
+        additionalVariables
       );
 
       this.logStep(
@@ -97,18 +407,10 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
         'info',
         {
           text: messageText.substring(0, 50),
-          buttonRows: processedButtons.length,
-          totalButtons: processedButtons.reduce(
-            (sum, row) => sum + row.length,
-            0
-          )
+          buttonRows: config.buttons.length,
+          totalButtons: config.buttons.reduce((sum, row) => sum + row.length, 0)
         }
       );
-
-      // Формируем inline клавиатуру
-      const inlineKeyboard = {
-        inline_keyboard: processedButtons
-      };
 
       // Отправляем сообщение с клавиатурой через Telegram API
       const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
@@ -131,6 +433,29 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
         messageId: response.data.result?.message_id
       });
 
+      // ✨ Используем унифицированный WaitForInputHandler для установки состояния ожидания
+      const keyboardConfig = {
+        type: 'inline',
+        buttons: config.buttons
+      };
+
+      const waitResult = await WaitForInputHandler.handleWaitForInput(
+        node,
+        context,
+        keyboardConfig
+      );
+
+      if (waitResult === WAITING_FOR_USER_INPUT) {
+        this.logStep(
+          context,
+          node,
+          'Waiting for callback via WaitForInputHandler',
+          'info',
+          { nodeId: node.id }
+        );
+        return WAITING_FOR_USER_INPUT;
+      }
+
       // Следующий нод определяется по connections
       return null;
     } catch (error) {
@@ -142,108 +467,20 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
   }
 
   /**
-   * Обрабатывает кнопки - разрешает переменные в тексте и callback_data
-   * Использует ProjectVariablesService для резолва project.* переменных
+   * @deprecated Use KeyboardBuilder.buildInlineKeyboard instead
+   * Kept for backward compatibility
    */
   private async processButtons(
     buttons: InlineButton[][],
     context: ExecutionContext
   ): Promise<InlineButton[][]> {
-    const processedRows: InlineButton[][] = [];
-
-    // Дополнительные переменные из telegram контекста
-    const additionalVariables: Record<string, string> = {
-      username: context.telegram.username || '',
-      first_name: context.telegram.firstName || '',
-      user_id: context.telegram.userId || '',
-      chat_id: context.telegram.chatId || ''
-    };
-
-    for (const row of buttons) {
-      const processedRow: InlineButton[] = [];
-
-      for (const button of row) {
-        // Резолвим текст кнопки через ProjectVariablesService
-        const resolvedText =
-          await ProjectVariablesService.replaceVariablesInText(
-            context.projectId,
-            button.text,
-            additionalVariables
-          );
-
-        const processedButton: InlineButton = {
-          text: resolvedText
-        };
-
-        // Обрабатываем различные типы кнопок
-        if (button.callback_data) {
-          processedButton.callback_data =
-            await ProjectVariablesService.replaceVariablesInText(
-              context.projectId,
-              button.callback_data,
-              additionalVariables
-            );
-        }
-
-        if (button.url) {
-          // URL кнопки - резолвим через ProjectVariablesService
-          processedButton.url =
-            await ProjectVariablesService.replaceVariablesInText(
-              context.projectId,
-              button.url,
-              additionalVariables
-            );
-        }
-
-        if (button.web_app) {
-          processedButton.web_app = {
-            url: await ProjectVariablesService.replaceVariablesInText(
-              context.projectId,
-              button.web_app.url,
-              additionalVariables
-            )
-          };
-        }
-
-        if (button.login_url) {
-          processedButton.login_url = {
-            url: await ProjectVariablesService.replaceVariablesInText(
-              context.projectId,
-              button.login_url.url,
-              additionalVariables
-            )
-          };
-        }
-
-        if (button.switch_inline_query !== undefined) {
-          processedButton.switch_inline_query =
-            await ProjectVariablesService.replaceVariablesInText(
-              context.projectId,
-              button.switch_inline_query,
-              additionalVariables
-            );
-        }
-
-        if (button.switch_inline_query_current_chat !== undefined) {
-          processedButton.switch_inline_query_current_chat =
-            await ProjectVariablesService.replaceVariablesInText(
-              context.projectId,
-              button.switch_inline_query_current_chat,
-              additionalVariables
-            );
-        }
-
-        if (button.pay) {
-          processedButton.pay = true;
-        }
-
-        processedRow.push(processedButton);
-      }
-
-      processedRows.push(processedRow);
-    }
-
-    return processedRows;
+    const additionalVariables = KeyboardBuilder.getContextVariables(context);
+    const result = await KeyboardBuilder.buildInlineKeyboard(
+      buttons,
+      context.projectId,
+      additionalVariables
+    );
+    return result.inline_keyboard;
   }
 
   async validate(config: any): Promise<ValidationResult> {
@@ -366,18 +603,14 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
         throw new Error('Reply keyboard configuration is missing');
       }
 
-      // Разрешаем переменные в тексте
-      const additionalVariables: Record<string, string> = {
-        username: context.telegram.username || '',
-        first_name: context.telegram.firstName || '',
-        user_id: context.telegram.userId || '',
-        chat_id: context.telegram.chatId || ''
-      };
+      // Получаем стандартные переменные из контекста
+      const additionalVariables = KeyboardBuilder.getContextVariables(context);
 
+      // Разрешаем переменные в тексте
       let messageText = await ProjectVariablesService.replaceVariablesInText(
         context.projectId,
         config.text,
-        additionalVariables
+        additionalVariables as Record<string, string>
       );
 
       // Обрабатываем кнопки (поддерживаем оба варианта: buttons и keyboard)
@@ -385,9 +618,21 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
       if (!buttons) {
         throw new Error('Keyboard buttons are required');
       }
-      const processedButtons = this.processReplyButtons(buttons, context);
 
-      // ✨ НОВОЕ: Регистрируем actions для кнопок
+      // ✨ ИСПОЛЬЗУЕМ ЦЕНТРАЛИЗОВАННЫЙ KeyboardBuilder
+      const replyKeyboard = await KeyboardBuilder.buildReplyKeyboard(
+        buttons,
+        {
+          resize_keyboard: config.resize_keyboard,
+          one_time_keyboard: config.one_time_keyboard,
+          input_field_placeholder: config.input_field_placeholder,
+          selective: config.selective
+        },
+        context.projectId,
+        additionalVariables
+      );
+
+      // ✨ Регистрируем actions для кнопок
       this.registerButtonActions(buttons, context);
 
       this.logStep(
@@ -397,18 +642,9 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
         'info',
         {
           text: messageText.substring(0, 50),
-          buttonRows: processedButtons.length
+          buttonRows: buttons.length
         }
       );
-
-      // Формируем reply клавиатуру
-      const replyKeyboard = {
-        keyboard: processedButtons,
-        resize_keyboard: config.resize_keyboard !== false, // По умолчанию true
-        one_time_keyboard: config.one_time_keyboard || false,
-        input_field_placeholder: config.input_field_placeholder,
-        selective: config.selective || false
-      };
 
       // Отправляем сообщение
       const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
@@ -430,6 +666,29 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
         messageId: response.data.result?.message_id
       });
 
+      // ✨ Используем унифицированный WaitForInputHandler для установки состояния ожидания
+      const keyboardConfig = {
+        type: 'reply',
+        buttons: buttons
+      };
+
+      const waitResult = await WaitForInputHandler.handleWaitForInput(
+        node,
+        context,
+        keyboardConfig
+      );
+
+      if (waitResult === WAITING_FOR_USER_INPUT) {
+        this.logStep(
+          context,
+          node,
+          'Waiting for user input via WaitForInputHandler',
+          'info',
+          { nodeId: node.id }
+        );
+        return WAITING_FOR_USER_INPUT;
+      }
+
       return null;
     } catch (error) {
       this.logStep(context, node, 'Failed to send reply keyboard', 'error', {
@@ -439,10 +698,15 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
     }
   }
 
+  /**
+   * @deprecated Use KeyboardBuilder.buildReplyKeyboard instead
+   * Kept for backward compatibility
+   */
   private processReplyButtons(
     buttons: ReplyButton[][],
     context: ExecutionContext
   ): ReplyButton[][] {
+    // Синхронная версия для обратной совместимости
     const processedRows: ReplyButton[][] = [];
 
     for (const row of buttons) {

@@ -209,7 +209,8 @@ export const BotAnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       );
 
       // Создаем и скачиваем файл
-      const blob = new Blob([data], {
+      const blobData = typeof data === 'string' ? data : new Uint8Array(data);
+      const blob = new Blob([blobData], {
         type:
           format === 'json'
             ? 'application/json'

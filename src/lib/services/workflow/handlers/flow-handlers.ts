@@ -25,7 +25,10 @@ export class DelayFlowHandler extends BaseNodeHandler {
     return nodeType === 'flow.delay';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data.config?.['flow.delay'];
 
@@ -37,7 +40,11 @@ export class DelayFlowHandler extends BaseNodeHandler {
       let delayMs = config.delayMs;
 
       if (config.variableDelay) {
-        const variableValue = await this.getVariable(config.variableDelay, context, 'session');
+        const variableValue = await this.getVariable(
+          config.variableDelay,
+          context,
+          'session'
+        );
         if (typeof variableValue === 'number') {
           delayMs = variableValue;
         }
@@ -55,12 +62,17 @@ export class DelayFlowHandler extends BaseNodeHandler {
         );
       }
 
-      this.logStep(context, node, `Scheduling workflow delay for ${delayMs}ms`, 'info');
+      this.logStep(
+        context,
+        node,
+        `Scheduling workflow delay for ${delayMs}ms`,
+        'info'
+      );
 
       // Для задержек менее 1 секунды используем синхронное ожидание (быстрее)
       if (delayMs < 1000) {
         this.logStep(context, node, `Using synchronous delay (<1s)`, 'debug');
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         this.logStep(context, node, 'Delay completed', 'info');
         // Следующий нод определяется по connections
         return null;
@@ -71,19 +83,19 @@ export class DelayFlowHandler extends BaseNodeHandler {
         // Находим следующий нод для продолжения после задержки
         const nextNodeId = this.findNextNodeId(node, context) || null;
 
-        // Обновляем execution: сохраняем состояние задержки
-        const { db } = await import('@/lib/db');
-        await db.workflowExecution.update({
-          where: { id: context.executionId },
-          data: {
-            status: 'waiting',
-            waitType: 'delay' as any,
-            currentNodeId: nextNodeId || node.id, // Сохраняем следующий нод для продолжения
-            waitPayload: {
-              delayMs,
-              originalNodeId: node.id,
-              scheduledAt: new Date().toISOString()
-            }
+        // Используем ExecutionContextManager для атомарного обновления с транзакцией
+        const { ExecutionContextManager } = await import(
+          '../execution-context-manager'
+        );
+
+        await ExecutionContextManager.updateExecutionState(context, {
+          status: 'waiting',
+          waitType: 'delay',
+          currentNodeId: nextNodeId || node.id,
+          waitPayload: {
+            delayMs,
+            originalNodeId: node.id,
+            scheduledAt: new Date().toISOString()
           }
         });
 
@@ -100,11 +112,17 @@ export class DelayFlowHandler extends BaseNodeHandler {
         // Сохраняем jobId в переменные сессии для возможности отмены
         if (!jobId.startsWith('sync:')) {
           await this.setVariable('delayJobId', jobId, context, 'session');
-          this.logStep(context, node, `Delay scheduled in queue (jobId: ${jobId})`, 'info', {
-            jobId,
-            delayMs,
-            scheduledFor: new Date(Date.now() + delayMs).toISOString()
-          });
+          this.logStep(
+            context,
+            node,
+            `Delay scheduled in queue (jobId: ${jobId})`,
+            'info',
+            {
+              jobId,
+              delayMs,
+              scheduledFor: new Date(Date.now() + delayMs).toISOString()
+            }
+          );
         }
 
         // Останавливаем выполнение workflow - оно будет возобновлено через Bull queue
@@ -112,9 +130,18 @@ export class DelayFlowHandler extends BaseNodeHandler {
         return null;
       } catch (queueError) {
         // Если очередь недоступна, используем синхронное ожидание как fallback
-        this.logStep(context, node, 'Queue unavailable, falling back to synchronous delay', 'warn', {
-          error: queueError instanceof Error ? queueError.message : String(queueError)
-        });
+        this.logStep(
+          context,
+          node,
+          'Queue unavailable, falling back to synchronous delay',
+          'warn',
+          {
+            error:
+              queueError instanceof Error
+                ? queueError.message
+                : String(queueError)
+          }
+        );
 
         // Для задержек более 5 минут в синхронном режиме выдаем предупреждение
         if (delayMs > 5 * 60 * 1000) {
@@ -126,7 +153,7 @@ export class DelayFlowHandler extends BaseNodeHandler {
           );
         }
 
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         this.logStep(context, node, 'Synchronous delay completed', 'info');
         return null;
       }
@@ -139,19 +166,28 @@ export class DelayFlowHandler extends BaseNodeHandler {
   /**
    * Находит ID следующего нода для продолжения выполнения после задержки
    */
-  private findNextNodeId(node: WorkflowNode, context: ExecutionContext): string | null {
+  private findNextNodeId(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): string | null {
     // Пытаемся получить connections из разных источников
     let connections: Array<{ source: string; target: string }> | null = null;
 
     // 1. Попытка из workflowVersion в контексте (если есть)
     const workflowVersion = (context as any).workflowVersion;
     if (workflowVersion?.connections) {
-      connections = workflowVersion.connections as Array<{ source: string; target: string }>;
+      connections = workflowVersion.connections as Array<{
+        source: string;
+        target: string;
+      }>;
     } else {
       // 2. Попытка получить из processor (если доступен)
       const processor = (context as any).processor;
       if (processor?.connectionsMap) {
-        const connectionsMap = processor.connectionsMap as Map<string, { source: string; target: string }>;
+        const connectionsMap = processor.connectionsMap as Map<
+          string,
+          { source: string; target: string }
+        >;
         connections = Array.from(connectionsMap.values());
       }
     }
@@ -163,9 +199,10 @@ export class DelayFlowHandler extends BaseNodeHandler {
     }
 
     // Ищем первый connection типа 'default', который начинается с текущей ноды
-    const nextConnection = connections.find(
-      conn => conn.source === node.id && (conn as any).type === 'default'
-    ) || connections.find(conn => conn.source === node.id);
+    const nextConnection =
+      connections.find(
+        (conn) => conn.source === node.id && (conn as any).type === 'default'
+      ) || connections.find((conn) => conn.source === node.id);
 
     return nextConnection?.target || null;
   }
@@ -178,7 +215,10 @@ export class DelayFlowHandler extends BaseNodeHandler {
       return { isValid: false, errors };
     }
 
-    if (config.delayMs !== undefined && (typeof config.delayMs !== 'number' || config.delayMs < 0)) {
+    if (
+      config.delayMs !== undefined &&
+      (typeof config.delayMs !== 'number' || config.delayMs < 0)
+    ) {
       errors.push('delayMs must be a non-negative number');
     }
 
@@ -211,7 +251,10 @@ export class EndFlowHandler extends BaseNodeHandler {
     return nodeType === 'flow.end';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['flow.end'] || {};
 
     this.logStep(context, node, 'Workflow execution ended', 'info', {
@@ -249,7 +292,10 @@ export class LoopFlowHandler extends BaseNodeHandler {
     return nodeType === 'flow.loop';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data.config?.['flow.loop'];
 
@@ -266,18 +312,32 @@ export class LoopFlowHandler extends BaseNodeHandler {
 
       switch (loopType) {
         case 'count':
-          return await this.executeCountLoop(node, config, context, maxIterations);
-        
+          return await this.executeCountLoop(
+            node,
+            config,
+            context,
+            maxIterations
+          );
+
         case 'foreach':
-          return await this.executeForeachLoop(node, config, context, maxIterations);
-        
+          return await this.executeForeachLoop(
+            node,
+            config,
+            context,
+            maxIterations
+          );
+
         case 'while':
-          return await this.executeWhileLoop(node, config, context, maxIterations);
-        
+          return await this.executeWhileLoop(
+            node,
+            config,
+            context,
+            maxIterations
+          );
+
         default:
           throw new Error(`Unknown loop type: ${loopType}`);
       }
-
     } catch (error) {
       this.logStep(context, node, 'Loop execution failed', 'error', { error });
       throw error;
@@ -297,17 +357,24 @@ export class LoopFlowHandler extends BaseNodeHandler {
     }
 
     if (count > maxIterations) {
-      throw new Error(`Count ${count} exceeds maximum iterations ${maxIterations}`);
+      throw new Error(
+        `Count ${count} exceeds maximum iterations ${maxIterations}`
+      );
     }
 
     const indexVar = config.indexVariable || 'loop_index';
-    
+
     for (let i = 0; i < count; i++) {
       await this.setVariable(indexVar, i, context, 'session');
       this.logStep(context, node, `Loop iteration ${i + 1}/${count}`, 'debug');
     }
 
-    this.logStep(context, node, `Count loop completed: ${count} iterations`, 'info');
+    this.logStep(
+      context,
+      node,
+      `Count loop completed: ${count} iterations`,
+      'info'
+    );
     return null;
   }
 
@@ -318,7 +385,7 @@ export class LoopFlowHandler extends BaseNodeHandler {
     maxIterations: number
   ): Promise<string | null> {
     const arrayVarName = config.array;
-    
+
     if (!arrayVarName) {
       throw new Error('Array variable name is required for foreach loop');
     }
@@ -330,7 +397,9 @@ export class LoopFlowHandler extends BaseNodeHandler {
     }
 
     if (array.length > maxIterations) {
-      throw new Error(`Array length ${array.length} exceeds maximum iterations ${maxIterations}`);
+      throw new Error(
+        `Array length ${array.length} exceeds maximum iterations ${maxIterations}`
+      );
     }
 
     const itemVar = config.itemVariable || 'loop_item';
@@ -339,10 +408,20 @@ export class LoopFlowHandler extends BaseNodeHandler {
     for (let i = 0; i < array.length; i++) {
       await this.setVariable(itemVar, array[i], context, 'session');
       await this.setVariable(indexVar, i, context, 'session');
-      this.logStep(context, node, `Foreach iteration ${i + 1}/${array.length}`, 'debug');
+      this.logStep(
+        context,
+        node,
+        `Foreach iteration ${i + 1}/${array.length}`,
+        'debug'
+      );
     }
 
-    this.logStep(context, node, `Foreach loop completed: ${array.length} iterations`, 'info');
+    this.logStep(
+      context,
+      node,
+      `Foreach loop completed: ${array.length} iterations`,
+      'info'
+    );
     return null;
   }
 
@@ -361,40 +440,58 @@ export class LoopFlowHandler extends BaseNodeHandler {
     let iterations = 0;
 
     while (iterations < maxIterations) {
-      const conditionResult = await this.evaluateSimpleCondition(condition, context);
-      
+      const conditionResult = await this.evaluateSimpleCondition(
+        condition,
+        context
+      );
+
       if (!conditionResult) {
         break;
       }
 
       iterations++;
       await this.setVariable('loop_index', iterations - 1, context, 'session');
-      this.logStep(context, node, `While loop iteration ${iterations}`, 'debug');
+      this.logStep(
+        context,
+        node,
+        `While loop iteration ${iterations}`,
+        'debug'
+      );
     }
 
     if (iterations >= maxIterations) {
-      throw new Error(`While loop exceeded maximum iterations ${maxIterations}`);
+      throw new Error(
+        `While loop exceeded maximum iterations ${maxIterations}`
+      );
     }
 
-    this.logStep(context, node, `While loop completed: ${iterations} iterations`, 'info');
+    this.logStep(
+      context,
+      node,
+      `While loop completed: ${iterations} iterations`,
+      'info'
+    );
     return null;
   }
 
-  private async evaluateSimpleCondition(condition: string, context: ExecutionContext): Promise<boolean> {
+  private async evaluateSimpleCondition(
+    condition: string,
+    context: ExecutionContext
+  ): Promise<boolean> {
     const resolvedCondition = this.resolveValue(condition, context);
-    
+
     if (typeof resolvedCondition === 'string') {
       return resolvedCondition.toLowerCase() === 'true';
     }
-    
+
     if (typeof resolvedCondition === 'boolean') {
       return resolvedCondition;
     }
-    
+
     if (typeof resolvedCondition === 'number') {
       return resolvedCondition > 0;
     }
-    
+
     return false;
   }
 
@@ -415,7 +512,10 @@ export class LoopFlowHandler extends BaseNodeHandler {
     if (loopType === 'count') {
       if (config.count === undefined) {
         errors.push('Count is required for count loop');
-      } else if (typeof config.count !== 'number' && typeof config.count !== 'string') {
+      } else if (
+        typeof config.count !== 'number' &&
+        typeof config.count !== 'string'
+      ) {
         errors.push('Count must be a number or variable reference');
       }
     }
@@ -433,7 +533,10 @@ export class LoopFlowHandler extends BaseNodeHandler {
     }
 
     if (config.maxIterations !== undefined) {
-      if (typeof config.maxIterations !== 'number' || config.maxIterations <= 0) {
+      if (
+        typeof config.maxIterations !== 'number' ||
+        config.maxIterations <= 0
+      ) {
         errors.push('maxIterations must be a positive number');
       }
     }
@@ -446,20 +549,352 @@ export class LoopFlowHandler extends BaseNodeHandler {
 }
 
 /**
- * Заглушка для flow.sub_workflow
+ * Обработчик для flow.sub_workflow
+ * Позволяет вызывать другие workflow как подпроцессы
+ * Поддерживает до 5 уровней вложенности
  */
 export class SubWorkflowFlowHandler extends BaseNodeHandler {
+  private static readonly MAX_NESTING_LEVEL = 5;
+
   canHandle(nodeType: WorkflowNodeType): boolean {
     return nodeType === 'flow.sub_workflow';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
-    this.logStep(context, node, 'Sub-workflow execution not implemented yet', 'warn');
-    return null;
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
+    try {
+      const config = node.data.config?.['flow.sub_workflow'];
+
+      if (!config) {
+        throw new Error('Sub-workflow configuration is missing');
+      }
+
+      if (!config.workflowId) {
+        throw new Error('Sub-workflow ID is required');
+      }
+
+      // Проверяем уровень вложенности
+      const currentNestingLevel = (context as any).nestingLevel || 0;
+      if (currentNestingLevel >= SubWorkflowFlowHandler.MAX_NESTING_LEVEL) {
+        throw new Error(
+          `Maximum sub-workflow nesting level (${SubWorkflowFlowHandler.MAX_NESTING_LEVEL}) exceeded. ` +
+            `Current level: ${currentNestingLevel}`
+        );
+      }
+
+      this.logStep(context, node, `Starting sub-workflow execution`, 'info', {
+        subWorkflowId: config.workflowId,
+        version: config.version || 'active',
+        nestingLevel: currentNestingLevel + 1
+      });
+
+      // Загружаем sub-workflow
+      const { db } = await import('@/lib/db');
+
+      // Получаем версию workflow
+      let workflowVersion;
+      if (config.version) {
+        // Конкретная версия
+        workflowVersion = await db.workflowVersion.findFirst({
+          where: {
+            workflowId: config.workflowId,
+            version: config.version
+          },
+          include: {
+            workflow: {
+              select: {
+                projectId: true,
+                connections: true
+              }
+            }
+          }
+        });
+      } else {
+        // Активная версия
+        workflowVersion = await db.workflowVersion.findFirst({
+          where: {
+            workflowId: config.workflowId,
+            isActive: true
+          },
+          include: {
+            workflow: {
+              select: {
+                projectId: true,
+                connections: true
+              }
+            }
+          }
+        });
+      }
+
+      if (!workflowVersion) {
+        throw new Error(
+          `Sub-workflow not found: ${config.workflowId}` +
+            (config.version
+              ? ` (version ${config.version})`
+              : ' (no active version)')
+        );
+      }
+
+      // Проверяем, что sub-workflow принадлежит тому же проекту
+      if (workflowVersion.workflow.projectId !== context.projectId) {
+        throw new Error(
+          `Sub-workflow ${config.workflowId} belongs to a different project`
+        );
+      }
+
+      // Применяем inputMapping - копируем переменные из родительского контекста в sub-workflow
+      if (config.inputMapping && typeof config.inputMapping === 'object') {
+        for (const [subVar, parentVar] of Object.entries(config.inputMapping)) {
+          const value = await this.getVariable(
+            parentVar as string,
+            context,
+            'session'
+          );
+          if (value !== undefined) {
+            await this.setVariable(`sub_${subVar}`, value, context, 'session');
+            this.logStep(
+              context,
+              node,
+              `Input mapping: ${parentVar} -> sub_${subVar}`,
+              'debug',
+              {
+                value:
+                  typeof value === 'object'
+                    ? JSON.stringify(value).slice(0, 100)
+                    : value
+              }
+            );
+          }
+        }
+      }
+
+      // Создаем sub-context для выполнения sub-workflow
+      const { ExecutionContextManager } = await import(
+        '../execution-context-manager'
+      );
+      const { normalizeNodes } = await import('../utils/node-utils');
+      const { SimpleWorkflowProcessor } = await import(
+        '../../simple-workflow-processor'
+      );
+
+      // Нормализуем nodes
+      const nodes = normalizeNodes(workflowVersion.nodes);
+
+      // Парсим connections
+      const connectionsRaw = workflowVersion.workflow.connections;
+      const connections =
+        typeof connectionsRaw === 'string'
+          ? JSON.parse(connectionsRaw)
+          : Array.isArray(connectionsRaw)
+            ? connectionsRaw
+            : [];
+
+      // Формируем WorkflowVersion для processor
+      const subWorkflowVersion = {
+        id: workflowVersion.id,
+        workflowId: workflowVersion.workflowId,
+        version: workflowVersion.version,
+        nodes,
+        entryNodeId: workflowVersion.entryNodeId,
+        connections,
+        variables: workflowVersion.variables as any,
+        settings: workflowVersion.settings as any,
+        isActive: workflowVersion.isActive,
+        createdAt: workflowVersion.createdAt
+      };
+
+      if (!subWorkflowVersion.entryNodeId) {
+        throw new Error(
+          `Sub-workflow ${config.workflowId} has no entry node defined`
+        );
+      }
+
+      // Создаем sub-context с увеличенным уровнем вложенности
+      const subContext = await ExecutionContextManager.createSubContext(
+        context,
+        subWorkflowVersion.workflowId,
+        subWorkflowVersion.version,
+        currentNestingLevel + 1
+      );
+
+      // Копируем входные переменные в sub-context
+      if (config.inputMapping && typeof config.inputMapping === 'object') {
+        for (const [subVar, parentVar] of Object.entries(config.inputMapping)) {
+          const value = await context.variables.get(
+            parentVar as string,
+            'session'
+          );
+          if (value !== undefined) {
+            await subContext.variables.set(subVar, value, 'session');
+          }
+        }
+      }
+
+      // Создаем processor для sub-workflow
+      const subProcessor = new SimpleWorkflowProcessor(
+        subWorkflowVersion as any,
+        context.projectId
+      );
+
+      // Выполняем sub-workflow
+      this.logStep(
+        context,
+        node,
+        `Executing sub-workflow from entry node`,
+        'info',
+        {
+          entryNodeId: subWorkflowVersion.entryNodeId,
+          nodesCount: Object.keys(nodes).length
+        }
+      );
+
+      try {
+        await subProcessor.resumeWorkflow(
+          subContext,
+          subWorkflowVersion.entryNodeId
+        );
+
+        // Проверяем статус выполнения sub-workflow
+        const subExecution = await db.workflowExecution.findUnique({
+          where: { id: subContext.executionId },
+          select: { status: true, error: true }
+        });
+
+        if (subExecution?.status === 'failed') {
+          throw new Error(
+            `Sub-workflow failed: ${subExecution.error || 'Unknown error'}`
+          );
+        }
+
+        if (subExecution?.status === 'waiting') {
+          // Sub-workflow ожидает ввода - это не поддерживается
+          this.logStep(
+            context,
+            node,
+            'Sub-workflow entered waiting state - not supported',
+            'warn'
+          );
+          throw new Error('Sub-workflow cannot enter waiting state');
+        }
+      } catch (subError) {
+        this.logStep(context, node, 'Sub-workflow execution failed', 'error', {
+          error: subError instanceof Error ? subError.message : String(subError)
+        });
+        throw subError;
+      }
+
+      // Применяем outputMapping - копируем переменные из sub-workflow обратно в родительский контекст
+      if (config.outputMapping && typeof config.outputMapping === 'object') {
+        for (const [parentVar, subVar] of Object.entries(
+          config.outputMapping
+        )) {
+          const value = await subContext.variables.get(
+            subVar as string,
+            'session'
+          );
+          if (value !== undefined) {
+            await this.setVariable(parentVar, value, context, 'session');
+            this.logStep(
+              context,
+              node,
+              `Output mapping: ${subVar} -> ${parentVar}`,
+              'debug',
+              {
+                value:
+                  typeof value === 'object'
+                    ? JSON.stringify(value).slice(0, 100)
+                    : value
+              }
+            );
+          }
+        }
+      }
+
+      // Завершаем sub-execution
+      await ExecutionContextManager.completeExecution(
+        subContext,
+        'completed',
+        undefined,
+        subContext.step
+      );
+
+      this.logStep(
+        context,
+        node,
+        'Sub-workflow completed successfully',
+        'info',
+        {
+          subWorkflowId: config.workflowId,
+          steps: subContext.step
+        }
+      );
+
+      // Возвращаем null - следующий нод определяется по connections
+      return null;
+    } catch (error) {
+      this.logStep(context, node, 'Sub-workflow execution failed', 'error', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
   }
 
   async validate(config: any): Promise<ValidationResult> {
-    return { isValid: true, errors: [] };
+    const errors: string[] = [];
+
+    if (!config) {
+      errors.push('Sub-workflow configuration is required');
+      return { isValid: false, errors };
+    }
+
+    if (!config.workflowId || typeof config.workflowId !== 'string') {
+      errors.push('workflowId is required and must be a string');
+    }
+
+    if (config.version !== undefined && typeof config.version !== 'number') {
+      errors.push('version must be a number if specified');
+    }
+
+    if (config.inputMapping !== undefined) {
+      if (
+        typeof config.inputMapping !== 'object' ||
+        Array.isArray(config.inputMapping)
+      ) {
+        errors.push('inputMapping must be an object');
+      } else {
+        for (const [key, value] of Object.entries(config.inputMapping)) {
+          if (typeof value !== 'string') {
+            errors.push(`inputMapping.${key} must be a string (variable name)`);
+          }
+        }
+      }
+    }
+
+    if (config.outputMapping !== undefined) {
+      if (
+        typeof config.outputMapping !== 'object' ||
+        Array.isArray(config.outputMapping)
+      ) {
+        errors.push('outputMapping must be an object');
+      } else {
+        for (const [key, value] of Object.entries(config.outputMapping)) {
+          if (typeof value !== 'string') {
+            errors.push(
+              `outputMapping.${key} must be a string (variable name)`
+            );
+          }
+        }
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }
 }
 
@@ -471,11 +906,19 @@ export class JumpFlowHandler extends BaseNodeHandler {
     return nodeType === 'flow.jump';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['flow.jump'];
 
     if (config?.targetNodeId) {
-      this.logStep(context, node, `Jumping to node ${config.targetNodeId}`, 'info');
+      this.logStep(
+        context,
+        node,
+        `Jumping to node ${config.targetNodeId}`,
+        'info'
+      );
       return config.targetNodeId;
     }
 
@@ -496,4 +939,3 @@ export class JumpFlowHandler extends BaseNodeHandler {
     };
   }
 }
-

@@ -2,7 +2,10 @@
 module.exports = {
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  testMatch: ['**/__tests__/sanity.test.js'],
+  testMatch: ['**/__tests__/sanity.test.js', '**/__tests__/services/**/*.test.ts'],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', { useESM: true }]
+  },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^~/(.*)$': '<rootDir>/public/$1',

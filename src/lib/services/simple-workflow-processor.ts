@@ -212,11 +212,14 @@ export class SimpleWorkflowProcessor {
           }
         : undefined;
 
+      // ✅ Используем новый метод getOrCreateSessionId для корректной работы с сессиями
+      const sessionId = await this.getOrCreateSessionId(ctx);
+
       context = await ExecutionContextManager.createContext(
         this.projectId,
         this.workflowVersion.workflowId,
         this.workflowVersion.version,
-        this.generateSessionId(ctx),
+        sessionId,
         userId, // Теперь это ID пользователя из БД, а не Telegram ID
         chatId,
         telegramUserId, // Telegram ID передаем отдельно
@@ -354,28 +357,70 @@ export class SimpleWorkflowProcessor {
   }
 
   /**
-   * Генерирует ID сессии
-   * ✅ ИСПРАВЛЕНИЕ: Для callback используем стабильный sessionId без timestamp
-   * чтобы переменные сохранялись между взаимодействиями
+   * Получает существующий или создает новый ID сессии
+   * ✅ ИСПРАВЛЕНИЕ Race Condition: Проверяем активное выполнение для пользователя
+   * и используем существующий sessionId, чтобы переменные сохранялись между взаимодействиями
+   */
+  private async getOrCreateSessionId(ctx: Context): Promise<string> {
+    const chatId = ctx.chat?.id || ctx.from?.id || 'unknown';
+    const userId = ctx.from?.id || 'unknown';
+    const baseSessionId = `${chatId}_${userId}`;
+
+    try {
+      // Проверяем активное выполнение для этого пользователя в этом workflow
+      const activeExecution = await db.workflowExecution.findFirst({
+        where: {
+          projectId: this.projectId,
+          workflowId: this.workflowVersion.workflowId,
+          telegramChatId: chatId.toString(),
+          status: { in: ['running', 'waiting'] }
+        },
+        orderBy: { startedAt: 'desc' },
+        select: { sessionId: true, status: true, id: true }
+      });
+
+      if (activeExecution?.sessionId) {
+        logger.debug('Using existing session from active execution', {
+          chatId,
+          userId,
+          existingSessionId: activeExecution.sessionId,
+          executionId: activeExecution.id,
+          executionStatus: activeExecution.status
+        });
+        return activeExecution.sessionId;
+      }
+
+      // Нет активного выполнения - создаем новый sessionId
+      const newSessionId = `${baseSessionId}_${Date.now()}`;
+      logger.debug('Creating new session ID (no active execution)', {
+        chatId,
+        userId,
+        newSessionId
+      });
+
+      return newSessionId;
+    } catch (error) {
+      // В случае ошибки БД - fallback на генерацию нового sessionId
+      logger.warn(
+        'Failed to check active execution, generating new sessionId',
+        {
+          chatId,
+          userId,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      return `${baseSessionId}_${Date.now()}`;
+    }
+  }
+
+  /**
+   * @deprecated Use getOrCreateSessionId instead
+   * Оставлен для обратной совместимости
    */
   private generateSessionId(ctx: Context): string {
     const chatId = ctx.chat?.id || ctx.from?.id || 'unknown';
     const userId = ctx.from?.id || 'unknown';
-
-    // ✅ Для callback НЕ добавляем timestamp, чтобы использовать ту же сессию
-    const isCallback = !!ctx.callbackQuery;
-    const sessionId = isCallback
-      ? `${chatId}_${userId}` // Стабильный ID для callback
-      : `${chatId}_${userId}_${Date.now()}`; // Уникальный ID для новых команд/сообщений
-
-    logger.debug('Generating session ID', {
-      chatId: ctx.chat?.id,
-      fromId: ctx.from?.id,
-      isCallback,
-      generatedSessionId: sessionId
-    });
-
-    return sessionId;
+    return `${chatId}_${userId}_${Date.now()}`;
   }
 
   /**

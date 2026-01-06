@@ -26,6 +26,9 @@ model Project {
   botToken                      String?               @map("bot_token")
   botUsername                   String?               @map("bot_username")
   ownerId                       String?               @map("owner_id")
+  // Конфигурируемые лимиты workflow
+  workflowMaxSteps              Int                   @default(100) @map("workflow_max_steps")
+  workflowTimeoutMs             Int                   @default(30000) @map("workflow_timeout_ms")
   bonusLevels          BonusLevel[]
   botFlows             BotFlow[]
   botSettings          BotSettings?
@@ -377,12 +380,20 @@ model WorkflowExecution {
   currentNodeId  String?       @map("current_node_id")
   waitType       String?       @map("wait_type")
   waitPayload    Json?         @map("wait_payload")
+  
+  // Restart tracking (для перезапуска выполнения)
+  parentExecutionId   String?             @map("parent_execution_id")
+  parentExecution     WorkflowExecution?  @relation("ExecutionRestart", fields: [parentExecutionId], references: [id], onDelete: SetNull)
+  childExecutions     WorkflowExecution[] @relation("ExecutionRestart")
+  restartedFromNodeId String?             @map("restarted_from_node_id")
+  
   workflow       Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   logs           WorkflowLog[]
 
   @@index([projectId, workflowId, startedAt])
   @@index([sessionId])
   @@index([projectId, telegramChatId, status])
+  @@index([parentExecutionId])
   @@map("workflow_executions")
 }
 
@@ -402,6 +413,16 @@ model WorkflowLog {
   error       Json?
   durationMs  Int?              @map("duration_ms")
   data        Json?
+  
+  // Full payload logging (для детального просмотра выполнения)
+  inputData       Json?   @map("input_data")       // Full input data
+  outputData      Json?   @map("output_data")      // Full output data  
+  variablesBefore Json?   @map("variables_before") // Variables state before
+  variablesAfter  Json?   @map("variables_after")  // Variables state after
+  httpRequest     Json?   @map("http_request")     // HTTP request details
+  httpResponse    Json?   @map("http_response")    // HTTP response details
+  duration        Int?                             // Step duration in ms (alias for durationMs)
+  
   execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
   @@index([executionId, step])
