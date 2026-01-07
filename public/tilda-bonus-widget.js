@@ -906,6 +906,9 @@
             // Применяем стили виджета
             if (settings.widgetSettings) {
               this.applyWidgetStyles(settings.widgetSettings);
+
+              // Инициализируем бонусные плашки на товарах
+              this.initProductBonusBadges(settings.widgetSettings);
             }
 
             // Обновляем кэш с новыми настройками
@@ -931,6 +934,9 @@
               }
               if (cachedSettings.widgetSettings) {
                 this.applyWidgetStyles(cachedSettings.widgetSettings);
+
+                // Инициализируем бонусные плашки на товарах из кэша
+                this.initProductBonusBadges(cachedSettings.widgetSettings);
               }
             }
           });
@@ -1398,6 +1404,303 @@
         }
       }
     },
+
+    // ========== БОНУСНЫЕ ПЛАШКИ НА ТОВАРАХ ==========
+
+    // Инициализация бонусных плашек на карточках и страницах товаров
+    initProductBonusBadges: function (widgetSettings) {
+      try {
+        // Проверяем включены ли плашки
+        if (!widgetSettings || widgetSettings.productBadgeEnabled === false) {
+          this.log('🏷️ Бонусные плашки отключены в настройках');
+          return;
+        }
+
+        this.log('🏷️ Инициализация бонусных плашек на товарах...');
+
+        // Сохраняем настройки для использования в других методах
+        this.state.productBadgeSettings = {
+          enabled: widgetSettings.productBadgeEnabled !== false,
+          showOnCards: widgetSettings.productBadgeShowOnCards !== false,
+          showOnProductPage:
+            widgetSettings.productBadgeShowOnProductPage !== false,
+          text:
+            widgetSettings.productBadgeText ||
+            'Начислим до {bonusAmount} бонусов',
+          linkUrl: widgetSettings.productBadgeLinkUrl || '',
+          bonusPercent: widgetSettings.productBadgeBonusPercent || 10,
+          backgroundColor:
+            widgetSettings.productBadgeBackgroundColor || '#f1f1f1',
+          textColor: widgetSettings.productBadgeTextColor || '#000000',
+          fontFamily: widgetSettings.productBadgeFontFamily || 'inherit',
+          fontSize: widgetSettings.productBadgeFontSize || '14px',
+          fontWeight: widgetSettings.productBadgeFontWeight || '400',
+          padding: widgetSettings.productBadgePadding || '5px 10px',
+          borderRadius: widgetSettings.productBadgeBorderRadius || '5px',
+          marginTop: widgetSettings.productBadgeMarginTop || '5px',
+          position: widgetSettings.productBadgePosition || 'after-price',
+          customSelector: widgetSettings.productBadgeCustomSelector || ''
+        };
+
+        // Добавляем стили для плашек
+        this.injectProductBadgeStyles();
+
+        // Добавляем плашки на карточки товаров
+        if (this.state.productBadgeSettings.showOnCards) {
+          this.addBadgesToProductCards();
+        }
+
+        // Добавляем плашки на страницу товара (popup)
+        if (this.state.productBadgeSettings.showOnProductPage) {
+          this.addBadgeToProductPage();
+        }
+
+        // Наблюдаем за динамическими изменениями DOM
+        this.observeProductBadges();
+
+        this.log('✅ Бонусные плашки инициализированы');
+      } catch (error) {
+        this.logError('Ошибка инициализации бонусных плашек', error);
+      }
+    },
+
+    // Добавление CSS стилей для плашек
+    injectProductBadgeStyles: function () {
+      if (document.getElementById('bonus-badge-styles')) return;
+
+      const settings = this.state.productBadgeSettings;
+      const style = document.createElement('style');
+      style.id = 'bonus-badge-styles';
+      style.textContent = `
+        .bonus-badge {
+          background-color: ${settings.backgroundColor};
+          color: ${settings.textColor};
+          font-family: ${settings.fontFamily};
+          font-size: ${settings.fontSize};
+          font-weight: ${settings.fontWeight};
+          padding: ${settings.padding};
+          border-radius: ${settings.borderRadius};
+          margin-top: ${settings.marginTop};
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          cursor: ${settings.linkUrl ? 'pointer' : 'default'};
+          transition: opacity 0.2s ease;
+          line-height: 1.4;
+        }
+        .bonus-badge:hover {
+          opacity: ${settings.linkUrl ? '0.8' : '1'};
+        }
+        .bonus-badge--card {
+          margin-top: 4px;
+        }
+        .bonus-badge--popup {
+          margin-top: 5px;
+        }
+      `;
+      document.head.appendChild(style);
+    },
+
+    // Расчёт бонусов от цены
+    calculateBonusAmount: function (price) {
+      const settings = this.state.productBadgeSettings;
+      const percent = settings.bonusPercent || 10;
+      return Math.round(price * (percent / 100));
+    },
+
+    // Создание элемента плашки
+    createBonusBadge: function (price, variant) {
+      const settings = this.state.productBadgeSettings;
+      const bonusAmount = this.calculateBonusAmount(price);
+      const text = settings.text.replace('{bonusAmount}', bonusAmount);
+
+      const badge = document.createElement('div');
+      badge.className = `bonus-badge bonus-badge--${variant || 'default'}`;
+      badge.textContent = text;
+      badge.setAttribute('data-bonus-badge', 'true');
+
+      if (settings.linkUrl) {
+        badge.addEventListener('click', () => {
+          window.location.href = settings.linkUrl;
+        });
+      }
+
+      return badge;
+    },
+
+    // Добавление плашек на карточки товаров в каталоге
+    addBadgesToProductCards: function () {
+      try {
+        // Селекторы для карточек товаров Tilda
+        const productCards = document.querySelectorAll(
+          '.js-product.t-store__card'
+        );
+
+        productCards.forEach((card) => {
+          // Проверяем, не добавлена ли уже плашка
+          if (card.querySelector('[data-bonus-badge]')) return;
+
+          // Получаем цену товара
+          const priceEl = card.querySelector('.js-product-price');
+          if (!priceEl) return;
+
+          const priceAttr = priceEl.getAttribute('data-product-price-def');
+          const price = parseFloat(priceAttr);
+          if (isNaN(price) || price <= 0) return;
+
+          // Находим контейнер для вставки плашки
+          const priceWrapper = card.querySelector('.js-store-price-wrapper');
+          if (!priceWrapper) return;
+
+          // Создаём и добавляем плашку
+          const badge = this.createBonusBadge(price, 'card');
+
+          const settings = this.state.productBadgeSettings;
+          if (settings.position === 'before-price') {
+            priceWrapper.insertBefore(badge, priceWrapper.firstChild);
+          } else if (
+            settings.position === 'custom' &&
+            settings.customSelector
+          ) {
+            const customContainer = card.querySelector(settings.customSelector);
+            if (customContainer) {
+              customContainer.appendChild(badge);
+            } else {
+              priceWrapper.appendChild(badge);
+            }
+          } else {
+            // after-price (по умолчанию)
+            priceWrapper.appendChild(badge);
+          }
+        });
+
+        this.log(`🏷️ Добавлено плашек на карточки: ${productCards.length}`);
+      } catch (error) {
+        this.logError('Ошибка добавления плашек на карточки', error);
+      }
+    },
+
+    // Добавление плашки на страницу товара (popup)
+    addBadgeToProductPage: function () {
+      try {
+        // Селекторы для popup страницы товара Tilda
+        const productPopup = document.querySelector(
+          '.t-store__prod-popup__info'
+        );
+        if (!productPopup) return;
+
+        // Проверяем, не добавлена ли уже плашка
+        if (productPopup.querySelector('[data-bonus-badge]')) return;
+
+        // Получаем цену товара
+        const priceEl = productPopup.querySelector('.js-product-price');
+        if (!priceEl) return;
+
+        const priceAttr = priceEl.getAttribute('data-product-price-def');
+        const price = parseFloat(priceAttr);
+        if (isNaN(price) || price <= 0) return;
+
+        // Находим контейнер для вставки плашки
+        const priceWrapper = productPopup.querySelector(
+          '.js-store-price-wrapper'
+        );
+        if (!priceWrapper) return;
+
+        // Создаём и добавляем плашку
+        const badge = this.createBonusBadge(price, 'popup');
+
+        const settings = this.state.productBadgeSettings;
+        if (settings.position === 'before-price') {
+          priceWrapper.insertBefore(badge, priceWrapper.firstChild);
+        } else if (settings.position === 'custom' && settings.customSelector) {
+          const customContainer = productPopup.querySelector(
+            settings.customSelector
+          );
+          if (customContainer) {
+            customContainer.appendChild(badge);
+          } else {
+            priceWrapper.appendChild(badge);
+          }
+        } else {
+          // after-price (по умолчанию)
+          priceWrapper.appendChild(badge);
+        }
+
+        this.log('🏷️ Плашка добавлена на страницу товара');
+      } catch (error) {
+        this.logError('Ошибка добавления плашки на страницу товара', error);
+      }
+    },
+
+    // Наблюдение за динамическими изменениями DOM для добавления плашек
+    observeProductBadges: function () {
+      try {
+        const observer = this.createObserver((mutations) => {
+          let shouldUpdateCards = false;
+          let shouldUpdatePopup = false;
+
+          for (const mutation of mutations) {
+            if (mutation.type === 'childList') {
+              // Проверяем добавленные узлы
+              for (const node of mutation.addedNodes) {
+                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+                // Проверяем карточки товаров
+                if (
+                  node.classList &&
+                  node.classList.contains('t-store__card')
+                ) {
+                  shouldUpdateCards = true;
+                }
+                // Проверяем popup товара
+                if (
+                  node.classList &&
+                  (node.classList.contains('t-store__prod-popup') ||
+                    node.classList.contains('t-store__prod-popup__info'))
+                ) {
+                  shouldUpdatePopup = true;
+                }
+                // Проверяем вложенные элементы
+                if (node.querySelector) {
+                  if (node.querySelector('.t-store__card')) {
+                    shouldUpdateCards = true;
+                  }
+                  if (node.querySelector('.t-store__prod-popup__info')) {
+                    shouldUpdatePopup = true;
+                  }
+                }
+              }
+            }
+          }
+
+          // Обновляем плашки с debounce
+          if (
+            shouldUpdateCards &&
+            this.state.productBadgeSettings?.showOnCards
+          ) {
+            this.safeSetTimeout(() => this.addBadgesToProductCards(), 100);
+          }
+          if (
+            shouldUpdatePopup &&
+            this.state.productBadgeSettings?.showOnProductPage
+          ) {
+            this.safeSetTimeout(() => this.addBadgeToProductPage(), 100);
+          }
+        });
+
+        if (observer) {
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+          this.log('👁️ Observer для бонусных плашек запущен');
+        }
+      } catch (error) {
+        this.logError('Ошибка создания observer для плашек', error);
+      }
+    },
+
+    // ========== КОНЕЦ БОНУСНЫХ ПЛАШЕК ==========
 
     // Полная очистка ресурсов для предотвращения утечек памяти
     destroy: function () {

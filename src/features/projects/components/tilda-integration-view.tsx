@@ -126,6 +126,33 @@ export function ProjectIntegrationView({
     buttonDisplay: 'inline-block',
     fontSize: '14px',
 
+    // ========== НАСТРОЙКИ БОНУСНЫХ ПЛАШЕК НА ТОВАРАХ ==========
+    // Включение/выключение плашек
+    productBadgeEnabled: true,
+    productBadgeShowOnCards: true, // Показывать на карточках товаров
+    productBadgeShowOnProductPage: true, // Показывать на странице товара
+
+    // Текст плашки
+    productBadgeText: 'Начислим до {bonusAmount} бонусов',
+    productBadgeLinkUrl: '', // Ссылка при клике (пустая = без ссылки)
+
+    // Расчёт бонусов
+    productBadgeBonusPercent: 10, // Процент от цены товара
+
+    // Стили плашки
+    productBadgeBackgroundColor: '#f1f1f1',
+    productBadgeTextColor: '#000000',
+    productBadgeFontFamily: 'inherit',
+    productBadgeFontSize: '14px',
+    productBadgeFontWeight: '400',
+    productBadgePadding: '5px 10px',
+    productBadgeBorderRadius: '5px',
+    productBadgeMarginTop: '5px',
+
+    // Позиционирование
+    productBadgePosition: 'after-price', // after-price, before-price, custom
+    productBadgeCustomSelector: '', // CSS селектор для кастомной позиции
+
     // ========== НАСТРОЙКИ САМОГО ВИДЖЕТА БОНУСОВ ==========
     // Цвета виджета (по умолчанию из формы)
     widgetBackgroundColor: '#ffffff',
@@ -347,6 +374,54 @@ export function ProjectIntegrationView({
                 functionalSettings.widgetSettings.buttonDisplay ||
                 'inline-block',
               fontSize: functionalSettings.widgetSettings.fontSize || '14px',
+
+              // Настройки бонусных плашек на товарах
+              productBadgeEnabled:
+                functionalSettings.widgetSettings.productBadgeEnabled !== false,
+              productBadgeShowOnCards:
+                functionalSettings.widgetSettings.productBadgeShowOnCards !==
+                false,
+              productBadgeShowOnProductPage:
+                functionalSettings.widgetSettings
+                  .productBadgeShowOnProductPage !== false,
+              productBadgeText:
+                functionalSettings.widgetSettings.productBadgeText ||
+                'Начислим до {bonusAmount} бонусов',
+              productBadgeLinkUrl:
+                functionalSettings.widgetSettings.productBadgeLinkUrl || '',
+              productBadgeBonusPercent:
+                functionalSettings.widgetSettings.productBadgeBonusPercent ||
+                10,
+              productBadgeBackgroundColor:
+                functionalSettings.widgetSettings.productBadgeBackgroundColor ||
+                '#f1f1f1',
+              productBadgeTextColor:
+                functionalSettings.widgetSettings.productBadgeTextColor ||
+                '#000000',
+              productBadgeFontFamily:
+                functionalSettings.widgetSettings.productBadgeFontFamily ||
+                'inherit',
+              productBadgeFontSize:
+                functionalSettings.widgetSettings.productBadgeFontSize ||
+                '14px',
+              productBadgeFontWeight:
+                functionalSettings.widgetSettings.productBadgeFontWeight ||
+                '400',
+              productBadgePadding:
+                functionalSettings.widgetSettings.productBadgePadding ||
+                '5px 10px',
+              productBadgeBorderRadius:
+                functionalSettings.widgetSettings.productBadgeBorderRadius ||
+                '5px',
+              productBadgeMarginTop:
+                functionalSettings.widgetSettings.productBadgeMarginTop ||
+                '5px',
+              productBadgePosition:
+                functionalSettings.widgetSettings.productBadgePosition ||
+                'after-price',
+              productBadgeCustomSelector:
+                functionalSettings.widgetSettings.productBadgeCustomSelector ||
+                '',
 
               // Настройки виджета бонусов
               widgetBackgroundColor:
@@ -2249,6 +2324,444 @@ export function ProjectIntegrationView({
                             </div>
                           </div>
                         </div>
+                      </AccordionContent>
+                    </AccordionItem>
+
+                    {/* Бонусные плашки на товарах */}
+                    <AccordionItem value='product-badges'>
+                      <AccordionTrigger className='text-sm font-medium'>
+                        Бонусные плашки на товарах
+                      </AccordionTrigger>
+                      <AccordionContent className='space-y-4'>
+                        <p className='text-muted-foreground text-xs'>
+                          Настройте плашки &quot;Начислим до X бонусов&quot; на
+                          карточках и страницах товаров
+                        </p>
+
+                        {/* Включение/выключение */}
+                        <div className='space-y-3'>
+                          <h4 className='text-sm font-medium'>Отображение</h4>
+                          <div className='grid gap-4 md:grid-cols-3'>
+                            <div className='flex items-center space-x-2'>
+                              <input
+                                type='checkbox'
+                                id='productBadgeEnabled'
+                                checked={widgetSettings.productBadgeEnabled}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeEnabled: e.target.checked
+                                  })
+                                }
+                                className='rounded'
+                              />
+                              <Label htmlFor='productBadgeEnabled'>
+                                Включить плашки
+                              </Label>
+                            </div>
+                            <div className='flex items-center space-x-2'>
+                              <input
+                                type='checkbox'
+                                id='productBadgeShowOnCards'
+                                checked={widgetSettings.productBadgeShowOnCards}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeShowOnCards: e.target.checked
+                                  })
+                                }
+                                className='rounded'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                              <Label htmlFor='productBadgeShowOnCards'>
+                                На карточках товаров
+                              </Label>
+                            </div>
+                            <div className='flex items-center space-x-2'>
+                              <input
+                                type='checkbox'
+                                id='productBadgeShowOnProductPage'
+                                checked={
+                                  widgetSettings.productBadgeShowOnProductPage
+                                }
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeShowOnProductPage:
+                                      e.target.checked
+                                  })
+                                }
+                                className='rounded'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                              <Label htmlFor='productBadgeShowOnProductPage'>
+                                На странице товара
+                              </Label>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Текст и расчёт */}
+                        <div className='space-y-3'>
+                          <h4 className='text-sm font-medium'>
+                            Текст и расчёт
+                          </h4>
+                          <div className='grid gap-4 md:grid-cols-2'>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeText'>
+                                Текст плашки
+                                <span className='text-muted-foreground ml-2 text-xs'>
+                                  (используйте {'{bonusAmount}'})
+                                </span>
+                              </Label>
+                              <Input
+                                id='productBadgeText'
+                                value={widgetSettings.productBadgeText}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeText: e.target.value
+                                  })
+                                }
+                                placeholder='Начислим до {bonusAmount} бонусов'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeBonusPercent'>
+                                Процент начисления
+                              </Label>
+                              <Input
+                                id='productBadgeBonusPercent'
+                                type='number'
+                                min='1'
+                                max='100'
+                                value={widgetSettings.productBadgeBonusPercent}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeBonusPercent:
+                                      parseInt(e.target.value) || 10
+                                  })
+                                }
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                              <p className='text-muted-foreground text-xs'>
+                                % от цены товара для расчёта бонусов
+                              </p>
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeLinkUrl'>
+                                Ссылка при клике
+                                <span className='text-muted-foreground ml-2 text-xs'>
+                                  (опционально)
+                                </span>
+                              </Label>
+                              <Input
+                                id='productBadgeLinkUrl'
+                                value={widgetSettings.productBadgeLinkUrl}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeLinkUrl: e.target.value
+                                  })
+                                }
+                                placeholder='https://example.com/bonuses'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgePosition'>
+                                Позиция плашки
+                              </Label>
+                              <select
+                                id='productBadgePosition'
+                                value={widgetSettings.productBadgePosition}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgePosition: e.target.value
+                                  })
+                                }
+                                className='w-full rounded-md border p-2'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              >
+                                <option value='after-price'>После цены</option>
+                                <option value='before-price'>
+                                  Перед ценой
+                                </option>
+                                <option value='custom'>
+                                  Кастомный селектор
+                                </option>
+                              </select>
+                            </div>
+                          </div>
+                          {widgetSettings.productBadgePosition === 'custom' && (
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeCustomSelector'>
+                                CSS селектор для вставки
+                              </Label>
+                              <Input
+                                id='productBadgeCustomSelector'
+                                value={
+                                  widgetSettings.productBadgeCustomSelector
+                                }
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeCustomSelector: e.target.value
+                                  })
+                                }
+                                placeholder='.my-custom-container'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Стили */}
+                        <div className='space-y-3'>
+                          <h4 className='text-sm font-medium'>Стили плашки</h4>
+                          <div className='grid gap-4 md:grid-cols-3'>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeBackgroundColor'>
+                                Цвет фона
+                              </Label>
+                              <div className='flex gap-2'>
+                                <Input
+                                  id='productBadgeBackgroundColor'
+                                  type='color'
+                                  value={
+                                    widgetSettings.productBadgeBackgroundColor
+                                  }
+                                  onChange={(e) =>
+                                    setWidgetSettings({
+                                      ...widgetSettings,
+                                      productBadgeBackgroundColor:
+                                        e.target.value
+                                    })
+                                  }
+                                  className='h-10 w-16 p-1'
+                                  disabled={!widgetSettings.productBadgeEnabled}
+                                />
+                                <Input
+                                  value={
+                                    widgetSettings.productBadgeBackgroundColor
+                                  }
+                                  onChange={(e) =>
+                                    setWidgetSettings({
+                                      ...widgetSettings,
+                                      productBadgeBackgroundColor:
+                                        e.target.value
+                                    })
+                                  }
+                                  placeholder='#f1f1f1'
+                                  disabled={!widgetSettings.productBadgeEnabled}
+                                />
+                              </div>
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeTextColor'>
+                                Цвет текста
+                              </Label>
+                              <div className='flex gap-2'>
+                                <Input
+                                  id='productBadgeTextColor'
+                                  type='color'
+                                  value={widgetSettings.productBadgeTextColor}
+                                  onChange={(e) =>
+                                    setWidgetSettings({
+                                      ...widgetSettings,
+                                      productBadgeTextColor: e.target.value
+                                    })
+                                  }
+                                  className='h-10 w-16 p-1'
+                                  disabled={!widgetSettings.productBadgeEnabled}
+                                />
+                                <Input
+                                  value={widgetSettings.productBadgeTextColor}
+                                  onChange={(e) =>
+                                    setWidgetSettings({
+                                      ...widgetSettings,
+                                      productBadgeTextColor: e.target.value
+                                    })
+                                  }
+                                  placeholder='#000000'
+                                  disabled={!widgetSettings.productBadgeEnabled}
+                                />
+                              </div>
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeFontSize'>
+                                Размер шрифта
+                              </Label>
+                              <Input
+                                id='productBadgeFontSize'
+                                value={widgetSettings.productBadgeFontSize}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeFontSize: e.target.value
+                                  })
+                                }
+                                placeholder='14px'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeFontWeight'>
+                                Толщина шрифта
+                              </Label>
+                              <select
+                                id='productBadgeFontWeight'
+                                value={widgetSettings.productBadgeFontWeight}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeFontWeight: e.target.value
+                                  })
+                                }
+                                className='w-full rounded-md border p-2'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              >
+                                <option value='400'>Обычный (400)</option>
+                                <option value='500'>Средний (500)</option>
+                                <option value='600'>Полужирный (600)</option>
+                                <option value='700'>Жирный (700)</option>
+                              </select>
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgePadding'>
+                                Внутренние отступы
+                              </Label>
+                              <Input
+                                id='productBadgePadding'
+                                value={widgetSettings.productBadgePadding}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgePadding: e.target.value
+                                  })
+                                }
+                                placeholder='5px 10px'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeBorderRadius'>
+                                Скругление углов
+                              </Label>
+                              <Input
+                                id='productBadgeBorderRadius'
+                                value={widgetSettings.productBadgeBorderRadius}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeBorderRadius: e.target.value
+                                  })
+                                }
+                                placeholder='5px'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeMarginTop'>
+                                Отступ сверху
+                              </Label>
+                              <Input
+                                id='productBadgeMarginTop'
+                                value={widgetSettings.productBadgeMarginTop}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeMarginTop: e.target.value
+                                  })
+                                }
+                                placeholder='5px'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                            <div className='space-y-2'>
+                              <Label htmlFor='productBadgeFontFamily'>
+                                Шрифт
+                              </Label>
+                              <select
+                                id='productBadgeFontFamily'
+                                value={widgetSettings.productBadgeFontFamily}
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeFontFamily: e.target.value
+                                  })
+                                }
+                                className='w-full rounded-md border p-2'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              >
+                                <option value='inherit'>
+                                  Наследовать от сайта
+                                </option>
+                                <option value="'AvenirNext', sans-serif">
+                                  AvenirNext
+                                </option>
+                                <option value="'Montserrat', sans-serif">
+                                  Montserrat
+                                </option>
+                                <option value='system-ui, sans-serif'>
+                                  Системный
+                                </option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Превью плашки */}
+                        {widgetSettings.productBadgeEnabled && (
+                          <div className='space-y-2 border-t pt-4'>
+                            <p className='text-muted-foreground text-xs font-medium'>
+                              Предварительный просмотр плашки
+                            </p>
+                            <div className='bg-muted/20 rounded-lg border p-4'>
+                              <div className='flex items-center gap-4'>
+                                <div className='text-lg font-medium'>
+                                  3 990 р.
+                                </div>
+                                <div
+                                  style={{
+                                    backgroundColor:
+                                      widgetSettings.productBadgeBackgroundColor,
+                                    color: widgetSettings.productBadgeTextColor,
+                                    fontFamily:
+                                      widgetSettings.productBadgeFontFamily,
+                                    fontSize:
+                                      widgetSettings.productBadgeFontSize,
+                                    fontWeight:
+                                      widgetSettings.productBadgeFontWeight,
+                                    padding: widgetSettings.productBadgePadding,
+                                    borderRadius:
+                                      widgetSettings.productBadgeBorderRadius,
+                                    marginTop:
+                                      widgetSettings.productBadgeMarginTop,
+                                    cursor: widgetSettings.productBadgeLinkUrl
+                                      ? 'pointer'
+                                      : 'default',
+                                    display: 'inline-block'
+                                  }}
+                                >
+                                  {widgetSettings.productBadgeText.replace(
+                                    '{bonusAmount}',
+                                    String(
+                                      Math.round(
+                                        3990 *
+                                          (widgetSettings.productBadgeBonusPercent /
+                                            100)
+                                      )
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </AccordionContent>
                     </AccordionItem>
                   </Accordion>
