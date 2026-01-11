@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.12
+ * @version: 2.9.13
  * @author: AI Assistant + User
  * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
@@ -882,6 +882,14 @@
       try {
         this.log('🔄 Загружаем настройки виджета при инициализации...');
 
+        // КРИТИЧНО: Очищаем старый кэш настроек для принудительной загрузки свежих данных
+        try {
+          localStorage.removeItem('tilda_bonus_project_settings_cache');
+          this.log('🗑️ Очищен старый кэш настроек проекта');
+        } catch (e) {
+          this.log('⚠️ Не удалось очистить кэш:', e);
+        }
+
         // Принудительно загружаем настройки из API (игнорируя кэш)
         this.loadProjectSettingsSimple()
           .then((settings) => {
@@ -1417,10 +1425,17 @@
         }
 
         this.log('🏷️ Инициализация бонусных плашек на товарах...');
+        this.log('📋 Полученные настройки виджета:', widgetSettings);
 
         // Получаем процент из настроек виджета (уже загружен из API)
         const bonusPercent = widgetSettings.productBadgeBonusPercent || 10;
         this.log('💰 Используем процент для плашек:', bonusPercent);
+        this.log(
+          '🔍 Источник процента:',
+          widgetSettings.productBadgeBonusPercent
+            ? 'из настроек'
+            : 'дефолтный 10%'
+        );
 
         // Сохраняем настройки для использования в других методах
         this.state.productBadgeSettings = {
@@ -1509,7 +1524,16 @@
     calculateBonusAmount: function (price) {
       const settings = this.state.productBadgeSettings;
       const percent = settings.bonusPercent || 10;
-      return Math.round(price * (percent / 100));
+      const bonusAmount = Math.round(price * (percent / 100));
+
+      this.log('💰 Расчёт бонусов:', {
+        price: price,
+        percent: percent,
+        bonusAmount: bonusAmount,
+        settings: settings
+      });
+
+      return bonusAmount;
     },
 
     // Создание элемента плашки
@@ -2363,7 +2387,7 @@
           return processedData;
         } else {
           throw new Error(
-            `API error: ${response.status} ${response.statusText}`
+            `API error: ${botResponse.status} ${botResponse.statusText}`
           );
         }
       } catch (error) {

@@ -625,7 +625,7 @@ export function ProjectIntegrationView({
     : '';
   const widgetCode =
     widgetUrl !== ''
-      ? '<script src="' + widgetUrl + '?v=25"></' + 'script>'
+      ? '<script src="' + widgetUrl + '?v=26"></' + 'script>'
       : '';
   const testWebhookData = JSON.stringify(
     {
