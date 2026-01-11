@@ -2326,19 +2326,20 @@ export function ProjectIntegrationView({
                                 </span>
                               </div>
                               <p className='text-muted-foreground text-xs'>
-                                💡 Автоматически берётся максимальный процент из{' '}
-                                <Link
-                                  href={`/dashboard/projects/${projectId}/settings`}
-                                  className='text-blue-600 hover:underline'
-                                >
-                                  настроек проекта
-                                </Link>{' '}
-                                или{' '}
+                                💡 Автоматически рассчитывается как максимальный
+                                процент из{' '}
                                 <Link
                                   href={`/dashboard/projects/${projectId}/bonus-levels`}
                                   className='text-blue-600 hover:underline'
                                 >
                                   уровней бонусов
+                                </Link>
+                                . Если уровней нет — берётся из{' '}
+                                <Link
+                                  href={`/dashboard/projects/${projectId}/settings`}
+                                  className='text-blue-600 hover:underline'
+                                >
+                                  настроек проекта
                                 </Link>
                               </p>
                             </div>

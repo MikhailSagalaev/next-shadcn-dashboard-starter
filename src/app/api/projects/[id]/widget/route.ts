@@ -67,6 +67,24 @@ export async function GET(
       );
     }
 
+    // КРИТИЧНО: Получаем максимальный процент из уровней бонусов
+    const bonusLevels = await db.bonusLevel.findMany({
+      where: { projectId },
+      select: { bonusPercent: true },
+      orderBy: { bonusPercent: 'desc' }
+    });
+
+    const maxBonusPercent =
+      bonusLevels.length > 0
+        ? bonusLevels[0].bonusPercent
+        : Number(project.welcomeBonus) || 10;
+
+    logger.info('Рассчитан максимальный процент из уровней', {
+      projectId,
+      maxBonusPercent,
+      levelsCount: bonusLevels.length
+    });
+
     // Получаем настройки виджета
     const widgetSettings = await db.widgetSettings.findUnique({
       where: { projectId }
@@ -81,7 +99,7 @@ export async function GET(
       const defaultSettings = await db.widgetSettings.create({
         data: {
           projectId,
-          productBadgeBonusPercent: project.welcomeBonus || 10
+          productBadgeBonusPercent: maxBonusPercent // Используем рассчитанный процент
         }
       });
 
@@ -89,6 +107,7 @@ export async function GET(
         {
           success: true,
           ...defaultSettings,
+          productBadgeBonusPercent: maxBonusPercent, // Всегда актуальный процент
           operationMode: project.operationMode,
           botUsername: project.botUsername,
           welcomeBonusAmount: Number(project.welcomeBonus),
@@ -99,10 +118,11 @@ export async function GET(
       );
     }
 
-    // Возвращаем настройки виджета
+    // Возвращаем настройки виджета с актуальным процентом из уровней
     const response = {
       success: true,
       ...widgetSettings,
+      productBadgeBonusPercent: maxBonusPercent, // ВСЕГДА берём из уровней, игнорируя сохранённое значение
       // Добавляем данные из проекта
       operationMode: project.operationMode,
       botUsername: project.botUsername,
