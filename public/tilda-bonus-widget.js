@@ -1519,6 +1519,18 @@
       badge.textContent = text;
       badge.setAttribute('data-bonus-badge', 'true');
 
+      // Применяем стили из настроек
+      badge.style.backgroundColor = settings.backgroundColor || '#f1f1f1';
+      badge.style.color = settings.textColor || '#000000';
+      badge.style.fontFamily = settings.fontFamily || 'inherit';
+      badge.style.fontSize = settings.fontSize || '14px';
+      badge.style.fontWeight = settings.fontWeight || '400';
+      badge.style.padding = settings.padding || '5px 10px';
+      badge.style.borderRadius = settings.borderRadius || '5px';
+      badge.style.marginTop = settings.marginTop || '5px';
+      badge.style.display = 'inline-block';
+      badge.style.cursor = settings.linkUrl ? 'pointer' : 'default';
+
       if (settings.linkUrl) {
         badge.addEventListener('click', () => {
           window.location.href = settings.linkUrl;
@@ -2260,27 +2272,57 @@
     loadProjectSettingsSimple: async function () {
       try {
         const cacheBuster = Date.now();
-        const url = `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`;
 
-        this.log('🔗 Запрос к API:', url);
+        // Загружаем настройки бота
+        const botUrl = `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`;
 
-        // Простой fetch без сложных заголовков
-        const response = await fetch(url, {
-          method: 'GET',
-          mode: 'cors',
-          cache: 'no-cache'
+        // Загружаем максимальный процент начисления
+        const maxPercentUrl = `${this.config.apiUrl}/api/projects/${this.config.projectId}/max-bonus-percent?t=${cacheBuster}`;
+
+        this.log('🔗 Запросы к API:', { botUrl, maxPercentUrl });
+
+        // Выполняем оба запроса параллельно
+        const [botResponse, maxPercentResponse] = await Promise.all([
+          fetch(botUrl, { method: 'GET', mode: 'cors', cache: 'no-cache' }),
+          fetch(maxPercentUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache'
+          })
+        ]);
+
+        this.log('📊 Ответы API:', {
+          bot: { status: botResponse.status, ok: botResponse.ok },
+          maxPercent: {
+            status: maxPercentResponse.status,
+            ok: maxPercentResponse.ok
+          }
         });
 
-        this.log('📊 Ответ API:', {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok,
-          headers: Object.fromEntries(response.headers.entries())
-        });
+        let maxBonusPercent = 10; // Дефолтное значение
 
-        if (response.ok) {
-          const data = await response.json();
+        // Получаем максимальный процент
+        if (maxPercentResponse.ok) {
+          const maxPercentData = await maxPercentResponse.json();
+          if (maxPercentData.success && maxPercentData.maxBonusPercent) {
+            maxBonusPercent = maxPercentData.maxBonusPercent;
+            this.log('✅ Получен максимальный процент:', maxBonusPercent);
+          }
+        }
+
+        if (botResponse.ok) {
+          const data = await botResponse.json();
           this.log('📦 Данные от API:', data);
+
+          // Если есть настройки виджета, обновляем процент
+          let widgetSettings = data?.functionalSettings?.widgetSettings || {};
+          if (widgetSettings) {
+            widgetSettings.productBadgeBonusPercent = maxBonusPercent;
+            this.log(
+              '🔄 Обновлен процент в настройках виджета:',
+              maxBonusPercent
+            );
+          }
 
           const processedData = {
             welcomeBonusAmount: Number(data?.welcomeBonusAmount || 500),
@@ -2289,7 +2331,7 @@
               data?.firstPurchaseDiscountPercent || 0
             ),
             botUsername: data?.botUsername || null,
-            widgetSettings: data?.widgetSettings || null,
+            widgetSettings: widgetSettings,
             operationMode: data?.operationMode || 'WITH_BOT'
           };
 
