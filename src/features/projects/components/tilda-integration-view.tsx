@@ -235,6 +235,22 @@ export function ProjectIntegrationView({
       const data = await response.json();
       setProject(data);
 
+      // Загружаем максимальный процент начисления из настроек проекта/bonus-levels
+      let maxBonusPercent = 10; // Дефолтное значение
+      try {
+        const maxPercentResponse = await fetch(
+          `/api/projects/${projectId}/max-bonus-percent`
+        );
+        if (maxPercentResponse.ok) {
+          const maxPercentData = await maxPercentResponse.json();
+          if (maxPercentData.success && maxPercentData.maxBonusPercent) {
+            maxBonusPercent = maxPercentData.maxBonusPercent;
+          }
+        }
+      } catch (error) {
+        console.warn('Не удалось загрузить максимальный процент:', error);
+      }
+
       // Загружаем настройки виджета из botSettings
       try {
         const botResponse = await fetch(`/api/projects/${projectId}/bot`);
@@ -389,9 +405,8 @@ export function ProjectIntegrationView({
                 'Начислим до {bonusAmount} бонусов',
               productBadgeLinkUrl:
                 functionalSettings.widgetSettings.productBadgeLinkUrl || '',
-              productBadgeBonusPercent:
-                functionalSettings.widgetSettings.productBadgeBonusPercent ||
-                10,
+              // ВСЕГДА используем максимальный процент из настроек проекта/bonus-levels
+              productBadgeBonusPercent: maxBonusPercent,
               productBadgeBackgroundColor:
                 functionalSettings.widgetSettings.productBadgeBackgroundColor ||
                 '#f1f1f1',
@@ -497,6 +512,12 @@ export function ProjectIntegrationView({
                 functionalSettings.widgetSettings.widgetButtonBoxShadow ||
                 'none'
             });
+          } else {
+            // Если нет сохранённых настроек, устанавливаем только процент
+            setWidgetSettings((prev) => ({
+              ...prev,
+              productBadgeBonusPercent: maxBonusPercent
+            }));
           }
         }
       } catch (error) {
@@ -2428,26 +2449,27 @@ export function ProjectIntegrationView({
                               />
                             </div>
                             <div className='space-y-2'>
-                              <Label htmlFor='productBadgeBonusPercent'>
-                                Процент начисления
-                              </Label>
-                              <Input
-                                id='productBadgeBonusPercent'
-                                type='number'
-                                min='1'
-                                max='100'
-                                value={widgetSettings.productBadgeBonusPercent}
-                                onChange={(e) =>
-                                  setWidgetSettings({
-                                    ...widgetSettings,
-                                    productBadgeBonusPercent:
-                                      parseInt(e.target.value) || 10
-                                  })
-                                }
-                                disabled={!widgetSettings.productBadgeEnabled}
-                              />
+                              <Label>Процент начисления</Label>
+                              <div className='bg-muted/50 rounded-md border px-3 py-2'>
+                                <span className='text-sm font-medium'>
+                                  {widgetSettings.productBadgeBonusPercent}%
+                                </span>
+                              </div>
                               <p className='text-muted-foreground text-xs'>
-                                % от цены товара для расчёта бонусов
+                                💡 Автоматически берётся максимальный процент из{' '}
+                                <Link
+                                  href={`/dashboard/projects/${projectId}/settings`}
+                                  className='text-blue-600 hover:underline'
+                                >
+                                  настроек проекта
+                                </Link>{' '}
+                                или{' '}
+                                <Link
+                                  href={`/dashboard/projects/${projectId}/bonus-levels`}
+                                  className='text-blue-600 hover:underline'
+                                >
+                                  уровней бонусов
+                                </Link>
                               </p>
                             </div>
                             <div className='space-y-2'>
@@ -2721,43 +2743,101 @@ export function ProjectIntegrationView({
                               Предварительный просмотр плашки
                             </p>
                             <div className='bg-muted/20 rounded-lg border p-4'>
-                              <div className='flex items-center gap-4'>
+                              <div className='flex flex-col gap-2'>
+                                {/* Before price */}
+                                {widgetSettings.productBadgePosition ===
+                                  'before-price' && (
+                                  <div
+                                    style={{
+                                      backgroundColor:
+                                        widgetSettings.productBadgeBackgroundColor,
+                                      color:
+                                        widgetSettings.productBadgeTextColor,
+                                      fontFamily:
+                                        widgetSettings.productBadgeFontFamily,
+                                      fontSize:
+                                        widgetSettings.productBadgeFontSize,
+                                      fontWeight:
+                                        widgetSettings.productBadgeFontWeight,
+                                      padding:
+                                        widgetSettings.productBadgePadding,
+                                      borderRadius:
+                                        widgetSettings.productBadgeBorderRadius,
+                                      marginBottom:
+                                        widgetSettings.productBadgeMarginTop,
+                                      cursor: widgetSettings.productBadgeLinkUrl
+                                        ? 'pointer'
+                                        : 'default',
+                                      display: 'inline-block'
+                                    }}
+                                  >
+                                    {widgetSettings.productBadgeText.replace(
+                                      '{bonusAmount}',
+                                      String(
+                                        Math.round(
+                                          3990 *
+                                            (widgetSettings.productBadgeBonusPercent /
+                                              100)
+                                        )
+                                      )
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Price */}
                                 <div className='text-lg font-medium'>
                                   3 990 р.
                                 </div>
-                                <div
-                                  style={{
-                                    backgroundColor:
-                                      widgetSettings.productBadgeBackgroundColor,
-                                    color: widgetSettings.productBadgeTextColor,
-                                    fontFamily:
-                                      widgetSettings.productBadgeFontFamily,
-                                    fontSize:
-                                      widgetSettings.productBadgeFontSize,
-                                    fontWeight:
-                                      widgetSettings.productBadgeFontWeight,
-                                    padding: widgetSettings.productBadgePadding,
-                                    borderRadius:
-                                      widgetSettings.productBadgeBorderRadius,
-                                    marginTop:
-                                      widgetSettings.productBadgeMarginTop,
-                                    cursor: widgetSettings.productBadgeLinkUrl
-                                      ? 'pointer'
-                                      : 'default',
-                                    display: 'inline-block'
-                                  }}
-                                >
-                                  {widgetSettings.productBadgeText.replace(
-                                    '{bonusAmount}',
-                                    String(
-                                      Math.round(
-                                        3990 *
-                                          (widgetSettings.productBadgeBonusPercent /
-                                            100)
+
+                                {/* After price */}
+                                {widgetSettings.productBadgePosition ===
+                                  'after-price' && (
+                                  <div
+                                    style={{
+                                      backgroundColor:
+                                        widgetSettings.productBadgeBackgroundColor,
+                                      color:
+                                        widgetSettings.productBadgeTextColor,
+                                      fontFamily:
+                                        widgetSettings.productBadgeFontFamily,
+                                      fontSize:
+                                        widgetSettings.productBadgeFontSize,
+                                      fontWeight:
+                                        widgetSettings.productBadgeFontWeight,
+                                      padding:
+                                        widgetSettings.productBadgePadding,
+                                      borderRadius:
+                                        widgetSettings.productBadgeBorderRadius,
+                                      marginTop:
+                                        widgetSettings.productBadgeMarginTop,
+                                      cursor: widgetSettings.productBadgeLinkUrl
+                                        ? 'pointer'
+                                        : 'default',
+                                      display: 'inline-block'
+                                    }}
+                                  >
+                                    {widgetSettings.productBadgeText.replace(
+                                      '{bonusAmount}',
+                                      String(
+                                        Math.round(
+                                          3990 *
+                                            (widgetSettings.productBadgeBonusPercent /
+                                              100)
+                                        )
                                       )
-                                    )
-                                  )}
-                                </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Custom position note */}
+                                {widgetSettings.productBadgePosition ===
+                                  'custom' && (
+                                  <div className='text-muted-foreground text-xs italic'>
+                                    Кастомная позиция:{' '}
+                                    {widgetSettings.productBadgeCustomSelector ||
+                                      'не указана'}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
