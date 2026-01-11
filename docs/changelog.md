@@ -4,6 +4,61 @@
 
 ---
 
+## [2026-01-11] - Исправление миграции workflow лимитов
+
+### 🐛 Исправлено
+- **Отсутствующая миграция БД** — добавлена миграция для полей `workflow_max_steps` и `workflow_timeout_ms`
+- **Ошибка 500 при загрузке проектов** — исправлена ошибка "column does not exist" после git pull
+- **Проблема с неудавшейся миграцией** — добавлены скрипты для исправления застрявшей миграции `20251205_add_operation_mode`
+
+### 📁 Файлы
+- `prisma/migrations/20260111_add_workflow_limits/migration.sql` — новая миграция
+- `scripts/fix-migrations.sh` — bash скрипт для исправления миграций (Linux)
+- `scripts/fix-migrations.ps1` — PowerShell скрипт для исправления миграций (Windows)
+- `scripts/fix-failed-migration.sql` — SQL для ручного исправления
+
+### 🔧 Инструкции для деплоя
+
+**Вариант 1: Автоматический (Linux)**
+```bash
+bash scripts/fix-migrations.sh
+```
+
+**Вариант 2: Автоматический (Windows)**
+```powershell
+.\scripts\fix-migrations.ps1
+```
+
+**Вариант 3: Ручной (если автоматический не сработал)**
+```bash
+# 1. Подключиться к PostgreSQL
+psql -U your_user -d your_database
+
+# 2. Пометить неудавшуюся миграцию как откаченную
+UPDATE "_prisma_migrations" 
+SET rolled_back_at = NOW()
+WHERE migration_name = '20251205_add_operation_mode' 
+  AND finished_at IS NULL;
+
+# 3. Добавить workflow поля
+ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "workflow_max_steps" INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "workflow_timeout_ms" INTEGER NOT NULL DEFAULT 30000;
+
+# 4. Выйти из psql
+\q
+
+# 5. Применить миграции
+npx prisma migrate deploy
+
+# 6. Перегенерировать Prisma Client
+npx prisma generate
+
+# 7. Перезапустить приложение
+pm2 restart all
+```
+
+---
+
 ## [2026-01-06] - Бонусные плашки на товарах Tilda
 
 ### 🎯 Добавлено
