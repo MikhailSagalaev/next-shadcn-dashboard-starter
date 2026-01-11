@@ -1418,6 +1418,10 @@
 
         this.log('🏷️ Инициализация бонусных плашек на товарах...');
 
+        // Получаем процент из настроек виджета (уже загружен из API)
+        const bonusPercent = widgetSettings.productBadgeBonusPercent || 10;
+        this.log('💰 Используем процент для плашек:', bonusPercent);
+
         // Сохраняем настройки для использования в других методах
         this.state.productBadgeSettings = {
           enabled: widgetSettings.productBadgeEnabled !== false,
@@ -1428,7 +1432,7 @@
             widgetSettings.productBadgeText ||
             'Начислим до {bonusAmount} бонусов',
           linkUrl: widgetSettings.productBadgeLinkUrl || '',
-          bonusPercent: widgetSettings.productBadgeBonusPercent || 10,
+          bonusPercent: bonusPercent,
           backgroundColor:
             widgetSettings.productBadgeBackgroundColor || '#f1f1f1',
           textColor: widgetSettings.productBadgeTextColor || '#000000',
@@ -1519,18 +1523,37 @@
       badge.textContent = text;
       badge.setAttribute('data-bonus-badge', 'true');
 
-      // Применяем стили из настроек
-      badge.style.backgroundColor = settings.backgroundColor || '#f1f1f1';
-      badge.style.color = settings.textColor || '#000000';
-      badge.style.fontFamily = settings.fontFamily || 'inherit';
-      badge.style.fontSize = settings.fontSize || '14px';
-      badge.style.fontWeight = settings.fontWeight || '400';
-      badge.style.padding = settings.padding || '5px 10px';
-      badge.style.borderRadius = settings.borderRadius || '5px';
-      badge.style.marginTop = settings.marginTop || '5px';
+      // Применяем ВСЕ стили из настроек
+      if (settings.backgroundColor) {
+        badge.style.backgroundColor = settings.backgroundColor;
+      }
+      if (settings.textColor) {
+        badge.style.color = settings.textColor;
+      }
+      if (settings.fontFamily) {
+        badge.style.fontFamily = settings.fontFamily;
+      }
+      if (settings.fontSize) {
+        badge.style.fontSize = settings.fontSize;
+      }
+      if (settings.fontWeight) {
+        badge.style.fontWeight = settings.fontWeight;
+      }
+      if (settings.padding) {
+        badge.style.padding = settings.padding;
+      }
+      if (settings.borderRadius) {
+        badge.style.borderRadius = settings.borderRadius;
+      }
+      if (settings.marginTop) {
+        badge.style.marginTop = settings.marginTop;
+      }
+
+      // Базовые стили для корректного отображения
       badge.style.display = 'inline-block';
       badge.style.cursor = settings.linkUrl ? 'pointer' : 'default';
 
+      // Добавляем обработчик клика если есть ссылка
       if (settings.linkUrl) {
         badge.addEventListener('click', () => {
           window.location.href = settings.linkUrl;
