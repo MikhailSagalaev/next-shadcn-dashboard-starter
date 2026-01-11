@@ -1,6 +1,6 @@
 /**
  * @file: src/app/api/projects/[id]/max-bonus-percent/route.ts
- * @description: API для получения максимального процента начисления бонусов
+ * @description: Публичный API для получения максимального процента начисления бонусов (используется виджетом)
  * @project: SaaS Bonus System
  * @dependencies: Prisma, BonusLevelService
  * @created: 2026-01-11
@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { BonusLevelService } from '@/lib/services/bonus-level.service';
 
+// Публичный endpoint - не требует аутентификации
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -27,7 +28,20 @@ export async function GET(
     });
 
     if (!project) {
-      return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Проект не найден'
+        },
+        {
+          status: 404,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          }
+        }
+      );
     }
 
     // Получаем активные уровни бонусов
@@ -43,15 +57,47 @@ export async function GET(
       maxPercent = Math.max(maxPercent, maxLevelPercent);
     }
 
-    return NextResponse.json({
-      success: true,
-      maxBonusPercent: maxPercent
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        maxBonusPercent: maxPercent
+      },
+      {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Cache-Control': 'public, max-age=300' // Кэш на 5 минут
+        }
+      }
+    );
   } catch (error) {
     console.error('Error getting max bonus percent:', error);
     return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера' },
-      { status: 500 }
+      {
+        success: false,
+        error: 'Внутренняя ошибка сервера'
+      },
+      {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      }
     );
   }
+}
+
+// Обработка preflight запросов для CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    }
+  });
 }
