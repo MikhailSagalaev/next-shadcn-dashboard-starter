@@ -22,8 +22,8 @@ fi
 echo "📊 Проверяем статус миграций..."
 
 # Извлекаем параметры подключения из DATABASE_URL
-# Формат: postgresql://user:password@host:port/database
-if [[ $DATABASE_URL =~ postgresql://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+) ]]; then
+# Формат: postgresql://user:password@host:port/database?schema=public
+if [[ $DATABASE_URL =~ postgresql://([^:]+):([^@]+)@([^:]+):([0-9]+)/([^?]+) ]]; then
     DB_USER="${BASH_REMATCH[1]}"
     DB_PASSWORD="${BASH_REMATCH[2]}"
     DB_HOST="${BASH_REMATCH[3]}"
