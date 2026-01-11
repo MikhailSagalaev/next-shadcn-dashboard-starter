@@ -32,6 +32,7 @@ model Project {
   bonusLevels          BonusLevel[]
   botFlows             BotFlow[]
   botSettings          BotSettings?
+  widgetSettings       WidgetSettings?
   notifications        Notification[]
   projectVariables     ProjectVariable[]
   owner                AdminAccount?         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -127,6 +128,48 @@ model BotSettings {
   project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("bot_settings")
+}
+
+model WidgetSettings {
+  id                              String   @id @default(cuid())
+  projectId                       String   @unique @map("project_id")
+  
+  // Текстовые настройки плашки регистрации
+  registrationTitle               String   @default("Зарегистрируйся и получи {bonusAmount} бонусов!") @map("registration_title")
+  registrationDescription         String   @default("Зарегистрируйся в нашей бонусной программе") @map("registration_description")
+  registrationButtonText          String   @default("Для участия в акции перейдите в бота") @map("registration_button_text")
+  registrationButtonUrl           String?  @map("registration_button_url")
+  verificationButtonUrl           String?  @map("verification_button_url")
+  registrationFallbackText        String   @default("Свяжитесь с администратором для регистрации") @map("registration_fallback_text")
+  
+  // Настройки видимости элементов плашки
+  showIcon                        Boolean  @default(true) @map("show_icon")
+  showTitle                       Boolean  @default(true) @map("show_title")
+  showDescription                 Boolean  @default(true) @map("show_description")
+  showButton                      Boolean  @default(true) @map("show_button")
+  showFallbackText                Boolean  @default(true) @map("show_fallback_text")
+  
+  // Настройки бонусных плашек на товарах
+  productBadgeEnabled             Boolean  @default(true) @map("product_badge_enabled")
+  productBadgeShowOnCards         Boolean  @default(true) @map("product_badge_show_on_cards")
+  productBadgeShowOnProductPage   Boolean  @default(true) @map("product_badge_show_on_product_page")
+  productBadgeText                String   @default("Начислим до {bonusAmount} бонусов") @map("product_badge_text")
+  productBadgeLinkUrl             String?  @map("product_badge_link_url")
+  productBadgeBonusPercent        Decimal  @default(10) @map("product_badge_bonus_percent") @db.Decimal(5, 2)
+  productBadgePosition            String   @default("after-price") @map("product_badge_position")
+  productBadgeCustomSelector      String?  @map("product_badge_custom_selector")
+  
+  // Стили (JSON для гибкости)
+  registrationStyles              Json?    @default("{}") @map("registration_styles")
+  productBadgeStyles              Json?    @default("{}") @map("product_badge_styles")
+  widgetStyles                    Json?    @default("{}") @map("widget_styles")
+  
+  createdAt                       DateTime @default(now()) @map("created_at")
+  updatedAt                       DateTime @updatedAt @map("updated_at")
+  
+  project                         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("widget_settings")
 }
 
 model BotFlow {

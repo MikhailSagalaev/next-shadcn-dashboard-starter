@@ -235,289 +235,175 @@ export function ProjectIntegrationView({
       const data = await response.json();
       setProject(data);
 
-      // Загружаем максимальный процент начисления из настроек проекта/bonus-levels
-      let maxBonusPercent = 10; // Дефолтное значение
+      // Загружаем настройки виджета из нового endpoint /widget
       try {
-        const maxPercentResponse = await fetch(
-          `/api/projects/${projectId}/max-bonus-percent`
-        );
-        if (maxPercentResponse.ok) {
-          const maxPercentData = await maxPercentResponse.json();
-          if (maxPercentData.success && maxPercentData.maxBonusPercent) {
-            maxBonusPercent = maxPercentData.maxBonusPercent;
-          }
-        }
-      } catch (error) {
-        console.warn('Не удалось загрузить максимальный процент:', error);
-      }
+        const widgetResponse = await fetch(`/api/projects/${projectId}/widget`);
+        if (widgetResponse.ok) {
+          const widgetData = await widgetResponse.json();
 
-      // Загружаем настройки виджета из botSettings
-      try {
-        const botResponse = await fetch(`/api/projects/${projectId}/bot`);
-        if (botResponse.ok) {
-          const botData = await botResponse.json();
-          const functionalSettings = botData.functionalSettings || {};
+          // Set botUsername from widget settings
+          setBotUsername(widgetData.botUsername || null);
 
-          // Set botUsername from bot settings
-          setBotUsername(botData.botUsername || null);
-
-          if (functionalSettings.widgetSettings) {
+          if (widgetData.success) {
             setWidgetSettings({
               // Текстовые настройки
               registrationTitle:
-                functionalSettings.widgetSettings.registrationTitle ||
+                widgetData.registrationTitle ||
                 'Зарегистрируйся и получи {bonusAmount} бонусов!',
               registrationDescription:
-                functionalSettings.widgetSettings.registrationDescription ||
+                widgetData.registrationDescription ||
                 'Зарегистрируйся в нашей бонусной программе',
               registrationButtonText:
-                functionalSettings.widgetSettings.registrationButtonText ||
+                widgetData.registrationButtonText ||
                 'Для участия в акции перейдите в бота',
-              registrationButtonUrl:
-                functionalSettings.widgetSettings.registrationButtonUrl || '',
-              verificationButtonUrl:
-                functionalSettings.widgetSettings.verificationButtonUrl || '',
+              registrationButtonUrl: widgetData.registrationButtonUrl || '',
+              verificationButtonUrl: widgetData.verificationButtonUrl || '',
               registrationFallbackText:
-                functionalSettings.widgetSettings.registrationFallbackText ||
+                widgetData.registrationFallbackText ||
                 'Свяжитесь с администратором для регистрации',
 
               // Настройки видимости элементов
               showIcon:
-                functionalSettings.widgetSettings.showIcon !== undefined
-                  ? functionalSettings.widgetSettings.showIcon
-                  : true,
+                widgetData.showIcon !== undefined ? widgetData.showIcon : true,
               showTitle:
-                functionalSettings.widgetSettings.showTitle !== undefined
-                  ? functionalSettings.widgetSettings.showTitle
+                widgetData.showTitle !== undefined
+                  ? widgetData.showTitle
                   : true,
               showDescription:
-                functionalSettings.widgetSettings.showDescription !== undefined
-                  ? functionalSettings.widgetSettings.showDescription
+                widgetData.showDescription !== undefined
+                  ? widgetData.showDescription
                   : true,
               showButton:
-                functionalSettings.widgetSettings.showButton !== undefined
-                  ? functionalSettings.widgetSettings.showButton
+                widgetData.showButton !== undefined
+                  ? widgetData.showButton
                   : true,
               showFallbackText:
-                functionalSettings.widgetSettings.showFallbackText !== undefined
-                  ? functionalSettings.widgetSettings.showFallbackText
+                widgetData.showFallbackText !== undefined
+                  ? widgetData.showFallbackText
                   : true,
 
               // Цветовые настройки
-              backgroundColor:
-                functionalSettings.widgetSettings.backgroundColor || '#667eea',
-              backgroundGradient:
-                functionalSettings.widgetSettings.backgroundGradient ||
-                '#764ba2',
-              textColor:
-                functionalSettings.widgetSettings.textColor || '#ffffff',
-              titleColor:
-                functionalSettings.widgetSettings.titleColor || '#ffffff',
-              descriptionColor:
-                functionalSettings.widgetSettings.descriptionColor || '#ffffff',
-              fallbackTextColor:
-                functionalSettings.widgetSettings.fallbackTextColor ||
-                '#ffffff',
-              buttonTextColor:
-                functionalSettings.widgetSettings.buttonTextColor || '#ffffff',
+              backgroundColor: widgetData.backgroundColor || '#667eea',
+              backgroundGradient: widgetData.backgroundGradient || '#764ba2',
+              textColor: widgetData.textColor || '#ffffff',
+              titleColor: widgetData.titleColor || '#ffffff',
+              descriptionColor: widgetData.descriptionColor || '#ffffff',
+              fallbackTextColor: widgetData.fallbackTextColor || '#ffffff',
+              buttonTextColor: widgetData.buttonTextColor || '#ffffff',
               buttonBackgroundColor:
-                functionalSettings.widgetSettings.buttonBackgroundColor ||
-                'rgba(255,255,255,0.2)',
+                widgetData.buttonBackgroundColor || 'rgba(255,255,255,0.2)',
               buttonBorderColor:
-                functionalSettings.widgetSettings.buttonBorderColor ||
-                'rgba(255,255,255,0.3)',
+                widgetData.buttonBorderColor || 'rgba(255,255,255,0.3)',
               buttonHoverColor:
-                functionalSettings.widgetSettings.buttonHoverColor ||
-                'rgba(255,255,255,0.3)',
+                widgetData.buttonHoverColor || 'rgba(255,255,255,0.3)',
               fallbackBackgroundColor:
-                functionalSettings.widgetSettings.fallbackBackgroundColor ||
-                'rgba(0,0,0,0.1)',
+                widgetData.fallbackBackgroundColor || 'rgba(0,0,0,0.1)',
 
               // Размеры и отступы
-              borderRadius:
-                functionalSettings.widgetSettings.borderRadius || '12px',
-              padding: functionalSettings.widgetSettings.padding || '16px',
-              marginBottom:
-                functionalSettings.widgetSettings.marginBottom || '12px',
-              iconSize: functionalSettings.widgetSettings.iconSize || '24px',
-              titleFontSize:
-                functionalSettings.widgetSettings.titleFontSize || '18px',
-              titleFontWeight:
-                functionalSettings.widgetSettings.titleFontWeight || 'bold',
-              descriptionFontSize:
-                functionalSettings.widgetSettings.descriptionFontSize || '14px',
-              buttonFontSize:
-                functionalSettings.widgetSettings.buttonFontSize || '14px',
-              buttonFontWeight:
-                functionalSettings.widgetSettings.buttonFontWeight || '500',
-              buttonPadding:
-                functionalSettings.widgetSettings.buttonPadding || '10px 20px',
-              buttonBorderRadius:
-                functionalSettings.widgetSettings.buttonBorderRadius || '6px',
-              fallbackFontSize:
-                functionalSettings.widgetSettings.fallbackFontSize || '14px',
-              fallbackPadding:
-                functionalSettings.widgetSettings.fallbackPadding || '8px',
-              fallbackBorderRadius:
-                functionalSettings.widgetSettings.fallbackBorderRadius || '4px',
+              borderRadius: widgetData.borderRadius || '12px',
+              padding: widgetData.padding || '16px',
+              marginBottom: widgetData.marginBottom || '12px',
+              iconSize: widgetData.iconSize || '24px',
+              titleFontSize: widgetData.titleFontSize || '18px',
+              titleFontWeight: widgetData.titleFontWeight || 'bold',
+              descriptionFontSize: widgetData.descriptionFontSize || '14px',
+              buttonFontSize: widgetData.buttonFontSize || '14px',
+              buttonFontWeight: widgetData.buttonFontWeight || '500',
+              buttonPadding: widgetData.buttonPadding || '10px 20px',
+              buttonBorderRadius: widgetData.buttonBorderRadius || '6px',
+              fallbackFontSize: widgetData.fallbackFontSize || '14px',
+              fallbackPadding: widgetData.fallbackPadding || '8px',
+              fallbackBorderRadius: widgetData.fallbackBorderRadius || '4px',
 
               // Эффекты и тени
-              boxShadow:
-                functionalSettings.widgetSettings.boxShadow ||
-                '0 4px 6px rgba(0,0,0,0.1)',
-              buttonBoxShadow:
-                functionalSettings.widgetSettings.buttonBoxShadow || 'none',
-              iconAnimation:
-                functionalSettings.widgetSettings.iconAnimation || 'jump',
+              boxShadow: widgetData.boxShadow || '0 4px 6px rgba(0,0,0,0.1)',
+              buttonBoxShadow: widgetData.buttonBoxShadow || 'none',
+              iconAnimation: widgetData.iconAnimation || 'jump',
 
               // Эмодзи и иконки
-              iconEmoji: functionalSettings.widgetSettings.iconEmoji || '🎁',
-              iconColor:
-                functionalSettings.widgetSettings.iconColor || '#ffffff',
+              iconEmoji: widgetData.iconEmoji || '🎁',
+              iconColor: widgetData.iconColor || '#ffffff',
 
               // Шрифты
               fontFamily:
-                functionalSettings.widgetSettings.fontFamily ||
-                'system-ui, -apple-system, sans-serif',
+                widgetData.fontFamily || 'system-ui, -apple-system, sans-serif',
 
               // Дополнительные настройки плашки
-              maxWidth: functionalSettings.widgetSettings.maxWidth || '100%',
-              textAlign:
-                functionalSettings.widgetSettings.textAlign || 'center',
-              buttonWidth:
-                functionalSettings.widgetSettings.buttonWidth || 'auto',
-              buttonDisplay:
-                functionalSettings.widgetSettings.buttonDisplay ||
-                'inline-block',
-              fontSize: functionalSettings.widgetSettings.fontSize || '14px',
+              maxWidth: widgetData.maxWidth || '100%',
+              textAlign: widgetData.textAlign || 'center',
+              buttonWidth: widgetData.buttonWidth || 'auto',
+              buttonDisplay: widgetData.buttonDisplay || 'inline-block',
+              fontSize: widgetData.fontSize || '14px',
 
               // Настройки бонусных плашек на товарах
-              productBadgeEnabled:
-                functionalSettings.widgetSettings.productBadgeEnabled !== false,
+              productBadgeEnabled: widgetData.productBadgeEnabled !== false,
               productBadgeShowOnCards:
-                functionalSettings.widgetSettings.productBadgeShowOnCards !==
-                false,
+                widgetData.productBadgeShowOnCards !== false,
               productBadgeShowOnProductPage:
-                functionalSettings.widgetSettings
-                  .productBadgeShowOnProductPage !== false,
+                widgetData.productBadgeShowOnProductPage !== false,
               productBadgeText:
-                functionalSettings.widgetSettings.productBadgeText ||
+                widgetData.productBadgeText ||
                 'Начислим до {bonusAmount} бонусов',
-              productBadgeLinkUrl:
-                functionalSettings.widgetSettings.productBadgeLinkUrl || '',
-              // ВСЕГДА используем максимальный процент из настроек проекта/bonus-levels
-              productBadgeBonusPercent: maxBonusPercent,
+              productBadgeLinkUrl: widgetData.productBadgeLinkUrl || '',
+              // Процент берётся из WidgetSettings
+              productBadgeBonusPercent:
+                Number(widgetData.productBadgeBonusPercent) || 10,
               productBadgeBackgroundColor:
-                functionalSettings.widgetSettings.productBadgeBackgroundColor ||
-                '#f1f1f1',
+                widgetData.productBadgeBackgroundColor || '#f1f1f1',
               productBadgeTextColor:
-                functionalSettings.widgetSettings.productBadgeTextColor ||
-                '#000000',
+                widgetData.productBadgeTextColor || '#000000',
               productBadgeFontFamily:
-                functionalSettings.widgetSettings.productBadgeFontFamily ||
-                'inherit',
-              productBadgeFontSize:
-                functionalSettings.widgetSettings.productBadgeFontSize ||
-                '14px',
+                widgetData.productBadgeFontFamily || 'inherit',
+              productBadgeFontSize: widgetData.productBadgeFontSize || '14px',
               productBadgeFontWeight:
-                functionalSettings.widgetSettings.productBadgeFontWeight ||
-                '400',
-              productBadgePadding:
-                functionalSettings.widgetSettings.productBadgePadding ||
-                '5px 10px',
+                widgetData.productBadgeFontWeight || '400',
+              productBadgePadding: widgetData.productBadgePadding || '5px 10px',
               productBadgeBorderRadius:
-                functionalSettings.widgetSettings.productBadgeBorderRadius ||
-                '5px',
-              productBadgeMarginTop:
-                functionalSettings.widgetSettings.productBadgeMarginTop ||
-                '5px',
+                widgetData.productBadgeBorderRadius || '5px',
+              productBadgeMarginTop: widgetData.productBadgeMarginTop || '5px',
               productBadgePosition:
-                functionalSettings.widgetSettings.productBadgePosition ||
-                'after-price',
+                widgetData.productBadgePosition || 'after-price',
               productBadgeCustomSelector:
-                functionalSettings.widgetSettings.productBadgeCustomSelector ||
-                '',
+                widgetData.productBadgeCustomSelector || '',
 
               // Настройки виджета бонусов
               widgetBackgroundColor:
-                functionalSettings.widgetSettings.widgetBackgroundColor ||
-                '#ffffff',
-              widgetBorderColor:
-                functionalSettings.widgetSettings.widgetBorderColor ||
-                '#e5e7eb',
-              widgetTextColor:
-                functionalSettings.widgetSettings.widgetTextColor || '#424242',
-              widgetLabelColor:
-                functionalSettings.widgetSettings.widgetLabelColor || '#6b7280',
+                widgetData.widgetBackgroundColor || '#ffffff',
+              widgetBorderColor: widgetData.widgetBorderColor || '#e5e7eb',
+              widgetTextColor: widgetData.widgetTextColor || '#424242',
+              widgetLabelColor: widgetData.widgetLabelColor || '#6b7280',
               widgetInputBackground:
-                functionalSettings.widgetSettings.widgetInputBackground ||
-                '#ffffff',
-              widgetInputBorder:
-                functionalSettings.widgetSettings.widgetInputBorder ||
-                '#d1d5db',
-              widgetInputText:
-                functionalSettings.widgetSettings.widgetInputText || '#424242',
+                widgetData.widgetInputBackground || '#ffffff',
+              widgetInputBorder: widgetData.widgetInputBorder || '#d1d5db',
+              widgetInputText: widgetData.widgetInputText || '#424242',
               widgetButtonBackground:
-                functionalSettings.widgetSettings.widgetButtonBackground ||
-                '#424242',
-              widgetButtonText:
-                functionalSettings.widgetSettings.widgetButtonText || '#ffffff',
-              widgetButtonHover:
-                functionalSettings.widgetSettings.widgetButtonHover ||
-                '#696969',
-              widgetBalanceColor:
-                functionalSettings.widgetSettings.widgetBalanceColor ||
-                '#000000',
-              widgetErrorColor:
-                functionalSettings.widgetSettings.widgetErrorColor || '#dc2626',
-              widgetSuccessColor:
-                functionalSettings.widgetSettings.widgetSuccessColor ||
-                '#059669',
+                widgetData.widgetButtonBackground || '#424242',
+              widgetButtonText: widgetData.widgetButtonText || '#ffffff',
+              widgetButtonHover: widgetData.widgetButtonHover || '#696969',
+              widgetBalanceColor: widgetData.widgetBalanceColor || '#000000',
+              widgetErrorColor: widgetData.widgetErrorColor || '#dc2626',
+              widgetSuccessColor: widgetData.widgetSuccessColor || '#059669',
               widgetFontFamily:
-                functionalSettings.widgetSettings.widgetFontFamily ||
+                widgetData.widgetFontFamily ||
                 'system-ui, -apple-system, sans-serif',
-              widgetFontSize:
-                functionalSettings.widgetSettings.widgetFontSize || '14px',
-              widgetLabelFontSize:
-                functionalSettings.widgetSettings.widgetLabelFontSize || '13px',
-              widgetButtonFontSize:
-                functionalSettings.widgetSettings.widgetButtonFontSize ||
-                '14px',
-              widgetBalanceFontSize:
-                functionalSettings.widgetSettings.widgetBalanceFontSize ||
-                '16px',
-              widgetBorderRadius:
-                functionalSettings.widgetSettings.widgetBorderRadius || '8px',
-              widgetPadding:
-                functionalSettings.widgetSettings.widgetPadding || '16px',
+              widgetFontSize: widgetData.widgetFontSize || '14px',
+              widgetLabelFontSize: widgetData.widgetLabelFontSize || '13px',
+              widgetButtonFontSize: widgetData.widgetButtonFontSize || '14px',
+              widgetBalanceFontSize: widgetData.widgetBalanceFontSize || '16px',
+              widgetBorderRadius: widgetData.widgetBorderRadius || '8px',
+              widgetPadding: widgetData.widgetPadding || '16px',
               widgetInputBorderRadius:
-                functionalSettings.widgetSettings.widgetInputBorderRadius ||
-                '6px',
-              widgetInputPadding:
-                functionalSettings.widgetSettings.widgetInputPadding ||
-                '8px 12px',
+                widgetData.widgetInputBorderRadius || '6px',
+              widgetInputPadding: widgetData.widgetInputPadding || '8px 12px',
               widgetButtonBorderRadius:
-                functionalSettings.widgetSettings.widgetButtonBorderRadius ||
-                '6px',
+                widgetData.widgetButtonBorderRadius || '6px',
               widgetButtonPadding:
-                functionalSettings.widgetSettings.widgetButtonPadding ||
-                '10px 20px',
+                widgetData.widgetButtonPadding || '10px 20px',
               widgetBoxShadow:
-                functionalSettings.widgetSettings.widgetBoxShadow ||
-                '0 1px 3px rgba(0,0,0,0.1)',
-              widgetInputBoxShadow:
-                functionalSettings.widgetSettings.widgetInputBoxShadow ||
-                'none',
-              widgetButtonBoxShadow:
-                functionalSettings.widgetSettings.widgetButtonBoxShadow ||
-                'none'
+                widgetData.widgetBoxShadow || '0 1px 3px rgba(0,0,0,0.1)',
+              widgetInputBoxShadow: widgetData.widgetInputBoxShadow || 'none',
+              widgetButtonBoxShadow: widgetData.widgetButtonBoxShadow || 'none'
             });
-          } else {
-            // Если нет сохранённых настроек, устанавливаем только процент
-            setWidgetSettings((prev) => ({
-              ...prev,
-              productBadgeBonusPercent: maxBonusPercent
-            }));
           }
         }
       } catch (error) {
@@ -552,29 +438,13 @@ export function ProjectIntegrationView({
     try {
       setSaving(true);
 
-      // Получаем текущие настройки бота
-      const botResponse = await fetch(`/api/projects/${projectId}/bot`);
-      let currentBotSettings: any = {};
-
-      if (botResponse.ok) {
-        currentBotSettings = await botResponse.json();
-      }
-
-      // Формируем только functionalSettings для обновления
-      // НЕ передаём botToken чтобы избежать полной перезаписи настроек
-      const updatedFunctionalSettings = {
-        ...(currentBotSettings.functionalSettings || {}),
-        widgetSettings: widgetSettings
-      };
-
-      const response = await fetch(`/api/projects/${projectId}/bot`, {
+      // Сохраняем настройки виджета в новый endpoint /widget
+      const response = await fetch(`/api/projects/${projectId}/widget`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          functionalSettings: updatedFunctionalSettings
-        })
+        body: JSON.stringify(widgetSettings)
       });
 
       if (response.ok) {
@@ -625,7 +495,7 @@ export function ProjectIntegrationView({
     : '';
   const widgetCode =
     widgetUrl !== ''
-      ? '<script src="' + widgetUrl + '?v=26"></' + 'script>'
+      ? '<script src="' + widgetUrl + '?v=27"></' + 'script>'
       : '';
   const testWebhookData = JSON.stringify(
     {

@@ -9,19 +9,21 @@ const EMAIL_VERIFICATION_REQUIRED = true; // Включить проверку e
 // 1) Баланс пользователя для Tilda:
 //    GET /api/projects/:id/users/balance?email=...&phone=...
 // 2) Вебхуки проектов
-// 3) Настройки бота для виджета (GET only)
-//    GET /api/projects/:id/bot
+// 3) Настройки виджета (GET only)
+//    GET /api/projects/:id/widget
 const PUBLIC_API_PATTERNS: RegExp[] = [
   /^\/api\/projects\/[^/]+\/users\/balance(?:\/?|$)/i,
   /^\/api\/webhook\//i,
-  /^\/api\/projects\/[^/]+\/bot$/i
+  /^\/api\/projects\/[^/]+\/widget$/i
 ];
 
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Защита /super-admin/* (исключая /super-admin/login)
-  const isSuperAdminPath = SUPER_ADMIN_MATCHERS.some((p) => pathname.startsWith(p));
+  const isSuperAdminPath = SUPER_ADMIN_MATCHERS.some((p) =>
+    pathname.startsWith(p)
+  );
   if (isSuperAdminPath && pathname !== '/super-admin/login') {
     const superAdminToken = req.cookies.get('super_admin_auth')?.value;
     if (!superAdminToken) {

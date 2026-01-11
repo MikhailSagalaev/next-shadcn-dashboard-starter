@@ -1872,7 +1872,7 @@
       try {
         const cacheBuster = Date.now(); // Предотвращаем кэширование
         const settings = await this.makeApiRequest(
-          `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`,
+          `${this.config.apiUrl}/api/projects/${this.config.projectId}/widget?t=${cacheBuster}`,
           {
             headers: {
               'Cache-Control': 'no-cache'
@@ -1880,15 +1880,41 @@
           }
         );
 
-        if (settings) {
+        if (settings && settings.success) {
           return {
-            welcomeBonusAmount: Number(settings?.welcomeBonusAmount || 0),
-            welcomeRewardType: settings?.welcomeRewardType || 'BONUS',
+            welcomeBonusAmount: Number(settings.welcomeBonusAmount || 0),
+            welcomeRewardType: settings.welcomeRewardType || 'BONUS',
             firstPurchaseDiscountPercent: Number(
-              settings?.firstPurchaseDiscountPercent || 0
+              settings.firstPurchaseDiscountPercent || 0
             ),
-            botUsername: settings?.botUsername || null,
-            widgetSettings: settings?.functionalSettings?.widgetSettings || {}
+            botUsername: settings.botUsername || null,
+            widgetSettings: {
+              registrationTitle: settings.registrationTitle,
+              registrationDescription: settings.registrationDescription,
+              registrationButtonText: settings.registrationButtonText,
+              registrationButtonUrl: settings.registrationButtonUrl,
+              verificationButtonUrl: settings.verificationButtonUrl,
+              registrationFallbackText: settings.registrationFallbackText,
+              showIcon: settings.showIcon,
+              showTitle: settings.showTitle,
+              showDescription: settings.showDescription,
+              showButton: settings.showButton,
+              showFallbackText: settings.showFallbackText,
+              productBadgeEnabled: settings.productBadgeEnabled,
+              productBadgeShowOnCards: settings.productBadgeShowOnCards,
+              productBadgeShowOnProductPage:
+                settings.productBadgeShowOnProductPage,
+              productBadgeText: settings.productBadgeText,
+              productBadgeLinkUrl: settings.productBadgeLinkUrl,
+              productBadgeBonusPercent: Number(
+                settings.productBadgeBonusPercent
+              ),
+              productBadgePosition: settings.productBadgePosition,
+              productBadgeCustomSelector: settings.productBadgeCustomSelector,
+              ...(settings.registrationStyles || {}),
+              ...(settings.productBadgeStyles || {}),
+              ...(settings.widgetStyles || {})
+            }
           };
         }
       } catch (error) {
@@ -2315,83 +2341,94 @@
       }
     },
 
-    // Упрощенная загрузка настроек без лишних заголовков
+    // Упрощенная загрузка настроек виджета из нового endpoint
     loadProjectSettingsSimple: async function () {
       try {
         const cacheBuster = Date.now();
 
-        // Загружаем настройки бота
-        const botUrl = `${this.config.apiUrl}/api/projects/${this.config.projectId}/bot?t=${cacheBuster}`;
+        // Используем новый endpoint /widget вместо /bot и /max-bonus-percent
+        const widgetUrl = `${this.config.apiUrl}/api/projects/${this.config.projectId}/widget?t=${cacheBuster}`;
 
-        // Загружаем максимальный процент начисления
-        const maxPercentUrl = `${this.config.apiUrl}/api/projects/${this.config.projectId}/max-bonus-percent?t=${cacheBuster}`;
+        this.log('🔗 Запрос к API виджета:', widgetUrl);
 
-        this.log('🔗 Запросы к API:', { botUrl, maxPercentUrl });
-
-        // Выполняем оба запроса параллельно
-        const [botResponse, maxPercentResponse] = await Promise.all([
-          fetch(botUrl, { method: 'GET', mode: 'cors', cache: 'no-cache' }),
-          fetch(maxPercentUrl, {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-cache'
-          })
-        ]);
-
-        this.log('📊 Ответы API:', {
-          bot: { status: botResponse.status, ok: botResponse.ok },
-          maxPercent: {
-            status: maxPercentResponse.status,
-            ok: maxPercentResponse.ok
-          }
+        const response = await fetch(widgetUrl, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-cache'
         });
 
-        let maxBonusPercent = 10; // Дефолтное значение
+        this.log('📊 Ответ API:', {
+          status: response.status,
+          ok: response.ok
+        });
 
-        // Получаем максимальный процент
-        if (maxPercentResponse.ok) {
-          const maxPercentData = await maxPercentResponse.json();
-          if (maxPercentData.success && maxPercentData.maxBonusPercent) {
-            maxBonusPercent = maxPercentData.maxBonusPercent;
-            this.log('✅ Получен максимальный процент:', maxBonusPercent);
-          }
-        }
-
-        if (botResponse.ok) {
-          const data = await botResponse.json();
-          this.log('📦 Данные от API:', data);
-
-          // Если есть настройки виджета, обновляем процент
-          let widgetSettings = data?.functionalSettings?.widgetSettings || {};
-          if (widgetSettings) {
-            widgetSettings.productBadgeBonusPercent = maxBonusPercent;
-            this.log(
-              '🔄 Обновлен процент в настройках виджета:',
-              maxBonusPercent
-            );
-          }
-
-          const processedData = {
-            welcomeBonusAmount: Number(data?.welcomeBonusAmount || 500),
-            welcomeRewardType: data?.welcomeRewardType || 'BONUS',
-            firstPurchaseDiscountPercent: Number(
-              data?.firstPurchaseDiscountPercent || 0
-            ),
-            botUsername: data?.botUsername || null,
-            widgetSettings: widgetSettings,
-            operationMode: data?.operationMode || 'WITH_BOT'
-          };
-
-          this.log('🔧 Обработанные настройки для плашки:', processedData);
-
-          return processedData;
-        } else {
+        if (!response.ok) {
           throw new Error(
-            `API error: ${botResponse.status} ${botResponse.statusText}`
+            `API error: ${response.status} ${response.statusText}`
           );
         }
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'API returned success: false');
+        }
+
+        this.log('📦 Данные от API виджета:', data);
+
+        // Формируем настройки виджета из ответа
+        const widgetSettings = {
+          // Текстовые настройки плашки регистрации
+          registrationTitle: data.registrationTitle,
+          registrationDescription: data.registrationDescription,
+          registrationButtonText: data.registrationButtonText,
+          registrationButtonUrl: data.registrationButtonUrl,
+          verificationButtonUrl: data.verificationButtonUrl,
+          registrationFallbackText: data.registrationFallbackText,
+
+          // Видимость элементов
+          showIcon: data.showIcon,
+          showTitle: data.showTitle,
+          showDescription: data.showDescription,
+          showButton: data.showButton,
+          showFallbackText: data.showFallbackText,
+
+          // Настройки бонусных плашек
+          productBadgeEnabled: data.productBadgeEnabled,
+          productBadgeShowOnCards: data.productBadgeShowOnCards,
+          productBadgeShowOnProductPage: data.productBadgeShowOnProductPage,
+          productBadgeText: data.productBadgeText,
+          productBadgeLinkUrl: data.productBadgeLinkUrl,
+          productBadgeBonusPercent: Number(data.productBadgeBonusPercent),
+          productBadgePosition: data.productBadgePosition,
+          productBadgeCustomSelector: data.productBadgeCustomSelector,
+
+          // Стили (из JSON полей)
+          ...(data.registrationStyles || {}),
+          ...(data.productBadgeStyles || {}),
+          ...(data.widgetStyles || {})
+        };
+
+        const processedData = {
+          welcomeBonusAmount: Number(data.welcomeBonusAmount || 500),
+          welcomeRewardType: data.welcomeRewardType || 'BONUS',
+          firstPurchaseDiscountPercent: Number(
+            data.firstPurchaseDiscountPercent || 0
+          ),
+          botUsername: data.botUsername || null,
+          widgetSettings: widgetSettings,
+          operationMode: data.operationMode || 'WITH_BOT'
+        };
+
+        this.log('🔧 Обработанные настройки виджета:', processedData);
+        this.log(
+          '💰 Процент начисления бонусов:',
+          widgetSettings.productBadgeBonusPercent
+        );
+
+        return processedData;
       } catch (error) {
-        this.log('🚨 Ошибка при запросе к API:', error);
+        this.log('🚨 Ошибка при запросе к API виджета:', error);
         throw error;
       }
     },
