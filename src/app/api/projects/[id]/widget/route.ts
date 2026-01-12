@@ -107,6 +107,10 @@ export async function GET(
         {
           success: true,
           ...defaultSettings,
+          // Разворачиваем стили из JSON полей
+          ...((defaultSettings.registrationStyles as object) || {}),
+          ...((defaultSettings.productBadgeStyles as object) || {}),
+          ...((defaultSettings.widgetStyles as object) || {}),
           productBadgeBonusPercent: maxBonusPercent, // Всегда актуальный процент
           operationMode: project.operationMode,
           botUsername: project.botUsername,
@@ -122,6 +126,10 @@ export async function GET(
     const response = {
       success: true,
       ...widgetSettings,
+      // Разворачиваем стили из JSON полей
+      ...((widgetSettings.registrationStyles as object) || {}),
+      ...((widgetSettings.productBadgeStyles as object) || {}),
+      ...((widgetSettings.widgetStyles as object) || {}),
       productBadgeBonusPercent: maxBonusPercent, // ВСЕГДА берём из уровней, игнорируя сохранённое значение
       // Добавляем данные из проекта
       operationMode: project.operationMode,
@@ -176,14 +184,206 @@ export async function PUT(
       return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
     }
 
+    // Разделяем поля на основные и стили
+    const {
+      // Стили регистрации
+      backgroundColor,
+      backgroundGradient,
+      textColor,
+      titleColor,
+      descriptionColor,
+      fallbackTextColor,
+      buttonTextColor,
+      buttonBackgroundColor,
+      buttonBorderColor,
+      buttonHoverColor,
+      fallbackBackgroundColor,
+      borderRadius,
+      padding,
+      marginBottom,
+      iconSize,
+      titleFontSize,
+      titleFontWeight,
+      descriptionFontSize,
+      buttonFontSize,
+      buttonFontWeight,
+      buttonPadding,
+      buttonBorderRadius,
+      fallbackFontSize,
+      fallbackPadding,
+      fallbackBorderRadius,
+      boxShadow,
+      buttonBoxShadow,
+      iconAnimation,
+      iconEmoji,
+      iconColor,
+      fontFamily,
+      maxWidth,
+      textAlign,
+      buttonWidth,
+      buttonDisplay,
+      fontSize,
+
+      // Стили бейджей товаров
+      productBadgeBackgroundColor,
+      productBadgeTextColor,
+      productBadgeFontFamily,
+      productBadgeFontSize,
+      productBadgeFontWeight,
+      productBadgePadding,
+      productBadgeBorderRadius,
+      productBadgeMarginTop,
+
+      // Стили виджета
+      widgetBackgroundColor,
+      widgetBorderColor,
+      widgetTextColor,
+      widgetLabelColor,
+      widgetInputBackground,
+      widgetInputBorder,
+      widgetInputText,
+      widgetButtonBackground,
+      widgetButtonText,
+      widgetButtonHover,
+      widgetBalanceColor,
+      widgetErrorColor,
+      widgetSuccessColor,
+      widgetFontFamily,
+      widgetFontSize,
+      widgetLabelFontSize,
+      widgetButtonFontSize,
+      widgetBalanceFontSize,
+      widgetBorderRadius,
+      widgetPadding,
+      widgetInputBorderRadius,
+      widgetInputPadding,
+      widgetButtonBorderRadius,
+      widgetButtonPadding,
+      widgetBoxShadow,
+      widgetInputBoxShadow,
+      widgetButtonBoxShadow,
+
+      ...mainFields
+    } = body;
+
+    // Группируем стили в JSON объекты
+    const registrationStyles = {
+      backgroundColor,
+      backgroundGradient,
+      textColor,
+      titleColor,
+      descriptionColor,
+      fallbackTextColor,
+      buttonTextColor,
+      buttonBackgroundColor,
+      buttonBorderColor,
+      buttonHoverColor,
+      fallbackBackgroundColor,
+      borderRadius,
+      padding,
+      marginBottom,
+      iconSize,
+      titleFontSize,
+      titleFontWeight,
+      descriptionFontSize,
+      buttonFontSize,
+      buttonFontWeight,
+      buttonPadding,
+      buttonBorderRadius,
+      fallbackFontSize,
+      fallbackPadding,
+      fallbackBorderRadius,
+      boxShadow,
+      buttonBoxShadow,
+      iconAnimation,
+      iconEmoji,
+      iconColor,
+      fontFamily,
+      maxWidth,
+      textAlign,
+      buttonWidth,
+      buttonDisplay,
+      fontSize
+    };
+
+    const productBadgeStyles = {
+      productBadgeBackgroundColor,
+      productBadgeTextColor,
+      productBadgeFontFamily,
+      productBadgeFontSize,
+      productBadgeFontWeight,
+      productBadgePadding,
+      productBadgeBorderRadius,
+      productBadgeMarginTop
+    };
+
+    const widgetStyles = {
+      widgetBackgroundColor,
+      widgetBorderColor,
+      widgetTextColor,
+      widgetLabelColor,
+      widgetInputBackground,
+      widgetInputBorder,
+      widgetInputText,
+      widgetButtonBackground,
+      widgetButtonText,
+      widgetButtonHover,
+      widgetBalanceColor,
+      widgetErrorColor,
+      widgetSuccessColor,
+      widgetFontFamily,
+      widgetFontSize,
+      widgetLabelFontSize,
+      widgetButtonFontSize,
+      widgetBalanceFontSize,
+      widgetBorderRadius,
+      widgetPadding,
+      widgetInputBorderRadius,
+      widgetInputPadding,
+      widgetButtonBorderRadius,
+      widgetButtonPadding,
+      widgetBoxShadow,
+      widgetInputBoxShadow,
+      widgetButtonBoxShadow
+    };
+
+    // Удаляем undefined значения
+    const cleanRegistrationStyles = Object.fromEntries(
+      Object.entries(registrationStyles).filter(
+        ([_, value]) => value !== undefined
+      )
+    );
+    const cleanProductBadgeStyles = Object.fromEntries(
+      Object.entries(productBadgeStyles).filter(
+        ([_, value]) => value !== undefined
+      )
+    );
+    const cleanWidgetStyles = Object.fromEntries(
+      Object.entries(widgetStyles).filter(([_, value]) => value !== undefined)
+    );
+
+    // Подготавливаем данные для сохранения
+    const updateData = {
+      ...mainFields,
+      ...(Object.keys(cleanRegistrationStyles).length > 0 && {
+        registrationStyles: cleanRegistrationStyles
+      }),
+      ...(Object.keys(cleanProductBadgeStyles).length > 0 && {
+        productBadgeStyles: cleanProductBadgeStyles
+      }),
+      ...(Object.keys(cleanWidgetStyles).length > 0 && {
+        widgetStyles: cleanWidgetStyles
+      })
+    };
+
     // Обновляем или создаём настройки виджета
     const widgetSettings = await db.widgetSettings.upsert({
       where: { projectId },
       create: {
         projectId,
-        ...body
+        ...updateData
       },
-      update: body
+      update: updateData
     });
 
     logger.info('Настройки виджета обновлены', { projectId });
