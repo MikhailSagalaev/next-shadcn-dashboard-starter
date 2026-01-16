@@ -2410,7 +2410,7 @@
         };
 
         const processedData = {
-          welcomeBonusAmount: Number(data.welcomeBonusAmount || 500),
+          welcomeBonusAmount: Number(data.welcomeBonusAmount ?? 500),
           welcomeRewardType: data.welcomeRewardType || 'BONUS',
           firstPurchaseDiscountPercent: Number(
             data.firstPurchaseDiscountPercent || 0
@@ -2480,7 +2480,7 @@
         this.log('🎨 Отрисовываем плашку регистрации с настройками:', settings);
 
         // Экранируем данные для безопасности
-        const welcomeBonusAmount = Number(settings.welcomeBonusAmount || 500);
+        const welcomeBonusAmount = Number(settings.welcomeBonusAmount ?? 500);
         const welcomeRewardType = settings.welcomeRewardType || 'BONUS';
         const firstPurchaseDiscountPercent = Number(
           settings.firstPurchaseDiscountPercent || 0

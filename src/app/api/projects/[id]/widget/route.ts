@@ -11,6 +11,48 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
+type LegacyWidgetSettings = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
+
+function getLegacyString(
+  settings: LegacyWidgetSettings,
+  key: string
+): string | undefined {
+  const value = settings[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function getLegacyBoolean(
+  settings: LegacyWidgetSettings,
+  key: string
+): boolean | undefined {
+  const value = settings[key];
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function getLegacyNumber(
+  settings: LegacyWidgetSettings,
+  key: string
+): number | undefined {
+  const value = settings[key];
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function cleanObject<T extends Record<string, unknown>>(obj: T) {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, value]) => value !== undefined)
+  );
+}
+
 // CORS заголовки для публичного доступа
 function createCorsHeaders() {
   return {
@@ -90,17 +132,200 @@ export async function GET(
       where: { projectId }
     });
 
-    // Если настроек нет, создаём дефолтные
+    // Если настроек нет, создаём (или восстанавливаем) дефолтные
     if (!widgetSettings) {
-      logger.info('Настройки виджета не найдены, создаём дефолтные', {
+      logger.info('Настройки виджета не найдены, проверяем legacy данные', {
         projectId
       });
 
+      const botSettings = await db.botSettings.findUnique({
+        where: { projectId },
+        select: { functionalSettings: true }
+      });
+      const legacyWidgetSettings =
+        (
+          botSettings?.functionalSettings as {
+            widgetSettings?: LegacyWidgetSettings;
+          } | null
+        )?.widgetSettings || null;
+      const hasLegacySettings =
+        legacyWidgetSettings && Object.keys(legacyWidgetSettings).length > 0;
+      const legacy = legacyWidgetSettings ?? {};
+
       const defaultSettings = await db.widgetSettings.create({
-        data: {
-          projectId,
-          productBadgeBonusPercent: maxBonusPercent // Используем рассчитанный процент
-        }
+        data: hasLegacySettings
+          ? {
+              projectId,
+              registrationTitle:
+                getLegacyString(legacy, 'registrationTitle') ||
+                'Зарегистрируйся и получи {bonusAmount} бонусов!',
+              registrationDescription:
+                getLegacyString(legacy, 'registrationDescription') ||
+                'Зарегистрируйся в нашей бонусной программе',
+              registrationButtonText:
+                getLegacyString(legacy, 'registrationButtonText') ||
+                'Для участия в акции перейдите в бота',
+              registrationButtonUrl:
+                getLegacyString(legacy, 'registrationButtonUrl') || null,
+              verificationButtonUrl:
+                getLegacyString(legacy, 'verificationButtonUrl') || null,
+              registrationFallbackText:
+                getLegacyString(legacy, 'registrationFallbackText') ||
+                'Свяжитесь с администратором для регистрации',
+              showIcon: getLegacyBoolean(legacy, 'showIcon') ?? true,
+              showTitle: getLegacyBoolean(legacy, 'showTitle') ?? true,
+              showDescription:
+                getLegacyBoolean(legacy, 'showDescription') ?? true,
+              showButton: getLegacyBoolean(legacy, 'showButton') ?? true,
+              showFallbackText:
+                getLegacyBoolean(legacy, 'showFallbackText') ?? true,
+              productBadgeEnabled:
+                getLegacyBoolean(legacy, 'productBadgeEnabled') ?? true,
+              productBadgeShowOnCards:
+                getLegacyBoolean(legacy, 'productBadgeShowOnCards') ?? true,
+              productBadgeShowOnProductPage:
+                getLegacyBoolean(legacy, 'productBadgeShowOnProductPage') ??
+                true,
+              productBadgeText:
+                getLegacyString(legacy, 'productBadgeText') ||
+                'Начислим до {bonusAmount} бонусов',
+              productBadgeLinkUrl:
+                getLegacyString(legacy, 'productBadgeLinkUrl') || null,
+              productBadgeBonusPercent:
+                getLegacyNumber(legacy, 'productBadgeBonusPercent') ??
+                maxBonusPercent,
+              productBadgePosition:
+                getLegacyString(legacy, 'productBadgePosition') ||
+                'after-price',
+              productBadgeCustomSelector:
+                getLegacyString(legacy, 'productBadgeCustomSelector') || null,
+              registrationStyles: cleanObject({
+                backgroundColor: getLegacyString(legacy, 'backgroundColor'),
+                backgroundGradient: getLegacyString(
+                  legacy,
+                  'backgroundGradient'
+                ),
+                textColor: getLegacyString(legacy, 'textColor'),
+                titleColor: getLegacyString(legacy, 'titleColor'),
+                descriptionColor: getLegacyString(legacy, 'descriptionColor'),
+                fallbackTextColor: getLegacyString(legacy, 'fallbackTextColor'),
+                buttonTextColor: getLegacyString(legacy, 'buttonTextColor'),
+                buttonBackgroundColor: getLegacyString(
+                  legacy,
+                  'buttonBackgroundColor'
+                ),
+                buttonBorderColor: getLegacyString(legacy, 'buttonBorderColor'),
+                buttonHoverColor: getLegacyString(legacy, 'buttonHoverColor'),
+                fallbackBackgroundColor: getLegacyString(
+                  legacy,
+                  'fallbackBackgroundColor'
+                ),
+                borderRadius: getLegacyString(legacy, 'borderRadius'),
+                padding: getLegacyString(legacy, 'padding'),
+                marginBottom: getLegacyString(legacy, 'marginBottom'),
+                iconSize: getLegacyString(legacy, 'iconSize'),
+                titleFontSize: getLegacyString(legacy, 'titleFontSize'),
+                titleFontWeight: getLegacyString(legacy, 'titleFontWeight'),
+                descriptionFontSize: getLegacyString(
+                  legacy,
+                  'descriptionFontSize'
+                ),
+                buttonFontSize: getLegacyString(legacy, 'buttonFontSize'),
+                buttonFontWeight: getLegacyString(legacy, 'buttonFontWeight'),
+                buttonPadding: getLegacyString(legacy, 'buttonPadding'),
+                buttonBorderRadius: getLegacyString(
+                  legacy,
+                  'buttonBorderRadius'
+                ),
+                fallbackFontSize: getLegacyString(legacy, 'fallbackFontSize'),
+                fallbackPadding: getLegacyString(legacy, 'fallbackPadding'),
+                fallbackBorderRadius: getLegacyString(
+                  legacy,
+                  'fallbackBorderRadius'
+                ),
+                boxShadow: getLegacyString(legacy, 'boxShadow'),
+                buttonBoxShadow: getLegacyString(legacy, 'buttonBoxShadow'),
+                iconAnimation: getLegacyString(legacy, 'iconAnimation'),
+                iconEmoji: getLegacyString(legacy, 'iconEmoji'),
+                iconColor: getLegacyString(legacy, 'iconColor'),
+                fontFamily: getLegacyString(legacy, 'fontFamily'),
+                maxWidth: getLegacyString(legacy, 'maxWidth'),
+                textAlign: getLegacyString(legacy, 'textAlign'),
+                buttonWidth: getLegacyString(legacy, 'buttonWidth'),
+                buttonDisplay: getLegacyString(legacy, 'buttonDisplay'),
+                fontSize: getLegacyString(legacy, 'fontSize')
+              }),
+              productBadgeStyles: cleanObject({
+                backgroundColor: getLegacyString(
+                  legacy,
+                  'productBadgeBackgroundColor'
+                ),
+                textColor: getLegacyString(legacy, 'productBadgeTextColor'),
+                fontFamily: getLegacyString(legacy, 'productBadgeFontFamily'),
+                fontSize: getLegacyString(legacy, 'productBadgeFontSize'),
+                fontWeight: getLegacyString(legacy, 'productBadgeFontWeight'),
+                padding: getLegacyString(legacy, 'productBadgePadding'),
+                borderRadius: getLegacyString(
+                  legacy,
+                  'productBadgeBorderRadius'
+                ),
+                marginTop: getLegacyString(legacy, 'productBadgeMarginTop')
+              }),
+              widgetStyles: cleanObject({
+                backgroundColor: getLegacyString(
+                  legacy,
+                  'widgetBackgroundColor'
+                ),
+                borderColor: getLegacyString(legacy, 'widgetBorderColor'),
+                textColor: getLegacyString(legacy, 'widgetTextColor'),
+                labelColor: getLegacyString(legacy, 'widgetLabelColor'),
+                inputBackground: getLegacyString(
+                  legacy,
+                  'widgetInputBackground'
+                ),
+                inputBorder: getLegacyString(legacy, 'widgetInputBorder'),
+                inputText: getLegacyString(legacy, 'widgetInputText'),
+                buttonBackground: getLegacyString(
+                  legacy,
+                  'widgetButtonBackground'
+                ),
+                buttonText: getLegacyString(legacy, 'widgetButtonText'),
+                buttonHover: getLegacyString(legacy, 'widgetButtonHover'),
+                balanceColor: getLegacyString(legacy, 'widgetBalanceColor'),
+                errorColor: getLegacyString(legacy, 'widgetErrorColor'),
+                successColor: getLegacyString(legacy, 'widgetSuccessColor'),
+                fontFamily: getLegacyString(legacy, 'widgetFontFamily'),
+                fontSize: getLegacyString(legacy, 'widgetFontSize'),
+                labelFontSize: getLegacyString(legacy, 'widgetLabelFontSize'),
+                buttonFontSize: getLegacyString(legacy, 'widgetButtonFontSize'),
+                balanceFontSize: getLegacyString(
+                  legacy,
+                  'widgetBalanceFontSize'
+                ),
+                borderRadius: getLegacyString(legacy, 'widgetBorderRadius'),
+                padding: getLegacyString(legacy, 'widgetPadding'),
+                inputBorderRadius: getLegacyString(
+                  legacy,
+                  'widgetInputBorderRadius'
+                ),
+                inputPadding: getLegacyString(legacy, 'widgetInputPadding'),
+                buttonBorderRadius: getLegacyString(
+                  legacy,
+                  'widgetButtonBorderRadius'
+                ),
+                buttonPadding: getLegacyString(legacy, 'widgetButtonPadding'),
+                boxShadow: getLegacyString(legacy, 'widgetBoxShadow'),
+                inputBoxShadow: getLegacyString(legacy, 'widgetInputBoxShadow'),
+                buttonBoxShadow: getLegacyString(
+                  legacy,
+                  'widgetButtonBoxShadow'
+                )
+              })
+            }
+          : {
+              projectId,
+              productBadgeBonusPercent: maxBonusPercent // Используем рассчитанный процент
+            }
       });
 
       return NextResponse.json(
