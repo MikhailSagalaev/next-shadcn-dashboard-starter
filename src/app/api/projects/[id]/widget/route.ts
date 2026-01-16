@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
@@ -47,10 +48,12 @@ function getLegacyNumber(
   return undefined;
 }
 
-function cleanObject<T extends Record<string, unknown>>(obj: T) {
+function cleanObject<T extends Record<string, unknown>>(
+  obj: T
+): Prisma.InputJsonValue {
   return Object.fromEntries(
     Object.entries(obj).filter(([, value]) => value !== undefined)
-  );
+  ) as Prisma.InputJsonValue;
 }
 
 // CORS заголовки для публичного доступа
