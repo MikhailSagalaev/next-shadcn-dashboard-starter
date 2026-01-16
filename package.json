@@ -14,7 +14,7 @@
     "docs:dev": "cd user-docs && yarn install && yarn dev",
     "docs:build": "cd user-docs && yarn install && yarn build",
     "docs:export": "cd user-docs && yarn install && yarn export",
-    "lint": "eslint src",
+    "lint": "node scripts/run-eslint.mjs src",
     "lint:fix": "eslint src --fix && yarn format",
     "lint:strict": "eslint --max-warnings=0 src",
     "format": "prettier --write .",
