@@ -2,7 +2,20 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
+function Input({
+  className,
+  type,
+  onFocus,
+  ...props
+}: React.ComponentProps<'input'>) {
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Для числовых инпутов: если значение 0, выделяем весь текст для удобного редактирования
+    if (type === 'number' && e.target.value === '0') {
+      e.target.select();
+    }
+    onFocus?.(e);
+  };
+
   return (
     <input
       type={type}
@@ -13,6 +26,7 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
         'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
         className
       )}
+      onFocus={handleFocus}
       {...props}
     />
   );

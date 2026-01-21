@@ -285,9 +285,9 @@ export function BillingTab() {
     }
   };
 
-  if (loading || !currentPlan || !usageStats) {
+  if (loading) {
     return (
-      <div className='flex h-64 items-center justify-center'>
+      <div className='flex h-64 w-full items-center justify-center'>
         <div className='text-center'>
           <div className='border-primary mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2'></div>
           <p className='text-muted-foreground'>Загрузка данных биллинга...</p>
@@ -296,10 +296,26 @@ export function BillingTab() {
     );
   }
 
+  if (!currentPlan || !usageStats) {
+    return (
+      <div className='flex h-64 w-full items-center justify-center'>
+        <div className='text-center'>
+          <AlertTriangle className='text-destructive mx-auto mb-4 h-12 w-12' />
+          <p className='text-muted-foreground'>
+            Не удалось загрузить данные биллинга
+          </p>
+          <Button variant='outline' className='mt-4' onClick={loadBillingData}>
+            Попробовать снова
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const plansToRender = planCatalog.length ? planCatalog : [currentPlan];
 
   return (
-    <div className='space-y-6'>
+    <div className='w-full space-y-6'>
       {/* Предупреждение об истечении подписки */}
       {subscriptionInfo?.expirationWarning && (
         <Alert

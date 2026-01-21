@@ -86,6 +86,7 @@ export default async function RootLayout({
           isScaled ? 'theme-scaled' : '',
           fontVariables
         )}
+        suppressHydrationWarning
       >
         <NextTopLoader showSpinner={false} />
         <NuqsAdapter>

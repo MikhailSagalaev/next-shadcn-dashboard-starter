@@ -13,6 +13,8 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageContainer from '@/components/layout/page-container';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Heading } from '@/components/ui/heading';
+import { Separator } from '@/components/ui/separator';
 import { User, Settings, CreditCard } from 'lucide-react';
 import { ProfileTab } from '@/features/profile/components/profile-tab';
 import { SettingsTab } from '@/features/settings/components/settings-tab';
@@ -43,14 +45,16 @@ export default function SettingsPage() {
 
   return (
     <PageContainer>
-      <div className='space-y-6'>
+      <div className='flex w-full flex-1 flex-col space-y-6'>
         {/* Заголовок */}
-        <div>
-          <h1 className='text-3xl font-bold tracking-tight'>Настройки</h1>
-          <p className='text-muted-foreground mt-1'>
-            Управление профилем, настройками и подпиской
-          </p>
+        <div className='flex items-center justify-between'>
+          <Heading
+            title='Настройки'
+            description='Управление профилем, настройками безопасности и подпиской'
+          />
         </div>
+
+        <Separator />
 
         {/* Основной контент с табами */}
         <Tabs

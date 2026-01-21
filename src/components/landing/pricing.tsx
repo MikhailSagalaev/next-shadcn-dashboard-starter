@@ -1,13 +1,12 @@
 /**
  * @file: pricing.tsx
- * @description: Секция тарифов - современный темный дизайн
+ * @description: Секция тарифов (Server Component)
  * @project: SaaS Bonus System
  * @dependencies: React, Shadcn/ui, Lucide-react
  * @created: 2025-01-28
+ * @updated: 2026-01-21 - Оптимизация: Server Component (статичный контент)
  * @author: AI Assistant + User
  */
-
-'use client';
 
 import { Button } from '@/components/ui/button';
 import { Check, Sparkles } from 'lucide-react';

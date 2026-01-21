@@ -16,11 +16,12 @@ import type { WorkflowNodeData } from '@/types/workflow';
 export const TriggerNode = memo(({ data }: NodeProps) => {
   const nodeData = data as WorkflowNodeData;
   const triggerType = nodeData.type;
-  const triggerValue = nodeData.config['trigger.command']?.command ||
-                       nodeData.config['trigger.message']?.pattern ||
-                       nodeData.config['trigger.callback']?.callbackData ||
-                       'Нажмите для редактирования';
-  
+  const triggerValue =
+    nodeData.config['trigger.command']?.command ||
+    nodeData.config['trigger.message']?.pattern ||
+    nodeData.config['trigger.callback']?.callbackData ||
+    'Нажмите для редактирования';
+
   const getTriggerDisplayText = () => {
     switch (triggerType) {
       case 'trigger.command':
@@ -32,29 +33,38 @@ export const TriggerNode = memo(({ data }: NodeProps) => {
       case 'trigger.webhook':
         return `Webhook: ${triggerValue}`;
       default:
-        return `${triggerType}: ${triggerValue}`;
+        // Если тип не определен, пробуем взять его из конфига или ставим заглушку
+        const typeLabel = triggerType
+          ? String(triggerType).replace('trigger.', '')
+          : 'Старт';
+        return `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)}: ${triggerValue}`;
     }
   };
 
   return (
-    <Card className='w-64 shadow-md border-green-500'>
+    <Card className='w-64 border-green-500 shadow-md'>
       <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
         <CardTitle className='text-sm font-medium'>
           <Play className='mr-2 inline-block h-4 w-4 text-green-500' />
           {nodeData.label}
         </CardTitle>
-        <span className='text-xs text-muted-foreground'>Триггер</span>
+        <span className='text-muted-foreground text-xs'>Триггер</span>
       </CardHeader>
       <CardContent className='space-y-2'>
-        <p className='text-sm text-muted-foreground line-clamp-2'>
+        <p className='text-muted-foreground line-clamp-2 text-sm'>
           {getTriggerDisplayText()}
         </p>
       </CardContent>
-      <Handle 
-        type='source' 
-        position={Position.Bottom} 
-        className='!bg-green-500 !w-4 !h-4 !border-2' 
-        style={{ width: '14px', height: '14px', border: '2px solid white', borderRadius: '50%' }}
+      <Handle
+        type='source'
+        position={Position.Bottom}
+        className='!h-4 !w-4 !border-2 !bg-green-500'
+        style={{
+          width: '14px',
+          height: '14px',
+          border: '2px solid white',
+          borderRadius: '50%'
+        }}
       />
     </Card>
   );

@@ -1,13 +1,12 @@
 /**
  * @file: features.tsx
- * @description: Секция функционала/возможностей - современный темный дизайн
+ * @description: Секция функционала/возможностей (Server Component)
  * @project: SaaS Bonus System
  * @dependencies: React, Shadcn/ui, Lucide-react
  * @created: 2025-01-28
+ * @updated: 2026-01-21 - Оптимизация: Server Component (статичный контент)
  * @author: AI Assistant + User
  */
-
-'use client';
 
 import {
   Gift,

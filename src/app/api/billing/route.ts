@@ -13,6 +13,7 @@ import { verifyJwt } from '@/lib/jwt';
 import { logger } from '@/lib/logger';
 import { formatPlan, toNumber } from '@/lib/services/billing-plan.utils';
 import { InvoiceService } from '@/lib/services/invoice.service';
+import { Prisma } from '@prisma/client';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trial', 'paused'];
 
@@ -159,10 +160,26 @@ export async function GET(request: NextRequest) {
     }
 
     if (!planRecord) {
-      return NextResponse.json(
-        { error: 'No subscription plans configured' },
-        { status: 500 }
-      );
+      // Fallback if DB is empty
+      planRecord = {
+        id: 'fallback-free',
+        slug: 'free',
+        name: 'Free (Fallback)',
+        description: 'Базовый тариф',
+        price: new Prisma.Decimal(0),
+        currency: 'RUB',
+        interval: 'month',
+        features: JSON.stringify(['Базовый доступ']),
+        maxProjects: 1,
+        maxUsersPerProject: 10,
+        maxBots: 1,
+        maxNotifications: 100,
+        isActive: true,
+        isPublic: true,
+        sortOrder: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as any;
     }
 
     const currentPlan = formatPlan(planRecord, {

@@ -1,7 +1,6 @@
 'use client';
 import React, { useEffect } from 'react';
 import { ActiveThemeProvider } from '../active-theme';
-import { HeroUIProvider } from '@heroui/react';
 import '@/lib/client-logger'; // Инициализация клиентского логгера
 
 export default function Providers({
@@ -17,10 +16,8 @@ export default function Providers({
   }, []);
 
   return (
-    <HeroUIProvider>
-      <ActiveThemeProvider initialTheme={activeThemeValue}>
-        {children}
-      </ActiveThemeProvider>
-    </HeroUIProvider>
+    <ActiveThemeProvider initialTheme={activeThemeValue}>
+      {children}
+    </ActiveThemeProvider>
   );
 }

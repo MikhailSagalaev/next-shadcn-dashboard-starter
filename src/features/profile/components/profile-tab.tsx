@@ -80,7 +80,7 @@ export function ProfileTab() {
   }, [loadStats]);
 
   return (
-    <div className='space-y-6'>
+    <div className='w-full space-y-6'>
       <div className='grid gap-6 md:grid-cols-2'>
         {/* Информация о пользователе */}
         <Card>

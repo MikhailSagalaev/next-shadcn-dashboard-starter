@@ -122,6 +122,12 @@
   }
 }
 
+@layer utilities {
+  .glass-card {
+    @apply bg-white/60 backdrop-blur-xl supports-[backdrop-filter]:bg-white/40 dark:bg-zinc-900/60 supports-[backdrop-filter]:dark:bg-zinc-900/40;
+  }
+}
+
 /* View Transition Wave Effect */
 ::view-transition-old(root),
 ::view-transition-new(root) {

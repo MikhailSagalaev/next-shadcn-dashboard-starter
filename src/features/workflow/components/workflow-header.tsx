@@ -51,7 +51,10 @@ interface WorkflowHeaderProps {
   currentWorkflow: Workflow | null;
   selectedWorkflowId: string | null;
   onWorkflowSelect: (id: string) => void;
-  onWorkflowCreate: (name: string, description?: string) => Promise<Workflow | undefined>;
+  onWorkflowCreate: (
+    name: string,
+    description?: string
+  ) => Promise<Workflow | undefined>;
   onWorkflowLoad: (id: string) => void;
   onWorkflowSave: () => void;
   onWorkflowDelete: (id: string) => void;
@@ -98,7 +101,9 @@ export function WorkflowHeader({
     setNewWorkflowDescription('');
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     if (event.target.files && event.target.files.length > 0) {
       const file = event.target.files[0];
       await onWorkflowImport(file);
@@ -110,7 +115,7 @@ export function WorkflowHeader({
   };
 
   return (
-    <header className='flex items-center justify-between border-b bg-background p-3 shadow-sm'>
+    <header className='bg-background flex items-center justify-between border-b p-3 shadow-sm'>
       <div className='flex items-center gap-3'>
         <h1 className='text-xl font-bold'>Конструктор Workflow</h1>
         <DropdownMenu>
@@ -120,16 +125,18 @@ export function WorkflowHeader({
               <ChevronDown className='h-4 w-4' />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="max-h-[300px]">
+          <DropdownMenuContent className='max-h-[300px]'>
             <DropdownMenuLabel>Мои workflow</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <ScrollArea className="max-h-[200px]">
+            <ScrollArea className='max-h-[200px]'>
               {workflows.length > 0 ? (
                 workflows.map((workflow) => (
                   <DropdownMenuItem
                     key={workflow.id}
                     onSelect={() => onWorkflowLoad(workflow.id)}
-                    className={currentWorkflow?.id === workflow.id ? 'bg-accent' : ''}
+                    className={
+                      currentWorkflow?.id === workflow.id ? 'bg-accent' : ''
+                    }
                   >
                     {workflow.name}
                   </DropdownMenuItem>
@@ -153,15 +160,26 @@ export function WorkflowHeader({
         {currentWorkflow && (
           <>
             <Button
-              variant={currentWorkflow.isActive ? 'default' : 'outline'}
-              onClick={() => onWorkflowToggleActive(currentWorkflow.id, !currentWorkflow.isActive)}
+              variant={currentWorkflow.isActive ? 'secondary' : 'default'}
+              onClick={() => {
+                const newActiveState = !currentWorkflow.isActive;
+                onWorkflowToggleActive(currentWorkflow.id, newActiveState);
+                toast({
+                  title: newActiveState
+                    ? 'Workflow опубликован'
+                    : 'Workflow деактивирован',
+                  description: newActiveState
+                    ? `Workflow "${currentWorkflow.name}" теперь активен.`
+                    : `Workflow "${currentWorkflow.name}" больше не принимает события.`
+                });
+              }}
             >
               {currentWorkflow.isActive ? (
                 <Square className='mr-2 h-4 w-4' />
               ) : (
-                <Play className='mr-2 h-4 w-4' />
+                <Play className='mr-2 h-4 w-4 text-white' />
               )}
-              {currentWorkflow.isActive ? 'Деактивировать' : 'Активировать'}
+              {currentWorkflow.isActive ? 'Снять с публикации' : 'Опубликовать'}
             </Button>
             <Button
               variant='outline'
@@ -222,7 +240,10 @@ export function WorkflowHeader({
             </div>
           </div>
           <DialogFooter>
-            <Button variant='outline' onClick={() => setIsCreateDialogOpen(false)}>
+            <Button
+              variant='outline'
+              onClick={() => setIsCreateDialogOpen(false)}
+            >
               Отмена
             </Button>
             <Button onClick={handleCreateWorkflow}>Создать</Button>
@@ -249,7 +270,10 @@ export function WorkflowHeader({
             />
           </div>
           <DialogFooter>
-            <Button variant='outline' onClick={() => setIsImportDialogOpen(false)}>
+            <Button
+              variant='outline'
+              onClick={() => setIsImportDialogOpen(false)}
+            >
               Отмена
             </Button>
           </DialogFooter>

@@ -2,8 +2,9 @@
  * @file: src/features/projects/components/project-analytics-view.tsx
  * @description: Компонент аналитики и статистики проекта
  * @project: SaaS Bonus System
- * @dependencies: React, Charts, UI components
+ * @dependencies: React, Framer Motion, Charts, UI components
  * @created: 2024-12-31
+ * @updated: 2026-01-21 - Стиль как на главной странице дашборда
  * @author: AI Assistant + User
  */
 
@@ -11,6 +12,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import {
   ArrowLeft,
   Users,
@@ -167,6 +169,21 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
 
   const { overview } = analytics;
 
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const item = {
+    hidden: { y: 20, opacity: 0 },
+    show: { y: 0, opacity: 1 }
+  };
+
   return (
     <div className='flex flex-1 flex-col space-y-6'>
       {/* Header */}
@@ -182,113 +199,136 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
       <Separator />
 
       {/* Main Metrics */}
-      <div className='grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-6'>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Пользователи</CardTitle>
-            <Users className='text-muted-foreground h-4 w-4' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>{overview.totalUsers}</div>
-            <div className='text-muted-foreground flex items-center space-x-2 text-xs'>
-              <span>Активных: {overview.activeUsers}</span>
-              <Badge variant='outline' className='text-xs'>
-                +{overview.newUsersLast7Days} за неделю
-              </Badge>
+      <motion.div
+        variants={container}
+        initial='hidden'
+        animate='show'
+        className='grid gap-4 md:grid-cols-2 lg:grid-cols-6'
+      >
+        <motion.div variants={item}>
+          <div className='glass-card relative overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <div className='absolute top-4 right-4 rounded-full bg-blue-500/10 p-2.5 text-blue-500'>
+              <Users className='h-5 w-5' />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <p className='text-sm font-medium text-zinc-500 dark:text-zinc-400'>
+                Пользователи
+              </p>
+              <h3 className='mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50'>
+                {overview.totalUsers}
+              </h3>
+              <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+                Активных: {overview.activeUsers}
+              </p>
+            </div>
+          </div>
+        </motion.div>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Всего бонусов</CardTitle>
-            <Gift className='text-muted-foreground h-4 w-4' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {formatNumber(Number(overview.totalBonuses))} бонусов
+        <motion.div variants={item}>
+          <div className='glass-card relative overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <div className='absolute top-4 right-4 rounded-full bg-purple-500/10 p-2.5 text-purple-500'>
+              <Gift className='h-5 w-5' />
             </div>
-            <div className='text-muted-foreground flex items-center space-x-2 text-xs'>
-              <span>
-                Активных: {formatNumber(Number(overview.activeBonuses))} бонусов
-              </span>
+            <div>
+              <p className='text-sm font-medium text-zinc-500 dark:text-zinc-400'>
+                Всего бонусов
+              </p>
+              <h3 className='mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50'>
+                {formatNumber(Number(overview.totalBonuses))}
+              </h3>
+              <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+                Активных: {formatNumber(Number(overview.activeBonuses))}
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Транзакции</CardTitle>
-            <Activity className='text-muted-foreground h-4 w-4' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {overview.totalTransactions}
+        <motion.div variants={item}>
+          <div className='glass-card relative overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <div className='absolute top-4 right-4 rounded-full bg-emerald-500/10 p-2.5 text-emerald-500'>
+              <Activity className='h-5 w-5' />
             </div>
-            <div className='text-muted-foreground flex items-center space-x-2 text-xs'>
-              <TrendingUp className='h-3 w-3 text-green-500' />
-              <span>+{overview.transactionsLast7Days} за неделю</span>
+            <div>
+              <p className='text-sm font-medium text-zinc-500 dark:text-zinc-400'>
+                Транзакции
+              </p>
+              <h3 className='mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50'>
+                {overview.totalTransactions}
+              </h3>
+              <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+                +{overview.transactionsLast7Days} за неделю
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Уровни</CardTitle>
-            <Target className='text-muted-foreground h-4 w-4' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {analytics.userLevels?.length || 0}
+        <motion.div variants={item}>
+          <div className='glass-card relative overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <div className='absolute top-4 right-4 rounded-full bg-indigo-500/10 p-2.5 text-indigo-500'>
+              <Target className='h-5 w-5' />
             </div>
-            <div className='text-muted-foreground text-xs'>
-              активных уровней
+            <div>
+              <p className='text-sm font-medium text-zinc-500 dark:text-zinc-400'>
+                Уровни
+              </p>
+              <h3 className='mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50'>
+                {analytics.userLevels?.length || 0}
+              </h3>
+              <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+                активных уровней
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Рефералы</CardTitle>
-            <UserCheck className='text-muted-foreground h-4 w-4' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {analytics.referralStats?.totalReferrals || 0}
+        <motion.div variants={item}>
+          <div className='glass-card relative overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <div className='absolute top-4 right-4 rounded-full bg-cyan-500/10 p-2.5 text-cyan-500'>
+              <UserCheck className='h-5 w-5' />
             </div>
-            <div className='text-muted-foreground text-xs'>
-              {formatNumber(
-                Number(analytics.referralStats?.totalBonusPaid || 0)
-              )}{' '}
-              бонусов выплачено
+            <div>
+              <p className='text-sm font-medium text-zinc-500 dark:text-zinc-400'>
+                Рефералы
+              </p>
+              <h3 className='mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50'>
+                {analytics.referralStats?.totalReferrals || 0}
+              </h3>
+              <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+                {formatNumber(
+                  Number(analytics.referralStats?.totalBonusPaid || 0)
+                )}{' '}
+                выплачено
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>
-              Истекающие бонусы
-            </CardTitle>
-            <AlertTriangle className='text-warning h-4 w-4' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-warning text-2xl font-bold'>
-              {formatNumber(Number(overview.expiringBonuses.amount))} бонусов
+        <motion.div variants={item}>
+          <div className='glass-card relative overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <div className='absolute top-4 right-4 rounded-full bg-amber-500/10 p-2.5 text-amber-500'>
+              <AlertTriangle className='h-5 w-5' />
             </div>
-            <div className='text-muted-foreground text-xs'>
-              {overview.expiringBonuses.count} бонусов
+            <div>
+              <p className='text-sm font-medium text-zinc-500 dark:text-zinc-400'>
+                Истекающие
+              </p>
+              <h3 className='mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50'>
+                {formatNumber(Number(overview.expiringBonuses.amount))}
+              </h3>
+              <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+                {overview.expiringBonuses.count} бонусов
+              </p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </motion.div>
+      </motion.div>
 
       {/* Charts Section */}
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
         {/* Daily Activity Chart */}
-        <Card>
+        <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
           <CardHeader>
-            <CardTitle className='flex items-center space-x-2'>
+            <CardTitle className='flex items-center space-x-2 text-xl font-semibold'>
               <BarChart3 className='h-5 w-5' />
               <span>Активность по дням</span>
             </CardTitle>
@@ -354,9 +394,9 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
         </Card>
 
         {/* User Levels Distribution Pie Chart */}
-        <Card>
+        <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
           <CardHeader>
-            <CardTitle className='flex items-center space-x-2'>
+            <CardTitle className='flex items-center space-x-2 text-xl font-semibold'>
               <Target className='h-5 w-5' />
               <span>Распределение по уровням</span>
             </CardTitle>
@@ -424,7 +464,8 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
                               Пользователей: {data.value}
                             </div>
                             <div className='text-muted-foreground text-sm'>
-                              Ср. покупки: {formatNumber(data.avgPurchases)} руб.
+                              Ср. покупки: {formatNumber(data.avgPurchases)}{' '}
+                              руб.
                             </div>
                           </div>
                         );
@@ -443,9 +484,9 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
       {/* Secondary Charts */}
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
         {/* Transaction Types Pie Chart */}
-        <Card>
+        <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
           <CardHeader>
-            <CardTitle className='flex items-center space-x-2'>
+            <CardTitle className='flex items-center space-x-2 text-xl font-semibold'>
               <PieChart className='h-5 w-5' />
               <span>Распределение транзакций</span>
             </CardTitle>
@@ -507,9 +548,9 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
         </Card>
 
         {/* Referral Stats Card */}
-        <Card>
+        <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
           <CardHeader>
-            <CardTitle className='flex items-center space-x-2'>
+            <CardTitle className='flex items-center space-x-2 text-xl font-semibold'>
               <UserCheck className='h-5 w-5' />
               <span>Реферальная программа</span>
             </CardTitle>
@@ -538,7 +579,8 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
                 </div>
                 <div className='bg-muted/50 rounded-lg border p-3 text-center'>
                   <div className='text-lg font-semibold'>
-                    {formatNumber(analytics.referralStats.totalBonusPaid)} бонусов
+                    {formatNumber(analytics.referralStats.totalBonusPaid)}{' '}
+                    бонусов
                   </div>
                   <div className='text-muted-foreground text-sm'>
                     Выплачено реферальных бонусов
@@ -580,9 +622,9 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
       </div>
 
       {/* Top Users Table */}
-      <Card>
+      <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
         <CardHeader>
-          <CardTitle className='flex items-center space-x-2'>
+          <CardTitle className='flex items-center space-x-2 text-xl font-semibold'>
             <Award className='h-5 w-5' />
             <span>Топ активных пользователей</span>
           </CardTitle>
@@ -598,21 +640,23 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
               </div>
             ) : (
               analytics.topUsers.map((user, index) => (
-                <div
+                <motion.div
                   key={user.id}
-                  className='flex items-center justify-between rounded-lg border p-4'
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className='group cursor-pointer rounded-xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:border-indigo-100 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-900/50'
                 >
                   <div className='flex items-center space-x-3'>
                     <div className='flex-shrink-0'>
-                      <div className='bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full'>
-                        <span className='text-primary font-semibold'>
-                          #{index + 1}
-                        </span>
+                      <div className='flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-500'>
+                        <span className='font-semibold'>#{index + 1}</span>
                       </div>
                     </div>
                     <div>
-                      <div className='font-medium'>{user.name}</div>
-                      <div className='text-muted-foreground text-sm'>
+                      <div className='font-medium text-zinc-900 dark:text-zinc-100'>
+                        {user.name}
+                      </div>
+                      <div className='text-sm text-zinc-500 dark:text-zinc-400'>
                         {user.contact}
                       </div>
                     </div>
@@ -620,26 +664,32 @@ export function ProjectAnalyticsView({ projectId }: ProjectAnalyticsViewProps) {
                   <div className='text-right'>
                     <div className='flex items-center space-x-4 text-sm'>
                       <div>
-                        <div className='font-medium'>
+                        <div className='font-medium text-zinc-900 dark:text-zinc-100'>
                           {user.transactionCount}
                         </div>
-                        <div className='text-muted-foreground'>транзакций</div>
+                        <div className='text-xs text-zinc-500 dark:text-zinc-400'>
+                          транзакций
+                        </div>
                       </div>
                       <div>
-                        <div className='font-medium text-green-600'>
-                          +{formatNumber(user.totalEarned)} бонусов
+                        <div className='font-medium text-emerald-600'>
+                          +{formatNumber(user.totalEarned)}
                         </div>
-                        <div className='text-muted-foreground'>начислено</div>
+                        <div className='text-xs text-zinc-500 dark:text-zinc-400'>
+                          начислено
+                        </div>
                       </div>
                       <div>
                         <div className='font-medium text-red-600'>
-                          -{formatNumber(user.totalSpent)} бонусов
+                          -{formatNumber(user.totalSpent)}
                         </div>
-                        <div className='text-muted-foreground'>потрачено</div>
+                        <div className='text-xs text-zinc-500 dark:text-zinc-400'>
+                          потрачено
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))
             )}
           </div>

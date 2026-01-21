@@ -9,11 +9,10 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  Save,
   Bot,
   Users,
   BarChart3,
@@ -21,17 +20,7 @@ import {
   Coins,
   Share2,
   Code,
-  Zap,
-  BookOpen,
-  Wrench,
-  Library,
   Workflow,
-  ShoppingCart,
-  Package,
-  ShoppingBag,
-  Users2,
-  Mail,
-  MessageSquare,
   Gift,
   Percent
 } from 'lucide-react';
@@ -83,6 +72,8 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
   const [usersCount, setUsersCount] = useState(0);
   const [showModeConfirmDialog, setShowModeConfirmDialog] = useState(false);
   const [pendingMode, setPendingMode] = useState<OperationMode | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -98,10 +89,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     isActive: true,
     welcomeBonusAmount: 0,
     welcomeRewardType: 'BONUS' as WelcomeRewardType,
-    firstPurchaseDiscountPercent: 10,
-    // ✨ НОВОЕ: Workflow лимиты
-    workflowMaxSteps: 100,
-    workflowTimeoutMs: 30000
+    firstPurchaseDiscountPercent: 10
   });
 
   const loadProject = async () => {
@@ -147,10 +135,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           welcomeRewardType: (projectData.welcomeRewardType ||
             'BONUS') as WelcomeRewardType,
           firstPurchaseDiscountPercent:
-            projectData.firstPurchaseDiscountPercent || 10,
-          // ✨ НОВОЕ: Workflow лимиты
-          workflowMaxSteps: projectData.workflowMaxSteps || 100,
-          workflowTimeoutMs: projectData.workflowTimeoutMs || 30000
+            projectData.firstPurchaseDiscountPercent || 10
         });
       } else if (projectResponse.status === 403) {
         // Проект не принадлежит текущему админу
@@ -190,6 +175,38 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     loadProject();
   }, [projectId]); // Добавляем projectId в зависимости вместо loadProject
 
+  // Отслеживание изменений формы
+  useEffect(() => {
+    if (!project) return;
+
+    const hasChanges =
+      formData.name !== (project.name || '') ||
+      formData.domain !== (project.domain || '') ||
+      formData.bonusPercentage !== Number(project.bonusPercentage || 1.0) ||
+      formData.bonusExpiryDays !== (project.bonusExpiryDays || 365) ||
+      formData.operationMode !== (project.operationMode || 'WITH_BOT') ||
+      formData.isActive !== (project.isActive ?? true) ||
+      formData.welcomeBonusAmount !== Number(project.welcomeBonus || 0) ||
+      formData.welcomeRewardType !== (project.welcomeRewardType || 'BONUS') ||
+      formData.firstPurchaseDiscountPercent !==
+        (project.firstPurchaseDiscountPercent || 10);
+
+    setIsDirty(hasChanges);
+  }, [formData, project]);
+
+  // Предупреждение при закрытии вкладки/окна
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
   const handleSave = async () => {
     if (!formData.name.trim()) {
       toast({
@@ -223,6 +240,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
       if (response.ok) {
         const updatedProject = await response.json();
         setProject(updatedProject);
+        setIsDirty(false); // Сбрасываем флаг изменений после успешного сохранения
 
         toast({
           title: 'Успех',
@@ -335,13 +353,29 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
         <div className='space-y-6 lg:col-span-2'>
           <Card>
             <CardHeader>
-              <CardTitle className='flex items-center'>
-                <Settings className='mr-2 h-5 w-5' />
-                Основные настройки
-              </CardTitle>
-              <CardDescription>
-                Базовые параметры проекта бонусной системы
-              </CardDescription>
+              <div className='flex items-center justify-between'>
+                <div>
+                  <CardTitle className='flex items-center'>
+                    <Settings className='mr-2 h-5 w-5' />
+                    Основные настройки
+                  </CardTitle>
+                  <CardDescription>
+                    Базовые параметры проекта бонусной системы
+                  </CardDescription>
+                </div>
+                <div className='flex items-center space-x-2'>
+                  <Switch
+                    id='isActive-header'
+                    checked={formData.isActive}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, isActive: checked })
+                    }
+                  />
+                  <Label htmlFor='isActive-header' className='cursor-pointer'>
+                    Проект активен
+                  </Label>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className='space-y-6'>
               <div className='space-y-4'>
@@ -516,84 +550,47 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   </div>
                 </div>
 
-                <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                  {/* Показываем поле процента только если нет уровней */}
-                  {!hasLevels ? (
-                    <div className='space-y-2'>
-                      <Label htmlFor='bonusPercentage'>
-                        Процент бонусов (%)
-                      </Label>
-                      <Input
-                        id='bonusPercentage'
-                        type='number'
-                        min='0'
-                        max='100'
-                        step='0.01'
-                        value={formData.bonusPercentage}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            bonusPercentage: parseFloat(e.target.value) || 0
-                          })
-                        }
-                        placeholder='1.0'
-                      />
-                      <p className='text-muted-foreground text-xs'>
-                        Базовый процент бонусов за каждую покупку
-                      </p>
-                    </div>
-                  ) : (
-                    <div className='space-y-2'>
-                      <Label className='text-muted-foreground'>
-                        Процент бонусов
-                      </Label>
-                      <div className='rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950'>
-                        <p className='text-sm text-blue-700 dark:text-blue-300'>
-                          Процент начисления определяется{' '}
-                          <Link
-                            href={`/dashboard/projects/${projectId}/bonus-levels`}
-                            className='font-medium underline hover:no-underline'
-                          >
-                            уровнями бонусов
-                          </Link>
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                {/* Показываем поле процента только если нет уровней */}
+                {!hasLevels ? (
                   <div className='space-y-2'>
-                    <Label htmlFor='bonusExpiryDays'>
-                      Срок действия бонусов (дни)
-                    </Label>
+                    <Label htmlFor='bonusPercentage'>Процент бонусов (%)</Label>
                     <Input
-                      id='bonusExpiryDays'
+                      id='bonusPercentage'
                       type='number'
-                      min='1'
-                      max='3650'
-                      value={formData.bonusExpiryDays}
+                      min='0'
+                      max='100'
+                      step='0.01'
+                      value={formData.bonusPercentage}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          bonusExpiryDays: parseInt(e.target.value) || 365
+                          bonusPercentage: parseFloat(e.target.value) || 0
                         })
                       }
-                      placeholder='365'
+                      placeholder='1.0'
                     />
                     <p className='text-muted-foreground text-xs'>
-                      Количество дней до истечения бонусов
+                      Базовый процент бонусов за каждую покупку
                     </p>
                   </div>
-                </div>
-
-                <div className='flex items-center space-x-2'>
-                  <Switch
-                    id='isActive'
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) =>
-                      setFormData({ ...formData, isActive: checked })
-                    }
-                  />
-                  <Label htmlFor='isActive'>Проект активен</Label>
-                </div>
+                ) : (
+                  <div className='space-y-2'>
+                    <Label className='text-muted-foreground'>
+                      Процент бонусов
+                    </Label>
+                    <div className='rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950'>
+                      <p className='text-sm text-blue-700 dark:text-blue-300'>
+                        Процент начисления определяется{' '}
+                        <Link
+                          href={`/dashboard/projects/${projectId}/bonus-levels`}
+                          className='font-medium underline hover:no-underline'
+                        >
+                          уровнями бонусов
+                        </Link>
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -624,67 +621,15 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             </div>
           )}
 
-          {/* ✨ НОВОЕ: Workflow Limits Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className='flex items-center'>
-                <Workflow className='mr-2 h-5 w-5' />
-                Лимиты Workflow
-              </CardTitle>
-              <CardDescription>
-                Настройки ограничений для выполнения сценариев бота
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-                <div className='space-y-2'>
-                  <Label htmlFor='workflowMaxSteps'>
-                    Максимум шагов выполнения
-                  </Label>
-                  <Input
-                    id='workflowMaxSteps'
-                    type='number'
-                    min='10'
-                    max='1000'
-                    value={formData.workflowMaxSteps}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        workflowMaxSteps: parseInt(e.target.value) || 100
-                      })
-                    }
-                    placeholder='100'
-                  />
-                  <p className='text-muted-foreground text-xs'>
-                    Защита от бесконечных циклов (10-1000)
-                  </p>
-                </div>
-                <div className='space-y-2'>
-                  <Label htmlFor='workflowTimeoutMs'>
-                    Таймаут выполнения (мс)
-                  </Label>
-                  <Input
-                    id='workflowTimeoutMs'
-                    type='number'
-                    min='5000'
-                    max='300000'
-                    step='1000'
-                    value={formData.workflowTimeoutMs}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        workflowTimeoutMs: parseInt(e.target.value) || 30000
-                      })
-                    }
-                    placeholder='30000'
-                  />
-                  <p className='text-muted-foreground text-xs'>
-                    Максимальное время выполнения (5-300 сек)
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Предупреждение о несохраненных изменениях */}
+          {isDirty && (
+            <div className='rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950'>
+              <p className='text-sm text-amber-800 dark:text-amber-200'>
+                ⚠️ У вас есть несохраненные изменения. Не забудьте сохранить их
+                перед выходом со страницы.
+              </p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className='flex justify-end'>
@@ -710,7 +655,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             <CardHeader>
               <CardTitle className='text-lg'>Быстрые действия</CardTitle>
             </CardHeader>
-            <CardContent className='space-y-3'>
+            <CardContent className='flex flex-col gap-3'>
               {/* Показываем настройку Telegram бота только в режиме WITH_BOT */}
               {formData.operationMode === 'WITH_BOT' && (
                 <Link href={`/dashboard/projects/${projectId}/bot`}>
@@ -721,23 +666,20 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 </Link>
               )}
               <Link href={`/dashboard/projects/${projectId}/users`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
+                <Button variant='outline' className='w-full justify-start'>
                   <Users className='mr-2 h-4 w-4' />
                   Управление пользователями
                 </Button>
               </Link>
               <Link href={`/dashboard/projects/${projectId}/bonus-levels`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
+                <Button variant='outline' className='w-full justify-start'>
                   <Coins className='mr-2 h-4 w-4' />
                   Уровни бонусов
                 </Button>
               </Link>
               {project?.operationMode === 'WITH_BOT' ? (
                 <Link href={`/dashboard/projects/${projectId}/referral`}>
-                  <Button
-                    variant='outline'
-                    className='mt-2 w-full justify-start'
-                  >
+                  <Button variant='outline' className='w-full justify-start'>
                     <Share2 className='mr-2 h-4 w-4' />
                     Реферальная программа
                   </Button>
@@ -745,7 +687,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
               ) : (
                 <Button
                   variant='outline'
-                  className='mt-2 w-full cursor-not-allowed justify-start opacity-50'
+                  className='w-full cursor-not-allowed justify-start opacity-50'
                   disabled
                   title='Реферальная программа доступна только с Telegram ботом'
                 >
@@ -757,19 +699,19 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 </Button>
               )}
               <Link href={`/dashboard/projects/${projectId}/analytics`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
+                <Button variant='outline' className='w-full justify-start'>
                   <BarChart3 className='mr-2 h-4 w-4' />
                   Статистика и аналитика
                 </Button>
               </Link>
               <Link href={`/dashboard/projects/${projectId}/workflow`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
+                <Button variant='outline' className='w-full justify-start'>
                   <Workflow className='mr-2 h-4 w-4' />
                   Конструктор Workflow
                 </Button>
               </Link>
               <Link href={`/dashboard/projects/${projectId}/integration`}>
-                <Button variant='outline' className='mt-2 w-full justify-start'>
+                <Button variant='outline' className='w-full justify-start'>
                   <Code className='mr-2 h-4 w-4' />
                   Интеграция на сайт
                 </Button>

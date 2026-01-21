@@ -1,13 +1,12 @@
 /**
  * @file: homepage-footer.tsx
- * @description: Футер в стиле Meridian с CTA
+ * @description: Футер в стиле Meridian с CTA (Server Component)
  * @project: SaaS Bonus System
  * @dependencies: React, Next.js, Shadcn/ui
  * @created: 2026-01-06
+ * @updated: 2026-01-21 - Оптимизация: Server Component (статичный контент)
  * @author: AI Assistant + User
  */
-
-'use client';
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';

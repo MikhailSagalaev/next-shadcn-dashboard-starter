@@ -1,13 +1,12 @@
 /**
  * @file: homepage-steps.tsx
- * @description: Секция шагов в стиле Meridian
+ * @description: Секция шагов в стиле Meridian (Server Component)
  * @project: SaaS Bonus System
  * @dependencies: React, Lucide-react
  * @created: 2026-01-06
+ * @updated: 2026-01-21 - Оптимизация: Server Component (статичный контент)
  * @author: AI Assistant + User
  */
-
-'use client';
 
 import { Settings, Globe, Bot, Rocket } from 'lucide-react';
 

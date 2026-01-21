@@ -67,6 +67,7 @@ interface BotConstructorHeaderProps {
   onFlowDelete: (flowId: string) => Promise<void>;
   onFlowExport: () => Promise<void>;
   onFlowImport: (file: File) => Promise<BotFlow>;
+  onFlowPublish: () => void;
   isPreviewMode: boolean;
   onPreviewToggle: () => void;
   isSaving?: boolean;
@@ -84,6 +85,7 @@ export function BotConstructorHeader({
   onFlowDelete,
   onFlowExport,
   onFlowImport,
+  onFlowPublish,
   isPreviewMode,
   onPreviewToggle,
   isSaving = false
@@ -304,6 +306,17 @@ export function BotConstructorHeader({
                   Превью
                 </>
               )}
+            </Button>
+
+            {/* Publish */}
+            <Button
+              variant='default'
+              size='sm'
+              onClick={onFlowPublish}
+              disabled={!currentFlow || isSaving}
+            >
+              <Upload className='mr-2 h-4 w-4' />
+              Опубликовать
             </Button>
 
             {/* Save */}

@@ -1,13 +1,12 @@
 /**
  * @file: footer.tsx
- * @description: Footer лэндинга - современный темный дизайн
+ * @description: Footer лэндинга (Server Component)
  * @project: SaaS Bonus System
  * @dependencies: React, Next.js, Lucide-react
  * @created: 2025-01-28
+ * @updated: 2026-01-21 - Оптимизация: Server Component (статичный контент)
  * @author: AI Assistant + User
  */
-
-'use client';
 
 import Link from 'next/link';
 import { MessageCircle, Mail, ExternalLink } from 'lucide-react';

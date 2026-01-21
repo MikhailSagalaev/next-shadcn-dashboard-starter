@@ -1,13 +1,12 @@
 /**
  * @file: homepage-features.tsx
- * @description: Bento grid фичи в стиле Meridian
+ * @description: Bento grid фичи в стиле Meridian (Server Component)
  * @project: SaaS Bonus System
  * @dependencies: React, Lucide-react
  * @created: 2026-01-06
+ * @updated: 2026-01-21 - Оптимизация: Server Component (статичный контент)
  * @author: AI Assistant + User
  */
-
-'use client';
 
 import { BarChart3, Zap, Users, Globe, TrendingUp } from 'lucide-react';
 

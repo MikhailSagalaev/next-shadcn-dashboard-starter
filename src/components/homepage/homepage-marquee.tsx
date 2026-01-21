@@ -1,9 +1,10 @@
 /**
  * @file: homepage-marquee.tsx
- * @description: Бегущая строка в стиле Meridian
+ * @description: Бегущая строка в стиле Meridian (Client Component для анимации)
  * @project: SaaS Bonus System
  * @dependencies: React
  * @created: 2026-01-06
+ * @updated: 2026-01-21 - Оставлен Client Component (требуется для CSS анимации)
  * @author: AI Assistant + User
  */
 

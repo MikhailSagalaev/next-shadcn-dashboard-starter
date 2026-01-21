@@ -1,15 +1,16 @@
 /**
  * @file: src/features/bot-constructor/components/bot-constructor.tsx
- * @description: Основной компонент визуального конструктора ботов
+ * @description: Основной компонент визуального конструктора ботов (Fixed: Debounce, Circular Deps, Preview Mode)
  * @project: SaaS Bonus System
  * @dependencies: React, React Flow, BotConstructor types
  * @created: 2025-09-30
+ * @updated: 2026-01-17 (Bug fixes & Optimization)
  * @author: AI Assistant + User
  */
 
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -22,7 +23,9 @@ import {
   Edge,
   Node,
   BackgroundVariant,
-  Panel
+  Panel,
+  NodeChange,
+  EdgeChange
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import '../bot-constructor.css';
@@ -60,12 +63,16 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<BotNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  // Flag to track if we have unsaved changes locally
+  const hasUnsavedChanges = useRef(false);
+
   // Custom hooks
   const {
     flows,
     currentFlow,
     isLoading,
     isPreviewMode,
+    isSaving,
     createFlow,
     updateFlow,
     deleteFlow,
@@ -73,7 +80,10 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
     saveFlow,
     exportFlow,
     importFlow,
-    togglePreviewMode
+
+    togglePreviewMode,
+    setCurrentFlow,
+    publishFlow
   } = useBotFlow(projectId);
 
   // Convert BotConnection[] to Edge[]
@@ -93,70 +103,6 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
     []
   );
 
-  // Sync currentFlow with React Flow state
-  useEffect(() => {
-    if (currentFlow) {
-      setNodes(currentFlow.nodes);
-      setEdges(botConnectionsToEdges(currentFlow.connections));
-    } else {
-      setNodes([]);
-      setEdges([]);
-    }
-  }, [currentFlow, setNodes, setEdges, botConnectionsToEdges]);
-
-  // Handle adding new nodes
-  const handleAddNode = useCallback(
-    (nodeType: NodeType, position: Position) => {
-      const newNode: BotNode = {
-        id: `${nodeType}-${Date.now()}`,
-        type: nodeType,
-        position,
-        data: {
-          label: getDefaultLabel(nodeType),
-          config: getDefaultConfig(nodeType)
-        }
-      };
-
-      setNodes((nds) => [...nds, newNode]);
-    },
-    []
-  );
-
-  // Handle connections
-  const onConnect = useCallback(
-    (params: Connection) => {
-      const edgeType =
-        params.sourceHandle === 'true'
-          ? 'true'
-          : params.sourceHandle === 'false'
-            ? 'false'
-            : 'default';
-
-      const newEdge: Edge = {
-        id: `edge-${params.source}-${params.target}-${Date.now()}`,
-        source: params.source!,
-        target: params.target!,
-        sourceHandle: params.sourceHandle,
-        targetHandle: params.targetHandle,
-        type: edgeType,
-        animated: true
-      };
-
-      setEdges((eds) => addEdge(newEdge, eds));
-    },
-    [setEdges]
-  );
-
-  // Handle node selection
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNode(node as BotNode);
-  }, []);
-
-  // Handle canvas click (deselect)
-  const onPaneClick = useCallback(() => {
-    setSelectedNode(null);
-  }, []);
-
   // Convert Edge[] to BotConnection[]
   const edgesToBotConnections = useCallback(
     (rfEdges: Edge[]): BotConnection[] => {
@@ -175,68 +121,159 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
     []
   );
 
-  // Handle node changes
-  const onNodesChangeWithSave = useCallback(
-    (changes: any[]) => {
-      onNodesChange(changes);
-      // Auto-save after changes (debounced)
-      if (currentFlow && changes.length > 0) {
-        const updatedFlow: Partial<BotFlow> = {
+  // Initial Sync: Load flow into React Flow ONLY when a new flow is selected
+  // We track the flow ID to ensure we only reset state when switching flows
+  const loadedFlowId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (currentFlow && currentFlow.id !== loadedFlowId.current) {
+      setNodes(currentFlow.nodes);
+      setEdges(botConnectionsToEdges(currentFlow.connections));
+      loadedFlowId.current = currentFlow.id;
+      hasUnsavedChanges.current = false;
+    } else if (!currentFlow) {
+      setNodes([]);
+      setEdges([]);
+      loadedFlowId.current = null;
+    }
+  }, [currentFlow, setNodes, setEdges, botConnectionsToEdges]);
+
+  // Debounced Save Logic
+  useEffect(() => {
+    // If no flow or preview mode, do nothing
+    if (!currentFlow || isPreviewMode) return;
+
+    const saveTimer = setTimeout(() => {
+      if (hasUnsavedChanges.current) {
+        // Prepare updated flow data
+        const updatedFlowData: Partial<BotFlow> = {
           nodes,
           connections: edgesToBotConnections(edges)
         };
-        updateFlow(currentFlow.id, updatedFlow);
+
+        // Optimistic update: don't wait for server
+        // Call updateFlow but DO NOT reset local state from the response result
+        updateFlow(currentFlow.id, updatedFlowData)
+          .then(() => {
+            hasUnsavedChanges.current = false;
+          })
+          .catch((err) => {
+            console.error('Auto-save failed', err);
+          });
       }
+    }, 1000); // 1 second debounce
+
+    return () => clearTimeout(saveTimer);
+  }, [
+    nodes,
+    edges,
+    currentFlow,
+    isPreviewMode,
+    updateFlow,
+    edgesToBotConnections
+  ]);
+
+  // Handle adding new nodes
+  const handleAddNode = useCallback(
+    (nodeType: NodeType, position: Position) => {
+      if (isPreviewMode) return; // Block in preview mode
+
+      const newNode: BotNode = {
+        id: `${nodeType}-${Date.now()}`,
+        type: nodeType,
+        position,
+        data: {
+          label: getDefaultLabel(nodeType),
+          config: getDefaultConfig(nodeType)
+        }
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      hasUnsavedChanges.current = true;
     },
-    [
-      onNodesChange,
-      nodes,
-      edges,
-      currentFlow,
-      updateFlow,
-      edgesToBotConnections
-    ]
+    [isPreviewMode, setNodes]
   );
 
-  // Handle edge changes
-  const onEdgesChangeWithSave = useCallback(
-    (changes: any[]) => {
+  // Handle connections
+  const onConnect = useCallback(
+    (params: Connection) => {
+      if (isPreviewMode) return; // Block in preview mode
+
+      const edgeType =
+        params.sourceHandle === 'true'
+          ? 'true'
+          : params.sourceHandle === 'false'
+            ? 'false'
+            : params.sourceHandle?.includes('error')
+              ? 'error'
+              : 'default'; // Improved edge type logic
+
+      const newEdge: Edge = {
+        id: `edge-${params.source}-${params.target}-${Date.now()}`,
+        source: params.source!,
+        target: params.target!,
+        sourceHandle: params.sourceHandle,
+        targetHandle: params.targetHandle,
+        type: edgeType,
+        animated: true
+      };
+
+      setEdges((eds) => addEdge(newEdge, eds));
+      hasUnsavedChanges.current = true;
+    },
+    [isPreviewMode, setEdges]
+  );
+
+  // Custom Change Handlers to track unsaved changes
+  const onNodesChangeWithTracking = useCallback(
+    (changes: NodeChange[]) => {
+      if (isPreviewMode) return;
+
+      // Apply changes
+      onNodesChange(changes as any);
+
+      // If we have selected node, check if it was removed or modified
+      if (changes.some((c) => c.type !== 'select')) {
+        hasUnsavedChanges.current = true;
+      }
+    },
+    [isPreviewMode, onNodesChange]
+  );
+
+  const onEdgesChangeWithTracking = useCallback(
+    (changes: EdgeChange[]) => {
+      if (isPreviewMode) return;
       onEdgesChange(changes);
-      // Auto-save after changes (debounced)
-      if (currentFlow && changes.length > 0) {
-        const updatedFlow: Partial<BotFlow> = {
-          nodes,
-          connections: edgesToBotConnections(edges)
-        };
-        updateFlow(currentFlow.id, updatedFlow);
+      if (changes.some((c) => c.type !== 'select')) {
+        hasUnsavedChanges.current = true;
       }
     },
-    [
-      onEdgesChange,
-      nodes,
-      edges,
-      currentFlow,
-      updateFlow,
-      edgesToBotConnections
-    ]
+    [isPreviewMode, onEdgesChange]
   );
 
-  // Memoized flow data for React Flow
-  const flowData = useMemo(() => {
-    if (!currentFlow) return { nodes: [], edges: [] };
+  // Handle node selection
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    setSelectedNode(node as BotNode);
+  }, []);
 
-    const rfNodes: Node[] = currentFlow.nodes.map((node) => ({
-      id: node.id,
-      type: node.type,
-      position: node.position,
-      data: node.data,
-      selected: selectedNode?.id === node.id
-    }));
+  // Handle canvas click (deselect)
+  const onPaneClick = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
 
-    const rfEdges: Edge[] = botConnectionsToEdges(currentFlow.connections);
+  // Handle property updates from panel
+  const handleNodeUpdate = useCallback(
+    (updatedNode: BotNode) => {
+      if (isPreviewMode) return;
 
-    return { nodes: rfNodes, edges: rfEdges };
-  }, [currentFlow, selectedNode, botConnectionsToEdges]);
+      setNodes((nds) =>
+        nds.map((node) => (node.id === updatedNode.id ? updatedNode : node))
+      );
+      setSelectedNode(updatedNode);
+      hasUnsavedChanges.current = true;
+    },
+    [isPreviewMode, setNodes]
+  );
 
   if (isLoading) {
     return (
@@ -260,27 +297,31 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
         onFlowSelect={setSelectedFlowId}
         onFlowCreate={createFlow}
         onFlowLoad={loadFlow}
-        onFlowSave={saveFlow}
+        onFlowSave={saveFlow} // Manual save
         onFlowDelete={deleteFlow}
         onFlowExport={exportFlow}
         onFlowImport={importFlow}
         isPreviewMode={isPreviewMode}
         onPreviewToggle={togglePreviewMode}
-        isSaving={false}
+        onFlowPublish={() => {
+          // New prop implementation will be handled in next step or internal component update
+          // This is a placeholder for the concept
+        }}
+        isSaving={isSaving}
       />
 
-      {/* Main content - занимает всё оставшееся пространство */}
+      {/* Main content */}
       <div className='flex flex-1 overflow-hidden'>
         {/* Toolbar */}
         <BotConstructorToolbar onAddNode={handleAddNode} />
 
-        {/* Canvas - занимает всё доступное пространство */}
+        {/* Canvas */}
         <div className='relative flex-1 overflow-hidden'>
           <ReactFlow
-            nodes={flowData.nodes}
-            edges={flowData.edges}
-            onNodesChange={onNodesChangeWithSave}
-            onEdgesChange={onEdgesChangeWithSave}
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChangeWithTracking}
+            onEdgesChange={onEdgesChangeWithTracking}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
@@ -288,6 +329,9 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
             fitView
             attributionPosition='bottom-left'
             className='h-full w-full'
+            nodesDraggable={!isPreviewMode}
+            nodesConnectable={!isPreviewMode}
+            elementsSelectable={!isPreviewMode} // Optional: allow selection but not editing
           >
             <Background variant={BackgroundVariant.Dots} />
             <Controls />
@@ -296,8 +340,20 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
             {/* Preview mode indicator */}
             {isPreviewMode && (
               <Panel position='top-center'>
-                <div className='rounded-lg bg-yellow-500 px-4 py-2 text-white shadow-lg'>
-                  🧪 Режим предпросмотра - изменения не сохраняются
+                <div className='flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-white shadow-lg'>
+                  <span>🧪 Режим предпросмотра</span>
+                  <span className='text-xs opacity-75'>
+                    (Изменения заблокированы)
+                  </span>
+                </div>
+              </Panel>
+            )}
+
+            {/* Unsaved changes indicator (debug or user feedback) */}
+            {hasUnsavedChanges.current && !isSaving && (
+              <Panel position='bottom-right'>
+                <div className='text-muted-foreground bg-background/80 rounded p-1 text-xs'>
+                  Unsaved changes...
                 </div>
               </Panel>
             )}
@@ -308,14 +364,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
         {selectedNode && (
           <BotConstructorProperties
             node={selectedNode}
-            onNodeUpdate={(updatedNode) => {
-              setNodes((nds) =>
-                nds.map((node) =>
-                  node.id === updatedNode.id ? updatedNode : node
-                )
-              );
-              setSelectedNode(updatedNode);
-            }}
+            onNodeUpdate={handleNodeUpdate}
             onClose={() => setSelectedNode(null)}
           />
         )}
@@ -324,7 +373,7 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
   );
 }
 
-// Helper functions
+// Helper functions (kept same as before)
 function getDefaultLabel(nodeType: NodeType): string {
   const labels: Record<NodeType, string> = {
     start: 'Старт',

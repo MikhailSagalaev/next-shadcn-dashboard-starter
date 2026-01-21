@@ -241,19 +241,7 @@ export class WorkflowRuntimeService {
     if (!this.initialized) {
       initializeNodeHandlers();
       this.initialized = true;
-      logger.info('Node handlers initialized');
-
-      // Принудительная регистрация MenuCommandHandler
-      const hasMenuCommand = nodeHandlersRegistry.has('action.menu_command');
-      logger.info('MenuCommandHandler check:', { hasMenuCommand });
-
-      if (!hasMenuCommand) {
-        logger.error('MenuCommandHandler not registered! Force registering...');
-        nodeHandlersRegistry.register(new MenuCommandHandler());
-        logger.info('MenuCommandHandler force registered');
-      } else {
-        logger.info('MenuCommandHandler already registered');
-      }
+      logger.debug('Node handlers initialized');
     }
   }
 

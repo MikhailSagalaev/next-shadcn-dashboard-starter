@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { botTemplates } from '@/lib/services/bot-templates/bot-templates.service';
 import { getCurrentAdmin } from '@/lib/auth';
 import { db } from '@/lib/db';
-const logger: any = { info: console.log, error: console.error };
+import { logger } from '@/lib/logger';
 
 // POST /api/templates/install - Установка шаблона в проект
 export async function POST(request: NextRequest) {
@@ -30,12 +30,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logger.info('POST /api/templates/install', {
-      templateId,
-      projectId,
-      userId,
-      customName
-    });
+    logger.info(
+      'POST /api/templates/install',
+      {
+        templateId,
+        projectId,
+        userId,
+        customName
+      },
+      'templates-install'
+    );
 
     // Проверяем аутентификацию
     const admin = await getCurrentAdmin();
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
     const workflowData = {
       ...template.workflowConfig,
       projectId,
-      isActive: false, // По умолчанию неактивен
+      isActive: false // По умолчанию неактивен
     };
 
     // Применяем кастомизации
@@ -67,10 +71,14 @@ export async function POST(request: NextRequest) {
       workflowData.name = customName;
     }
 
-    logger.info('Creating workflow directly in DB', {
-      projectId,
-      workflowData: JSON.stringify(workflowData, null, 2)
-    });
+    logger.info(
+      'Creating workflow directly in DB',
+      {
+        projectId,
+        workflowData: JSON.stringify(workflowData, null, 2)
+      },
+      'templates-install'
+    );
 
     const workflow = await db.workflow.create({
       data: {
@@ -84,62 +92,88 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    logger.info('Workflow created successfully', { workflowId: workflow.id });
+    logger.info(
+      'Workflow created successfully',
+      { workflowId: workflow.id },
+      'templates-install'
+    );
 
-        // Деактивируем все существующие активные workflow для проекта
-        await db.workflow.updateMany({
-          where: {
-            projectId,
-            isActive: true,
-            id: { not: workflow.id } // Не деактивируем только что созданный
-          },
-          data: { isActive: false }
-        });
+    // Деактивируем все существующие активные workflow для проекта
+    await db.workflow.updateMany({
+      where: {
+        projectId,
+        isActive: true,
+        id: { not: workflow.id } // Не деактивируем только что созданный
+      },
+      data: { isActive: false }
+    });
 
-        // Деактивируем все существующие активные версии
-        await db.workflowVersion.updateMany({
-          where: {
-            workflow: { projectId },
-            isActive: true
-          },
-          data: { isActive: false }
-        });
+    // Деактивируем все существующие активные версии
+    await db.workflowVersion.updateMany({
+      where: {
+        workflow: { projectId },
+        isActive: true
+      },
+      data: { isActive: false }
+    });
 
-        // Создаем первую версию workflow
-        const nodes = workflowData.nodes || [];
-        const entryNode = nodes.find((node: any) => node.type?.startsWith('trigger.'));
+    // Создаем первую версию workflow
+    const nodes = workflowData.nodes || [];
+    const entryNode = nodes.find((node: any) =>
+      node.type?.startsWith('trigger.')
+    );
 
-        if (entryNode) {
-          const workflowVersion = await db.workflowVersion.create({
-            data: {
-              workflowId: workflow.id,
-              version: 1,
-              nodes: JSON.parse(JSON.stringify(nodes)) as any,
-              variables: JSON.parse(JSON.stringify(workflowData.variables || [])) as any,
-              settings: JSON.parse(JSON.stringify(workflowData.settings || {})) as any,
-              entryNodeId: entryNode.id,
-              isActive: true
-            }
-          });
-
-          logger.info('Workflow version created successfully', { versionId: workflowVersion.id });
-        } else {
-          logger.warn('No entry node found in template, version not created', { workflowId: workflow.id });
+    if (entryNode) {
+      const workflowVersion = await db.workflowVersion.create({
+        data: {
+          workflowId: workflow.id,
+          version: 1,
+          nodes: JSON.parse(JSON.stringify(nodes)) as any,
+          variables: JSON.parse(
+            JSON.stringify(workflowData.variables || [])
+          ) as any,
+          settings: JSON.parse(
+            JSON.stringify(workflowData.settings || {})
+          ) as any,
+          entryNodeId: entryNode.id,
+          isActive: true
         }
+      });
+
+      logger.info(
+        'Workflow version created successfully',
+        { versionId: workflowVersion.id },
+        'templates-install'
+      );
+    } else {
+      logger.warn(
+        'No entry node found in template, version not created',
+        { workflowId: workflow.id },
+        'templates-install'
+      );
+    }
 
     const result = {
       success: true,
       workflowId: workflow.id
     };
 
-    logger.info('Template installation result', { result });
+    logger.info(
+      'Template installation result',
+      { result },
+      'templates-install'
+    );
 
     if (!result.success) {
-      logger.error('Template installation failed', {
-        templateId,
-        projectId,
-        userId
-      });
+      logger.error(
+        'Template installation failed',
+        {
+          templateId,
+          projectId,
+          userId
+        },
+        'templates-install'
+      );
       return NextResponse.json(
         { success: false, error: 'Не удалось установить шаблон' },
         { status: 400 }
@@ -152,9 +186,13 @@ export async function POST(request: NextRequest) {
       message: 'Шаблон успешно установлен'
     });
   } catch (error) {
-    logger.error('Failed to install template', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    logger.error(
+      'Failed to install template',
+      {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      'templates-install'
+    );
 
     return NextResponse.json(
       {

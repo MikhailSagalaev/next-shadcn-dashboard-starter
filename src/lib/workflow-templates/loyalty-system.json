@@ -1,0 +1,186 @@
+{
+  "name": "Система лояльности",
+  "description": "Умная система лояльности с проверкой статуса пользователей и флоу регистрации на сайте. Приветственные бонусы начисляются автоматически при активации.",
+  "nodes": [
+    {
+      "id": "start-trigger",
+      "type": "trigger.command",
+      "position": { "x": 100, "y": 100 },
+      "data": {
+        "label": "Команда /start",
+        "command": "/start",
+        "description": "Запуск бота"
+      }
+    },
+    {
+      "id": "welcome-message",
+      "type": "message.text",
+      "position": { "x": 100, "y": 200 },
+      "data": {
+        "label": "Приветствие",
+        "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📱 Для регистрации, пожалуйста, поделитесь вашим номером телефона или укажите email."
+      }
+    },
+    {
+      "id": "request-contact",
+      "type": "trigger.contact",
+      "position": { "x": 100, "y": 300 },
+      "data": {
+        "label": "Запрос контакта",
+        "requestPhone": true,
+        "buttonText": "📱 Поделиться номером"
+      }
+    },
+    {
+      "id": "check-user",
+      "type": "action.check_user",
+      "position": { "x": 100, "y": 400 },
+      "data": {
+        "label": "Проверка пользователя",
+        "telegramId": "{{telegram.userId}}",
+        "phone": "{{telegram.contact.phone}}",
+        "email": "{{telegram.message.text}}"
+      }
+    },
+    {
+      "id": "is-new-user",
+      "type": "condition",
+      "position": { "x": 100, "y": 500 },
+      "data": {
+        "label": "Новый пользователь?",
+        "expression": "!get('user') || !get('user').id"
+      }
+    },
+    {
+      "id": "create-user",
+      "type": "action.create_user",
+      "position": { "x": -100, "y": 600 },
+      "data": {
+        "label": "Создать пользователя",
+        "telegramId": "{{telegram.userId}}",
+        "username": "{{telegram.username}}",
+        "firstName": "{{telegram.firstName}}",
+        "phone": "{{telegram.contact.phone}}",
+        "email": "{{telegram.message.text}}"
+      }
+    },
+    {
+      "id": "add-welcome-bonus",
+      "type": "action.add_bonus",
+      "position": { "x": -100, "y": 700 },
+      "data": {
+        "label": "Начислить бонусы",
+        "userId": "{{user.id}}",
+        "amount": 100,
+        "type": "WELCOME",
+        "description": "Приветственные бонусы"
+      }
+    },
+    {
+      "id": "success-new-user",
+      "type": "message.text",
+      "position": { "x": -100, "y": 800 },
+      "data": {
+        "label": "Успешная регистрация",
+        "text": "🎉 Поздравляем с регистрацией!\n\n💰 Вам начислено 100 приветственных бонусов!\n\n✨ Используйте их для покупок и получайте выгоду!"
+      }
+    },
+    {
+      "id": "existing-user-message",
+      "type": "message.text",
+      "position": { "x": 300, "y": 600 },
+      "data": {
+        "label": "Приветствие существующего",
+        "text": "👋 Рады видеть вас снова!\n\n💰 Ваш текущий баланс: {{user.balance}} бонусов\n\n🛍️ Продолжайте делать покупки и копить бонусы!"
+      }
+    },
+    {
+      "id": "end-node",
+      "type": "flow.end",
+      "position": { "x": 100, "y": 900 },
+      "data": {
+        "label": "Завершение",
+        "success": true
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "start-to-welcome",
+      "source": "start-trigger",
+      "target": "welcome-message",
+      "type": "default"
+    },
+    {
+      "id": "welcome-to-request",
+      "source": "welcome-message",
+      "target": "request-contact",
+      "type": "default"
+    },
+    {
+      "id": "request-to-check",
+      "source": "request-contact",
+      "target": "check-user",
+      "type": "default"
+    },
+    {
+      "id": "check-to-condition",
+      "source": "check-user",
+      "target": "is-new-user",
+      "type": "default"
+    },
+    {
+      "id": "condition-to-create",
+      "source": "is-new-user",
+      "target": "create-user",
+      "type": "true"
+    },
+    {
+      "id": "create-to-bonus",
+      "source": "create-user",
+      "target": "add-welcome-bonus",
+      "type": "default"
+    },
+    {
+      "id": "bonus-to-success",
+      "source": "add-welcome-bonus",
+      "target": "success-new-user",
+      "type": "default"
+    },
+    {
+      "id": "success-to-end",
+      "source": "success-new-user",
+      "target": "end-node",
+      "type": "default"
+    },
+    {
+      "id": "condition-to-existing",
+      "source": "is-new-user",
+      "target": "existing-user-message",
+      "type": "false"
+    },
+    {
+      "id": "existing-to-end",
+      "source": "existing-user-message",
+      "target": "end-node",
+      "type": "default"
+    }
+  ],
+  "variables": [
+    {
+      "name": "user",
+      "type": "object",
+      "description": "Данные пользователя из базы данных"
+    },
+    {
+      "name": "welcome_bonus",
+      "type": "number",
+      "value": 100,
+      "description": "Размер приветственного бонуса"
+    }
+  ],
+  "settings": {
+    "maxExecutionTime": 60000,
+    "retryAttempts": 3
+  }
+}

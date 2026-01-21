@@ -1,13 +1,12 @@
 /**
  * @file: hero-section.tsx
- * @description: Hero секция лэндинга - современный темный дизайн с градиентами
+ * @description: Hero секция лэндинга (Server Component)
  * @project: SaaS Bonus System
  * @dependencies: React, Next.js, Shadcn/ui, Lucide-react
  * @created: 2025-01-28
+ * @updated: 2026-01-21 - Оптимизация: Server Component (статичный контент)
  * @author: AI Assistant + User
  */
-
-'use client';
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';

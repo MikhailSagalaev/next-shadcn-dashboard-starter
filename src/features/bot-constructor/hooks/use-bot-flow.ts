@@ -435,6 +435,44 @@ export function useBotFlow(projectId: string) {
     [projectId, toast]
   );
 
+  // Publish flow
+  const publishFlow = useCallback(
+    async (flowId: string) => {
+      try {
+        setIsSaving(true);
+        const response = await fetch(
+          `/api/projects/${projectId}/flows/${flowId}/publish`,
+          {
+            method: 'POST'
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to publish flow');
+        }
+
+        const result = await response.json();
+
+        toast({
+          title: 'Bot Published',
+          description: `Version ${result.version.version} is now live.`
+        });
+
+        return result.version;
+      } catch (error) {
+        console.error('Failed to publish flow:', error);
+        toast({
+          title: 'Publish Failed',
+          description: error instanceof Error ? error.message : 'Unknown error',
+          variant: 'destructive'
+        });
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [projectId, toast]
+  );
+
   // Load flows on mount
   useEffect(() => {
     loadFlows();
@@ -462,6 +500,7 @@ export function useBotFlow(projectId: string) {
     togglePreviewMode,
 
     // Utilities
-    setCurrentFlow
+    setCurrentFlow,
+    publishFlow
   };
 }

@@ -50,6 +50,7 @@ export async function GET(
 }
 
 // DELETE /api/templates/[templateId] - Удалить шаблон (только для администраторов)
+// TODO: Implement deleteTemplate method in BotTemplatesService
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ templateId: string }> }
@@ -81,25 +82,11 @@ export async function DELETE(
       );
     }
 
-    // Удаляем шаблон
-    const success = await botTemplates.deleteTemplate(templateId);
-
-    if (!success) {
-      return NextResponse.json(
-        { success: false, error: 'Не удалось удалить шаблон' },
-        { status: 500 }
-      );
-    }
-
-    logger.info('Template deleted successfully', {
-      templateId,
-      templateName: template.name
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Шаблон успешно удален'
-    });
+    // TODO: Implement deletion logic
+    return NextResponse.json(
+      { success: false, error: 'Удаление шаблонов пока не реализовано' },
+      { status: 501 }
+    );
   } catch (error) {
     logger.error('Failed to delete template', {
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -114,4 +101,3 @@ export async function DELETE(
     );
   }
 }
-
