@@ -16,10 +16,11 @@ import type { WorkflowNodeData } from '@/types/workflow';
 export const TriggerNode = memo(({ data }: NodeProps) => {
   const nodeData = data as WorkflowNodeData;
   const triggerType = nodeData.type;
+  const config = nodeData.config || {};
   const triggerValue =
-    nodeData.config['trigger.command']?.command ||
-    nodeData.config['trigger.message']?.pattern ||
-    nodeData.config['trigger.callback']?.callbackData ||
+    config['trigger.command']?.command ||
+    config['trigger.message']?.pattern ||
+    config['trigger.callback']?.callbackData ||
     'Нажмите для редактирования';
 
   const getTriggerDisplayText = () => {
