@@ -20,6 +20,7 @@ export interface MonthlyUserGrowth {
 export interface SystemStats {
   totalProjects: number;
   totalUsers: number;
+  activeUsers: number;
   activeBots: number;
   totalBonuses: number;
   recentProjects: RecentProject[];
@@ -37,58 +38,73 @@ export async function getDashboardStats(): Promise<SystemStats> {
 
   try {
     // Получаем общую статистику
-    const [totalProjects, totalUsers, totalBonuses, recentProjects] =
-      await Promise.all([
-        // Количество проектов владельца
-        db.project.count({
-          where: ownerFilter
-        }),
+    const [
+      totalProjects,
+      totalUsers,
+      activeUsers,
+      totalBonuses,
+      recentProjects
+    ] = await Promise.all([
+      // Количество проектов владельца
+      db.project.count({
+        where: ownerFilter
+      }),
 
-        // Количество пользователей в проектах владельца
-        db.user.count({
-          where: {
+      // Количество пользователей в проектах владельца
+      db.user.count({
+        where: {
+          project: ownerFilter
+        }
+      }),
+
+      // Количество активированных пользователей (с telegramUserId)
+      db.user.count({
+        where: {
+          project: ownerFilter,
+          telegramUserId: {
+            not: null
+          }
+        }
+      }),
+
+      // Сумма начисленных бонусов для пользователей проектов владельца
+      db.bonus.aggregate({
+        _sum: {
+          amount: true
+        },
+        where: {
+          user: {
             project: ownerFilter
           }
-        }),
+        }
+      }),
 
-        // Сумма начисленных бонусов для пользователей проектов владельца
-        db.bonus.aggregate({
-          _sum: {
-            amount: true
+      // Последние проекты владельца с информацией
+      db.project.findMany({
+        where: ownerFilter,
+        take: 5,
+        orderBy: {
+          createdAt: 'desc'
+        },
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          botToken: true,
+          botSettings: {
+            select: {
+              isActive: true
+            }
           },
-          where: {
-            user: {
-              project: ownerFilter
+          botStatus: true,
+          _count: {
+            select: {
+              users: true
             }
           }
-        }),
-
-        // Последние проекты владельца с информацией
-        db.project.findMany({
-          where: ownerFilter,
-          take: 5,
-          orderBy: {
-            createdAt: 'desc'
-          },
-          select: {
-            id: true,
-            name: true,
-            createdAt: true,
-            botToken: true,
-            botSettings: {
-              select: {
-                isActive: true
-              }
-            },
-            botStatus: true,
-            _count: {
-              select: {
-                users: true
-              }
-            }
-          }
-        })
-      ]);
+        }
+      })
+    ]);
 
     // Подсчитываем активных ботов (логика упрощена для RSC, но должна совпадать с API)
     // 1. Из менеджера:
@@ -143,6 +159,7 @@ export async function getDashboardStats(): Promise<SystemStats> {
     return {
       totalProjects,
       totalUsers,
+      activeUsers,
       activeBots,
       totalBonuses: Number(totalBonuses._sum.amount || 0),
       recentProjects: recentProjects.map((project) => ({
@@ -164,6 +181,7 @@ export async function getDashboardStats(): Promise<SystemStats> {
     return {
       totalProjects: 0,
       totalUsers: 0,
+      activeUsers: 0,
       activeBots: 0,
       totalBonuses: 0,
       recentProjects: [],

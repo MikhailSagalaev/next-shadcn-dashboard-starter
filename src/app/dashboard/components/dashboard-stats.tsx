@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 interface DashboardStatsProps {
   totalProjects: number;
   totalUsers: number;
+  activeUsers: number;
   activeBots: number;
   totalBonuses: number;
 }
@@ -14,6 +15,7 @@ interface DashboardStatsProps {
 export function DashboardStats({
   totalProjects,
   totalUsers,
+  activeUsers,
   activeBots,
   totalBonuses
 }: DashboardStatsProps) {
@@ -71,7 +73,7 @@ export function DashboardStats({
               {totalUsers}
             </h3>
             <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
-              Участников системы
+              {activeUsers} активированных
             </p>
           </div>
         </div>

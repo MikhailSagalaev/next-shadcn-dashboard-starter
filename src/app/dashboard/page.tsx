@@ -7,8 +7,6 @@
  */
 
 import { Suspense } from 'react';
-import { Heading } from '@/components/ui/heading';
-import { Separator } from '@/components/ui/separator';
 import { getDashboardStats } from './data-access';
 import { DashboardStats } from './components/dashboard-stats';
 import { RecentProjects } from './components/recent-projects';
@@ -25,19 +23,11 @@ export default async function DashboardPage() {
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
-      <div className='flex items-center justify-between'>
-        <Heading
-          title='Панель управления'
-          description='Добро пожаловать в Gupil. Обзор вашей системы лояльности.'
-        />
-      </div>
-
-      <Separator className='my-4' />
-
       <Suspense fallback={<div>Loading stats...</div>}>
         <DashboardStats
           totalProjects={stats.totalProjects}
           totalUsers={stats.totalUsers}
+          activeUsers={stats.activeUsers}
           activeBots={stats.activeBots}
           totalBonuses={stats.totalBonuses}
         />
