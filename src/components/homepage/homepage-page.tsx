@@ -15,6 +15,7 @@ import { HomepageMarquee } from './homepage-marquee';
 import { HomepageFeatures } from './homepage-features';
 import { HomepageSteps } from './homepage-steps';
 import { HomepagePricing } from './homepage-pricing';
+import { HomepageHelpSection } from './homepage-help-section';
 import { HomepageFooter } from './homepage-footer';
 
 /**
@@ -39,6 +40,7 @@ export function HomepagePage() {
           <div id='pricing'>
             <HomepagePricing />
           </div>
+          <HomepageHelpSection />
         </main>
         <HomepageFooter />
       </div>

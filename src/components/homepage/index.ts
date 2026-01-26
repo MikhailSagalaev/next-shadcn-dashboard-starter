@@ -13,5 +13,6 @@ export { HomepageMarquee } from './homepage-marquee';
 export { HomepageFeatures } from './homepage-features';
 export { HomepageSteps } from './homepage-steps';
 export { HomepagePricing } from './homepage-pricing';
+export { HomepageHelpSection } from './homepage-help-section';
 export { HomepageFooter } from './homepage-footer';
 export { HomepageStyleManager } from './homepage-style-manager';
