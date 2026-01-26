@@ -49,6 +49,7 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
+import { DashboardHelpSection } from '@/components/dashboard/help-section';
 
 export function ProjectIntegrationView({
   params: _params
@@ -3091,58 +3092,8 @@ export function ProjectIntegrationView({
           </Tabs>
         </div>
 
-        {/* Дополнительная информация */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Нужна помощь?</CardTitle>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div className='grid gap-4 md:grid-cols-2'>
-              <Button
-                variant='outline'
-                className='hover:bg-muted/50 flex h-auto flex-col items-start p-6 text-left transition-colors'
-                onClick={() => {
-                  // Здесь можно добавить логику открытия документации
-                  window.open('/docs/webhook-integration.md', '_blank');
-                }}
-              >
-                <div className='mb-2 flex items-center gap-3'>
-                  <div className='text-2xl'>📚</div>
-                  <h4 className='font-medium'>Документация</h4>
-                </div>
-                <p className='text-muted-foreground mb-3 text-sm'>
-                  Подробное руководство по интеграции с примерами кода
-                </p>
-                <span className='text-primary text-sm font-medium'>
-                  Читать документацию →
-                </span>
-              </Button>
-
-              <Button
-                variant='outline'
-                className='hover:bg-muted/50 flex h-auto flex-col items-start p-6 text-left transition-colors'
-                onClick={() => {
-                  // Здесь можно добавить логику открытия техподдержки
-                  window.open(
-                    'mailto:support@example.com?subject=Вопрос по интеграции',
-                    '_blank'
-                  );
-                }}
-              >
-                <div className='mb-2 flex items-center gap-3'>
-                  <div className='text-2xl'>💬</div>
-                  <h4 className='font-medium'>Техподдержка</h4>
-                </div>
-                <p className='text-muted-foreground mb-3 text-sm'>
-                  Свяжитесь с нами, если возникли вопросы
-                </p>
-                <span className='text-primary text-sm font-medium'>
-                  Написать в поддержку →
-                </span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Секция помощи */}
+        <DashboardHelpSection />
       </div>
     </PageContainer>
   );
