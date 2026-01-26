@@ -57,11 +57,11 @@ export async function getDashboardStats(): Promise<SystemStats> {
         }
       }),
 
-      // Количество активированных пользователей (с telegramUserId)
+      // Количество активированных пользователей (с telegramId)
       db.user.count({
         where: {
           project: ownerFilter,
-          telegramUserId: {
+          telegramId: {
             not: null
           }
         }
