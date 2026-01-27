@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.13
+ * @version: 2.9.14
  * @author: AI Assistant + User
  * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
@@ -251,11 +251,35 @@
           this.log('📱 Загружен валидный телефон из localStorage');
         }
 
+        // УЛУЧШЕНИЕ #4: Валидация appliedBonuses при загрузке
         if (savedAppliedBonuses) {
           const bonusAmount = parseFloat(savedAppliedBonuses);
           if (!isNaN(bonusAmount) && bonusAmount >= 0 && bonusAmount <= 10000) {
-            this.state.appliedBonuses = bonusAmount;
-            this.log('💰 Загружены примененные бонусы:', bonusAmount);
+            // Проверяем, что корзина не пустая
+            const cartTotal = this.getCartTotal();
+
+            if (cartTotal > 0) {
+              // Корректируем если appliedBonuses больше суммы корзины
+              const validAmount = Math.min(bonusAmount, cartTotal);
+              this.state.appliedBonuses = validAmount;
+
+              if (validAmount !== bonusAmount) {
+                localStorage.setItem('tilda_applied_bonuses', validAmount);
+                this.log('⚠️ appliedBonuses скорректирован:', {
+                  было: bonusAmount,
+                  стало: validAmount,
+                  причина: 'больше суммы корзины'
+                });
+              } else {
+                this.log('💰 Загружены валидные бонусы:', validAmount);
+              }
+            } else {
+              // Корзина пустая - очищаем appliedBonuses
+              this.log(
+                '🗑️ Корзина пустая при загрузке, очищаем appliedBonuses'
+              );
+              this.resetAppliedBonuses();
+            }
           }
         }
 
@@ -1574,7 +1598,7 @@
       }
 
       // Базовые стили для корректного отображения
-      badge.style.display = 'inline-block';
+      badge.style.display = 'block'; // Блочный элемент для отображения на новой строке
       badge.style.cursor = settings.linkUrl ? 'pointer' : 'default';
 
       // Добавляем обработчик клика если есть ссылка
@@ -1616,7 +1640,8 @@
 
           const settings = this.state.productBadgeSettings;
           if (settings.position === 'before-price') {
-            priceWrapper.insertBefore(badge, priceWrapper.firstChild);
+            // Вставляем ПЕРЕД оберткой цены
+            priceWrapper.parentNode.insertBefore(badge, priceWrapper);
           } else if (
             settings.position === 'custom' &&
             settings.customSelector
@@ -1625,11 +1650,18 @@
             if (customContainer) {
               customContainer.appendChild(badge);
             } else {
-              priceWrapper.appendChild(badge);
+              // Вставляем ПОСЛЕ обертки цены (по умолчанию)
+              priceWrapper.parentNode.insertBefore(
+                badge,
+                priceWrapper.nextSibling
+              );
             }
           } else {
-            // after-price (по умолчанию)
-            priceWrapper.appendChild(badge);
+            // after-price (по умолчанию) - вставляем ПОСЛЕ обертки цены
+            priceWrapper.parentNode.insertBefore(
+              badge,
+              priceWrapper.nextSibling
+            );
           }
         });
 
@@ -1670,7 +1702,8 @@
 
         const settings = this.state.productBadgeSettings;
         if (settings.position === 'before-price') {
-          priceWrapper.insertBefore(badge, priceWrapper.firstChild);
+          // Вставляем ПЕРЕД оберткой цены
+          priceWrapper.parentNode.insertBefore(badge, priceWrapper);
         } else if (settings.position === 'custom' && settings.customSelector) {
           const customContainer = productPopup.querySelector(
             settings.customSelector
@@ -1678,11 +1711,15 @@
           if (customContainer) {
             customContainer.appendChild(badge);
           } else {
-            priceWrapper.appendChild(badge);
+            // Вставляем ПОСЛЕ обертки цены (по умолчанию)
+            priceWrapper.parentNode.insertBefore(
+              badge,
+              priceWrapper.nextSibling
+            );
           }
         } else {
-          // after-price (по умолчанию)
-          priceWrapper.appendChild(badge);
+          // after-price (по умолчанию) - вставляем ПОСЛЕ обертки цены
+          priceWrapper.parentNode.insertBefore(badge, priceWrapper.nextSibling);
         }
 
         this.log('🏷️ Плашка добавлена на страницу товара');
@@ -2982,14 +3019,37 @@
     onCartOpen: function () {
       this.log('Корзина открыта');
 
-      // Обновляем изначальную сумму корзины при открытии
+      // УЛУЧШЕНИЕ #1: Проверяем, что корзина не пустая
       const currentTotal = this.getCartTotal();
+
+      // Если корзина пустая, сбрасываем appliedBonuses
+      if (currentTotal === 0 && this.state.appliedBonuses > 0) {
+        this.log('🗑️ Корзина пустая, сбрасываем appliedBonuses');
+        this.resetAppliedBonuses();
+        return;
+      }
+
+      // УЛУЧШЕНИЕ #2: Если appliedBonuses больше суммы корзины, корректируем
+      if (this.state.appliedBonuses > currentTotal && currentTotal > 0) {
+        this.log('⚠️ appliedBonuses больше суммы корзины, корректируем');
+        this.state.appliedBonuses = currentTotal;
+        localStorage.setItem('tilda_applied_bonuses', currentTotal);
+        this.log('✅ appliedBonuses скорректирован до:', currentTotal);
+      }
+
+      // Обновляем изначальную сумму корзины при открытии
       if (currentTotal > 0 && this.state.originalCartTotal === 0) {
         this.state.originalCartTotal = currentTotal;
         this.log(
           'Установлена изначальная сумма корзины:',
           this.state.originalCartTotal
         );
+      }
+
+      // УЛУЧШЕНИЕ #3: Переприменяем бонусы если они были применены ранее
+      if (this.state.appliedBonuses > 0 && currentTotal > 0) {
+        this.log('🔄 Переприменяем бонусы к текущей корзине');
+        this.reapplyBonuses();
       }
 
       // Определяем текущее состояние авторизации и показываем соответствующий UI
@@ -5609,9 +5669,66 @@
 
     // Сброс примененных бонусов
     resetAppliedBonuses: function () {
+      this.log('🔄 Полный сброс appliedBonuses');
+
+      // 1. Сбрасываем state
       this.state.appliedBonuses = 0;
+
+      // 2. Очищаем localStorage
       localStorage.removeItem('tilda_applied_bonuses');
 
+      // 3. Удаляем скрытые поля из DOM
+      const fields = document.querySelectorAll(
+        '[name="appliedBonuses"], #applied_bonuses_field, #applied_bonuses_field_backup'
+      );
+      fields.forEach((field) => {
+        this.log('🗑️ Удаляем поле:', field.id || field.name);
+        field.remove();
+      });
+
+      // 4. Очищаем window.tcart от всех следов appliedBonuses
+      if (
+        typeof window !== 'undefined' &&
+        window.tcart &&
+        typeof window.tcart === 'object'
+      ) {
+        delete window.tcart.appliedBonuses;
+        delete window.tcart.appliedBonusesNumber;
+
+        if (window.tcart.data && typeof window.tcart.data === 'object') {
+          delete window.tcart.data.appliedBonuses;
+        }
+
+        if (
+          window.tcart.formData &&
+          typeof window.tcart.formData === 'object'
+        ) {
+          delete window.tcart.formData.appliedBonuses;
+        }
+
+        if (window.tcart.order && typeof window.tcart.order === 'object') {
+          delete window.tcart.order.appliedBonuses;
+        }
+
+        if (
+          window.tcart.orderData &&
+          typeof window.tcart.orderData === 'object'
+        ) {
+          delete window.tcart.orderData.appliedBonuses;
+        }
+
+        this.log('✅ appliedBonuses удален из всех объектов window.tcart');
+      }
+
+      // 5. Удаляем промокод GUPIL
+      try {
+        this.clearAllPromocodes();
+        this.log('✅ Промокод GUPIL удален');
+      } catch (error) {
+        this.log('⚠️ Ошибка удаления промокода:', error);
+      }
+
+      // 6. Восстанавливаем отображение суммы корзины
       const totalElement = document.querySelector(
         '.t706__cartwin-totalamount-withoutdelivery, .t706__cartwin-totalamount'
       );
@@ -5619,8 +5736,11 @@
         totalElement.textContent = totalElement.dataset.originalAmount;
       }
 
+      // 7. Очищаем статус виджета
       const status = document.getElementById('bonus-status');
       if (status) status.innerHTML = '';
+
+      this.log('✅ appliedBonuses полностью сброшен');
     }
   };
 
