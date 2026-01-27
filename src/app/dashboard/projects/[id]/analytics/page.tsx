@@ -1,31 +1,41 @@
 /**
- * @file: src/app/dashboard/projects/[id]/analytics/page.tsx
- * @description: Страница аналитики и статистики проекта (полная ширина)
+ * @file: page.tsx
+ * @description: Страница аналитики заказов и товаров
  * @project: SaaS Bonus System
- * @dependencies: Next.js App Router, Charts
- * @created: 2024-12-31
- * @updated: 2026-01-21 - Полная ширина без PageContainer
- * @author: AI Assistant + User
+ * @created: 2026-01-27
  */
 
-import { Metadata } from 'next';
-import { ProjectAnalyticsView } from '@/features/projects/components/project-analytics-view';
+import { Suspense } from 'react';
+import { Heading } from '@/components/ui/heading';
+import { Separator } from '@/components/ui/separator';
+import { AnalyticsClient } from './analytics-client';
 
-export const metadata: Metadata = {
-  title: 'Аналитика проекта - SaaS Bonus System',
-  description: 'Статистика, графики и аналитические данные проекта'
+export const metadata = {
+  title: 'Аналитика | Gupil',
+  description: 'Аналитика заказов и товаров'
 };
 
-interface AnalyticsPageProps {
+export default async function AnalyticsPage({
+  params
+}: {
   params: Promise<{ id: string }>;
-}
-
-export default async function AnalyticsPage({ params }: AnalyticsPageProps) {
+}) {
   const { id } = await params;
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
-      <ProjectAnalyticsView projectId={id} />
+      <div className='flex items-center justify-between'>
+        <Heading
+          title='Аналитика'
+          description='Статистика заказов, товаров и продаж'
+        />
+      </div>
+
+      <Separator className='my-4' />
+
+      <Suspense fallback={<div>Загрузка...</div>}>
+        <AnalyticsClient projectId={id} />
+      </Suspense>
     </div>
   );
 }

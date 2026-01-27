@@ -44,7 +44,21 @@ export async function POST(
       normalizedOrder
     );
 
-    // 5. Log Success (Briefly)
+    // 5. Log to Database (WebhookLog)
+    await db.webhookLog.create({
+      data: {
+        projectId: project.id,
+        endpoint: `/api/webhook/${webhookSecret}`,
+        method: 'POST',
+        headers: Object.fromEntries(req.headers.entries()),
+        body: body,
+        response: result,
+        status: 200,
+        success: result.success
+      }
+    });
+
+    // 6. Log Success (Briefly)
     logger.info('Webhook Processed', {
       projectId: project.id,
       orderId: normalizedOrder.orderId,
@@ -55,6 +69,36 @@ export async function POST(
     return NextResponse.json(result);
   } catch (error) {
     logger.error('Webhook Error', error);
+
+    // Log error to database if we have projectId
+    try {
+      const { webhookSecret } = await params;
+      const project = await db.project.findUnique({
+        where: { webhookSecret },
+        select: { id: true }
+      });
+
+      if (project) {
+        await db.webhookLog.create({
+          data: {
+            projectId: project.id,
+            endpoint: `/api/webhook/${webhookSecret}`,
+            method: 'POST',
+            headers: {},
+            body: {},
+            response: {
+              error: 'Internal Server Error',
+              details: error instanceof Error ? error.message : 'Unknown'
+            },
+            status: 500,
+            success: false
+          }
+        });
+      }
+    } catch (logError) {
+      logger.error('Failed to log webhook error', logError);
+    }
+
     return NextResponse.json(
       {
         error: 'Internal Server Error',

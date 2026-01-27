@@ -21,12 +21,15 @@ export class OrderProcessingService {
     const project = await db.project.findUnique({ where: { id: projectId } });
     if (!project) throw new Error('Project not found');
 
+    // 2. Save Order to Database
+    const savedOrder = await this.saveOrder(projectId, order);
+
     const bonusBehavior = (project.bonusBehavior || 'SPEND_AND_EARN') as
       | 'SPEND_AND_EARN'
       | 'SPEND_ONLY'
       | 'EARN_ONLY';
 
-    // 2. Find or Create User
+    // 3. Find or Create User
     let user = await UserService.findUserByContact(
       projectId,
       order.email,
@@ -79,7 +82,15 @@ export class OrderProcessingService {
       });
     }
 
-    // 3. Process Bonuses
+    // 4. Link Order to User
+    if (savedOrder && user) {
+      await db.order.update({
+        where: { id: savedOrder.id },
+        data: { userId: user.id }
+      });
+    }
+
+    // 5. Process Bonuses
     // Determine Logic
     // Legacy "GUPIL" promo code check replaced with generalized check or just appliedBonuses
     // We trust 'appliedBonuses' from TildaParserService which normalizes widget behavior
@@ -146,8 +157,175 @@ export class OrderProcessingService {
       data: {
         spent: spentAmount,
         earned: earnedBonusAmount,
-        userId: user.id
+        userId: user.id,
+        orderId: savedOrder?.id
       }
     };
+  }
+
+  /**
+   * Save order and products to database for analytics
+   */
+  private static async saveOrder(
+    projectId: string,
+    order: NormalizedOrder
+  ): Promise<any> {
+    try {
+      // Create Order with full metadata
+      const savedOrder = await db.order.create({
+        data: {
+          projectId,
+          orderNumber: order.orderId,
+          status: 'CONFIRMED',
+          totalAmount: order.amount,
+          paidAmount: order.amount - order.appliedBonuses,
+          bonusAmount: order.appliedBonuses,
+          paymentMethod: order.raw?.payment?.sys || 'unknown',
+          deliveryMethod: order.raw?.payment?.delivery || null,
+          deliveryAddress: order.raw?.payment?.delivery_address || null,
+          metadata: {
+            // Основные данные
+            promocode: order.promocode,
+            utmSource: order.utmSource,
+
+            // Данные клиента
+            customerName: order.name,
+            customerEmail: order.email,
+            customerPhone: order.phone,
+
+            // Данные доставки
+            deliveryFio: order.raw?.payment?.delivery_fio,
+            deliveryZip: order.raw?.payment?.delivery_zip,
+            deliveryCity: order.raw?.payment?.delivery_city,
+            deliveryComment: order.raw?.payment?.delivery_comment,
+            deliveryPrice: order.raw?.payment?.delivery_price,
+
+            // Данные оплаты
+            paymentSystem: order.raw?.payment?.sys,
+            paymentTransactionId: order.raw?.payment?.systranid,
+            subtotal: order.raw?.payment?.subtotal,
+
+            // UTM метки
+            utmCampaign: order.raw?.utm_campaign,
+            utmMedium: order.raw?.utm_medium,
+            utmContent: order.raw?.utm_content,
+            utmTerm: order.raw?.utm_term,
+            utmRef: order.raw?.utm_ref,
+
+            // Cookies и дополнительные данные
+            cookies: order.raw?.COOKIES,
+            formId: order.raw?.formid,
+            formName: order.raw?.formname,
+            maId: order.raw?.ma_id,
+
+            // Полные raw данные для полной истории
+            raw: order.raw
+          }
+        }
+      });
+
+      // Create Order Items and Products
+      if (order.products && order.products.length > 0) {
+        for (const product of order.products) {
+          // Find or create product
+          let dbProduct = null;
+          if (product.sku) {
+            dbProduct = await db.product.findUnique({
+              where: { sku: product.sku }
+            });
+
+            if (!dbProduct) {
+              // Создаем товар со всеми данными включая изображения
+              dbProduct = await db.product.create({
+                data: {
+                  projectId,
+                  name: product.name,
+                  sku: product.sku,
+                  price: product.price,
+                  metadata: {
+                    // Изображение товара
+                    image: product.img,
+
+                    // Опции товара (вес, размер и т.д.)
+                    options: product.options,
+
+                    // External ID из Tilda
+                    externalId: product.externalid,
+
+                    // Все остальные данные
+                    ...product
+                  }
+                }
+              });
+            } else {
+              // Обновляем изображение если его нет
+              if (product.img && !dbProduct.metadata?.image) {
+                await db.product.update({
+                  where: { id: dbProduct.id },
+                  data: {
+                    metadata: {
+                      ...(dbProduct.metadata as any),
+                      image: product.img,
+                      options: product.options,
+                      externalId: product.externalid
+                    }
+                  }
+                });
+              }
+            }
+          }
+
+          // Create order item with full product data
+          await db.orderItem.create({
+            data: {
+              orderId: savedOrder.id,
+              productId: dbProduct?.id,
+              name: product.name,
+              quantity: product.quantity || 1,
+              price: product.price,
+              total: product.amount || product.price * (product.quantity || 1),
+              metadata: {
+                // Изображение товара
+                image: product.img,
+
+                // SKU
+                sku: product.sku,
+
+                // Опции (вес, размер и т.д.)
+                options: product.options,
+
+                // External ID
+                externalId: product.externalid,
+
+                // Все данные товара
+                ...product
+              }
+            }
+          });
+        }
+      }
+
+      // Create analytics event
+      await db.analyticsEvent.create({
+        data: {
+          projectId,
+          orderId: savedOrder.id,
+          eventType: 'order_created',
+          data: {
+            amount: order.amount,
+            productsCount: order.products.length,
+            appliedBonuses: order.appliedBonuses,
+            paymentMethod: order.raw?.payment?.sys,
+            deliveryMethod: order.raw?.payment?.delivery
+          }
+        }
+      });
+
+      return savedOrder;
+    } catch (error) {
+      logger.error('Failed to save order', { error, orderId: order.orderId });
+      // Don't throw - order processing should continue even if analytics fails
+      return null;
+    }
   }
 }
