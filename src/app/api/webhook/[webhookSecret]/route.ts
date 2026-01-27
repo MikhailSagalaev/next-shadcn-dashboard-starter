@@ -52,7 +52,7 @@ export async function POST(
         method: 'POST',
         headers: Object.fromEntries(req.headers.entries()),
         body: body,
-        response: result,
+        response: result as any, // Cast to any for JSON compatibility
         status: 200,
         success: result.success
       }
