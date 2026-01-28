@@ -149,6 +149,7 @@ export function ProjectIntegrationView({
     productBadgePadding: '5px 10px',
     productBadgeBorderRadius: '5px',
     productBadgeMarginTop: '5px',
+    productBadgeMarginX: '0',
 
     // Позиционирование
     productBadgePosition: 'after-price', // after-price, before-price, custom
@@ -362,6 +363,7 @@ export function ProjectIntegrationView({
               productBadgeBorderRadius:
                 widgetData.productBadgeBorderRadius || '5px',
               productBadgeMarginTop: widgetData.productBadgeMarginTop || '5px',
+              productBadgeMarginX: widgetData.productBadgeMarginX || '0',
               productBadgePosition:
                 widgetData.productBadgePosition || 'after-price',
               productBadgeCustomSelector:
@@ -2576,6 +2578,25 @@ export function ProjectIntegrationView({
                               />
                             </div>
                             <div className='space-y-2'>
+                              <Label htmlFor='productBadgeMarginX'>
+                                Отступ слева/справа
+                              </Label>
+                              <Input
+                                id='productBadgeMarginX'
+                                value={
+                                  widgetSettings.productBadgeMarginX || '0'
+                                }
+                                onChange={(e) =>
+                                  setWidgetSettings({
+                                    ...widgetSettings,
+                                    productBadgeMarginX: e.target.value
+                                  })
+                                }
+                                placeholder='0'
+                                disabled={!widgetSettings.productBadgeEnabled}
+                              />
+                            </div>
+                            <div className='space-y-2'>
                               <Label htmlFor='productBadgeFontFamily'>
                                 Шрифт
                               </Label>
@@ -2637,6 +2658,12 @@ export function ProjectIntegrationView({
                                         widgetSettings.productBadgeBorderRadius,
                                       marginBottom:
                                         widgetSettings.productBadgeMarginTop,
+                                      marginLeft:
+                                        widgetSettings.productBadgeMarginX ||
+                                        '0',
+                                      marginRight:
+                                        widgetSettings.productBadgeMarginX ||
+                                        '0',
                                       cursor: widgetSettings.productBadgeLinkUrl
                                         ? 'pointer'
                                         : 'default',
@@ -2682,6 +2709,12 @@ export function ProjectIntegrationView({
                                         widgetSettings.productBadgeBorderRadius,
                                       marginTop:
                                         widgetSettings.productBadgeMarginTop,
+                                      marginLeft:
+                                        widgetSettings.productBadgeMarginX ||
+                                        '0',
+                                      marginRight:
+                                        widgetSettings.productBadgeMarginX ||
+                                        '0',
                                       cursor: widgetSettings.productBadgeLinkUrl
                                         ? 'pointer'
                                         : 'default',

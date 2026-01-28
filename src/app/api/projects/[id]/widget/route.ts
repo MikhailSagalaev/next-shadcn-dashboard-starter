@@ -272,7 +272,8 @@ export async function GET(
                   legacy,
                   'productBadgeBorderRadius'
                 ),
-                marginTop: getLegacyString(legacy, 'productBadgeMarginTop')
+                marginTop: getLegacyString(legacy, 'productBadgeMarginTop'),
+                marginX: getLegacyString(legacy, 'productBadgeMarginX') || '0'
               }),
               widgetStyles: cleanObject({
                 backgroundColor: getLegacyString(
@@ -461,6 +462,7 @@ export async function PUT(
       productBadgePadding,
       productBadgeBorderRadius,
       productBadgeMarginTop,
+      productBadgeMarginX,
 
       // Стили виджета
       widgetBackgroundColor,
@@ -542,7 +544,8 @@ export async function PUT(
       productBadgeFontWeight,
       productBadgePadding,
       productBadgeBorderRadius,
-      productBadgeMarginTop
+      productBadgeMarginTop,
+      productBadgeMarginX
     };
 
     const widgetStyles = {

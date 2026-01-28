@@ -1481,6 +1481,7 @@
           padding: widgetSettings.productBadgePadding || '5px 10px',
           borderRadius: widgetSettings.productBadgeBorderRadius || '5px',
           marginTop: widgetSettings.productBadgeMarginTop || '5px',
+          marginX: widgetSettings.productBadgeMarginX || '0',
           position: widgetSettings.productBadgePosition || 'after-price',
           customSelector: widgetSettings.productBadgeCustomSelector || ''
         };
@@ -1595,6 +1596,10 @@
       }
       if (settings.marginTop) {
         badge.style.marginTop = settings.marginTop;
+      }
+      if (settings.marginX !== undefined) {
+        badge.style.marginLeft = settings.marginX;
+        badge.style.marginRight = settings.marginX;
       }
 
       // Базовые стили для корректного отображения
