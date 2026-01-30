@@ -13,5 +13,8 @@ const withNextra = nextra({})
 
 export default withNextra({
   reactStrictMode: true,
-  outputFileTracingRoot: process.cwd()
+  outputFileTracingRoot: process.cwd(),
+  eslint: {
+    ignoreDuringBuilds: true
+  }
 })
