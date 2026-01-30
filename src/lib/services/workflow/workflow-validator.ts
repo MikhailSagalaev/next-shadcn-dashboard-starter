@@ -19,10 +19,14 @@ export interface WorkflowValidationResult {
   errors: WorkflowValidationError[];
 }
 
-export async function validateWorkflow(
+/**
+ * СУГУБО КЛИЕНТСКАЯ валидация (топология, циклы, орфаны)
+ * Безопасна для использования в браузере.
+ */
+export function validateWorkflow(
   nodes: WorkflowNode[],
   connections: WorkflowConnection[]
-): Promise<WorkflowValidationResult> {
+): WorkflowValidationResult {
   const errors: WorkflowValidationError[] = [];
 
   if (nodes.length === 0) {
@@ -69,14 +73,33 @@ export async function validateWorkflow(
   const orphanErrors = detectOrphans(nodes, triggerNodes, adjacency);
   errors.push(...orphanErrors);
 
-  // ✨ НОВОЕ: Валидация goto_node ссылок в кнопках и flow.jump
+  // Валидация goto_node ссылок в кнопках и flow.jump
   const gotoErrors = validateGotoNodes(nodes, nodeMap);
   errors.push(...gotoErrors);
 
-  // ✨ НОВОЕ: Проверка типов нод и их конфигурации
+  return {
+    isValid: errors.filter((error) => error.type === 'error').length === 0,
+    errors
+  };
+}
+
+/**
+ * СЕРВЕРНАЯ валидация (включает клиентскую + глубокую проверку типов и конфигов)
+ * Использует node-handlers-registry и может быть асинхронной.
+ */
+export async function validateWorkflowServer(
+  nodes: WorkflowNode[],
+  connections: WorkflowConnection[]
+): Promise<WorkflowValidationResult> {
+  // 1. Базовая валидация (топология)
+  const basicResult = validateWorkflow(nodes, connections);
+  const errors = [...basicResult.errors];
+
+  // 2. Проверка типов нод (требует реестра)
   const typeErrors = validateNodeTypes(nodes);
   errors.push(...typeErrors);
 
+  // 3. Глубокая валидация конфигурации (требует реестра и валидаторов хендлеров)
   const configErrors = await validateNodeConfigs(nodes);
   errors.push(...configErrors);
 

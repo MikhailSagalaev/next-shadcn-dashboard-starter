@@ -13,7 +13,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import type { UpdateWorkflowRequest } from '@/types/workflow';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
-import { validateWorkflow } from '@/lib/services/workflow/workflow-validator';
+import { validateWorkflowServer } from '@/lib/services/workflow/workflow-validator';
 import { normalizeNodes } from '@/lib/services/workflow/utils/node-utils';
 
 // GET /api/projects/[id]/workflows/[workflowId] - Получить workflow
@@ -97,7 +97,7 @@ export async function PUT(
 
     // ✨ НОВОЕ: Валидация workflow перед сохранением (включая goto_node)
     if (hasWorkflowData && data.nodes && data.connections) {
-      const validationResult = await validateWorkflow(
+      const validationResult = await validateWorkflowServer(
         data.nodes,
         data.connections
       );
