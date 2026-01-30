@@ -167,12 +167,20 @@ export async function PUT(
       });
 
       // Создаем новую версию workflow
+
+      // Получаем текущую активную версию для деактивации
       const currentVersion = await db.workflowVersion.findFirst({
         where: { workflowId, isActive: true },
         orderBy: { version: 'desc' }
       });
 
-      const newVersionNumber = (currentVersion?.version || 0) + 1;
+      // Fix: Ищем максимальную версию среди ВСЕХ версий, чтобы избежать конфликтов уникальности
+      const latestVersion = await db.workflowVersion.findFirst({
+        where: { workflowId },
+        orderBy: { version: 'desc' }
+      });
+
+      const newVersionNumber = (latestVersion?.version || 0) + 1;
 
       version = await db.workflowVersion.create({
         data: {
