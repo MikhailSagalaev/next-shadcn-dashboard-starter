@@ -12,10 +12,77 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { withApiRateLimit } from '@/lib';
 
-// Генерируем компактный JS-лоадер с подстановкой projectId
-function generateBootloaderJs(projectId: string, widgetVersion = 'v=25') {
-  const js = `(()=>{try{var origin;(function(){try{var cur=document.currentScript;if(cur&&cur.src){origin=new URL(cur.src,window.location.href).origin;}else{origin=window.location.origin;}}catch(_){origin=window.location.origin;}})();var s=document.createElement('script');s.src=origin+'/tilda-bonus-widget.js?${widgetVersion}';s.async=true;s.onload=function(){try{if(window.TildaBonusWidget){window.TildaBonusWidget.init({projectId:'${projectId}',apiUrl:origin,bonusToRuble:1,minOrderAmount:100,debug:false});}}catch(_){}};document.head.appendChild(s);}catch(_){}})();`;
-  return js;
+// Генерируем компактный JS-лоадер с подстановкой projectId и платформы
+function generateBootloaderJs(
+  projectId: string,
+  platform = 'tilda',
+  widgetVersion = 'v=30'
+) {
+  // Логика загрузки:
+  // 1. Определяем базовый URL скрипта (origin)
+  // 2. Загружаем universal-widget.js
+  // 3. Загружаем адаптер для платформы (по умолчанию tilda-adapter.js)
+  // 4. Инициализируем ядро с адаптером
+
+  const js = `
+(()=>{
+  try {
+    var origin;
+    (function(){
+      try{
+        var cur=document.currentScript;
+        if(cur&&cur.src){origin=new URL(cur.src,window.location.href).origin;}
+        else{origin=window.location.origin;}
+      }catch(_){origin=window.location.origin;}
+    })();
+
+    // Загрузчик скриптов
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        var s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    // Загружаем зависимости последовательно
+    Promise.all([
+      loadScript(origin + '/universal-widget.js?${widgetVersion}'),
+      loadScript(origin + '/${platform}-adapter.js?${widgetVersion}')
+    ]).then(() => {
+      try {
+        if (window.LeadWidgetCore && window.TildaAdapter) {
+          // Выбираем адаптер динамически (пока хардкод для тильды)
+          var AdapterClass = window.TildaAdapter;
+          var core = new window.LeadWidgetCore({
+            projectId: '${projectId}',
+            apiUrl: origin,
+            debug: false,
+            adapter: new AdapterClass({ /* adapter config */ })
+          });
+          
+          // Внедряем адаптер обратно в кор
+          core.adapter.core = core;
+          
+          core.init();
+          window.LeadWidget = core; // Экспорт для отладки
+        }
+      } catch (err) {
+        console.error('LeadWidget Init Error:', err);
+      }
+    }).catch(err => {
+      console.error('LeadWidget Load Error:', err);
+      // Fallback на старый виджет если новые скрипты не грузятся?
+      // loadScript(origin + '/tilda-bonus-widget.js'); 
+    });
+
+  } catch(_) {}
+})();
+`;
+  return js.replace(/\n/g, ''); // Минификация (удаление переносов)
 }
 
 async function handler(
