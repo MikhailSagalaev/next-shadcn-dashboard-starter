@@ -24,7 +24,7 @@ function generateBootloaderJs(
   // 3. Загружаем адаптер для платформы (по умолчанию tilda-adapter.js)
   // 4. Инициализируем ядро с адаптером
 
-  /* Minified Bootloader */
+  /* Legacy Bootloader (Restored) */
   const js = `
 (()=>{
   try {
@@ -32,51 +32,35 @@ function generateBootloaderJs(
     (function(){
       try{
         var cur=document.currentScript;
-        if(cur&&cur.src){origin=new URL(cur.src,window.location.href).origin;}
-        else{origin=window.location.origin;}
+        if(cur&&cur.src){
+          origin=new URL(cur.src,window.location.href).origin;
+        }else{
+          origin=window.location.origin;
+        }
       }catch(_){origin=window.location.origin;}
     })();
 
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        var s = document.createElement('script');
-        s.src = src;
-        s.async = true;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
-
-    Promise.all([
-      loadScript(origin + '/universal-widget.js?${widgetVersion}'),
-      loadScript(origin + '/${platform}-adapter.js?${widgetVersion}')
-    ]).then(() => {
-      try {
-        if (window.LeadWidgetCore && window.TildaAdapter) {
-          var AdapterClass = window.TildaAdapter;
-          var core = new window.LeadWidgetCore({
-            projectId: '${projectId}',
-            apiUrl: origin,
-            debug: false,
-            adapter: new AdapterClass({})
+    var s=document.createElement('script');
+    s.src=origin+'/tilda-bonus-widget.js?${widgetVersion}';
+    s.async=true;
+    s.onload=function(){
+      try{
+        if(window.TildaBonusWidget){
+          window.TildaBonusWidget.init({
+            projectId:'${projectId}',
+            apiUrl:origin,
+            bonusToRuble:1,
+            minOrderAmount:100,
+            debug:false
           });
-          
-          core.adapter.core = core;
-          core.init();
-          window.LeadWidget = core;
         }
-      } catch (err) {
-        console.error('LeadWidget Init Error:', err);
-      }
-    }).catch(err => {
-      console.error('LeadWidget Load Error:', err);
-    });
-
+      }catch(_){}
+    };
+    document.head.appendChild(s);
   } catch(_) {}
 })();
 `;
-  return js;
+  return js.replace(/\n\s*/g, '');
 }
 
 async function handler(
