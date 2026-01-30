@@ -11,7 +11,6 @@ import { Footer, Layout, Navbar } from 'nextra-theme-docs';
 import { Banner, Head } from 'nextra/components';
 import { getPageMap } from 'nextra/page-map';
 import 'nextra-theme-docs/style.css';
-import Image from 'next/image';
 
 export const metadata = {
   title: {
@@ -25,12 +24,10 @@ const navbar = (
   <Navbar
     logo={
       <div className='flex items-center gap-2 font-bold'>
-        <Image src='/logo.svg' alt='Gupil Docs' width={32} height={32} />
+        <img src='/logo.svg' alt='Gupil Docs' width={32} height={32} />
         <span>Gupil Docs</span>
       </div>
     }
-    // @ts-ignore
-    searchPlaceholder='Поиск по документации...'
   />
 );
 
@@ -51,12 +48,10 @@ export default async function RootLayout({
           navbar={navbar}
           footer={footer}
           editLink='Редактировать эту страницу на GitHub'
-          docsRepositoryBase='https://github.com/your-org/gupil/tree/main/user-docs'
+          docsRepositoryBase='https://github.com/MikhailSagalaev/next-shadcn-dashboard-starter/tree/main/user-docs'
           sidebar={{ defaultMenuCollapseLevel: 1, toggleButton: true }}
           toc={{ title: 'На этой странице' }}
           feedback={{ content: 'Есть вопросы? Напишите нам' }}
-          // @ts-ignore
-          i18n={[{ locale: 'ru', text: 'Русский' }]}
           pageMap={await getPageMap()}
         >
           {children}
