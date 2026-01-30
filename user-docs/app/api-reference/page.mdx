@@ -99,8 +99,13 @@ Body: `{ email, promocode, order_amount }`
 - `POST /api/projects/{id}/users/{uid}/bonuses/add` — Начисление.
 - `POST /api/projects/{id}/users/{uid}/bonuses/subtract` — Списание.
 
-### Статистика
-- `GET /api/projects/{id}/stats` — Общая сводка.
+### Аналитика
+- `GET /api/projects/{id}/analytics` — Полная статистика.
+  - **Response**:
+    - `stats`: Оборот, заказы, средний чек.
+    - `cohorts`: Когортный анализ (Retention).
+    - `financial`: ARPU, LTV, ARPPU.
+    - `advancedReferralStats`: Эффективность реферальной программы.
 
 ## Лимиты (Rate Limits)
 

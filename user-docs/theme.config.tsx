@@ -10,7 +10,19 @@
 import React from 'react';
 
 const config = {
-  logo: <span>Gupil Documentation</span>,
+  logo: (
+    <div className='flex items-center gap-2 font-bold'>
+      <svg
+        xmlns='http://www.w3.org/2000/svg'
+        viewBox='0 0 24 24'
+        fill='currentColor'
+        className='h-6 w-6 text-indigo-500'
+      >
+        <path d='M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z' />
+      </svg>
+      <span>Gupil Docs</span>
+    </div>
+  ),
   project: {
     link: 'https://github.com/your-org/gupil'
   },
