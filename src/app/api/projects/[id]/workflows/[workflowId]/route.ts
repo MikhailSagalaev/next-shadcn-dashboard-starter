@@ -97,7 +97,10 @@ export async function PUT(
 
     // ✨ НОВОЕ: Валидация workflow перед сохранением (включая goto_node)
     if (hasWorkflowData && data.nodes && data.connections) {
-      const validationResult = validateWorkflow(data.nodes, data.connections);
+      const validationResult = await validateWorkflow(
+        data.nodes,
+        data.connections
+      );
 
       // Возвращаем ошибки валидации (только критические)
       const criticalErrors = validationResult.errors.filter(

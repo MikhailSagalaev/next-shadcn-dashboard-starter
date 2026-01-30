@@ -5,7 +5,10 @@
     {
       "id": "start-trigger",
       "type": "trigger.command",
-      "position": { "x": 100, "y": 100 },
+      "position": {
+        "x": 100,
+        "y": 100
+      },
       "data": {
         "label": "Команда /start",
         "command": "/start",
@@ -15,16 +18,22 @@
     {
       "id": "welcome-message",
       "type": "message.text",
-      "position": { "x": 100, "y": 200 },
+      "position": {
+        "x": 100,
+        "y": 200
+      },
       "data": {
         "label": "Приветствие",
-        "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📱 Для регистрации, пожалуйста, поделитесь вашим номером телефона или укажите email."
+        "text": "🎁 Добро пожаловать в программу лояльности!\n\n💰 Получите приветственные бонусы прямо сейчас!\n\n📱 Для регистрации, пожалуйста, поделитесь вашим номером телефона или напишите ваш Email."
       }
     },
     {
       "id": "request-contact",
       "type": "trigger.contact",
-      "position": { "x": 100, "y": 300 },
+      "position": {
+        "x": 100,
+        "y": 300
+      },
       "data": {
         "label": "Запрос контакта",
         "requestPhone": true,
@@ -33,53 +42,95 @@
     },
     {
       "id": "check-user",
-      "type": "action.check_user",
-      "position": { "x": 100, "y": 400 },
+      "type": "action.database_query",
+      "position": {
+        "x": 100,
+        "y": 400
+      },
       "data": {
         "label": "Проверка пользователя",
-        "telegramId": "{{telegram.userId}}",
-        "phone": "{{telegram.contact.phone}}",
-        "email": "{{telegram.message.text}}"
+        "config": {
+          "action.database_query": {
+            "query": "check_user_by_telegram",
+            "parameters": {
+              "telegramId": "{{telegram.userId}}",
+              "phone": "{{contact.phone}}",
+              "email": "{{message.text}}"
+            },
+            "assignTo": "user"
+          }
+        }
       }
     },
     {
       "id": "is-new-user",
       "type": "condition",
-      "position": { "x": 100, "y": 500 },
+      "position": {
+        "x": 100,
+        "y": 500
+      },
       "data": {
         "label": "Новый пользователь?",
-        "expression": "!get('user') || !get('user').id"
+        "config": {
+          "condition": {
+            "expression": "!get('user') || !get('user').id"
+          }
+        }
       }
     },
     {
       "id": "create-user",
-      "type": "action.create_user",
-      "position": { "x": -100, "y": 600 },
+      "type": "action.database_query",
+      "position": {
+        "x": -100,
+        "y": 600
+      },
       "data": {
         "label": "Создать пользователя",
-        "telegramId": "{{telegram.userId}}",
-        "username": "{{telegram.username}}",
-        "firstName": "{{telegram.firstName}}",
-        "phone": "{{telegram.contact.phone}}",
-        "email": "{{telegram.message.text}}"
+        "config": {
+          "action.database_query": {
+            "query": "create_user",
+            "parameters": {
+              "telegramId": "{{telegram.userId}}",
+              "username": "{{telegram.username}}",
+              "firstName": "{{telegram.firstName}}",
+              "phone": "{{contact.phone}}",
+              "email": "{{message.text}}"
+            },
+            "assignTo": "user"
+          }
+        }
       }
     },
     {
       "id": "add-welcome-bonus",
-      "type": "action.add_bonus",
-      "position": { "x": -100, "y": 700 },
+      "type": "action.database_query",
+      "position": {
+        "x": -100,
+        "y": 700
+      },
       "data": {
         "label": "Начислить бонусы",
-        "userId": "{{user.id}}",
-        "amount": 100,
-        "type": "WELCOME",
-        "description": "Приветственные бонусы"
+        "config": {
+          "action.database_query": {
+            "query": "add_bonus",
+            "parameters": {
+              "userId": "{{user.id}}",
+              "amount": 100,
+              "type": "WELCOME",
+              "description": "Приветственные бонусы"
+            }
+          }
+        }
       }
     },
     {
       "id": "success-new-user",
       "type": "message.text",
-      "position": { "x": -100, "y": 800 },
+      "position": {
+        "x": -100,
+        "y": 800
+      },
       "data": {
         "label": "Успешная регистрация",
         "text": "🎉 Поздравляем с регистрацией!\n\n💰 Вам начислено 100 приветственных бонусов!\n\n✨ Используйте их для покупок и получайте выгоду!"
@@ -88,7 +139,10 @@
     {
       "id": "existing-user-message",
       "type": "message.text",
-      "position": { "x": 300, "y": 600 },
+      "position": {
+        "x": 300,
+        "y": 600
+      },
       "data": {
         "label": "Приветствие существующего",
         "text": "👋 Рады видеть вас снова!\n\n💰 Ваш текущий баланс: {{user.balance}} бонусов\n\n🛍️ Продолжайте делать покупки и копить бонусы!"
@@ -97,10 +151,17 @@
     {
       "id": "end-node",
       "type": "flow.end",
-      "position": { "x": 100, "y": 900 },
+      "position": {
+        "x": 100,
+        "y": 900
+      },
       "data": {
         "label": "Завершение",
-        "success": true
+        "config": {
+          "flow.end": {
+            "success": true
+          }
+        }
       }
     }
   ],

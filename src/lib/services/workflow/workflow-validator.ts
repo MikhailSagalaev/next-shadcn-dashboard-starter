@@ -19,10 +19,10 @@ export interface WorkflowValidationResult {
   errors: WorkflowValidationError[];
 }
 
-export function validateWorkflow(
+export async function validateWorkflow(
   nodes: WorkflowNode[],
   connections: WorkflowConnection[]
-): WorkflowValidationResult {
+): Promise<WorkflowValidationResult> {
   const errors: WorkflowValidationError[] = [];
 
   if (nodes.length === 0) {
@@ -73,10 +73,120 @@ export function validateWorkflow(
   const gotoErrors = validateGotoNodes(nodes, nodeMap);
   errors.push(...gotoErrors);
 
+  // ✨ НОВОЕ: Проверка типов нод и их конфигурации
+  const typeErrors = validateNodeTypes(nodes);
+  errors.push(...typeErrors);
+
+  const configErrors = await validateNodeConfigs(nodes);
+  errors.push(...configErrors);
+
   return {
     isValid: errors.filter((error) => error.type === 'error').length === 0,
     errors
   };
+}
+
+/**
+ * ✨ НОВОЕ: Проверка существования типов нод в реестре
+ */
+export function validateNodeTypes(
+  nodes: WorkflowNode[]
+): WorkflowValidationError[] {
+  const errors: WorkflowValidationError[] = [];
+  // Используем require для избежания циклических зависимостей, если они есть
+  // Но лучше импортировать nodeHandlersRegistry сверху, если это возможно.
+  // Так как workflow-validator может использоваться там где реестр еще не инициализирован,
+  // стоит быть осторожным. Но по архитектуре, реестр должен быть доступен.
+
+  // Для простоты и надежности, мы не станем импортировать реестр прямо здесь в теле функции,
+  // а предположим что он импортирован в файле или передан (но мы не меняли сигнатуру).
+  // Поэтому добавим импорт в начало файла.
+
+  // В данном контексте, так как мы редактируем файл целиком или частично,
+  // я не могу добавить импорт сверху в этом блоке, если не заменяю весь файл.
+  // Но я могу использовать динамический импорт или получить доступ к реестру.
+
+  // ВАЖНО: Мы не можем добавить импорт в начало файла через replace_file_content
+  // если заменяем только конец.
+  // Поэтому я сделаю это допущение: я заменю функцию validateWorkflow и добавлю новые функции.
+  // Но мне нужно, чтобы nodeHandlersRegistry был доступен.
+  // Я использую require внутри функции для надежности.
+
+  try {
+    const { nodeHandlersRegistry } = require('./node-handlers-registry');
+
+    for (const node of nodes) {
+      if (!nodeHandlersRegistry.has(node.type)) {
+        errors.push({
+          type: 'error',
+          message: `Неизвестный тип ноды: '${node.type}'.`,
+          nodeId: node.id
+        });
+      }
+    }
+  } catch (e) {
+    console.warn(
+      'Не удалось загрузить nodeHandlersRegistry для валидации типов:',
+      e
+    );
+  }
+
+  return errors;
+}
+
+/**
+ * ✨ НОВОЕ: Глубокая валидация конфигурации нод через их хендлеры
+ */
+export async function validateNodeConfigs(
+  nodes: WorkflowNode[]
+): Promise<WorkflowValidationError[]> {
+  const errors: WorkflowValidationError[] = [];
+
+  try {
+    const { nodeHandlersRegistry } = require('./node-handlers-registry');
+
+    for (const node of nodes) {
+      const handler = nodeHandlersRegistry.get(node.type);
+      if (handler) {
+        // Получаем конфиг для конкретного типа ноды
+        const configKey = node.type;
+        // Некоторые ноды хранят конфиг в node.data.config[node.type], некоторые просто в node.data
+        // Стандартная схема: node.data.config[node.type]
+
+        // Но хендлеры ожидают "сырой" конфиг, который они сами парсят?
+        // Посмотрим на BaseNodeHandler.validate(config).
+        // Обычно хендлеры ожидают объект, который внутри data.config[type]
+
+        let configToValidate = node.data?.config?.[node.type];
+
+        // Если конфига нет, передаем undefined/null, пусть хендлер сам решает ошибка это или нет
+        // (например condition handler может требовать конфиг)
+
+        try {
+          const result = await handler.validate(configToValidate);
+          if (!result.isValid) {
+            for (const errorMsg of result.errors) {
+              errors.push({
+                type: 'error',
+                message: `Ошибка в ноде '${node.data?.label || node.id}': ${errorMsg}`,
+                nodeId: node.id
+              });
+            }
+          }
+        } catch (validationError: any) {
+          errors.push({
+            type: 'error',
+            message: `Ошибка валидации ноды '${node.data?.label || node.id}': ${validationError.message}`,
+            nodeId: node.id
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Не удалось провести глубокую валидацию конфигураций:', e);
+  }
+
+  return errors;
 }
 
 /**
