@@ -52,12 +52,6 @@ export default async function RootLayout({
           sidebar={{ defaultMenuCollapseLevel: 1, toggleButton: true }}
           toc={{ title: 'На этой странице' }}
           feedback={{ content: 'Есть вопросы? Напишите нам' }}
-          search={{
-            placeholder: 'Поиск по документации...',
-            emptyResult: 'Ничего не найдено',
-            error: 'Ошибка поиска',
-            loading: 'Загрузка...'
-          }}
           pageMap={await getPageMap()}
         >
           {children}

@@ -246,9 +246,6 @@ export function UsersTable({
         return (
           <div className='flex items-center space-x-3'>
             <Avatar className='h-8 w-8'>
-              <AvatarImage
-                src={`https://api.slingacademy.com/public/sample-users/${(parseInt(user.id.slice(-2), 16) % 10) + 1}.png`}
-              />
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div>
