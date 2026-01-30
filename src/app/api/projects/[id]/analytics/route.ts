@@ -1,15 +1,7 @@
-/**
- * @file: src/app/api/projects/[id]/analytics/route.ts
- * @description: API для получения аналитических данных проекта
- * @project: SaaS Bonus System
- * @dependencies: Next.js API Routes, Prisma, ReferralService
- * @created: 2024-12-31
- * @author: AI Assistant + User
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ReferralService } from '@/lib/services/referral.service';
+import { AnalyticsService } from '@/lib/services/analytics.service';
 import { logger } from '@/lib/logger';
 import { CacheService } from '@/lib/redis';
 
@@ -30,7 +22,7 @@ export async function GET(
     }
 
     const analytics = await CacheService.getOrSet(
-      `analytics:${id}:v1`,
+      `analytics:${id}:v2`, // Incremented cache version
       async () => {
         const now = new Date();
         const thirtyDaysAgo = new Date(
@@ -54,7 +46,10 @@ export async function GET(
           topUsers,
           usersByLevel,
           bonusLevels,
-          referralStats
+          referralStats,
+          cohortAnalysis,
+          financialMetrics,
+          advancedReferralStats
         ] = await Promise.all([
           db.user.count({ where: { projectId: id } }),
           db.user.count({ where: { projectId: id, isActive: true } }),
@@ -150,7 +145,7 @@ export async function GET(
           }),
           db.user
             .findMany({
-              where: { 
+              where: {
                 projectId: id,
                 // Фильтруем только пользователей с транзакциями за последние 30 дней
                 transactions: {
@@ -185,7 +180,7 @@ export async function GET(
                     const totalSpent = u.transactions
                       .filter((t) => t.type === 'SPEND')
                       .reduce((sum, t) => sum + Number(t.amount), 0);
-                    
+
                     return {
                       id: u.id,
                       first_name: u.firstName,
@@ -199,16 +194,14 @@ export async function GET(
                       activity_score: u.transactions.length * 100 + totalEarned
                     };
                   })
-                  .sort(
-                    (a: any, b: any) => {
-                      // Сортируем по общему счету активности (количество транзакций + сумма начисленных)
-                      // Если счет равен, сортируем по количеству транзакций
-                      if (b.activity_score !== a.activity_score) {
-                        return b.activity_score - a.activity_score;
-                      }
-                      return b.transaction_count - a.transaction_count;
+                  .sort((a: any, b: any) => {
+                    // Сортируем по общему счету активности (количество транзакций + сумма начисленных)
+                    // Если счет равен, сортируем по количеству транзакций
+                    if (b.activity_score !== a.activity_score) {
+                      return b.activity_score - a.activity_score;
                     }
-                  )
+                    return b.transaction_count - a.transaction_count;
+                  })
                   .slice(0, 10) // Берем только топ-10 после сортировки
             ),
           db.user
@@ -247,7 +240,11 @@ export async function GET(
             },
             orderBy: { order: 'asc' }
           }),
-          ReferralService.getReferralStats(id)
+          ReferralService.getReferralStats(id),
+          // New Analytics Calls
+          AnalyticsService.getCohortAnalysis(id),
+          AnalyticsService.getFinancialMetrics(id),
+          AnalyticsService.getReferralAnalytics(id)
         ]);
 
         return {
@@ -304,7 +301,11 @@ export async function GET(
             paymentPercent: Number(level.payment_percent) || 0,
             order: Number(level.order) || 0
           })),
-          referralStats
+          referralStats,
+          // New Data
+          cohorts: cohortAnalysis.cohorts,
+          financial: financialMetrics,
+          advancedReferralStats
         };
       },
       60

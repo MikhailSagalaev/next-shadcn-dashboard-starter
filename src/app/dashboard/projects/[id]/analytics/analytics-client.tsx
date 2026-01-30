@@ -31,7 +31,9 @@ import {
   TrendingUp,
   DollarSign,
   Calendar,
-  Users
+  Users,
+  GitFork,
+  CreditCard
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -44,6 +46,7 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
   const [period, setPeriod] = useState('30d');
   const [ordersData, setOrdersData] = useState<any>(null);
   const [productsData, setProductsData] = useState<any>(null);
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,16 +56,19 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ordersRes, productsRes] = await Promise.all([
+      const [ordersRes, productsRes, analyticsRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/analytics/orders?period=${period}`),
-        fetch(`/api/projects/${projectId}/analytics/products?period=${period}`)
+        fetch(`/api/projects/${projectId}/analytics/products?period=${period}`),
+        fetch(`/api/projects/${projectId}/analytics`)
       ]);
 
       const orders = await ordersRes.json();
       const products = await productsRes.json();
+      const analytics = await analyticsRes.json();
 
       setOrdersData(orders);
       setProductsData(products);
+      setAnalyticsData(analytics);
     } catch (error) {
       console.error('Failed to load analytics:', error);
     } finally {
@@ -105,6 +111,25 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
     }
   ];
 
+  if (analyticsData?.financial) {
+    stats.push(
+      {
+        title: 'ARPU',
+        value: `${Math.round(analyticsData.financial.arpu || 0).toLocaleString('ru-RU')} ₽`,
+        icon: Users,
+        color: 'text-indigo-500',
+        bgColor: 'bg-indigo-500/10'
+      },
+      {
+        title: 'LTV (Est.)',
+        value: `${Math.round(analyticsData.financial.ltv || 0).toLocaleString('ru-RU')} ₽`,
+        icon: CreditCard,
+        color: 'text-pink-500',
+        bgColor: 'bg-pink-500/10'
+      }
+    );
+  }
+
   return (
     <div className='space-y-6'>
       {/* Period Selector */}
@@ -126,7 +151,7 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'
+        className='grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
       >
         {stats.map((stat, index) => (
           <motion.div
@@ -160,6 +185,8 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
           <TabsTrigger value='orders'>Заказы</TabsTrigger>
           <TabsTrigger value='products'>Товары</TabsTrigger>
           <TabsTrigger value='top'>Топ товаров</TabsTrigger>
+          <TabsTrigger value='cohorts'>Когорты</TabsTrigger>
+          <TabsTrigger value='referrals'>Рефералы</TabsTrigger>
         </TabsList>
 
         {/* Orders Tab */}
@@ -319,6 +346,132 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Cohorts Tab */}
+        <TabsContent value='cohorts' className='space-y-4'>
+          <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <CardHeader>
+              <CardTitle>Когортный анализ (Retention)</CardTitle>
+              <CardDescription>
+                Возвращаемость пользователей по месяцам регистрации
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className='overflow-x-auto'>
+                <table className='w-full text-sm'>
+                  <thead>
+                    <tr className='border-b dark:border-zinc-800'>
+                      <th className='p-2 text-left font-medium'>Когорта</th>
+                      <th className='p-2 text-left font-medium'>
+                        Пользователей
+                      </th>
+                      {[0, 1, 2, 3, 4, 5, 6].map((m) => (
+                        <th key={m} className='p-2 text-center font-medium'>
+                          M{m}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analyticsData?.cohorts?.map((cohort: any) => (
+                      <tr
+                        key={cohort.cohortDate}
+                        className='border-b dark:border-zinc-800'
+                      >
+                        <td className='p-2 font-medium'>{cohort.cohortDate}</td>
+                        <td className='p-2 text-zinc-500'>
+                          {cohort.totalUsers}
+                        </td>
+                        {cohort.retention.map((r: any) => (
+                          <td key={r.month} className='p-2 text-center'>
+                            <span
+                              className={`rounded px-2 py-1 text-xs ${
+                                r.percentage > 50
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : r.percentage > 20
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-zinc-100 text-zinc-800'
+                              }`}
+                            >
+                              {Math.round(r.percentage)}%
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Referrals Tab */}
+        <TabsContent value='referrals' className='space-y-4'>
+          <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
+            <CardHeader>
+              <CardTitle>Реферальная программа</CardTitle>
+              <CardDescription>
+                Статистика приглашений и эффективность партнеров
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className='mb-6 grid gap-4 md:grid-cols-2'>
+                <div className='rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800/50'>
+                  <p className='text-sm text-zinc-500'>Всего приглашено</p>
+                  <p className='text-2xl font-bold'>
+                    {analyticsData?.advancedReferralStats?.totalReferrals || 0}
+                  </p>
+                </div>
+                <div className='rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800/50'>
+                  <p className='text-sm text-zinc-500'>Выручка от рефералов</p>
+                  <p className='text-2xl font-bold text-emerald-600'>
+                    {(
+                      analyticsData?.advancedReferralStats?.totalRevenue || 0
+                    ).toLocaleString('ru-RU')}{' '}
+                    ₽
+                  </p>
+                </div>
+              </div>
+
+              <h3 className='mb-3 font-semibold'>Топ партнеров</h3>
+              <div className='space-y-3'>
+                {analyticsData?.advancedReferralStats?.topReferrers?.map(
+                  (ref: any, i: number) => (
+                    <div
+                      key={ref.userId}
+                      className='flex items-center justify-between rounded-lg border p-3 dark:border-zinc-800'
+                    >
+                      <div className='flex items-center gap-3'>
+                        <div className='flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-xs font-bold dark:bg-zinc-700'>
+                          {i + 1}
+                        </div>
+                        <div>
+                          <p className='font-medium'>{ref.name}</p>
+                          <p className='text-xs text-zinc-500'>
+                            {ref.referrals} рефералов
+                          </p>
+                        </div>
+                      </div>
+                      <div className='text-right'>
+                        <p className='font-semibold'>
+                          {ref.revenue.toLocaleString('ru-RU')} ₽
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
+                {(!analyticsData?.advancedReferralStats?.topReferrers ||
+                  analyticsData.advancedReferralStats.topReferrers.length ===
+                    0) && (
+                  <p className='text-sm text-zinc-500 italic'>
+                    Нет данных о партнерах
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

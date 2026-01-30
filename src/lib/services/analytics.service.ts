@@ -64,13 +64,13 @@ export class AnalyticsService {
         where: {
           projectId,
           status: {
-            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'],
+            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
-          ...dateFilter,
+          ...dateFilter
         },
         _sum: {
-          totalAmount: true,
-        },
+          totalAmount: true
+        }
       });
 
       const revenue = Number(revenueResult._sum.totalAmount || 0);
@@ -79,8 +79,8 @@ export class AnalyticsService {
       const orderCount = await db.order.count({
         where: {
           projectId,
-          ...dateFilter,
-        },
+          ...dateFilter
+        }
       });
 
       // Средний чек
@@ -94,11 +94,11 @@ export class AnalyticsService {
             ? {
                 registeredAt: {
                   ...(startDate ? { gte: startDate } : {}),
-                  ...(endDate ? { lte: endDate } : {}),
-                },
+                  ...(endDate ? { lte: endDate } : {})
+                }
               }
-            : {}),
-        },
+            : {})
+        }
       });
 
       // Активные пользователи (с заказами)
@@ -107,14 +107,15 @@ export class AnalyticsService {
           projectId,
           orders: {
             some: {
-              ...dateFilter,
-            },
-          },
-        },
+              ...dateFilter
+            }
+          }
+        }
       });
 
       // Конверсия (пользователи с заказами / общее количество пользователей)
-      const conversionRate = totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
+      const conversionRate =
+        totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
 
       const result = {
         revenue,
@@ -122,7 +123,7 @@ export class AnalyticsService {
         averageOrderValue,
         totalUsers,
         activeUsers,
-        conversionRate,
+        conversionRate
       };
 
       // Кэшируем результат на 5 минут
@@ -133,7 +134,7 @@ export class AnalyticsService {
       logger.error('Ошибка вычисления KPI', {
         filters,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -156,15 +157,15 @@ export class AnalyticsService {
           eventType,
           userId,
           orderId,
-          data,
-        },
+          data
+        }
       });
     } catch (error) {
       logger.error('Ошибка регистрации события аналитики', {
         projectId,
         eventType,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       // Не бросаем ошибку, чтобы не прерывать основной процесс
     }
@@ -188,8 +189,8 @@ export class AnalyticsService {
             projectId,
             metricType,
             period,
-            date,
-          },
+            date
+          }
         },
         create: {
           projectId,
@@ -197,12 +198,12 @@ export class AnalyticsService {
           period,
           value,
           date,
-          metadata,
+          metadata
         },
         update: {
           value,
-          metadata,
-        },
+          metadata
+        }
       });
     } catch (error) {
       logger.error('Ошибка сохранения метрики', {
@@ -210,7 +211,7 @@ export class AnalyticsService {
         metricType,
         period,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -234,12 +235,12 @@ export class AnalyticsService {
           period,
           date: {
             gte: startDate,
-            lte: endDate,
-          },
+            lte: endDate
+          }
         },
         orderBy: {
-          date: 'asc',
-        },
+          date: 'asc'
+        }
       });
 
       return metrics;
@@ -249,7 +250,7 @@ export class AnalyticsService {
         metricType,
         period,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -288,13 +289,13 @@ export class AnalyticsService {
         where: {
           projectId,
           status: {
-            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'],
+            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
-          ...dateFilter,
+          ...dateFilter
         },
         _sum: {
-          totalAmount: true,
-        },
+          totalAmount: true
+        }
       });
 
       const revenue = Number(result._sum.totalAmount || 0);
@@ -307,7 +308,7 @@ export class AnalyticsService {
       logger.error('Ошибка вычисления выручки', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -336,14 +337,14 @@ export class AnalyticsService {
       return await db.order.count({
         where: {
           projectId,
-          ...dateFilter,
-        },
+          ...dateFilter
+        }
       });
     } catch (error) {
       logger.error('Ошибка вычисления количества заказов', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -359,14 +360,18 @@ export class AnalyticsService {
   ): Promise<number> {
     try {
       const revenue = await this.getRevenue(projectId, startDate, endDate);
-      const orderCount = await this.getOrderCount(projectId, startDate, endDate);
+      const orderCount = await this.getOrderCount(
+        projectId,
+        startDate,
+        endDate
+      );
 
       return orderCount > 0 ? revenue / orderCount : 0;
     } catch (error) {
       logger.error('Ошибка вычисления среднего чека', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -408,15 +413,17 @@ export class AnalyticsService {
         where: {
           projectId,
           eventType: {
-            in: ['page_view', 'add_to_cart', 'checkout_started', 'purchase'],
+            in: ['page_view', 'add_to_cart', 'checkout_started', 'purchase']
           },
-          ...dateFilter,
-        },
+          ...dateFilter
+        }
       });
 
       const views = events.filter((e) => e.eventType === 'page_view').length;
       const carts = events.filter((e) => e.eventType === 'add_to_cart').length;
-      const checkouts = events.filter((e) => e.eventType === 'checkout_started').length;
+      const checkouts = events.filter(
+        (e) => e.eventType === 'checkout_started'
+      ).length;
       const purchases = events.filter((e) => e.eventType === 'purchase').length;
 
       return {
@@ -428,14 +435,14 @@ export class AnalyticsService {
           viewToCart: views > 0 ? (carts / views) * 100 : 0,
           cartToCheckout: carts > 0 ? (checkouts / carts) * 100 : 0,
           checkoutToPurchase: checkouts > 0 ? (purchases / checkouts) * 100 : 0,
-          viewToPurchase: views > 0 ? (purchases / views) * 100 : 0,
-        },
+          viewToPurchase: views > 0 ? (purchases / views) * 100 : 0
+        }
       };
     } catch (error) {
       logger.error('Ошибка вычисления воронки продаж', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -481,10 +488,10 @@ export class AnalyticsService {
           orders: {
             some: {
               status: {
-                in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'],
-              },
-            },
-          },
+                in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
+              }
+            }
+          }
         },
         select: {
           id: true,
@@ -492,34 +499,38 @@ export class AnalyticsService {
           orders: {
             where: {
               status: {
-                in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'],
-              },
+                in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
+              }
             },
             select: {
               totalAmount: true,
-              createdAt: true,
+              createdAt: true
             },
             orderBy: {
-              createdAt: 'desc',
-            },
-          },
-        },
+              createdAt: 'desc'
+            }
+          }
+        }
       });
 
       const rfmData = users.map((user) => {
         const orders = user.orders || [];
         const lastOrderDate = orders[0]?.createdAt || user.registeredAt;
         const recency = Math.floor(
-          (endDate.getTime() - new Date(lastOrderDate).getTime()) / (1000 * 60 * 60 * 24)
+          (endDate.getTime() - new Date(lastOrderDate).getTime()) /
+            (1000 * 60 * 60 * 24)
         ); // Дни
         const frequency = orders.length;
-        const monetary = orders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+        const monetary = orders.reduce(
+          (sum, o) => sum + Number(o.totalAmount),
+          0
+        );
 
         return {
           userId: user.id,
           recency,
           frequency,
-          monetary,
+          monetary
         };
       });
 
@@ -531,7 +542,7 @@ export class AnalyticsService {
         { name: 'New Customers', r: [5], f: [1], m: [1, 2, 3, 4, 5] },
         { name: 'At Risk', r: [2, 3], f: [3, 4, 5], m: [3, 4, 5] },
         { name: 'Cannot Lose Them', r: [1, 2], f: [4, 5], m: [4, 5] },
-        { name: 'Hibernating', r: [1, 2, 3], f: [1, 2], m: [1, 2, 3] },
+        { name: 'Hibernating', r: [1, 2, 3], f: [1, 2], m: [1, 2, 3] }
       ];
 
       // Вычисляем R, F, M квантили
@@ -548,24 +559,28 @@ export class AnalyticsService {
         getQuantile(recencies, 0.2),
         getQuantile(recencies, 0.4),
         getQuantile(recencies, 0.6),
-        getQuantile(recencies, 0.8),
+        getQuantile(recencies, 0.8)
       ];
 
       const fQuartiles = [
         getQuantile(frequencies, 0.2),
         getQuantile(frequencies, 0.4),
         getQuantile(frequencies, 0.6),
-        getQuantile(frequencies, 0.8),
+        getQuantile(frequencies, 0.8)
       ];
 
       const mQuartiles = [
         getQuantile(monetaries, 0.2),
         getQuantile(monetaries, 0.4),
         getQuantile(monetaries, 0.6),
-        getQuantile(monetaries, 0.8),
+        getQuantile(monetaries, 0.8)
       ];
 
-      const getScore = (value: number, quartiles: number[], reverse: boolean = false): number => {
+      const getScore = (
+        value: number,
+        quartiles: number[],
+        reverse: boolean = false
+      ): number => {
         if (reverse) {
           if (value <= quartiles[0]) return 5;
           if (value <= quartiles[1]) return 4;
@@ -582,7 +597,10 @@ export class AnalyticsService {
       };
 
       // Классифицируем пользователей
-      const segmentCounts: Record<string, { users: number; recency: number; frequency: number; monetary: number }> = {};
+      const segmentCounts: Record<
+        string,
+        { users: number; recency: number; frequency: number; monetary: number }
+      > = {};
 
       for (const data of rfmData) {
         const r = getScore(data.recency, rQuartiles, true); // Чем меньше recency, тем лучше
@@ -601,7 +619,7 @@ export class AnalyticsService {
                 users: 0,
                 recency: 0,
                 frequency: 0,
-                monetary: 0,
+                monetary: 0
               };
             }
             segmentCounts[segment.name].users++;
@@ -619,7 +637,7 @@ export class AnalyticsService {
         users: data.users,
         avgRecency: data.users > 0 ? data.recency / data.users : 0,
         avgFrequency: data.users > 0 ? data.frequency / data.users : 0,
-        avgMonetary: data.users > 0 ? data.monetary / data.users : 0,
+        avgMonetary: data.users > 0 ? data.monetary / data.users : 0
       }));
 
       const response = { segments: result };
@@ -632,7 +650,7 @@ export class AnalyticsService {
       logger.error('Ошибка RFM-анализа', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -673,23 +691,28 @@ export class AnalyticsService {
         where: {
           projectId,
           status: {
-            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'],
+            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
-          ...dateFilter,
+          ...dateFilter
         },
         include: {
           items: {
             include: {
-              product: true,
-            },
-          },
-        },
+              product: true
+            }
+          }
+        }
       });
 
       // Агрегируем данные по товарам
       const productData: Record<
         string,
-        { name: string; revenue: number; quantities: number[]; productId?: string }
+        {
+          name: string;
+          revenue: number;
+          quantities: number[];
+          productId?: string;
+        }
       > = {};
 
       for (const order of orders) {
@@ -700,7 +723,7 @@ export class AnalyticsService {
               name: item.name,
               revenue: 0,
               quantities: [],
-              productId: item.productId || undefined,
+              productId: item.productId || undefined
             };
           }
           productData[key].revenue += Number(item.total);
@@ -719,7 +742,7 @@ export class AnalyticsService {
         .map(([key, data]) => ({
           key,
           ...data,
-          quantity: data.quantities.reduce((sum, q) => sum + q, 0),
+          quantity: data.quantities.reduce((sum, q) => sum + q, 0)
         }))
         .sort((a, b) => b.revenue - a.revenue);
 
@@ -740,7 +763,7 @@ export class AnalyticsService {
           ...product,
           abcClass,
           revenueShare: (product.revenue / totalRevenue) * 100,
-          cumulativeShare: share,
+          cumulativeShare: share
         };
       });
 
@@ -748,12 +771,14 @@ export class AnalyticsService {
       // Вычисляем коэффициент вариации для каждого товара
       const xyzProducts = abcProducts.map((product) => {
         const quantities = productData[product.key].quantities;
-        const avgQuantity = quantities.reduce((sum, q) => sum + q, 0) / quantities.length;
+        const avgQuantity =
+          quantities.reduce((sum, q) => sum + q, 0) / quantities.length;
         const variance =
           quantities.reduce((sum, q) => sum + Math.pow(q - avgQuantity, 2), 0) /
           quantities.length;
         const stdDev = Math.sqrt(variance);
-        const coefficientOfVariation = avgQuantity > 0 ? (stdDev / avgQuantity) * 100 : 0;
+        const coefficientOfVariation =
+          avgQuantity > 0 ? (stdDev / avgQuantity) * 100 : 0;
 
         let xyzClass: 'X' | 'Y' | 'Z' = 'Z';
         if (coefficientOfVariation <= 10) {
@@ -769,7 +794,7 @@ export class AnalyticsService {
           quantity: product.quantity,
           abcClass: product.abcClass,
           xyzClass,
-          category: `${product.abcClass}${xyzClass}`,
+          category: `${product.abcClass}${xyzClass}`
         };
       });
 
@@ -778,7 +803,7 @@ export class AnalyticsService {
       logger.error('Ошибка ABC/XYZ-анализа', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
@@ -792,27 +817,29 @@ export class AnalyticsService {
     period: 'day' | 'week' | 'month' = 'day',
     startDate: Date,
     endDate: Date
-  ): Promise<Array<{
-    period: string;
-    revenue: number;
-    orderCount: number;
-    averageOrderValue: number;
-  }>> {
+  ): Promise<
+    Array<{
+      period: string;
+      revenue: number;
+      orderCount: number;
+      averageOrderValue: number;
+    }>
+  > {
     try {
       const orders = await db.order.findMany({
         where: {
           projectId,
           status: {
-            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'],
+            in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
           createdAt: {
             gte: startDate,
-            lte: endDate,
-          },
+            lte: endDate
+          }
         },
         orderBy: {
-          createdAt: 'asc',
-        },
+          createdAt: 'asc'
+        }
       });
 
       // Группируем по периодам
@@ -852,7 +879,7 @@ export class AnalyticsService {
           period,
           revenue: data.revenue,
           orderCount: data.count,
-          averageOrderValue: data.count > 0 ? data.revenue / data.count : 0,
+          averageOrderValue: data.count > 0 ? data.revenue / data.count : 0
         }))
         .sort((a, b) => a.period.localeCompare(b.period));
 
@@ -861,10 +888,270 @@ export class AnalyticsService {
       logger.error('Ошибка анализа динамики продаж', {
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'analytics-service',
+        component: 'analytics-service'
       });
       throw error;
     }
   }
-}
+  /**
+   * Когортный анализ (Retention)
+   */
+  static async getCohortAnalysis(
+    projectId: string,
+    months: number = 6
+  ): Promise<{
+    cohorts: Array<{
+      cohortDate: string;
+      totalUsers: number;
+      retention: Array<{
+        month: number;
+        users: number;
+        percentage: number;
+      }>;
+    }>;
+  }> {
+    try {
+      const now = new Date();
+      const startDate = new Date(now.getFullYear(), now.getMonth() - months, 1);
 
+      // Получаем пользователей, зарегистрированных за период
+      const users = await db.user.findMany({
+        where: {
+          projectId,
+          registeredAt: {
+            gte: startDate
+          }
+        },
+        select: {
+          id: true,
+          registeredAt: true,
+          orders: {
+            where: {
+              projectId,
+              status: {
+                in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
+              }
+            },
+            select: {
+              createdAt: true
+            }
+          }
+        }
+      });
+
+      // Группируем по месяцам регистрации
+      const cohortData: Record<string, typeof users> = {};
+
+      for (const user of users) {
+        const regDate = new Date(user.registeredAt);
+        const cohortKey = `${regDate.getFullYear()}-${String(regDate.getMonth() + 1).padStart(2, '0')}`;
+
+        if (!cohortData[cohortKey]) {
+          cohortData[cohortKey] = [];
+        }
+        cohortData[cohortKey].push(user);
+      }
+
+      // Вычисляем Retention
+      const result = Object.entries(cohortData)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([cohortDate, cohortUsers]) => {
+          const totalUsers = cohortUsers.length;
+          const cohortStart = new Date(`${cohortDate}-01`);
+
+          const retention = [];
+          for (let i = 0; i <= months; i++) {
+            // Месяц для проверки (когорта + i месяцев)
+            const checkMonthStart = new Date(cohortStart);
+            checkMonthStart.setMonth(cohortStart.getMonth() + i);
+            const checkMonthEnd = new Date(checkMonthStart);
+            checkMonthEnd.setMonth(checkMonthStart.getMonth() + 1);
+
+            if (checkMonthStart > now) break;
+
+            // Сколько пользователей из когорты совершили заказ в этом месяце
+            const activeUsers = cohortUsers.filter((u) =>
+              u.orders.some((o) => {
+                const orderDate = new Date(o.createdAt);
+                return (
+                  orderDate >= checkMonthStart && orderDate < checkMonthEnd
+                );
+              })
+            ).length;
+
+            retention.push({
+              month: i,
+              users: activeUsers,
+              percentage: totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0
+            });
+          }
+
+          return {
+            cohortDate,
+            totalUsers,
+            retention
+          };
+        });
+
+      return { cohorts: result };
+    } catch (error) {
+      logger.error('Ошибка когортного анализа', {
+        projectId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'analytics-service'
+      });
+      return { cohorts: [] };
+    }
+  }
+
+  /**
+   * Реферальная аналитика
+   */
+  static async getReferralAnalytics(projectId: string): Promise<{
+    totalReferrals: number;
+    totalRevenue: number;
+    topReferrers: Array<{
+      userId: string;
+      name: string;
+      referrals: number;
+      revenue: number;
+    }>;
+  }> {
+    try {
+      const totalReferrals = await db.user.count({
+        where: {
+          projectId,
+          referredBy: { not: null }
+        }
+      });
+
+      const revenueResult = await db.user.aggregate({
+        where: {
+          projectId,
+          referredBy: { not: null }
+        },
+        _sum: {
+          totalPurchases: true
+        }
+      });
+      const totalRevenue = Number(revenueResult._sum.totalPurchases || 0);
+
+      const topReferrersGroup = await db.user.groupBy({
+        by: ['referredBy'],
+        where: {
+          projectId,
+          referredBy: { not: null }
+        },
+        _count: {
+          id: true
+        },
+        orderBy: {
+          _count: {
+            id: 'desc'
+          }
+        },
+        take: 10
+      });
+
+      const topReferrers = [];
+      for (const group of topReferrersGroup) {
+        if (!group.referredBy) continue;
+
+        const referrer = await db.user.findUnique({
+          where: { id: group.referredBy },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        });
+
+        if (referrer) {
+          const refRevenue = await db.user.aggregate({
+            where: {
+              projectId,
+              referredBy: referrer.id
+            },
+            _sum: {
+              totalPurchases: true
+            }
+          });
+
+          topReferrers.push({
+            userId: referrer.id,
+            name:
+              `${referrer.firstName || ''} ${referrer.lastName || ''}`.trim() ||
+              referrer.email ||
+              'Unknown',
+            referrals: group._count.id,
+            revenue: Number(refRevenue._sum.totalPurchases || 0)
+          });
+        }
+      }
+
+      return {
+        totalReferrals,
+        totalRevenue,
+        topReferrers: topReferrers.sort((a, b) => b.revenue - a.revenue)
+      };
+    } catch (error) {
+      logger.error('Ошибка реферальной аналитики', {
+        projectId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'analytics-service'
+      });
+      return { totalReferrals: 0, totalRevenue: 0, topReferrers: [] };
+    }
+  }
+
+  /**
+   * Финансовые метрики (ARPU, ARPPU, LTV)
+   */
+  static async getFinancialMetrics(projectId: string): Promise<{
+    arpu: number;
+    arppu: number;
+    ltv: number;
+    averageCheck: number;
+  }> {
+    try {
+      const revenue = await this.getRevenue(projectId);
+      const totalUsers = await db.user.count({ where: { projectId } });
+
+      const payingUsers = await db.user.count({
+        where: {
+          projectId,
+          orders: {
+            some: {
+              status: {
+                in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
+              }
+            }
+          }
+        }
+      });
+
+      const arpu = totalUsers > 0 ? revenue / totalUsers : 0;
+      const arppu = payingUsers > 0 ? revenue / payingUsers : 0;
+
+      // Исторический LTV = ARPU за все время (упрощенно)
+      const ltv = arpu;
+
+      const avgCheck = await this.getAverageOrderValue(projectId);
+
+      return {
+        arpu,
+        arppu,
+        ltv,
+        averageCheck: avgCheck
+      };
+    } catch (error) {
+      logger.error('Ошибка финансовых метрик', {
+        projectId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'analytics-service'
+      });
+      return { arpu: 0, arppu: 0, ltv: 0, averageCheck: 0 };
+    }
+  }
+}

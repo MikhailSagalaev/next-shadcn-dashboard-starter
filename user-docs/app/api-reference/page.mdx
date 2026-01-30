@@ -1,902 +1,123 @@
-# API справочник
+# API Справочник
 
-Полная документация по REST API Gupil для интеграции с внешними системами.
+Документация REST API Gupil.
 
-## Обзор API
+Base URL: `https://yourdomain.com/api`
 
-Gupil предоставляет RESTful API для интеграции с внешними системами, автоматизации операций и создания кастомных решений. API поддерживает JSON формат данных и использует стандартные HTTP методы.
+## Аутентификация
 
-### Базовый URL
-```
-https://yourdomain.com/api
-```
+- **Bearer Token**: Для административных запросов.
+- **X-API-Key**: Для публичных запросов (виджеты).
+- **Webhook Signature**: Валидация входящих webhook-запросов.
 
-### Аутентификация
+## Формат ответа
 
-API использует несколько методов аутентификации в зависимости от типа запроса:
-
-#### 1. JWT токены (для админ панели)
-```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-#### 2. Webhook секреты (для webhook endpoints)
-```
-URL: /api/webhook/{secret-key}
-```
-
-#### 3. API ключи проекта (для публичных endpoints)
-```http
-X-API-Key: your-project-api-key
-```
-
-### Формат ответов
-
-Все ответы возвращаются в JSON формате:
-
-**Успешный ответ:**
+JSON:
 ```json
 {
   "success": true,
-  "data": {
-    // данные ответа
-  },
-  "message": "Операция выполнена успешно"
+  "data": { ... },
+  "message": "OK"
 }
 ```
 
-**Ошибка:**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Некорректные данные",
-    "details": {
-      "field": "email",
-      "reason": "Неверный формат email"
-    }
-  }
-}
-```
+## Webhook API (Входящие данные)
 
-### HTTP статус коды
+Endpoint: `POST /api/webhook/{secret}`
 
-- `200 OK` - Успешный запрос
-- `201 Created` - Ресурс создан
-- `400 Bad Request` - Некорректный запрос
-- `401 Unauthorized` - Не авторизован
-- `403 Forbidden` - Доступ запрещен
-- `404 Not Found` - Ресурс не найден
-- `422 Unprocessable Entity` - Ошибка валидации
-- `429 Too Many Requests` - Превышен лимит запросов
-- `500 Internal Server Error` - Внутренняя ошибка сервера
-
-## Webhook API
-
-### Регистрация пользователя
-
-**Endpoint:** `POST /api/webhook/{secret}`
-
-Создает нового пользователя в системе бонусов.
-
-**Параметры:**
+### Регистрация (`register_user`)
+Создает пользователя.
 ```json
 {
   "action": "register_user",
   "payload": {
     "email": "user@example.com",
-    "phone": "+7 (999) 123-45-67",
-    "first_name": "Иван",
-    "last_name": "Петров",
-    "telegram_id": "123456789",
-    "telegram_username": "ivan_petrov",
-    "utm_source": "google",
-    "utm_medium": "cpc",
-    "utm_campaign": "winter_sale",
-    "referral_code": "FRIEND123"
+    "phone": "+79990000000",
+    "first_name": "Иван"
   }
 }
 ```
 
-**Обязательные поля:**
-- `email` или `phone` - для идентификации пользователя
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "user_id": "user_123",
-    "balance": 100,
-    "level": "Новичок",
-    "welcome_bonus": 100
-  },
-  "message": "Пользователь создан успешно"
-}
-```
-
-### Начисление бонусов за покупку
-
-**Endpoint:** `POST /api/webhook/{secret}`
-
-Начисляет бонусы за совершенную покупку.
-
-**Параметры:**
+### Покупка (`purchase`)
+Начисляет бонусы.
 ```json
 {
   "action": "purchase",
   "payload": {
     "user_email": "user@example.com",
-    "order_id": "ORDER-12345",
+    "order_id": "1001",
     "amount": 5000,
-    "currency": "RUB",
-    "products": [
-      {
-        "id": "product_1",
-        "name": "Товар 1",
-        "price": 2500,
-        "quantity": 1,
-        "category": "electronics"
-      }
-    ],
-    "bonuses_used": 0,
-    "payment_method": "card",
-    "order_date": "2024-12-13T10:30:00Z"
+    "products": [...]
   }
 }
 ```
 
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "bonuses_earned": 250,
-    "user_balance": 1750,
-    "bonus_percent": 5,
-    "user_level": "Серебряный"
-  },
-  "message": "Бонусы начислены успешно"
-}
-```
-
-### Списание бонусов
-
-**Endpoint:** `POST /api/webhook/{secret}`
-
-Списывает бонусы при использовании их для оплаты.
-
-**Параметры:**
+### Списание (`spend_bonuses`)
+Уменьшает баланс.
 ```json
 {
   "action": "spend_bonuses",
   "payload": {
     "user_email": "user@example.com",
-    "order_id": "ORDER-12346",
     "bonuses_amount": 500,
-    "order_total": 3000,
-    "remaining_amount": 2500
+    "order_id": "1002"
   }
 }
 ```
 
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "bonuses_spent": 500,
-    "user_balance": 1250,
-    "remaining_bonuses": 1250
-  },
-  "message": "Бонусы списаны успешно"
-}
-```
-
-### Отмена заказа
-
-**Endpoint:** `POST /api/webhook/{secret}`
-
-Отменяет начисленные бонусы при отмене заказа.
-
-**Параметры:**
+### Отмена (`cancel_order`)
+Откатывает начисление.
 ```json
 {
   "action": "cancel_order",
   "payload": {
-    "user_email": "user@example.com",
-    "order_id": "ORDER-12345",
-    "reason": "customer_request"
+    "order_id": "1001"
   }
 }
 ```
 
 ## Публичные API
 
-### Получение баланса пользователя
+### Баланс
+`GET /api/projects/{projectId}/users/balance`
+Query: `email` или `phone`
 
-**Endpoint:** `GET /api/projects/{projectId}/users/balance`
+### Промокод
+`POST /api/projects/{projectId}/promocodes/validate`
+Body: `{ email, promocode, order_amount }`
 
-Получает баланс бонусов пользователя для отображения на сайте.
+## Админ API
 
-**Заголовки:**
-```http
-X-API-Key: your-project-api-key
-```
+### Проекты
+- `GET /api/projects` — Список.
+- `POST /api/projects` — Создание.
+- `PUT /api/projects/{id}` — Обновление.
 
-**Параметры запроса:**
-- `email` - email пользователя
-- `phone` - телефон пользователя (альтернатива email)
+### Пользователи
+- `GET /api/projects/{id}/users` — Поиск и список.
+- `GET /api/projects/{id}/users/{uid}` — Детали.
+- `POST /api/projects/{id}/users/{uid}/bonuses/add` — Начисление.
+- `POST /api/projects/{id}/users/{uid}/bonuses/subtract` — Списание.
 
-**Пример запроса:**
-```http
-GET /api/projects/proj_123/users/balance?email=user@example.com
-X-API-Key: pk_live_abc123def456
-```
+### Статистика
+- `GET /api/projects/{id}/stats` — Общая сводка.
 
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "balance": 1250,
-    "balance_formatted": "1 250",
-    "expiring_bonuses": 150,
-    "expiry_date": "2024-12-31",
-    "level": {
-      "name": "Серебряный",
-      "bonus_percent": 10,
-      "max_payment_percent": 25
-    },
-    "can_spend": true
-  }
-}
-```
+## Лимиты (Rate Limits)
 
-### Проверка промокода
+- Webhooks: 1000 RPM
+- Public: 100 RPM
+- Admin: 500 RPM
 
-**Endpoint:** `POST /api/projects/{projectId}/promocodes/validate`
+Коды ошибок:
+- 400: Bad Request
+- 401: Unauthorized
+- 429: Too Many Requests
+- 500: Internal Server Error
 
-Проверяет валидность промокода для использования бонусов.
+## SDK
 
-**Заголовки:**
-```http
-X-API-Key: your-project-api-key
-Content-Type: application/json
-```
-
-**Параметры:**
-```json
-{
-  "email": "user@example.com",
-  "promocode": "GUPIL",
-  "order_amount": 3000
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "valid": true,
-    "available_bonuses": 1250,
-    "max_discount": 750,
-    "discount_percent": 25,
-    "message": "Вы можете использовать до 750 бонусов"
-  }
-}
-```
-
-## Административные API
-
-### Управление проектами
-
-#### Список проектов
-
-**Endpoint:** `GET /api/projects`
-
-**Заголовки:**
-```http
-Authorization: Bearer {jwt-token}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "projects": [
-      {
-        "id": "proj_123",
-        "name": "Мой магазин",
-        "domain": "myshop.ru",
-        "status": "active",
-        "created_at": "2024-01-15T10:00:00Z",
-        "users_count": 1250,
-        "total_bonuses": 125000
-      }
-    ],
-    "total": 1,
-    "page": 1,
-    "per_page": 20
-  }
-}
-```
-
-#### Создание проекта
-
-**Endpoint:** `POST /api/projects`
-
-**Параметры:**
-```json
-{
-  "name": "Новый проект",
-  "domain": "newshop.ru",
-  "description": "Описание проекта",
-  "operation_mode": "WITH_BOT"
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "proj_456",
-    "name": "Новый проект",
-    "webhook_url": "https://yourdomain.com/api/webhook/abc123def456",
-    "api_key": "pk_live_xyz789"
-  }
-}
-```
-
-#### Обновление проекта
-
-**Endpoint:** `PUT /api/projects/{projectId}`
-
-**Параметры:**
-```json
-{
-  "name": "Обновленное название",
-  "domain": "updatedshop.ru",
-  "bonus_percent": 10,
-  "bonus_expiry_days": 90,
-  "welcome_bonus": 200
-}
-```
-
-### Управление пользователями
-
-#### Список пользователей проекта
-
-**Endpoint:** `GET /api/projects/{projectId}/users`
-
-**Параметры запроса:**
-- `page` - номер страницы (по умолчанию 1)
-- `per_page` - количество на странице (по умолчанию 20, максимум 100)
-- `search` - поиск по email, телефону, имени
-- `status` - фильтр по статусу (active, inactive)
-- `level` - фильтр по уровню лояльности
-- `created_from` - дата регистрации от (YYYY-MM-DD)
-- `created_to` - дата регистрации до (YYYY-MM-DD)
-
-**Пример запроса:**
-```http
-GET /api/projects/proj_123/users?page=1&per_page=50&search=ivan&status=active
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "users": [
-      {
-        "id": "user_123",
-        "email": "ivan@example.com",
-        "phone": "+7 (999) 123-45-67",
-        "first_name": "Иван",
-        "last_name": "Петров",
-        "balance": 1250,
-        "level": "Серебряный",
-        "is_active": true,
-        "telegram_id": "123456789",
-        "created_at": "2024-01-15T10:00:00Z",
-        "last_activity": "2024-12-13T15:30:00Z"
-      }
-    ],
-    "total": 1250,
-    "page": 1,
-    "per_page": 50,
-    "total_pages": 25
-  }
-}
-```
-
-#### Получение пользователя
-
-**Endpoint:** `GET /api/projects/{projectId}/users/{userId}`
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": "user_123",
-      "email": "ivan@example.com",
-      "phone": "+7 (999) 123-45-67",
-      "first_name": "Иван",
-      "last_name": "Петров",
-      "balance": 1250,
-      "expiring_bonuses": 150,
-      "level": {
-        "name": "Серебряный",
-        "bonus_percent": 10,
-        "min_amount": 50000
-      },
-      "referral_info": {
-        "referral_code": "USER123",
-        "referrals_count": 5,
-        "referral_bonuses": 500
-      },
-      "metadata": {
-        "birthday": "1990-05-15",
-        "city": "Москва"
-      },
-      "created_at": "2024-01-15T10:00:00Z"
-    }
-  }
-}
-```
-
-#### Обновление пользователя
-
-**Endpoint:** `PUT /api/projects/{projectId}/users/{userId}`
-
-**Параметры:**
-```json
-{
-  "first_name": "Иван",
-  "last_name": "Петров",
-  "email": "newemail@example.com",
-  "phone": "+7 (999) 123-45-67",
-  "is_active": true,
-  "metadata": {
-    "birthday": "1990-05-15",
-    "city": "Москва",
-    "notes": "VIP клиент"
-  }
-}
-```
-
-### Операции с бонусами
-
-#### Начисление бонусов
-
-**Endpoint:** `POST /api/projects/{projectId}/users/{userId}/bonuses/add`
-
-**Параметры:**
-```json
-{
-  "amount": 500,
-  "reason": "Промо-акция",
-  "expires_at": "2024-12-31T23:59:59Z",
-  "type": "admin"
-}
-```
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "transaction_id": "txn_123",
-    "amount": 500,
-    "new_balance": 1750,
-    "expires_at": "2024-12-31T23:59:59Z"
-  }
-}
-```
-
-#### Списание бонусов
-
-**Endpoint:** `POST /api/projects/{projectId}/users/{userId}/bonuses/subtract`
-
-**Параметры:**
-```json
-{
-  "amount": 200,
-  "reason": "Корректировка баланса",
-  "order_id": "ORDER-123"
-}
-```
-
-#### История транзакций
-
-**Endpoint:** `GET /api/projects/{projectId}/users/{userId}/transactions`
-
-**Параметры запроса:**
-- `page` - номер страницы
-- `per_page` - количество на странице
-- `type` - тип транзакции (earned, spent, admin_add, etc.)
-- `from_date` - дата от
-- `to_date` - дата до
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "transactions": [
-      {
-        "id": "txn_123",
-        "type": "earned",
-        "amount": 250,
-        "balance_before": 1000,
-        "balance_after": 1250,
-        "reason": "Покупка на сумму 5000₽",
-        "order_id": "ORDER-12345",
-        "created_at": "2024-12-13T10:30:00Z",
-        "expires_at": "2025-03-13T10:30:00Z"
-      }
-    ],
-    "total": 25,
-    "page": 1,
-    "per_page": 20
-  }
-}
-```
-
-### Статистика и аналитика
-
-#### Статистика проекта
-
-**Endpoint:** `GET /api/projects/{projectId}/stats`
-
-**Параметры запроса:**
-- `period` - период (day, week, month, year)
-- `from_date` - дата от
-- `to_date` - дата до
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "users": {
-      "total": 1250,
-      "active": 890,
-      "new_this_period": 45
-    },
-    "bonuses": {
-      "total_balance": 125000,
-      "earned_this_period": 15000,
-      "spent_this_period": 8500,
-      "expired_this_period": 2000
-    },
-    "transactions": {
-      "total_count": 5420,
-      "this_period": 234
-    },
-    "levels": {
-      "Новичок": 650,
-      "Бронзовый": 350,
-      "Серебряный": 180,
-      "Золотой": 60,
-      "Платиновый": 10
-    }
-  }
-}
-```
-
-#### Реферальная статистика
-
-**Endpoint:** `GET /api/projects/{projectId}/referral-program/stats`
-
-**Ответ:**
-```json
-{
-  "success": true,
-  "data": {
-    "total_referrers": 125,
-    "active_referrers": 89,
-    "total_referrals": 456,
-    "total_referral_bonuses": 45600,
-    "average_order_value": 3200,
-    "conversion_rate": 0.15,
-    "level_breakdown": {
-      "level_1": {
-        "referrals": 456,
-        "bonuses": 35000
-      },
-      "level_2": {
-        "referrals": 123,
-        "bonuses": 8600
-      },
-      "level_3": {
-        "referrals": 34,
-        "bonuses": 2000
-      }
-    },
-    "top_referrers": [
-      {
-        "user_id": "user_123",
-        "name": "Иван Петров",
-        "referrals_count": 15,
-        "total_bonuses": 2500
-      }
-    ]
-  }
-}
-```
-
-## Telegram Bot API
-
-### Отправка сообщения
-
-**Endpoint:** `POST /api/projects/{projectId}/bot/send-message`
-
-**Параметры:**
-```json
-{
-  "user_id": "user_123",
-  "message": "Привет! У вас новые бонусы: 250",
-  "buttons": [
-    [
-      {"text": "💰 Баланс", "callback_data": "balance"},
-      {"text": "📊 История", "callback_data": "history"}
-    ]
-  ]
-}
-```
-
-### Массовая рассылка
-
-**Endpoint:** `POST /api/projects/{projectId}/bot/broadcast`
-
-**Параметры:**
-```json
-{
-  "message": "Специальное предложение только сегодня!",
-  "segment": {
-    "level": ["Золотой", "Платиновый"],
-    "min_balance": 1000,
-    "last_activity_days": 30
-  },
-  "schedule_at": "2024-12-13T15:00:00Z"
-}
-```
-
-## Webhook события
-
-### Подписка на события
-
-Вы можете настроить webhook URL для получения уведомлений о событиях в системе.
-
-**Настройка:** `/dashboard/projects/{id}/settings` → Webhook URL
-
-### Типы событий
-
-#### user.created
-Пользователь зарегистрирован в системе.
-
-```json
-{
-  "event": "user.created",
-  "data": {
-    "user_id": "user_123",
-    "email": "user@example.com",
-    "welcome_bonus": 100,
-    "created_at": "2024-12-13T10:30:00Z"
-  }
-}
-```
-
-#### bonus.earned
-Пользователь получил бонусы.
-
-```json
-{
-  "event": "bonus.earned",
-  "data": {
-    "user_id": "user_123",
-    "amount": 250,
-    "reason": "purchase",
-    "order_id": "ORDER-12345",
-    "new_balance": 1250
-  }
-}
-```
-
-#### bonus.spent
-Пользователь потратил бонусы.
-
-```json
-{
-  "event": "bonus.spent",
-  "data": {
-    "user_id": "user_123",
-    "amount": 500,
-    "order_id": "ORDER-12346",
-    "new_balance": 750
-  }
-}
-```
-
-#### level.changed
-Пользователь достиг нового уровня.
-
-```json
-{
-  "event": "level.changed",
-  "data": {
-    "user_id": "user_123",
-    "old_level": "Бронзовый",
-    "new_level": "Серебряный",
-    "bonus_reward": 200
-  }
-}
-```
-
-## Rate Limiting
-
-API имеет ограничения на количество запросов:
-
-- **Webhook API**: 1000 запросов в минуту на проект
-- **Публичные API**: 100 запросов в минуту на API ключ
-- **Административные API**: 500 запросов в минуту на пользователя
-
-При превышении лимита возвращается статус `429 Too Many Requests`:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Превышен лимит запросов",
-    "retry_after": 60
-  }
-}
-```
-
-## Коды ошибок
-
-### Общие ошибки
-
-- `INVALID_REQUEST` - Некорректный запрос
-- `AUTHENTICATION_FAILED` - Ошибка аутентификации
-- `AUTHORIZATION_FAILED` - Недостаточно прав
-- `RESOURCE_NOT_FOUND` - Ресурс не найден
-- `VALIDATION_ERROR` - Ошибка валидации данных
-- `RATE_LIMIT_EXCEEDED` - Превышен лимит запросов
-- `INTERNAL_ERROR` - Внутренняя ошибка сервера
-
-### Специфичные ошибки
-
-- `USER_NOT_FOUND` - Пользователь не найден
-- `INSUFFICIENT_BALANCE` - Недостаточно бонусов
-- `PROJECT_NOT_ACTIVE` - Проект неактивен
-- `BONUS_EXPIRED` - Бонусы истекли
-- `DUPLICATE_ORDER` - Дублирование заказа
-- `INVALID_PROMOCODE` - Неверный промокод
-
-## SDK и библиотеки
-
-### JavaScript/Node.js
-
+Node.js пример:
 ```javascript
-const GupilAPI = require('@gupil/api-client');
-
-const client = new GupilAPI({
-  apiKey: 'your-api-key',
-  baseURL: 'https://yourdomain.com/api'
-});
-
-// Получение баланса
-const balance = await client.users.getBalance('user@example.com');
-
-// Начисление бонусов
-const transaction = await client.bonuses.add('user_123', {
-  amount: 500,
-  reason: 'Промо-акция'
-});
+const client = new GupilAPI({ apiKey: '...' });
+await client.users.getBalance('user@mail.com');
 ```
-
-### PHP
-
-```php
-use Gupil\ApiClient;
-
-$client = new ApiClient([
-    'api_key' => 'your-api-key',
-    'base_url' => 'https://yourdomain.com/api'
-]);
-
-// Получение баланса
-$balance = $client->users()->getBalance('user@example.com');
-
-// Начисление бонусов
-$transaction = $client->bonuses()->add('user_123', [
-    'amount' => 500,
-    'reason' => 'Промо-акция'
-]);
-```
-
-### Python
-
-```python
-from gupil_api import GupilClient
-
-client = GupilClient(
-    api_key='your-api-key',
-    base_url='https://yourdomain.com/api'
-)
-
-# Получение баланса
-balance = client.users.get_balance('user@example.com')
-
-# Начисление бонусов
-transaction = client.bonuses.add('user_123', {
-    'amount': 500,
-    'reason': 'Промо-акция'
-})
-```
-
-## Примеры интеграции
-
-### Интеграция с e-commerce
-
-```javascript
-// Обработчик успешной оплаты
-app.post('/payment/success', async (req, res) => {
-  const { orderId, userEmail, amount } = req.body;
-  
-  // Отправка webhook в Gupil
-  await fetch('https://yourdomain.com/api/webhook/your-secret', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'purchase',
-      payload: {
-        user_email: userEmail,
-        order_id: orderId,
-        amount: amount
-      }
-    })
-  });
-  
-  res.json({ success: true });
-});
-```
-
-### Виджет баланса на сайте
-
-```html
-<div id="bonus-widget">
-  <div id="bonus-balance">Загрузка...</div>
-  <button id="use-bonuses">Использовать бонусы</button>
-</div>
-
-<script>
-async function loadBonusBalance(email) {
-  const response = await fetch(`/api/projects/proj_123/users/balance?email=${email}`, {
-    headers: { 'X-API-Key': 'your-api-key' }
-  });
-  
-  const data = await response.json();
-  
-  if (data.success) {
-    document.getElementById('bonus-balance').textContent = 
-      `Доступно: ${data.data.balance_formatted} бонусов`;
-  }
-}
-
-// Загрузка при загрузке страницы
-loadBonusBalance('user@example.com');
-</script>
-```
-
-Этот API справочник поможет вам интегрировать Gupil с любой системой и создать мощные автоматизированные решения для управления бонусной программой.
