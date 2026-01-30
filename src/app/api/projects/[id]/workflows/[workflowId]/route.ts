@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 import type { UpdateWorkflowRequest } from '@/types/workflow';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
 import { validateWorkflow } from '@/lib/services/workflow/workflow-validator';
+import { normalizeNodes } from '@/lib/services/workflow/utils/node-utils';
 
 // GET /api/projects/[id]/workflows/[workflowId] - Получить workflow
 export async function GET(
@@ -132,26 +133,24 @@ export async function PUT(
 
     if (hasWorkflowData || needsVersion) {
       // Определяем entry node (первый trigger node)
-      const nodes = (data.nodes || existingWorkflow.nodes || []) as any[];
+      const rawNodes = data.nodes || existingWorkflow.nodes || [];
+      const normalizedNodes = normalizeNodes(rawNodes);
+      const nodesArray = Object.values(normalizedNodes);
 
       console.log('Creating workflow version with nodes:', {
         hasWorkflowData,
         needsVersion,
         dataNodesCount: data.nodes?.length,
-        existingNodesCount: Array.isArray(existingWorkflow.nodes)
-          ? existingWorkflow.nodes.length
-          : 0,
-        nodesLength: nodes.length,
-        nodesTypes: nodes.map((n: any) => n.type)
+        nodesLength: nodesArray.length
       });
 
-      const entryNode = nodes.find((node: any) =>
+      const entryNode = nodesArray.find((node: any) =>
         node.type?.startsWith('trigger.')
       );
 
       if (!entryNode) {
         console.error('No entry node found in workflow', {
-          nodes: nodes.map((n: any) => ({ id: n.id, type: n.type }))
+          nodes: nodesArray.map((n: any) => ({ id: n.id, type: n.type }))
         });
         return NextResponse.json(
           { error: 'Workflow должен содержать хотя бы один trigger node' },
