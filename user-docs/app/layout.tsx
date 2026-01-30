@@ -8,9 +8,10 @@
  */
 
 import { Footer, Layout, Navbar } from 'nextra-theme-docs';
-import { Banner, Head } from 'nextra/components';
+import { Head } from 'nextra/components';
 import { getPageMap } from 'nextra/page-map';
 import 'nextra-theme-docs/style.css';
+import type { ReactNode } from 'react';
 
 export const metadata = {
   title: {
@@ -25,7 +26,6 @@ const navbar = (
     logo={
       <div className='flex items-center gap-2 font-bold'>
         <img src='/logo.svg' alt='Gupil Docs' width={32} height={32} />
-        <span>Gupil Docs</span>
       </div>
     }
   />
@@ -38,7 +38,7 @@ const footer = (
 export default async function RootLayout({
   children
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <html lang='ru' dir='ltr' suppressHydrationWarning>
@@ -52,6 +52,12 @@ export default async function RootLayout({
           sidebar={{ defaultMenuCollapseLevel: 1, toggleButton: true }}
           toc={{ title: 'На этой странице' }}
           feedback={{ content: 'Есть вопросы? Напишите нам' }}
+          search={{
+            placeholder: 'Поиск по документации...',
+            emptyResult: 'Ничего не найдено',
+            error: 'Ошибка поиска',
+            loading: 'Загрузка...'
+          }}
           pageMap={await getPageMap()}
         >
           {children}
