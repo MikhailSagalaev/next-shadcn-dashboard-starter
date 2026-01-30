@@ -18,7 +18,7 @@ const helpCards = [
     title: 'Документация',
     description: 'Подробное руководство по интеграции с примерами кода',
     icon: BookOpen,
-    href: '/docs/getting-started',
+    href: 'https://docs.gupil.ru',
     linkText: 'Читать документацию →',
     color: 'text-blue-500',
     bgColor: 'bg-blue-500/10',
