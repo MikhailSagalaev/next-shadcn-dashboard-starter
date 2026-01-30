@@ -7,39 +7,41 @@
  * @author: AI Assistant + User
  */
 
-import React from 'react'
-import type { DocsThemeConfig } from 'nextra-theme-docs'
+import React from 'react';
 
-const config: DocsThemeConfig = {
+const config = {
   logo: <span>Gupil Documentation</span>,
   project: {
-    link: 'https://github.com/your-org/gupil',
+    link: 'https://github.com/your-org/gupil'
   },
   chat: {
-    link: 'https://t.me/gupil_support',
+    link: 'https://t.me/gupil_support'
   },
   docsRepositoryBase: 'https://github.com/your-org/gupil/tree/main/user-docs',
   footer: {
-    text: '© 2025 Gupil Documentation. Все права защищены.',
+    text: '© 2025 Gupil Documentation. Все права защищены.'
   },
   useNextSeoProps() {
     return {
       titleTemplate: '%s – Gupil Docs'
-    }
+    };
   },
   head: (
     <>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta property="og:title" content="Gupil Documentation" />
-      <meta property="og:description" content="Документация по SaaS платформе бонусных программ Gupil" />
+      <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+      <meta property='og:title' content='Gupil Documentation' />
+      <meta
+        property='og:description'
+        content='Документация по SaaS платформе бонусных программ Gupil'
+      />
     </>
   ),
   sidebar: {
     titleComponent({ title, type }) {
       if (type === 'separator') {
-        return <span className="cursor-default">{title}</span>
+        return <span className='cursor-default'>{title}</span>;
       }
-      return <>{title}</>
+      return <>{title}</>;
     },
     defaultMenuCollapseLevel: 1,
     toggleButton: true
@@ -61,6 +63,6 @@ const config: DocsThemeConfig = {
     prev: true,
     next: true
   }
-}
+};
 
-export default config
+export default config;
