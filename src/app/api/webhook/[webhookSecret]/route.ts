@@ -13,7 +13,13 @@ export async function POST(
 
     // 1. Verify Project via Secret
     const project = await db.project.findUnique({
-      where: { webhookSecret }
+      where: { webhookSecret },
+      select: {
+        id: true,
+        widgetVersion: true,
+        bonusBehavior: true,
+        operationMode: true
+      }
     });
 
     if (!project) {
@@ -61,6 +67,7 @@ export async function POST(
     // 6. Log Success (Briefly)
     logger.info('Webhook Processed', {
       projectId: project.id,
+      widgetVersion: project.widgetVersion,
       orderId: normalizedOrder.orderId,
       spent: result.data?.spent,
       earned: result.data?.earned

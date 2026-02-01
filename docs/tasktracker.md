@@ -4,6 +4,84 @@
 
 ---
 
+## 📋 Задача: Universal Widget - Рефакторинг на адаптеры
+- **Статус**: 🔄 В процессе (Phase 1-2 ✅ завершены)
+- **Приоритет**: 🟡 Средний
+- **Описание**: Завершить рефакторинг виджета на универсальную архитектуру с адаптерами для поддержки множества платформ
+- **Техническая сложность**: 5
+- **Затраченное время**: 10 часов (оценка: 26 часов)
+- **Прогресс**: 8/21 задач (38%)
+- **Шаги выполнения**:
+  - [x] **Phase 1:** Завершение TildaAdapter ✅ (4 задачи, 4 часа)
+    - [x] Task 1.1: Анализ legacy функционала
+    - [x] Task 1.2: Дополнение TildaAdapter недостающими методами (25+ методов)
+    - [x] Task 1.3: Улучшение observeCart (debounce 400ms)
+    - [x] Task 1.4: Улучшение initProductBadges (MutationObserver)
+  - [x] **Phase 2:** Рефакторинг LeadWidgetCore ✅ (4 задачи, 6 часов)
+    - [x] Task 2.1: Вынос Tilda-специфичного кода
+    - [x] Task 2.2: Добавление методов работы с адаптером
+    - [x] Task 2.3: Улучшение управления состоянием (pub/sub)
+    - [x] Task 2.4: Оптимизация API запросов (cache, retry, timeout)
+  - [ ] **Phase 3:** Widget Loader (3 задачи, 3 часа) ← СЛЕДУЮЩИЙ ЭТАП
+    - [ ] Task 3.1: Создание widget-loader.js
+    - [ ] Task 3.2: Автоопределение платформы
+    - [ ] Task 3.3: Динамическая загрузка адаптеров
+  - [ ] **Phase 4:** Интеграция и документация (3 задачи, 4 часа)
+    - [ ] Task 4.1: Обновление админ-панели
+    - [ ] Task 4.2: Создание документации
+    - [ ] Task 4.3: Обновление user-docs
+  - [ ] **Phase 5:** Тестирование (4 задачи, 6 часов)
+    - [ ] Task 5.1: Unit тесты для TildaAdapter
+    - [ ] Task 5.2: Unit тесты для LeadWidgetCore
+    - [ ] Task 5.3: Integration тесты
+    - [ ] Task 5.4: E2E тесты
+  - [ ] **Phase 6:** Миграция и деплой (3 задачи, 3 часа)
+    - [ ] Task 6.1: Создание скрипта миграции
+    - [ ] Task 6.2: Постепенный rollout
+    - [ ] Task 6.3: Удаление legacy кода
+- **Зависимости**: 
+  - `public/tilda-adapter.js` (v3.0.0) ✅
+  - `public/universal-widget.js` (v3.1.0) ✅
+  - `public/tilda-bonus-widget.js` (legacy, остается в production)
+  - `public/test-tilda-adapter.html` (тестовая страница) ✅
+  - `public/TEST_ADAPTER_README.md` (документация тестов) ✅
+- **Результаты Phase 1**:
+  - ✅ TildaAdapter v3.0.0 с 25+ методами
+  - ✅ Debounce оптимизация (400ms корзина, 500ms ввод)
+  - ✅ MutationObserver для динамических товаров
+  - ✅ Валидация email и телефона
+  - ✅ Полная поддержка всех типов каталогов Tilda
+  - ✅ Тестовая страница для проверки функционала
+- **Результаты Phase 2**:
+  - ✅ LeadWidgetCore v3.1.0 полностью платформо-независимый
+  - ✅ Методы работы с адаптером (setAdapter, getAdapter, validateAdapter)
+  - ✅ Pub/Sub паттерн для реактивности (setState, subscribe, notify)
+  - ✅ API кеширование с TTL (Map-based cache)
+  - ✅ Retry с exponential backoff (до 3 попыток)
+  - ✅ Timeout 10 секунд с AbortController
+  - ✅ Rate limiting 300ms между запросами
+  - ✅ Lifecycle методы (init, destroy)
+- **Ожидаемые результаты (финал)**:
+  - Поддержка множества платформ (Tilda, Shopify, WooCommerce, custom)
+  - Уменьшение размера виджета на 25% (80KB → 60KB gzip)
+  - Улучшение тестируемости и расширяемости
+  - Упрощение добавления новых платформ
+- **Тестирование**:
+  1. ✅ Тестовая страница `public/test-tilda-adapter.html`
+  2. Unit тесты для TildaAdapter (запланировано)
+  3. Unit тесты для LeadWidgetCore (запланировано)
+  4. Integration тесты на реальном Tilda сайте (запланировано)
+  5. E2E тесты с Playwright (запланировано)
+  6. Performance тесты (запланировано)
+- **Документация**:
+  - `.kiro/specs/universal-widget/requirements.md` ✅
+  - `.kiro/specs/universal-widget/tasks.md` ✅
+  - `.kiro/specs/universal-widget/design.md` ✅
+  - `.kiro/specs/universal-widget/analysis.md` ✅
+  - `public/TEST_ADAPTER_README.md` ✅
+
+---
+
 ## 📋 Задача: React Best Practices - Оптимизация Server/Client Components
 - **Статус**: ✅ Завершена
 - **Приоритет**: 🟡 Средний

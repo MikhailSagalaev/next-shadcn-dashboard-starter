@@ -1,0 +1,453 @@
+# Интеграция с Custom платформой
+
+Руководство по подключению бонусной системы Gupil к любой платформе электронной коммерции.
+
+> **Универсальная интеграция!** Если ваша платформа не Tilda, Shopify или WooCommerce - используйте Custom интеграцию. Виджет адаптируется под любой сайт!
+
+## Для кого эта интеграция?
+
+Custom интеграция подходит для:
+
+- ✅ Самописных интернет-магазинов
+- ✅ Редких CMS (не Tilda/Shopify/WooCommerce)
+- ✅ Корпоративных систем e-commerce
+- ✅ Любых сайтов с корзиной и формой оформления
+
+## Быстрый старт
+
+### Шаг 1: Получите код интеграции
+
+1. Войдите в админ-панель Gupil
+2. Перейдите в **Проекты** → Выберите ваш проект
+3. Откройте вкладку **Интеграция**
+4. Выберите платформу **Custom**
+5. Скопируйте код подключения виджета
+
+### Шаг 2: Добавьте код на сайт
+
+Вставьте код **перед закрывающим тегом `</body>`**:
+
+```html
+<!-- Gupil Bonus Widget -->
+<script>
+  window.gupilConfig = {
+    projectId: 'YOUR_PROJECT_ID',
+    apiUrl: 'https://gupil.ru/api',
+    platform: 'custom', // Принудительно использовать Custom адаптер
+    
+    // Укажите селекторы для вашего сайта
+    selectors: {
+      emailInput: '#customer-email',      // Поле email
+      phoneInput: '#customer-phone',      // Поле телефона
+      cartTotal: '.cart-total-amount',    // Сумма корзины
+      cartItems: '.cart-item',            // Товары в корзине
+      promoInput: '#promo-code',          // Поле промокода
+      promoButton: '#apply-promo'         // Кнопка применения промокода
+    }
+  };
+</script>
+<script src="https://gupil.ru/widget-loader.js" async></script>
+```
+
+### Шаг 3: Настройте селекторы
+
+Виджет использует CSS селекторы для поиска элементов на вашем сайте. Вам нужно указать правильные селекторы.
+
+#### Как найти селекторы?
+
+1. Откройте ваш сайт в браузере
+2. Нажмите F12 (открыть DevTools)
+3. Нажмите на иконку "Выбрать элемент" (или Ctrl+Shift+C)
+4. Кликните на нужный элемент (например, поле email)
+5. В DevTools появится HTML код элемента
+6. Найдите `id` или `class` элемента
+
+**Пример:**
+```html
+<!-- Если у вас такой HTML -->
+<input type="email" id="user-email" class="form-input">
+
+<!-- То селектор будет -->
+emailInput: '#user-email'  // По ID (рекомендуется)
+// или
+emailInput: '.form-input'  // По классу
+```
+
+#### Обязательные селекторы
+
+| Селектор | Описание | Пример |
+|----------|----------|--------|
+| `emailInput` | Поле ввода email | `#email`, `.email-input` |
+| `phoneInput` | Поле ввода телефона | `#phone`, `.phone-input` |
+| `cartTotal` | Элемент с суммой корзины | `.cart-total`, `#total-amount` |
+
+#### Опциональные селекторы
+
+| Селектор | Описание | Пример |
+|----------|----------|--------|
+| `cartItems` | Товары в корзине | `.cart-item`, `.product-row` |
+| `promoInput` | Поле промокода | `#promo-code`, `.promo-input` |
+| `promoButton` | Кнопка применения промокода | `#apply-promo`, `.promo-btn` |
+
+### Шаг 4: Настройте Webhook
+
+Webhook нужен для синхронизации заказов с Gupil.
+
+1. В Gupil: **Интеграция** → Скопируйте **Webhook URL**
+   - Формат: `https://gupil.ru/api/webhook/YOUR_SECRET`
+2. В вашей CMS/платформе: Настройте отправку webhook при создании заказа
+3. Формат данных: **JSON**
+4. Метод: **POST**
+
+**Пример данных webhook:**
+```json
+{
+  "action": "purchase",
+  "payload": {
+    "email": "customer@example.com",
+    "phone": "+79991234567",
+    "amount": 5000,
+    "orderId": "ORDER-12345",
+    "items": [
+      {
+        "id": "PRODUCT-1",
+        "name": "Товар 1",
+        "price": 3000,
+        "quantity": 1
+      },
+      {
+        "id": "PRODUCT-2",
+        "name": "Товар 2",
+        "price": 2000,
+        "quantity": 1
+      }
+    ]
+  }
+}
+```
+
+**Готово!** Виджет начнет работать на вашем сайте.
+
+---
+
+## Что умеет виджет?
+
+### ✅ Регистрация пользователей
+
+Виджет автоматически регистрирует новых пользователей при вводе email/телефона.
+
+**Как это работает:**
+1. Клиент вводит email/телефон в форму
+2. Виджет отслеживает ввод (через `observeContactInput`)
+3. Отправляет данные в Gupil API
+4. Создается новый пользователь (если не существует)
+5. Начисляются приветственные бонусы (если настроено)
+
+### ✅ Отображение доступных бонусов
+
+Виджет показывает клиенту сколько бонусов доступно для использования.
+
+**Требования:**
+- Клиент должен быть зарегистрирован (ввел email/телефон)
+- У клиента должны быть активные бонусы
+
+### ✅ Применение промокодов
+
+Клиенты могут использовать промокоды для получения скидок.
+
+**Требования:**
+- На сайте должно быть поле для ввода промокода
+- Должна быть кнопка применения промокода
+- Селекторы `promoInput` и `promoButton` должны быть указаны
+
+### ✅ Начисление бонусов за покупки
+
+При оформлении заказа клиенту начисляются бонусы.
+
+**Требования:**
+- Webhook должен быть настроен
+- В webhook должны передаваться данные заказа
+
+---
+
+## Расширенная настройка
+
+### Кастомизация виджета
+
+Вы можете настроить внешний вид и поведение виджета:
+
+```html
+<script>
+  window.gupilConfig = {
+    projectId: 'YOUR_PROJECT_ID',
+    apiUrl: 'https://gupil.ru/api',
+    platform: 'custom',
+    
+    // Селекторы
+    selectors: {
+      emailInput: '#email',
+      phoneInput: '#phone',
+      cartTotal: '.total',
+      cartItems: '.item'
+    },
+    
+    // Внешний вид
+    theme: 'light',        // Тема: light | dark | auto
+    language: 'ru',        // Язык: ru | en
+    
+    // Отладка
+    debug: false,          // Debug режим (для отладки)
+    
+    // Callbacks
+    onReady: function(widget) {
+      console.log('Виджет готов!');
+      // Можно вызывать методы widget
+      widget.refreshBonuses();
+    },
+    onError: function(error) {
+      console.error('Ошибка виджета:', error);
+      // Отправить ошибку в систему мониторинга
+    }
+  };
+</script>
+<script src="https://gupil.ru/widget-loader.js" async></script>
+```
+
+### Программное управление виджетом
+
+После загрузки виджета вы можете управлять им через JavaScript:
+
+```javascript
+// Получить экземпляр виджета
+const widget = window.gupilWidget;
+
+// Обновить информацию о бонусах
+widget.refreshBonuses();
+
+// Применить промокод программно
+widget.applyPromocode('SUMMER2026')
+  .then(result => {
+    console.log('Промокод применен:', result);
+  })
+  .catch(error => {
+    console.error('Ошибка применения промокода:', error);
+  });
+
+// Получить состояние виджета
+const userBonuses = widget.getState('userBonuses');
+console.log('Доступно бонусов:', userBonuses);
+
+// Подписаться на изменения
+widget.subscribe('userBonuses', (newValue, oldValue) => {
+  console.log(`Бонусы изменились: ${oldValue} → ${newValue}`);
+});
+```
+
+---
+
+## Проверка работы
+
+### 1. Проверка виджета
+
+Откройте сайт и консоль браузера (F12):
+
+✅ **Виджет загружен**
+```
+[Gupil Widget] Platform detected: custom
+[Gupil Widget] Adapter loaded: CustomAdapter
+[Gupil Widget] Widget initialized successfully
+```
+
+✅ **Селекторы найдены**
+```
+[CustomAdapter] Email input found: #customer-email
+[CustomAdapter] Phone input found: #customer-phone
+[CustomAdapter] Cart total found: .cart-total-amount
+```
+
+❌ **Если селекторы не найдены**
+```
+[CustomAdapter] Warning: Email input not found
+[CustomAdapter] Warning: Phone input not found
+```
+→ Проверьте селекторы в конфигурации
+
+### 2. Проверка регистрации
+
+Введите email в форму:
+
+1. Откройте форму оформления
+2. Введите email (например, `test@example.com`)
+3. Проверьте консоль:
+```
+[Gupil Widget] Contact info changed: test@example.com
+[Gupil Widget] User registered successfully
+```
+
+4. Проверьте в Gupil: **Пользователи** → Клиент должен быть зарегистрирован
+
+### 3. Проверка Webhook
+
+Оформите тестовый заказ:
+
+1. Добавьте товар в корзину
+2. Заполните форму оформления
+3. Оформите заказ
+
+Проверьте в Gupil:
+
+✅ **Логи** → Должен прийти webhook `purchase`
+✅ **Пользователи** → Клиент должен быть зарегистрирован
+✅ **Транзакции** → Должна быть запись о начислении бонусов
+
+---
+
+## Troubleshooting
+
+### Виджет не загружается
+
+**Проблема:** Виджет не появляется на сайте.
+
+**Решение:**
+1. Откройте консоль браузера (F12)
+2. Проверьте наличие ошибок
+3. Убедитесь что `projectId` указан правильно
+4. Проверьте что скрипт загружается: Network → `widget-loader.js`
+
+**Debug режим:**
+```javascript
+window.gupilConfig = {
+  projectId: 'YOUR_PROJECT_ID',
+  apiUrl: 'https://gupil.ru/api',
+  platform: 'custom',
+  debug: true // Включить debug логи
+};
+```
+
+### Селекторы не работают
+
+**Проблема:** Виджет не находит элементы на странице.
+
+**Решение:**
+1. Откройте консоль и проверьте логи:
+```
+[CustomAdapter] Warning: Email input not found: #email
+```
+
+2. Проверьте что селектор правильный:
+```javascript
+// Проверить вручную в консоли
+document.querySelector('#email'); // Должен вернуть элемент
+```
+
+3. Если элемент не найден - обновите селектор в конфигурации
+
+### Webhook не приходит
+
+**Проблема:** После оформления заказа webhook не приходит в Gupil.
+
+**Решение:**
+1. Проверьте что Webhook URL указан правильно в вашей CMS
+2. Проверьте что формат данных: **JSON**
+3. Проверьте что метод: **POST**
+4. Оформите тестовый заказ и проверьте логи в Gupil
+
+**Тест webhook вручную:**
+```bash
+curl -X POST https://gupil.ru/api/webhook/YOUR_SECRET \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "purchase",
+    "payload": {
+      "email": "test@example.com",
+      "amount": 5000,
+      "orderId": "TEST-123"
+    }
+  }'
+```
+
+---
+
+## Создание собственного адаптера
+
+Если Custom адаптер не подходит для вашей платформы, вы можете создать собственный адаптер.
+
+### Когда нужен собственный адаптер?
+
+- ❌ Custom адаптер не может найти нужные элементы
+- ❌ Ваша платформа использует JavaScript API вместо DOM
+- ❌ Нужна специфичная логика работы с корзиной
+
+### Как создать адаптер?
+
+1. Изучите [Custom Adapter Guide](https://github.com/gupil/docs/custom-adapter-guide.md)
+2. Создайте файл `my-platform-adapter.js`
+3. Реализуйте интерфейс `IWidgetAdapter`
+4. Подключите адаптер на сайт
+
+**Минимальный пример:**
+```javascript
+class MyPlatformAdapter {
+  getCartTotal() {
+    // Вернуть сумму корзины
+    return window.MyPlatform.cart.total;
+  }
+
+  getContactInfo() {
+    // Вернуть email и телефон
+    return {
+      email: window.MyPlatform.customer.email,
+      phone: window.MyPlatform.customer.phone
+    };
+  }
+
+  async applyPromocode(code) {
+    // Применить промокод
+    await window.MyPlatform.cart.applyDiscount(code);
+    return true;
+  }
+
+  observeCart(callback) {
+    // Следить за изменениями корзины
+    window.MyPlatform.cart.on('change', callback);
+  }
+
+  observeContactInput(callback) {
+    // Следить за вводом контактов
+    window.MyPlatform.customer.on('update', callback);
+  }
+}
+
+// Подключение
+window.gupilConfig = {
+  projectId: 'YOUR_PROJECT_ID',
+  apiUrl: 'https://gupil.ru/api',
+  platform: 'custom',
+  customAdapter: MyPlatformAdapter // Ваш адаптер
+};
+```
+
+[Подробное руководство по созданию адаптера →](https://github.com/gupil/docs/custom-adapter-guide.md)
+
+---
+
+## Полезные ссылки
+
+- [Universal Widget Guide](https://github.com/gupil/docs/universal-widget-guide.md) - полное руководство
+- [Custom Adapter Guide](https://github.com/gupil/docs/custom-adapter-guide.md) - создание адаптера
+- [API Reference](/api-reference) - документация API
+- [Webhook Integration](/webhook-integration) - детали интеграции webhook
+- [FAQ](/faq) - часто задаваемые вопросы
+
+---
+
+## Поддержка
+
+Нужна помощь с интеграцией? Свяжитесь с нами:
+
+- 📧 Email: support@gupil.ru
+- 💬 Telegram: @gupil_support
+- 📚 База знаний: https://docs.gupil.ru
+- 🐛 GitHub Issues: https://github.com/gupil/widget/issues
+
+Мы поможем настроить интеграцию для вашей платформы!

@@ -20,6 +20,7 @@ model Project {
   welcomeRewardType             WelcomeRewardType     @default(BONUS) @map("welcome_reward_type")
   firstPurchaseDiscountPercent  Int                   @default(0) @map("first_purchase_discount_percent")
   isActive                      Boolean               @default(true) @map("is_active")
+  widgetVersion                 String                @default("legacy") @map("widget_version") // "legacy" | "universal"
   createdAt                     DateTime              @default(now()) @map("created_at")
   updatedAt                     DateTime              @updatedAt @map("updated_at")
   botStatus                     BotStatus             @default(INACTIVE) @map("bot_status")

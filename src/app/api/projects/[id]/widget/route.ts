@@ -97,7 +97,8 @@ export async function GET(
         welcomeBonus: true,
         welcomeRewardType: true,
         firstPurchaseDiscountPercent: true,
-        botUsername: true
+        botUsername: true,
+        widgetVersion: true
       }
     });
 
@@ -345,7 +346,8 @@ export async function GET(
           botUsername: project.botUsername,
           welcomeBonusAmount: Number(project.welcomeBonus),
           welcomeRewardType: project.welcomeRewardType,
-          firstPurchaseDiscountPercent: project.firstPurchaseDiscountPercent
+          firstPurchaseDiscountPercent: project.firstPurchaseDiscountPercent,
+          widgetVersion: project.widgetVersion // Добавляем версию виджета
         },
         { headers: createCorsHeaders() }
       );
@@ -365,11 +367,13 @@ export async function GET(
       botUsername: project.botUsername,
       welcomeBonusAmount: Number(project.welcomeBonus),
       welcomeRewardType: project.welcomeRewardType,
-      firstPurchaseDiscountPercent: project.firstPurchaseDiscountPercent
+      firstPurchaseDiscountPercent: project.firstPurchaseDiscountPercent,
+      widgetVersion: project.widgetVersion // Добавляем версию виджета для мониторинга
     };
 
     logger.info('Настройки виджета успешно загружены', {
       projectId,
+      widgetVersion: project.widgetVersion,
       hasSettings: true
     });
 

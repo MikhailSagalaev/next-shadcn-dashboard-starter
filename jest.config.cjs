@@ -2,7 +2,13 @@
 module.exports = {
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  testMatch: ['**/__tests__/sanity.test.js', '**/__tests__/services/**/*.test.ts'],
+  testMatch: [
+    '**/__tests__/sanity.test.js',
+    '**/__tests__/services/**/*.test.ts',
+    '**/__tests__/adapters/**/*.test.ts',
+    '**/__tests__/widgets/**/*.test.ts',
+    '**/__tests__/integration/**/*.test.ts'
+  ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { useESM: true }]
   },

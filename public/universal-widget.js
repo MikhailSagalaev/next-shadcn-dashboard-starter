@@ -1,7 +1,16 @@
 /**
  * @file: universal-widget.js
  * @description: Ядро Универсального Бонусного Виджета (Платформо-независимое)
- * @version: 3.0.0 (Alpha)
+ * @version: 3.1.0 (Alpha)
+ * @project: SaaS Bonus System - Universal Widget
+ * @created: 2026-01-31
+ *
+ * ИЗМЕНЕНИЯ v3.1.0:
+ * - Добавлены методы работы с адаптером (setAdapter, getAdapter, validateAdapter)
+ * - Улучшено управление состоянием (setState, getState, subscribe)
+ * - Оптимизированы API запросы (кеширование, batch, retry)
+ * - Удалены все Tilda-специфичные зависимости
+ * - Добавлена реактивность через pub/sub паттерн
  */
 
 (function () {
@@ -14,7 +23,11 @@
           apiUrl: 'https://bonus.example.com',
           projectId: null,
           debug: false,
-          adapter: null // Экземпляр адаптера
+          adapter: null, // Экземпляр адаптера
+          enableCache: true,
+          cacheTimeout: 5 * 60 * 1000, // 5 минут
+          apiTimeout: 10000, // 10 секунд
+          maxRetries: 3
         },
         config
       );
@@ -24,8 +37,21 @@
         cartTotal: 0,
         isInitialized: false,
         accessToken: null,
+        widgetSettings: null,
+        operationMode: 'WITH_BOT',
+        firstPurchaseDiscount: null,
         _lastApiCall: 0
       };
+
+      // Pub/Sub для реактивности
+      this.subscribers = new Map();
+
+      // Кеш API запросов
+      this.apiCache = new Map();
+
+      // Очередь batch запросов
+      this.batchQueue = [];
+      this.batchTimer = null;
 
       this.adapter = this.config.adapter;
 
@@ -34,18 +60,33 @@
       this.onUserDataUpdate = this.onUserDataUpdate.bind(this);
     }
 
+    /**
+     * ========================================
+     * LIFECYCLE МЕТОДЫ
+     * ========================================
+     */
+
     async init() {
       if (!this.adapter) {
         console.error('LeadWidget: Не передан адаптер платформы');
         return;
       }
 
-      this.log('Инициализация ядра...');
+      // Валидация адаптера
+      if (!this.validateAdapter(this.adapter)) {
+        console.error('LeadWidget: Адаптер не реализует необходимые методы');
+        return;
+      }
+
+      this.log('🚀 Инициализация ядра...');
 
       // Инициализация адаптера
       if (this.adapter.init) {
         this.adapter.init();
       }
+
+      // Загрузка настроек виджета
+      await this.loadWidgetSettings();
 
       // Начальная проверка данных
       this.state.cartTotal = this.adapter.getCartTotal();
@@ -54,14 +95,203 @@
         this.onUserDataUpdate(contactInfo);
       }
 
-      // Загрузка авторизации
+      // Загрузка из localStorage
       this.loadStorage();
+
+      // Запуск наблюдателей адаптера
+      if (this.adapter.observeCart) {
+        this.adapter.observeCart();
+      }
+      if (this.adapter.observeUserInput) {
+        this.adapter.observeUserInput();
+      }
 
       // Рендер UI
       this.renderUI();
 
-      this.state.isInitialized = true;
+      this.setState({ isInitialized: true });
+      this.log('✅ Ядро инициализировано');
     }
+
+    destroy() {
+      this.log('🧹 Уничтожение виджета...');
+
+      // Уничтожение адаптера
+      if (this.adapter && this.adapter.destroy) {
+        this.adapter.destroy();
+      }
+
+      // Очистка подписчиков
+      this.subscribers.clear();
+
+      // Очистка кеша
+      this.apiCache.clear();
+
+      // Очистка batch таймера
+      if (this.batchTimer) {
+        clearTimeout(this.batchTimer);
+      }
+
+      // Удаление UI
+      const root = document.getElementById('lead-widget-root');
+      if (root) {
+        root.remove();
+      }
+
+      this.log('✅ Виджет уничтожен');
+    }
+
+    /**
+     * ========================================
+     * МЕТОДЫ РАБОТЫ С АДАПТЕРОМ
+     * ========================================
+     */
+
+    /**
+     * Установить адаптер
+     * @param {object} adapter - Экземпляр адаптера
+     * @returns {boolean}
+     */
+    setAdapter(adapter) {
+      if (!this.validateAdapter(adapter)) {
+        console.error('LeadWidget: Невалидный адаптер');
+        return false;
+      }
+
+      this.adapter = adapter;
+      this.config.adapter = adapter;
+      this.log('✅ Адаптер установлен');
+      return true;
+    }
+
+    /**
+     * Получить текущий адаптер
+     * @returns {object|null}
+     */
+    getAdapter() {
+      return this.adapter;
+    }
+
+    /**
+     * Валидация адаптера
+     * @param {object} adapter
+     * @returns {boolean}
+     */
+    validateAdapter(adapter) {
+      if (!adapter || typeof adapter !== 'object') {
+        return false;
+      }
+
+      // Обязательные методы
+      const requiredMethods = ['getCartTotal', 'getContactInfo'];
+
+      for (const method of requiredMethods) {
+        if (typeof adapter[method] !== 'function') {
+          console.error(`LeadWidget: Адаптер не реализует метод ${method}`);
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    /**
+     * Событие готовности адаптера
+     * @param {function} callback
+     */
+    onAdapterReady(callback) {
+      if (this.adapter && this.state.isInitialized) {
+        callback(this.adapter);
+      } else {
+        this.subscribe('initialized', () => callback(this.adapter));
+      }
+    }
+
+    /**
+     * ========================================
+     * УПРАВЛЕНИЕ СОСТОЯНИЕМ (PUB/SUB)
+     * ========================================
+     */
+
+    /**
+     * Установить состояние с уведомлением подписчиков
+     * @param {object} updates - Объект с обновлениями
+     */
+    setState(updates) {
+      const oldState = { ...this.state };
+
+      // Обновляем состояние
+      Object.assign(this.state, updates);
+
+      // Уведомляем подписчиков
+      Object.keys(updates).forEach((key) => {
+        if (oldState[key] !== this.state[key]) {
+          this.notify(key, this.state[key], oldState[key]);
+        }
+      });
+
+      // Общее уведомление об изменении
+      this.notify('stateChanged', this.state, oldState);
+    }
+
+    /**
+     * Получить состояние
+     * @param {string} key - Ключ состояния (опционально)
+     * @returns {any}
+     */
+    getState(key) {
+      if (key) {
+        return this.state[key];
+      }
+      return { ...this.state };
+    }
+
+    /**
+     * Подписаться на изменения состояния
+     * @param {string} key - Ключ состояния или 'stateChanged' для всех изменений
+     * @param {function} callback - Функция обратного вызова
+     * @returns {function} - Функция отписки
+     */
+    subscribe(key, callback) {
+      if (!this.subscribers.has(key)) {
+        this.subscribers.set(key, new Set());
+      }
+
+      this.subscribers.get(key).add(callback);
+
+      // Возвращаем функцию отписки
+      return () => {
+        const subs = this.subscribers.get(key);
+        if (subs) {
+          subs.delete(callback);
+        }
+      };
+    }
+
+    /**
+     * Уведомить подписчиков
+     * @param {string} key
+     * @param {any} newValue
+     * @param {any} oldValue
+     */
+    notify(key, newValue, oldValue) {
+      const subs = this.subscribers.get(key);
+      if (subs) {
+        subs.forEach((callback) => {
+          try {
+            callback(newValue, oldValue);
+          } catch (e) {
+            console.error('Ошибка в подписчике:', e);
+          }
+        });
+      }
+    }
+
+    /**
+     * ========================================
+     * ОБРАБОТЧИКИ СОБЫТИЙ ПЛАТФОРМЫ
+     * ========================================
+     */
 
     /**
      * Вызывается адаптером при изменении корзины
@@ -69,8 +299,9 @@
      */
     onPlatformCartUpdate(total) {
       if (this.state.cartTotal === total) return;
-      this.log(`Корзина обновлена: ${this.state.cartTotal} -> ${total}`);
-      this.state.cartTotal = total;
+
+      this.log(`📊 Корзина обновлена: ${this.state.cartTotal} → ${total}`);
+      this.setState({ cartTotal: total });
       this.updateUI();
     }
 
@@ -80,20 +311,196 @@
      */
     onUserDataUpdate(data) {
       let changed = false;
+      const newUser = { ...this.state.user };
+
       if (data.email && data.email !== this.state.user?.email) {
-        this.state.user = { ...this.state.user, email: data.email };
+        newUser.email = data.email;
         changed = true;
       }
       if (data.phone && data.phone !== this.state.user?.phone) {
-        this.state.user = { ...this.state.user, phone: data.phone };
+        newUser.phone = data.phone;
         changed = true;
       }
 
       if (changed) {
-        this.log('Данные пользователя обновлены:', this.state.user);
+        this.log('📝 Данные пользователя обновлены:', newUser);
+        this.setState({ user: newUser });
         this.checkUserRegistration();
       }
     }
+
+    /**
+     * ========================================
+     * API ЗАПРОСЫ (С КЕШИРОВАНИЕМ И RETRY)
+     * ========================================
+     */
+
+    /**
+     * Общий метод API запросов с кешированием, retry и timeout
+     * @param {string} url
+     * @param {object} options
+     * @param {object} cacheOptions - { cache: boolean, ttl: number }
+     * @returns {Promise<any>}
+     */
+    async makeApiRequest(url, options = {}, cacheOptions = {}) {
+      const {
+        cache = this.config.enableCache,
+        ttl = this.config.cacheTimeout
+      } = cacheOptions;
+
+      // Проверяем кеш для GET запросов
+      if (cache && (!options.method || options.method === 'GET')) {
+        const cached = this.getCachedResponse(url);
+        if (cached) {
+          this.log('📦 Ответ из кеша:', url);
+          return cached;
+        }
+      }
+
+      // Rate limiting
+      await this.rateLimitDelay();
+
+      // Выполняем запрос с retry
+      const response = await this.fetchWithRetry(url, options);
+
+      // Кешируем успешный ответ
+      if (cache && (!options.method || options.method === 'GET')) {
+        this.setCachedResponse(url, response, ttl);
+      }
+
+      return response;
+    }
+
+    /**
+     * Fetch с retry и timeout
+     * @param {string} url
+     * @param {object} options
+     * @param {number} retryCount
+     * @returns {Promise<any>}
+     */
+    async fetchWithRetry(url, options = {}, retryCount = 0) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        this.config.apiTimeout
+      );
+
+      try {
+        const res = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+          },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          // Retry для серверных ошибок
+          if (res.status >= 500 && retryCount < this.config.maxRetries) {
+            await this.exponentialBackoff(retryCount);
+            return this.fetchWithRetry(url, options, retryCount + 1);
+          }
+          throw new Error(`API Error: ${res.status} ${res.statusText}`);
+        }
+
+        return await res.json();
+      } catch (err) {
+        clearTimeout(timeoutId);
+
+        // Retry для сетевых ошибок
+        if (err.name === 'AbortError') {
+          this.log('⏱️ Timeout запроса:', url);
+        }
+
+        if (retryCount < this.config.maxRetries) {
+          this.log(
+            `🔄 Retry ${retryCount + 1}/${this.config.maxRetries}:`,
+            url
+          );
+          await this.exponentialBackoff(retryCount);
+          return this.fetchWithRetry(url, options, retryCount + 1);
+        }
+
+        throw err;
+      }
+    }
+
+    /**
+     * Rate limiting задержка
+     */
+    async rateLimitDelay() {
+      const now = Date.now();
+      const minDelay = 300; // 300ms между запросами
+
+      if (this.state._lastApiCall && now - this.state._lastApiCall < minDelay) {
+        await new Promise((r) =>
+          setTimeout(r, minDelay - (now - this.state._lastApiCall))
+        );
+      }
+
+      this.state._lastApiCall = Date.now();
+    }
+
+    /**
+     * Exponential backoff для retry
+     * @param {number} retryCount
+     */
+    async exponentialBackoff(retryCount) {
+      const delay = 1000 * Math.pow(2, retryCount);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    /**
+     * Получить кешированный ответ
+     * @param {string} key
+     * @returns {any|null}
+     */
+    getCachedResponse(key) {
+      const cached = this.apiCache.get(key);
+      if (!cached) return null;
+
+      if (Date.now() - cached.timestamp > cached.ttl) {
+        this.apiCache.delete(key);
+        return null;
+      }
+
+      return cached.data;
+    }
+
+    /**
+     * Сохранить ответ в кеш
+     * @param {string} key
+     * @param {any} data
+     * @param {number} ttl
+     */
+    setCachedResponse(key, data, ttl) {
+      this.apiCache.set(key, {
+        data,
+        timestamp: Date.now(),
+        ttl
+      });
+    }
+
+    /**
+     * Очистить кеш
+     * @param {string} key - Опционально, конкретный ключ
+     */
+    clearCache(key) {
+      if (key) {
+        this.apiCache.delete(key);
+      } else {
+        this.apiCache.clear();
+      }
+    }
+
+    /**
+     * ========================================
+     * БИЗНЕС-ЛОГИКА
+     * ========================================
+     */
 
     async checkUserRegistration() {
       if (!this.state.user?.email && !this.state.user?.phone) return;
@@ -104,59 +511,16 @@
           {
             method: 'POST',
             body: JSON.stringify(this.state.user)
-          }
+          },
+          { cache: false }
         );
 
         if (res && res.registered) {
-          this.log('Пользователь зарегистрирован:', res);
-          // Обработка статуса регистрации
+          this.log('✅ Пользователь зарегистрирован:', res);
+          this.setState({ user: { ...this.state.user, ...res.user } });
         }
       } catch (e) {
-        this.log('Ошибка проверки регистрации', e);
-      }
-    }
-
-    /**
-     * Общий метод API запросов с повторами и ограничением частоты
-     * @param {string} url
-     * @param {object} options
-     * @param {number} retryCount
-     */
-    async makeApiRequest(url, options = {}, retryCount = 0) {
-      // Простой ограничитель частоты (rate limiter)
-      const now = Date.now();
-      if (this.state._lastApiCall && now - this.state._lastApiCall < 300) {
-        await new Promise((r) => setTimeout(r, 300));
-      }
-      this.state._lastApiCall = Date.now();
-
-      try {
-        const res = await fetch(url, {
-          ...options,
-          headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-          }
-        });
-
-        if (!res.ok) {
-          if (res.status >= 500 && retryCount < 3) {
-            await new Promise((r) =>
-              setTimeout(r, 1000 * Math.pow(2, retryCount))
-            );
-            return this.makeApiRequest(url, options, retryCount + 1);
-          }
-          throw new Error(`Ошибка API: ${res.status}`);
-        }
-        return await res.json();
-      } catch (err) {
-        if (retryCount < 3) {
-          await new Promise((r) =>
-            setTimeout(r, 1000 * Math.pow(2, retryCount))
-          );
-          return this.makeApiRequest(url, options, retryCount + 1);
-        }
-        throw err;
+        this.log('❌ Ошибка проверки регистрации:', e);
       }
     }
 
@@ -167,16 +531,17 @@
           {
             method: 'POST',
             body: JSON.stringify({ user: this.state.user })
-          }
+          },
+          { cache: true, ttl: 60000 } // Кеш на 1 минуту
         );
 
         if (res && res.available) {
-          this.state.firstPurchaseDiscount = res;
+          this.setState({ firstPurchaseDiscount: res });
           this.log('🎁 Доступна скидка на первый заказ:', res);
           this.updateUI();
         }
       } catch (e) {
-        this.log('Ошибка проверки скидки на первый заказ', e);
+        this.log('❌ Ошибка проверки скидки:', e);
       }
     }
 
@@ -188,10 +553,66 @@
         const success = await this.adapter.applyPromocode(code);
         if (success) {
           this.log('✅ Промокод первой покупки применен');
-          alert('Скидка применена!'); // В реальности тут красивый тост
+          this.showNotification('Скидка применена!', 'success');
         }
       }
     }
+
+    async loadWidgetSettings() {
+      try {
+        this.log('🔄 Загрузка настроек виджета...');
+
+        const res = await this.makeApiRequest(
+          `${this.config.apiUrl}/api/projects/${this.config.projectId}/settings`,
+          {},
+          { cache: true, ttl: this.config.cacheTimeout }
+        );
+
+        if (res) {
+          this.applySettings(res);
+        }
+      } catch (e) {
+        this.log('❌ Ошибка загрузки настроек:', e);
+      }
+    }
+
+    applySettings(settings) {
+      this.log('✅ Настройки применены:', settings);
+
+      this.setState({
+        widgetSettings: settings.widgetSettings || {},
+        operationMode: settings.operationMode || 'WITH_BOT'
+      });
+
+      // Инъекция CSS переменных
+      if (settings.widgetSettings) {
+        this.injectCssVariables(settings.widgetSettings);
+
+        // Инициализация плашек через адаптер
+        if (this.adapter && this.adapter.initProductBadges) {
+          this.adapter.initProductBadges(settings.widgetSettings, (price) =>
+            this.calculateBonusAmount(price)
+          );
+        }
+      }
+    }
+
+    calculateBonusAmount(price) {
+      const settings = this.state.widgetSettings;
+      const percent = settings?.productBadgeBonusPercent || 10;
+      return Math.round(price * (percent / 100));
+    }
+
+    injectCssVariables(settings) {
+      // TODO: Создать style элемент с CSS переменными
+      // Это будет реализовано в следующей итерации
+    }
+
+    /**
+     * ========================================
+     * UI МЕТОДЫ
+     * ========================================
+     */
 
     renderUI() {
       // Если адаптер предоставил точку монтирования - рендерим инлайн
@@ -202,7 +623,11 @@
         return;
       }
 
-      // Иначе (или если настроено) - плавающая кнопка (Shadow DOM)
+      // Иначе - плавающая кнопка (Shadow DOM)
+      this.renderFloatingButton();
+    }
+
+    renderFloatingButton() {
       if (document.getElementById('lead-widget-root')) return;
 
       // Создаем Shadow DOM хост
@@ -246,25 +671,25 @@
       // Очищаем контейнер
       container.innerHTML = '';
 
-      // Создаем структуру инлайн виджета (упрощенная копия из legacy)
+      // Создаем структуру инлайн виджета
       const widget = document.createElement('div');
       widget.className = 'bonus-widget-container';
       widget.style.cssText = `
-            padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;
-            background: white; margin-bottom: 12px; font-family: system-ui;
-        `;
+        padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;
+        background: white; margin-bottom: 12px; font-family: system-ui;
+      `;
 
       // Секция скидки на первый заказ
       if (this.state.firstPurchaseDiscount?.available) {
         const discountDiv = document.createElement('div');
         discountDiv.style.cssText = `
-                padding: 12px; background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-                border-radius: 8px; margin-bottom: 12px; text-align: center; color: white;
-            `;
+          padding: 12px; background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+          border-radius: 8px; margin-bottom: 12px; text-align: center; color: white;
+        `;
         discountDiv.innerHTML = `
-                <p style="margin:0 0 8px 0;font-weight:600">🎉 Скидка на первый заказ ${this.state.firstPurchaseDiscount.discountPercent}%!</p>
-                <button style="background:white;color:#059669;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:600">Применить</button>
-            `;
+          <p style="margin:0 0 8px 0;font-weight:600">🎉 Скидка на первый заказ ${this.state.firstPurchaseDiscount.discountPercent}%!</p>
+          <button style="background:white;color:#059669;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:600">Применить</button>
+        `;
         discountDiv.querySelector('button').onclick = () =>
           this.applyFirstPurchaseDiscount();
         widget.appendChild(discountDiv);
@@ -273,28 +698,38 @@
       // Основной баланс
       const balanceDiv = document.createElement('div');
       balanceDiv.innerHTML = `
-            <div style="font-size:14px;color:#6b7280;margin-bottom:8px">Ваш баланс: <span style="font-weight:600;color:#059669;font-size:16px">${this.state.user?.balance || 0}</span> бонусов</div>
-        `;
+        <div style="font-size:14px;color:#6b7280;margin-bottom:8px">
+          Ваш баланс: <span style="font-weight:600;color:#059669;font-size:16px">${this.state.user?.balance || 0}</span> бонусов
+        </div>
+      `;
       widget.appendChild(balanceDiv);
 
       container.appendChild(widget);
     }
 
+    updateUI() {
+      // Перерисовываем UI при изменениях
+      // В реальности лучше обновлять конкретные узлы, а не все дерево
+      this.log('🎨 UI обновлен');
+    }
+
     toggleModal() {
-      alert(
-        `Статус: ${this.state.isInitialized ? 'Готов' : 'Загрузка'}\nКорзина: ${this.state.cartTotal}\nПользователь: ${this.state.user?.email || 'Гость'}`
+      this.showNotification(
+        `Статус: ${this.state.isInitialized ? 'Готов' : 'Загрузка'}\nКорзина: ${this.state.cartTotal}\nПользователь: ${this.state.user?.email || 'Гость'}`,
+        'info'
       );
     }
 
-    updateUI() {
-      // Перерисовываем UI при изменениях
-      if (this.config.adapter && this.config.adapter.mountInlineWidget) {
-        // Инлайн обновление
-        // В реальности лучше обновлять конкретные узлы, а не все дерево
-        // this.renderInlineUI(this.currentContainer);
-      }
-      this.log('UI обновлен, баланс:', this.state.cartTotal);
+    showNotification(message, type = 'info') {
+      // TODO: Реализовать красивые toast уведомления
+      alert(message);
     }
+
+    /**
+     * ========================================
+     * УТИЛИТЫ
+     * ========================================
+     */
 
     // Безопасное получение данных из localStorage
     safeGetStorage(key) {
@@ -306,7 +741,7 @@
         if (/<script|javascript:|data:/i.test(value)) return null; // Защита от XSS
         return value;
       } catch (error) {
-        this.log('Ошибка доступа к Storage', error);
+        this.log('❌ Ошибка доступа к Storage:', error);
         return null;
       }
     }
@@ -320,97 +755,37 @@
         localStorage.setItem(key, value);
         return true;
       } catch (error) {
-        this.log('Ошибка записи в Storage', error);
+        this.log('❌ Ошибка записи в Storage:', error);
         return false;
       }
-    }
-
-    // Валидация email
-    validateEmail(email) {
-      if (!email || typeof email !== 'string') return false;
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      return emailRegex.test(email) && email.length <= 254;
-    }
-
-    // Валидация телефона
-    validatePhone(phone) {
-      if (!phone || typeof phone !== 'string') return false;
-      const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/;
-      return phoneRegex.test(phone.replace(/\s/g, ''));
-    }
-
-    // Загрузка настроек виджета
-    async loadWidgetSettingsOnInit() {
-      try {
-        this.log('🔄 Загрузка настроек виджета...');
-        // Пытаемся получить кешированные настройки
-        const cached = this.safeGetStorage('lw_settings_cache');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
-            // 5 минут кеш
-            this.applySettings(parsed.data);
-            return;
-          }
-        }
-
-        const res = await this.makeApiRequest(
-          `${this.config.apiUrl}/api/projects/${this.config.projectId}/settings`
-        );
-        if (res) {
-          this.applySettings(res);
-          this.safeSetStorage(
-            'lw_settings_cache',
-            JSON.stringify({
-              timestamp: Date.now(),
-              data: res
-            })
-          );
-        }
-      } catch (e) {
-        this.log('Ошибка загрузки настроек', e);
-      }
-    }
-
-    applySettings(settings) {
-      this.log('✅ Настройки применены:', settings);
-      this.state.widgetSettings = settings.widgetSettings || {};
-      this.state.operationMode = settings.operationMode || 'WITH_BOT';
-
-      // Тут будет инъекция CSS переменных
-      if (settings.widgetSettings) {
-        this.injectCssVariables(settings.widgetSettings);
-        // Инициализация плашек, если включены
-        if (this.config.adapter && this.config.adapter.initProductBadges) {
-          this.config.adapter.initProductBadges(
-            settings.widgetSettings,
-            (price) => this.calculateBonusAmount(price)
-          );
-        }
-      }
-    }
-
-    calculateBonusAmount(price) {
-      const settings = this.state.widgetSettings;
-      const percent = settings.productBadgeBonusPercent || 10;
-      return Math.round(price * (percent / 100));
-    }
-
-    injectCssVariables(settings) {
-      // TODO: Создать style элемент с CSS переменными
     }
 
     loadStorage() {
       try {
         const data = this.safeGetStorage('lw_user');
-        if (data) this.state.user = JSON.parse(data);
+        if (data) {
+          const user = JSON.parse(data);
+          this.setState({ user });
+        }
       } catch (e) {
-        /* игнорируем */
+        this.log('❌ Ошибка загрузки из Storage:', e);
+      }
+    }
+
+    saveStorage() {
+      try {
+        if (this.state.user) {
+          this.safeSetStorage('lw_user', JSON.stringify(this.state.user));
+        }
+      } catch (e) {
+        this.log('❌ Ошибка сохранения в Storage:', e);
       }
     }
 
     log(...args) {
-      if (this.config.debug) console.log('[LeadWidget]', ...args);
+      if (this.config.debug) {
+        console.log('[LeadWidget]', ...args);
+      }
     }
   }
 

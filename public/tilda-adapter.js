@@ -2,6 +2,25 @@
  * @file: tilda-adapter.js
  * @description: Адаптер для интеграции виджета с платформой Tilda
  * @implements: IWidgetAdapter
+ * @version: 3.0.0
+ * @status: 🚧 В разработке (не используется в production)
+ * @project: SaaS Bonus System - Universal Widget
+ *
+ * АРХИТЕКТУРА:
+ * - Изолирует всю Tilda-специфичную логику от ядра виджета
+ * - Реализует паттерн Adapter для мультиплатформенности
+ * - Предоставляет унифицированный API для работы с платформой
+ *
+ * ИНТЕРФЕЙС IWidgetAdapter:
+ * - init(): void
+ * - getCartTotal(): number
+ * - getContactInfo(): {email, phone}
+ * - applyPromocode(code): Promise<boolean>
+ * - observeCart(): void
+ * - observeUserInput(): void
+ * - initProductBadges(settings, calculatorFn): void
+ * - mountInlineWidget(renderCallback): void
+ * - destroy(): void
  */
 
 (function () {
@@ -13,16 +32,37 @@
       this.observers = new Set();
       this.promoHiddenClass = 'bonus-promocode-hidden';
       this.originalPromoStyles = null;
+      this.lastCartTotal = 0;
+      this.debounceTimers = new Map();
+      this.badgeSettings = null;
+      this.calculateBonus = null;
     }
 
     /**
-     * Инициализация наблюдателей платформы
+     * ========================================
+     * ОБЯЗАТЕЛЬНЫЕ МЕТОДЫ ИНТЕРФЕЙСА
+     * ========================================
+     */
+
+    /**
+     * Инициализация адаптера
      */
     init() {
-      this.observeCart();
-      this.observeUserInput();
-      this.capturePromoStyles();
-      console.log('✅ TildaAdapter: Инициализирован');
+      this.log('✅ TildaAdapter: Инициализация');
+
+      // Проверяем что мы на Tilda
+      if (!this.isTildaPlatform()) {
+        console.warn('⚠️ TildaAdapter: Не обнаружена платформа Tilda');
+        return;
+      }
+
+      // Захватываем стили промокода до любых манипуляций
+      const promoWrapper = document.querySelector('.t-inputpromocode__wrapper');
+      if (promoWrapper) {
+        this.capturePromoStyles(promoWrapper);
+      }
+
+      this.log('✅ TildaAdapter: Инициализирован');
     }
 
     /**
@@ -69,9 +109,9 @@
         'input[name="phone"], input[type="tel"], .t-input-group_phone input'
       );
       for (const input of phoneInputs) {
-        // Базовая валидация (минимум 5 цифр)
+        // Базовая валидация (минимум 10 цифр)
         const digits = input.value.replace(/\D/g, '');
-        if (digits.length > 5) {
+        if (digits.length >= 10) {
           phone = input.value.trim();
           break;
         }
@@ -81,25 +121,58 @@
     }
 
     /**
+     * Очистка ресурсов при уничтожении
+     */
+    destroy() {
+      this.log('🧹 TildaAdapter: Очистка ресурсов');
+
+      // Отключаем всех observers
+      this.observers.forEach((obs) => obs.disconnect());
+      this.observers.clear();
+
+      // Очищаем таймеры
+      this.debounceTimers.forEach((timer) => clearTimeout(timer));
+      this.debounceTimers.clear();
+
+      // Восстанавливаем поле промокода если скрывали
+      const promoWrapper = document.querySelector('.t-inputpromocode__wrapper');
+      if (promoWrapper) {
+        this.showTildaPromocodeField(promoWrapper);
+      }
+
+      this.log('✅ TildaAdapter: Ресурсы очищены');
+    }
+
+    /**
+     * ========================================
+     * ОПЦИОНАЛЬНЫЕ МЕТОДЫ ИНТЕРФЕЙСА
+     * ========================================
+     */
+
+    /**
      * Применить промокод к корзине
      * @param {string} code - Промокод для применения
+     * @returns {Promise<boolean>}
      */
-    applyPromocode(code) {
-      const wrapper = document.querySelector('.t-inputpromocode__wrapper');
+    async applyPromocode(code) {
       const input = document.querySelector('.t-inputpromocode');
       const btn = document.querySelector('.t-inputpromocode__btn');
 
       if (input && btn) {
-        // Если поле скрыто, логика обработки может потребоваться здесь
-        // For now, Tilda requires the field to be present
-
         input.value = code;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
 
+        // Небольшая задержка перед кликом
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         btn.click();
+
+        this.log(`✅ Промокод "${code}" применен`);
         return true;
       }
+
+      this.log(`⚠️ Не удалось применить промокод "${code}"`);
       return false;
     }
 
@@ -112,158 +185,128 @@
       if (!wrapper) return;
 
       if (hidden) {
-        this.capturePromoStyles(wrapper);
-        wrapper.classList.add(this.promoHiddenClass);
-        wrapper.style.display = 'none'; // Принудительное скрытие
-        wrapper.setAttribute('aria-hidden', 'true');
+        this.hideTildaPromocodeField(wrapper);
       } else {
-        wrapper.classList.remove(this.promoHiddenClass);
-        // Восстановление стилей
-        wrapper.style.display = '';
-        wrapper.removeAttribute('aria-hidden');
+        this.showTildaPromocodeField(wrapper);
       }
     }
 
-    capturePromoStyles(wrapper) {
-      if (!wrapper)
-        wrapper = document.querySelector('.t-inputpromocode__wrapper');
-      if (!wrapper || this.originalPromoStyles) return;
-
-      this.originalPromoStyles = wrapper.getAttribute('style');
-    }
-
     /**
-     * Отслеживание изменений корзины
+     * Отслеживание изменений корзины с debounce
      */
     observeCart() {
       const cartWin = document.querySelector('.t706__cartwin');
-      if (!cartWin) return;
+      if (!cartWin) {
+        this.log('⚠️ Корзина Tilda не найдена');
+        return;
+      }
+
+      let debounceTimer = null;
 
       const observer = new MutationObserver((mutations) => {
-        // Debounce можно реализовать в ядре, здесь просто отправляем событие
-        this.core.onPlatformCartUpdate(this.getCartTotal());
+        // Debounce для оптимизации
+        if (debounceTimer) clearTimeout(debounceTimer);
+
+        debounceTimer = setTimeout(() => {
+          const newTotal = this.getCartTotal();
+
+          // Проверяем реальное изменение
+          if (this.lastCartTotal !== newTotal) {
+            this.log(
+              `📊 Корзина изменилась: ${this.lastCartTotal} → ${newTotal}`
+            );
+            this.lastCartTotal = newTotal;
+            this.core.onPlatformCartUpdate(newTotal);
+          }
+        }, 400); // 400ms debounce
       });
 
       observer.observe(cartWin, {
         childList: true,
         subtree: true,
         characterData: true,
-        attributes: true
+        attributes: true,
+        attributeFilter: ['class', 'data-total']
       });
+
       this.observers.add(observer);
+      this.log('✅ Observer корзины запущен');
     }
 
     /**
-     * Отслеживание ввода пользователя
+     * Отслеживание ввода пользователя с debounce и валидацией
      */
     observeUserInput() {
-      // Use efficient delegation or specific inputs
       const handleInput = (e) => {
         const target = e.target;
         if (target.tagName !== 'INPUT') return;
 
         const type = target.type;
         const name = target.name;
+        const value = target.value;
 
+        // Определяем тип поля
+        let fieldType = null;
         if (type === 'email' || name === 'email' || name.includes('email')) {
-          this.core.onUserDataUpdate({ email: target.value });
+          fieldType = 'email';
         } else if (
           type === 'tel' ||
           name === 'phone' ||
           name.includes('phone')
         ) {
-          this.core.onUserDataUpdate({ phone: target.value });
+          fieldType = 'phone';
         }
+
+        if (!fieldType) return;
+
+        // Debounce для каждого типа поля
+        if (this.debounceTimers.has(fieldType)) {
+          clearTimeout(this.debounceTimers.get(fieldType));
+        }
+
+        this.debounceTimers.set(
+          fieldType,
+          setTimeout(() => {
+            // Валидация перед отправкой
+            if (fieldType === 'email' && !this.validateEmail(value)) return;
+            if (fieldType === 'phone' && !this.validatePhone(value)) return;
+
+            this.log(`📝 Пользователь ввел ${fieldType}:`, value);
+            this.core.onUserDataUpdate({ [fieldType]: value });
+          }, 500)
+        ); // 500ms debounce
       };
 
       document.addEventListener('input', handleInput, { passive: true });
       document.addEventListener('change', handleInput, { passive: true });
-      // Store cleanup function if needed, or relying on page lifecycle
+
+      this.log('✅ Observer ввода пользователя запущен');
     }
 
     /**
-     * Инициализация бонусных плашек
-     * @param {object} settings
-     * @param {function} calculatorFn Функция расчета бонусов (из ядра)
+     * Инициализация бонусных плашек на товарах
+     * @param {object} settings - Настройки виджета
+     * @param {Function} calculatorFn - Функция расчета бонусов (из ядра)
      */
     initProductBadges(settings, calculatorFn) {
-      if (settings.productBadgeEnabled === false) return;
+      if (settings.productBadgeEnabled === false) {
+        this.log('ℹ️ Бонусные плашки отключены');
+        return;
+      }
 
       this.badgeSettings = settings;
       this.calculateBonus = calculatorFn;
 
-      // Стили для плашек
+      // Инъекция стилей
       this.injectBadgeStyles(settings);
 
-      // Поиск и добавление на карточки
-      this.addBadgesToCards();
+      // Добавление плашек на существующие товары
+      this.addBadgesToAllProducts();
 
-      // Наблюдатель за подгрузкой товаров
-      const container = document.querySelector('.t-records') || document.body;
-      const observer = new MutationObserver(() => this.addBadgesToCards());
-      observer.observe(container, { childList: true, subtree: true });
-      this.observers.add(observer);
-    }
+      // Наблюдатель за динамической подгрузкой товаров
+      this.observeProductChanges();
 
-    injectBadgeStyles(settings) {
-      if (document.getElementById('lw-badge-styles')) return;
-      const style = document.createElement('style');
-      style.id = 'lw-badge-styles';
-      style.textContent = `
-            .lw-bonus-badge {
-                background-color: ${settings.productBadgeBackgroundColor || '#f1f1f1'};
-                color: ${settings.productBadgeTextColor || '#000000'};
-                font-size: ${settings.productBadgeFontSize || '14px'};
-                padding: ${settings.productBadgePadding || '5px 10px'};
-                border-radius: ${settings.productBadgeBorderRadius || '5px'};
-                margin-top: 5px;
-                display: inline-block;
-            }
-        `;
-      document.head.appendChild(style);
-    }
-
-    addBadgesToCards() {
-      // Селекторы карточек Тильды
-      const selectors = [
-        '.js-product',
-        '.t-store__card',
-        '.t776__col',
-        '.t754__col'
-      ];
-
-      selectors.forEach((selector) => {
-        document.querySelectorAll(selector).forEach((card) => {
-          if (card.dataset.lwBadgeAdded) return;
-
-          // Находим цену
-          const priceEl =
-            card.querySelector('.js-product-price') ||
-            card.querySelector('.t-store__card__price-value') ||
-            card.querySelector('.t776__price-value');
-
-          if (!priceEl) return;
-
-          const price = parseFloat(
-            priceEl.textContent.replace(/[^\d.,]/g, '').replace(',', '.')
-          );
-          if (!price) return;
-
-          const bonus = this.calculateBonus(price);
-          if (bonus <= 0) return;
-
-          // Создаем плашку
-          const badge = document.createElement('div');
-          badge.className = 'lw-bonus-badge';
-          badge.textContent = (
-            this.badgeSettings.productBadgeText || 'Бонусы: {bonusAmount}'
-          ).replace('{bonusAmount}', bonus);
-
-          // Вставляем после цены
-          priceEl.parentNode.insertBefore(badge, priceEl.nextSibling);
-          card.dataset.lwBadgeAdded = 'true';
-        });
-      });
+      this.log('✅ Бонусные плашки инициализированы');
     }
 
     /**
@@ -272,26 +315,467 @@
      */
     mountInlineWidget(renderCallback) {
       const promoWrapper = document.querySelector('.t-inputpromocode__wrapper');
-      if (!promoWrapper) return;
 
-      // Скрываем нативное поле (но не удаляем)
+      if (!promoWrapper) {
+        this.log('⚠️ Поле промокода Tilda не найдено');
+        return;
+      }
+
+      // Скрываем нативное поле промокода
       this.setPromocodeFieldVisibility(true);
 
+      // Создаем или находим контейнер
       let container = document.querySelector('.lw-inline-widget-container');
+
       if (!container) {
         container = document.createElement('div');
         container.className = 'lw-inline-widget-container';
+        container.style.cssText = 'margin-bottom: 12px;';
+
         // Вставляем ПЕРЕД полем промокода
         promoWrapper.parentNode.insertBefore(container, promoWrapper);
+
+        this.log('✅ Контейнер виджета создан');
       }
 
+      // Вызываем callback рендера из Core
       renderCallback(container);
+
+      this.log('✅ Инлайн виджет смонтирован');
     }
 
-    destroy() {
-      this.observers.forEach((obs) => obs.disconnect());
-      this.observers.clear();
-      // Remove event listeners if stored
+    /**
+     * ========================================
+     * ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ РАБОТЫ С TILDA
+     * ========================================
+     */
+
+    /**
+     * Получить объект корзины Tilda
+     * @returns {object|null}
+     */
+    getTildaCart() {
+      return window.tcart || null;
+    }
+
+    /**
+     * Получить товары в корзине
+     * @returns {Array<{id, name, price, quantity, img}>}
+     */
+    getCartItems() {
+      const cart = this.getTildaCart();
+      if (!cart || !cart.products) return [];
+
+      return cart.products.map((product) => ({
+        id: product.uid || product.id,
+        name: product.name,
+        price: parseFloat(product.price),
+        quantity: parseInt(product.quantity),
+        img: product.img
+      }));
+    }
+
+    /**
+     * Получить текущий промокод
+     * @returns {string|null}
+     */
+    getCurrentPromocode() {
+      const input = document.querySelector('.t-inputpromocode');
+      return input ? input.value : null;
+    }
+
+    /**
+     * Очистить промокод
+     */
+    clearPromocode() {
+      const input = document.querySelector('.t-inputpromocode');
+      if (input) {
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    /**
+     * Проверить применен ли промокод
+     * @returns {boolean}
+     */
+    isPromocodeApplied() {
+      const wrapper = document.querySelector('.t-inputpromocode__wrapper');
+      return wrapper && wrapper.classList.contains('t-inputpromocode_applied');
+    }
+
+    /**
+     * Получить форму оформления
+     * @returns {HTMLFormElement|null}
+     */
+    getCheckoutForm() {
+      return (
+        document.querySelector('.t706__cartwin-bottom form') ||
+        document.querySelector('.t-form[data-form-type="order"]')
+      );
+    }
+
+    /**
+     * Заполнить поле формы
+     * @param {string} name - Имя поля
+     * @param {string} value - Значение
+     * @returns {boolean}
+     */
+    fillFormField(name, value) {
+      const form = this.getCheckoutForm();
+      if (!form) return false;
+
+      const input =
+        form.querySelector(`input[name="${name}"]`) ||
+        form.querySelector(`input[data-tilda-rule="${name}"]`);
+
+      if (input) {
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }
+      return false;
+    }
+
+    /**
+     * Получить данные формы
+     * @returns {object}
+     */
+    getFormData() {
+      const form = this.getCheckoutForm();
+      if (!form) return {};
+
+      const formData = new FormData(form);
+      const data = {};
+
+      for (const [key, value] of formData.entries()) {
+        data[key] = value;
+      }
+
+      return data;
+    }
+
+    /**
+     * Получить цену товара из элемента
+     * @param {HTMLElement} element
+     * @returns {number}
+     */
+    getProductPrice(element) {
+      const priceEl =
+        element.querySelector('.js-product-price') ||
+        element.querySelector('.t-store__card__price-value') ||
+        element.querySelector('.t776__price-value') ||
+        element.querySelector('.t754__price-value');
+
+      if (!priceEl) return 0;
+
+      const priceText = priceEl.textContent
+        .replace(/[^\d.,]/g, '')
+        .replace(',', '.');
+      return parseFloat(priceText) || 0;
+    }
+
+    /**
+     * Получить ID товара
+     * @param {HTMLElement} element
+     * @returns {string|null}
+     */
+    getProductId(element) {
+      return (
+        element.dataset.productId ||
+        element.dataset.uid ||
+        element.querySelector('[data-product-id]')?.dataset.productId ||
+        null
+      );
+    }
+
+    /**
+     * Получить название товара
+     * @param {HTMLElement} element
+     * @returns {string}
+     */
+    getProductName(element) {
+      const nameEl =
+        element.querySelector('.js-product-name') ||
+        element.querySelector('.t-store__card__title') ||
+        element.querySelector('.t776__title') ||
+        element.querySelector('.t754__title');
+
+      return nameEl ? nameEl.textContent.trim() : '';
+    }
+
+    /**
+     * Получить все товары на странице
+     * @returns {Array<{element, id, name, price}>}
+     */
+    getAllProducts() {
+      const selectors = [
+        '.js-product',
+        '.t-store__card',
+        '.t776__col',
+        '.t754__col'
+      ];
+
+      const products = [];
+
+      selectors.forEach((selector) => {
+        document.querySelectorAll(selector).forEach((element) => {
+          products.push({
+            element: element,
+            id: this.getProductId(element),
+            name: this.getProductName(element),
+            price: this.getProductPrice(element)
+          });
+        });
+      });
+
+      return products;
+    }
+
+    /**
+     * ========================================
+     * ВНУТРЕННИЕ МЕТОДЫ (PRIVATE)
+     * ========================================
+     */
+
+    /**
+     * Проверить что мы на платформе Tilda
+     * @returns {boolean}
+     */
+    isTildaPlatform() {
+      return (
+        typeof window.tcart !== 'undefined' ||
+        typeof window.t_store !== 'undefined' ||
+        document.querySelector('.t-records') !== null
+      );
+    }
+
+    /**
+     * Захватить оригинальные стили поля промокода
+     * @param {HTMLElement} wrapper
+     */
+    capturePromoStyles(wrapper) {
+      if (!wrapper || this.originalPromoStyles) return;
+
+      try {
+        const inlineStyle = wrapper.getAttribute('style') || '';
+        const computedStyle = window.getComputedStyle(wrapper);
+
+        this.originalPromoStyles = {
+          inline: inlineStyle,
+          display: computedStyle.display,
+          visibility: computedStyle.visibility
+        };
+
+        this.log('✅ Сохранены оригинальные стили поля промокода');
+      } catch (error) {
+        console.warn('⚠️ Ошибка сохранения стилей:', error);
+      }
+    }
+
+    /**
+     * Скрыть поле промокода Tilda
+     * @param {HTMLElement} wrapper
+     */
+    hideTildaPromocodeField(wrapper) {
+      if (!wrapper) return;
+
+      wrapper.classList.add(this.promoHiddenClass);
+      wrapper.style.display = 'none';
+      wrapper.setAttribute('aria-hidden', 'true');
+
+      this.log('✅ Поле промокода скрыто');
+    }
+
+    /**
+     * Показать поле промокода Tilda
+     * @param {HTMLElement} wrapper
+     */
+    showTildaPromocodeField(wrapper) {
+      if (!wrapper) return;
+
+      wrapper.classList.remove(this.promoHiddenClass);
+      wrapper.style.display = '';
+      wrapper.removeAttribute('aria-hidden');
+
+      this.log('✅ Поле промокода показано');
+    }
+
+    /**
+     * Валидация email
+     * @param {string} email
+     * @returns {boolean}
+     */
+    validateEmail(email) {
+      if (!email || typeof email !== 'string') return false;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email) && email.length <= 254;
+    }
+
+    /**
+     * Валидация телефона
+     * @param {string} phone
+     * @returns {boolean}
+     */
+    validatePhone(phone) {
+      if (!phone || typeof phone !== 'string') return false;
+      const digits = phone.replace(/\D/g, '');
+      return digits.length >= 10 && digits.length <= 15;
+    }
+
+    /**
+     * Инъекция CSS стилей для плашек
+     * @param {object} settings
+     */
+    injectBadgeStyles(settings) {
+      if (document.getElementById('lw-badge-styles')) return;
+
+      const style = document.createElement('style');
+      style.id = 'lw-badge-styles';
+      style.textContent = `
+        .lw-bonus-badge {
+          background-color: ${settings.productBadgeBackgroundColor || '#f1f1f1'};
+          color: ${settings.productBadgeTextColor || '#000000'};
+          font-size: ${settings.productBadgeFontSize || '14px'};
+          padding: ${settings.productBadgePadding || '5px 10px'};
+          border-radius: ${settings.productBadgeBorderRadius || '5px'};
+          margin-top: 5px;
+          margin-left: ${settings.productBadgeMarginX || '0'};
+          margin-right: ${settings.productBadgeMarginX || '0'};
+          display: block;
+          font-family: inherit;
+          line-height: 1.4;
+        }
+      `;
+      document.head.appendChild(style);
+
+      this.log('✅ Стили плашек добавлены');
+    }
+
+    /**
+     * Добавление плашек на все товары
+     */
+    addBadgesToAllProducts() {
+      const products = this.getAllProducts();
+      let addedCount = 0;
+
+      products.forEach((product) => {
+        if (product.element.dataset.lwBadgeAdded) return;
+
+        const bonus = this.calculateBonus(product.price);
+        if (bonus <= 0) return;
+
+        if (this.addBadgeToProduct(product.element, bonus)) {
+          addedCount++;
+        }
+      });
+
+      this.log(
+        `✅ Добавлено плашек: ${addedCount} из ${products.length} товаров`
+      );
+    }
+
+    /**
+     * Добавление плашки на конкретный товар
+     * @param {HTMLElement} element
+     * @param {number} bonusAmount
+     * @returns {boolean}
+     */
+    addBadgeToProduct(element, bonusAmount) {
+      const priceWrapper =
+        element.querySelector('.js-store-price-wrapper') ||
+        element.querySelector('.t-store__card__price') ||
+        element.querySelector('.t776__price') ||
+        element.querySelector('.t754__price');
+
+      if (!priceWrapper) return false;
+
+      const badge = this.createBadgeElement(bonusAmount);
+
+      // Вставляем ПОСЛЕ обертки цены
+      priceWrapper.parentNode.insertBefore(badge, priceWrapper.nextSibling);
+
+      element.dataset.lwBadgeAdded = 'true';
+      return true;
+    }
+
+    /**
+     * Создание элемента плашки
+     * @param {number} bonusAmount
+     * @returns {HTMLElement}
+     */
+    createBadgeElement(bonusAmount) {
+      const badge = document.createElement('div');
+      badge.className = 'lw-bonus-badge';
+
+      const text = (
+        this.badgeSettings.productBadgeText ||
+        'Начислим до {bonusAmount} бонусов'
+      ).replace('{bonusAmount}', bonusAmount);
+
+      badge.textContent = text;
+
+      return badge;
+    }
+
+    /**
+     * Наблюдатель за изменениями товаров
+     */
+    observeProductChanges() {
+      const container = document.querySelector('.t-records') || document.body;
+
+      const observer = new MutationObserver((mutations) => {
+        // Проверяем добавились ли новые товары
+        let hasNewProducts = false;
+
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) {
+              // Element node
+              const selectors = [
+                '.js-product',
+                '.t-store__card',
+                '.t776__col',
+                '.t754__col'
+              ];
+              const isProduct = selectors.some(
+                (sel) => node.matches && node.matches(sel)
+              );
+              const hasProducts = selectors.some(
+                (sel) => node.querySelector && node.querySelector(sel)
+              );
+
+              if (isProduct || hasProducts) {
+                hasNewProducts = true;
+              }
+            }
+          });
+        });
+
+        if (hasNewProducts) {
+          this.log('🔄 Обнаружены новые товары, добавляем плашки');
+          this.addBadgesToAllProducts();
+        }
+      });
+
+      observer.observe(container, {
+        childList: true,
+        subtree: true
+      });
+
+      this.observers.add(observer);
+      this.log('✅ Observer товаров запущен');
+    }
+
+    /**
+     * Логирование (только если Core включил debug)
+     * @param {...any} args
+     */
+    log(...args) {
+      if (this.core && this.core.config && this.core.config.debug) {
+        console.log('[TildaAdapter]', ...args);
+      }
     }
   }
 

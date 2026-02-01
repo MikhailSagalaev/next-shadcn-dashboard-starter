@@ -23,8 +23,14 @@ export default {
   'webhook-integration': {
     title: 'Webhook интеграция'
   },
+  'widget-integration': {
+    title: 'Интеграция виджета'
+  },
   'tilda-integration': {
     title: 'Интеграция с Tilda'
+  },
+  'custom-integration': {
+    title: 'Custom интеграция'
   },
   'bonus-system': {
     title: 'Бонусная система'
@@ -35,4 +41,4 @@ export default {
   faq: {
     title: 'FAQ'
   }
-}
+};
