@@ -1,5 +1,35 @@
 # Changelog
 
+## [2026-03-01] - Исправление Webhook для Tilda
+
+### 🐛 Исправлено
+- **Webhook endpoint** - добавлена поддержка `application/x-www-form-urlencoded`
+  - Tilda отправляет данные в формате form data, а не JSON
+  - Автоматический парсинг поля `payment` как JSON-строки
+  - Поддержка обоих форматов: JSON и form data
+  - Улучшенное логирование для отладки
+
+### 📚 Документация
+- **docs/tilda-webhook-setup.md** - новый гайд по настройке webhook в Tilda
+  - Пошаговая инструкция
+  - Решение проблемы "Invalid JSON"
+  - Примеры форматов данных
+  - Отладка и типичные ошибки
+
+### 🧪 Тестирование
+- **public/test-tilda-webhook.html** - тестовая страница для webhook
+  - Отправка данных в формате form data (как Tilda)
+  - Визуальные логи запросов/ответов
+  - Тестовый режим (test=test)
+
+### 🔧 Технические детали
+- Webhook теперь проверяет `Content-Type` заголовок
+- Поддержка `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`
+- Fallback на JSON для неизвестных типов
+- Детальное логирование процесса парсинга
+
+---
+
 ## [2026-02-01] - Universal Widget: Phase 6.2 Super-Admin UI ✅ ЗАВЕРШЕНО
 
 ### 🎨 Super-Admin Interface

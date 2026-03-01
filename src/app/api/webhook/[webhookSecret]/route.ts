@@ -31,13 +31,62 @@ export async function POST(
 
     // 2. Parse Body and Normalize
     let body;
+    const contentType = req.headers.get('content-type') || '';
+
+    logger.info('Webhook received', {
+      projectId: project.id,
+      contentType,
+      method: req.method
+    });
+
     try {
-      body = await req.json();
+      if (contentType.includes('application/json')) {
+        // JSON format (custom integrations)
+        body = await req.json();
+        logger.debug('Parsed as JSON', { bodyKeys: Object.keys(body) });
+      } else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+        // Form data format (Tilda)
+        const formData = await req.formData();
+        body = Object.fromEntries(formData.entries());
+        
+        logger.debug('Parsed as FormData', { 
+          bodyKeys: Object.keys(body),
+          paymentType: typeof body.payment 
+        });
+        
+        // Tilda sends nested data as JSON strings, parse them
+        if (body.payment && typeof body.payment === 'string') {
+          try {
+            body.payment = JSON.parse(body.payment);
+            logger.debug('Payment field parsed successfully', { 
+              paymentKeys: Object.keys(body.payment) 
+            });
+          } catch (e) {
+            logger.warn('Failed to parse payment field', { 
+              payment: body.payment,
+              error: e instanceof Error ? e.message : 'Unknown'
+            });
+          }
+        }
+      } else {
+        // Try JSON as fallback
+        logger.debug('Unknown content-type, trying JSON fallback');
+        body = await req.json();
+      }
     } catch (e) {
-      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+      logger.error('Failed to parse request body', { 
+        contentType, 
+        error: e instanceof Error ? e.message : 'Unknown' 
+      });
+      return NextResponse.json({ 
+        error: 'Invalid request format. Expected JSON or form data.',
+        details: e instanceof Error ? e.message : 'Unknown error'
+      }, { status: 400 });
     }
 
+    // Handle test requests
     if (!body || body.test === 'test') {
+      logger.info('Test webhook received', { projectId: project.id });
       return NextResponse.json({ message: 'Test OK' });
     }
 
