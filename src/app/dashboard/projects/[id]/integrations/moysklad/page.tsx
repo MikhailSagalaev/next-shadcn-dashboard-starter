@@ -1,10 +1,11 @@
 /**
  * @file: page.tsx
- * @description: МойСклад integration settings page
+ * @description: МойСклад Loyalty API Integration Settings
  * @project: SaaS Bonus System
- * @dependencies: Next.js 15, React 19, Prisma
- * @created: 2026-03-01
- * @author: AI Assistant + User
+ * @created: 2026-03-02
+ * @author: AI Assistant
+ * 
+ * Архитектура: МЫ являемся API provider, МойСклад вызывает НАШИ endpoints
  */
 
 import { db } from '@/lib/db';
@@ -12,17 +13,15 @@ import { getCurrentAdmin } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
+import { Suspense } from 'react';
+import { MoySkladIntegrationForm } from './components/integration-form';
+import { MoySkladStatsCards } from './components/stats-cards';
+import { MoySkladApiLogs } from './components/api-logs';
+import { MoySkladCredentials } from './components/credentials';
 
 export const metadata = {
-  title: 'МойСклад Integration | Gupil',
-  description: 'Configure МойСклад integration for bonus synchronization'
+  title: 'МойСклад Loyalty API | Gupil',
+  description: 'Configure МойСклад Loyalty API integration'
 };
 
 async function getIntegrationData(projectId: string) {
@@ -31,10 +30,17 @@ async function getIntegrationData(projectId: string) {
     redirect('/auth/login');
   }
 
+  // Owner filter для мультитенантности
   const project = await db.project.findFirst({
     where: {
       id: projectId,
       ownerId: admin.sub
+    },
+    select: {
+      id: true,
+      name: true,
+      bonusBehavior: true,
+      bonusExpiryDays: true,
     }
   });
 
@@ -43,31 +49,59 @@ async function getIntegrationData(projectId: string) {
   }
 
   const integration = await db.moySkladIntegration.findUnique({
-    where: { projectId }
+    where: { projectId },
+    select: {
+      id: true,
+      authToken: true,
+      baseUrl: true,
+      bonusPercentage: true,
+      maxBonusSpend: true,
+      isActive: true,
+      lastRequestAt: true,
+      createdAt: true,
+      updatedAt: true,
+    }
   });
 
-  const syncLogs = integration
-    ? await db.moySkladSyncLog.findMany({
+  // Статистика API запросов
+  const stats = integration
+    ? await db.moySkladApiLog.aggregate({
         where: { integrationId: integration.id },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              phone: true
-            }
-          }
+        _count: { id: true },
+        _avg: { processingTimeMs: true },
+      })
+    : null;
+
+  const successCount = integration
+    ? await db.moySkladApiLog.count({
+        where: {
+          integrationId: integration.id,
+          responseStatus: { gte: 200, lt: 300 }
         }
       })
-    : [];
+    : 0;
+
+  const errorCount = integration
+    ? await db.moySkladApiLog.count({
+        where: {
+          integrationId: integration.id,
+          responseStatus: { gte: 400 }
+        }
+      })
+    : 0;
 
   return {
     project,
     integration,
-    syncLogs
+    stats: {
+      totalRequests: stats?._count.id || 0,
+      successRequests: successCount,
+      errorRequests: errorCount,
+      avgProcessingTime: stats?._avg.processingTimeMs || 0,
+      successRate: stats?._count.id
+        ? ((successCount / stats._count.id) * 100).toFixed(1)
+        : '0',
+    }
   };
 }
 
@@ -76,134 +110,91 @@ export default async function MoySkladIntegrationPage({
 }: {
   params: { id: string };
 }) {
-  const { project, integration, syncLogs } = await getIntegrationData(
-    params.id
-  );
+  const { project, integration, stats } = await getIntegrationData(params.id);
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
       {/* Header */}
       <div className='flex items-center justify-between'>
         <Heading
-          title='МойСклад Integration'
-          description='Configure bonus synchronization with МойСклад'
+          title='МойСклад Loyalty API'
+          description='Интеграция с МойСклад через Loyalty API Provider'
         />
       </div>
 
       <Separator className='my-4' />
 
-      {/* Integration Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Integration Status</CardTitle>
-          <CardDescription>
-            Current status of МойСклад integration
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {integration ? (
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between'>
-                <span className='text-sm font-medium'>Status:</span>
-                <span
-                  className={`text-sm ${integration.isActive ? 'text-green-600' : 'text-gray-500'}`}
-                >
-                  {integration.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <div className='flex items-center justify-between'>
-                <span className='text-sm font-medium'>Sync Direction:</span>
-                <span className='text-sm'>{integration.syncDirection}</span>
-              </div>
-              <div className='flex items-center justify-between'>
-                <span className='text-sm font-medium'>Last Sync:</span>
-                <span className='text-sm'>
-                  {integration.lastSyncAt
-                    ? new Date(integration.lastSyncAt).toLocaleString()
-                    : 'Never'}
-                </span>
-              </div>
-              <div className='flex items-center justify-between'>
-                <span className='text-sm font-medium'>Webhook URL:</span>
-                <code className='rounded bg-gray-100 px-2 py-1 text-xs'>
-                  {integration.webhookUrl}
-                </code>
-              </div>
-            </div>
-          ) : (
-            <p className='text-sm text-gray-500'>
-              Integration not configured. Click "Configure Integration" to set
-              up.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Sync History */}
-      {integration && syncLogs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Sync Operations</CardTitle>
-            <CardDescription>
-              Last 10 synchronization operations
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className='space-y-2'>
-              {syncLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className='flex items-center justify-between border-b pb-2'
-                >
-                  <div>
-                    <p className='text-sm font-medium'>{log.operation}</p>
-                    <p className='text-xs text-gray-500'>
-                      {log.user
-                        ? `${log.user.firstName} ${log.user.lastName}`
-                        : 'Unknown user'}
-                    </p>
-                  </div>
-                  <div className='text-right'>
-                    <p
-                      className={`text-sm ${
-                        log.status === 'SUCCESS'
-                          ? 'text-green-600'
-                          : log.status === 'ERROR'
-                            ? 'text-red-600'
-                            : 'text-yellow-600'
-                      }`}
-                    >
-                      {log.status}
-                    </p>
-                    <p className='text-xs text-gray-500'>
-                      {new Date(log.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Stats Cards */}
+      {integration && (
+        <Suspense fallback={<div>Loading stats...</div>}>
+          <MoySkladStatsCards
+            stats={stats}
+            isActive={integration.isActive}
+            lastRequestAt={integration.lastRequestAt}
+          />
+        </Suspense>
       )}
 
-      {/* Configuration Instructions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Setup Instructions</CardTitle>
-          <CardDescription>
-            How to configure МойСклад integration
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ol className='list-inside list-decimal space-y-2 text-sm'>
-            <li>Obtain API token from МойСклад settings</li>
-            <li>Create a bonus program in МойСклад</li>
-            <li>Configure integration settings below</li>
-            <li>Copy webhook URL and configure in МойСклад</li>
-            <li>Test the connection</li>
+      {/* Credentials Section */}
+      {integration && (
+        <MoySkladCredentials
+          projectId={project.id}
+          baseUrl={integration.baseUrl}
+          isActive={integration.isActive}
+        />
+      )}
+
+      {/* Integration Form */}
+      <MoySkladIntegrationForm
+        projectId={project.id}
+        integration={integration}
+        bonusBehavior={project.bonusBehavior}
+      />
+
+      {/* API Logs */}
+      {integration && (
+        <Suspense fallback={<div>Loading logs...</div>}>
+          <MoySkladApiLogs integrationId={integration.id} />
+        </Suspense>
+      )}
+
+      {/* Setup Instructions */}
+      {!integration && (
+        <div className='rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950'>
+          <h3 className='text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4'>
+            📘 Инструкция по настройке
+          </h3>
+          <ol className='list-decimal list-inside space-y-3 text-sm text-blue-800 dark:text-blue-200'>
+            <li>
+              <strong>Активируйте интеграцию</strong> - заполните форму ниже и нажмите "Активировать"
+            </li>
+            <li>
+              <strong>Скопируйте credentials</strong> - после активации вы получите Auth Token и Base URL
+            </li>
+            <li>
+              <strong>Установите решение в МойСклад</strong> - перейдите в маркетплейс МойСклад и установите наше решение
+            </li>
+            <li>
+              <strong>Настройте интеграцию</strong> - введите Auth Token и Base URL в настройках решения в МойСклад
+            </li>
+            <li>
+              <strong>Протестируйте</strong> - создайте тестовую продажу в МойСклад и проверьте начисление бонусов
+            </li>
           </ol>
-        </CardContent>
-      </Card>
+          
+          <div className='mt-4 p-4 bg-white dark:bg-zinc-900 rounded border border-blue-300 dark:border-blue-800'>
+            <p className='text-sm font-medium text-blue-900 dark:text-blue-100 mb-2'>
+              ℹ️ Важно понимать:
+            </p>
+            <ul className='list-disc list-inside space-y-1 text-xs text-blue-700 dark:text-blue-300'>
+              <li>МойСклад вызывает НАШИ endpoints (мы - API provider)</li>
+              <li>Мы рассчитываем скидки и бонусы в реальном времени</li>
+              <li>Не требуется синхронизация данных между системами</li>
+              <li>Все операции логируются для мониторинга</li>
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
