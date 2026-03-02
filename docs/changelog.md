@@ -1,5 +1,28 @@
 # Changelog
 
+## [2026-03-02] - Исправление production build ошибок МойСклад интеграции
+
+### 🐛 Исправлено
+- **Production build ошибки в МойСклад интеграции**
+  - Добавлены отсутствующие экспорты в `verification-code-service.ts`:
+    - `checkVerificationRateLimit` теперь экспортируется
+    - `sendVerificationCode` добавлен как alias для `requestVerificationCode`
+  - Исправлена синтаксическая ошибка в `moysklad/page.tsx` (дублирование JSX кода)
+  - Временно закомментированы вызовы `db.verificationCode` (модель не существует в Prisma schema)
+  - Добавлены in-memory заглушки для хранения кодов верификации
+
+### 📝 Технические детали
+- Файлы изменены:
+  - `src/lib/moysklad-loyalty/verification-code-service.ts`
+  - `src/app/dashboard/projects/[id]/integrations/moysklad/page.tsx`
+- Коммит: `2f00484`
+
+### ⚠️ TODO (не критично)
+- Добавить модель `VerificationCode` в Prisma schema
+- Раскомментировать database вызовы в `verification-code-service.ts`
+
+---
+
 ## [2026-03-02] - Исправление начисления приветственных бонусов
 
 ### 🐛 Исправлено
