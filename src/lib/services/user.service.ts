@@ -107,6 +107,54 @@ export class UserService {
         component: 'user-service'
       });
 
+      // Начисляем приветственные бонусы если настроено
+      try {
+        const fullProject = await db.project.findUnique({
+          where: { id: data.projectId },
+          include: { referralProgram: true }
+        });
+
+        if (fullProject) {
+          // Приоритет: ReferralProgram.welcomeBonus > Project.welcomeBonus
+          const welcomeBonus = fullProject.referralProgram?.welcomeBonus
+            ? Number(fullProject.referralProgram.welcomeBonus)
+            : Number(fullProject.welcomeBonus);
+
+          const welcomeRewardType =
+            fullProject.referralProgram?.welcomeRewardType ||
+            fullProject.welcomeRewardType;
+
+          // Начисляем только если тип BONUS и сумма > 0
+          if (welcomeRewardType === 'BONUS' && welcomeBonus > 0) {
+            await BonusService.awardBonus({
+              userId: user.id,
+              amount: welcomeBonus,
+              type: 'WELCOME',
+              description: `Приветственный бонус`,
+              metadata: {
+                source: 'registration',
+                welcomeBonus: true
+              }
+            });
+
+            logger.info('Начислены приветственные бонусы', {
+              userId: user.id,
+              projectId: data.projectId,
+              amount: welcomeBonus,
+              component: 'user-service'
+            });
+          }
+        }
+      } catch (error) {
+        logger.error('Ошибка начисления приветственных бонусов', {
+          userId: user.id,
+          projectId: data.projectId,
+          error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+          component: 'user-service'
+        });
+        // Не бросаем ошибку - пользователь уже создан
+      }
+
       return user as any;
     } catch (error) {
       logger.error('Ошибка создания пользователя', {

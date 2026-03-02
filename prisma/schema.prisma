@@ -54,6 +54,7 @@ model Project {
   mailingTemplates     MailingTemplate[]
   notificationTemplates NotificationTemplate[]
   retailCrmIntegration RetailCrmIntegration?
+  moySkladIntegration  MoySkladIntegration?
   ChatChannel          ChatChannel[]
   Chat                 Chat[]
 
@@ -209,40 +210,45 @@ model BotSession {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  projectId         String             @map("project_id")
-  email             String?
-  phone             String?
-  firstName         String?            @map("first_name")
-  lastName          String?            @map("last_name")
-  birthDate         DateTime?          @map("birth_date") @db.Date
-  telegramId        BigInt?            @map("telegram_id")
-  telegramUsername  String?            @map("telegram_username")
-  isActive          Boolean            @default(false) @map("is_active")
-  registeredAt      DateTime           @default(now()) @map("registered_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  currentLevel      String             @default("Базовый") @map("current_level")
-  referralCode      String?            @unique @map("referral_code")
-  referredBy        String?            @map("referred_by")
-  totalPurchases    Decimal            @default(0) @map("total_purchases") @db.Decimal(10, 2)
-  utmCampaign       String?            @map("utm_campaign")
-  utmContent        String?            @map("utm_content")
-  utmMedium         String?            @map("utm_medium")
-  utmSource         String?            @map("utm_source")
-  utmTerm           String?            @map("utm_term")
-  metadata          Json?              @default("{}")
-  bonuses           Bonus[]
-  notifications     Notification[]
-  transactions      Transaction[]
-  orders            Order[]
-  analyticsEvents   AnalyticsEvent[]
-  segmentMembers    SegmentMember[]
-  mailingRecipients MailingRecipient[]
-  mailingHistory    MailingHistory[]
-  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  referrer          User?              @relation("UserReferrals", fields: [referredBy], references: [id])
-  referrals         User[]             @relation("UserReferrals")
-  Chat              Chat[]
+  id                      String             @id @default(cuid())
+  projectId               String             @map("project_id")
+  email                   String?
+  phone                   String?
+  firstName               String?            @map("first_name")
+  lastName                String?            @map("last_name")
+  birthDate               DateTime?          @map("birth_date") @db.Date
+  telegramId              BigInt?            @map("telegram_id")
+  telegramUsername        String?            @map("telegram_username")
+  isActive                Boolean            @default(false) @map("is_active")
+  registeredAt            DateTime           @default(now()) @map("registered_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+  currentLevel            String             @default("Базовый") @map("current_level")
+  referralCode            String?            @unique @map("referral_code")
+  referredBy              String?            @map("referred_by")
+  totalPurchases          Decimal            @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  utmCampaign             String?            @map("utm_campaign")
+  utmContent              String?            @map("utm_content")
+  utmMedium               String?            @map("utm_medium")
+  utmSource               String?            @map("utm_source")
+  utmTerm                 String?            @map("utm_term")
+  metadata                Json?              @default("{}")
+  
+  // МойСклад integration fields
+  moySkladCounterpartyId  String?            @unique @map("moysklad_counterparty_id")
+  lastSyncAt              DateTime?          @map("last_sync_at")
+  
+  bonuses                 Bonus[]
+  notifications           Notification[]
+  transactions            Transaction[]
+  orders                  Order[]
+  analyticsEvents         AnalyticsEvent[]
+  segmentMembers          SegmentMember[]
+  mailingRecipients       MailingRecipient[]
+  mailingHistory          MailingHistory[]
+  project                 Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  referrer                User?              @relation("UserReferrals", fields: [referredBy], references: [id])
+  referrals               User[]             @relation("UserReferrals")
+  Chat                    Chat[]
 
   @@unique([projectId, email])
   @@unique([projectId, phone])
@@ -281,9 +287,14 @@ model Transaction {
   referralUserId  String?         @map("referral_user_id")
   referralLevel   Int?            @map("referral_level")
   userLevel       String?         @map("user_level")
+  
+  // МойСклад integration field
+  moySkladSaleId  String?         @map("moysklad_sale_id") // ID продажи в МойСклад для связи с возвратами
+  
   bonus           Bonus?          @relation(fields: [bonusId], references: [id])
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([moySkladSaleId])
   @@map("transactions")
 }
 
@@ -542,6 +553,7 @@ enum TransactionType {
   SPEND
   EXPIRE
   REFUND
+  RETURN // Для возвратов из МойСклад
 }
 
 enum AdminRole {
@@ -1206,4 +1218,82 @@ model NotificationTemplate {
 
   @@index([projectId])
   @@map("notification_templates")
+}
+
+// МойСклад Loyalty API Integration Models
+// Архитектура: МЫ являемся API provider, МойСклад вызывает НАШИ endpoints
+
+model MoySkladIntegration {
+  id                String              @id @default(cuid())
+  projectId         String              @unique @map("project_id")
+  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Auth token для аутентификации запросов от МойСклад
+  // МойСклад отправляет этот токен в заголовке Lognex-Discount-API-Auth-Token
+  authToken         String              @unique @map("auth_token") // Hashed with bcrypt
+  
+  // Base URL нашего Loyalty API, который мы предоставляем МойСклад
+  baseUrl           String              @map("base_url") // https://gupil.ru/api/moysklad-loyalty/[projectId]
+  
+  // Настройки бонусной программы
+  bonusPercentage   Decimal             @default(10) @map("bonus_percentage") @db.Decimal(5, 2)
+  maxBonusSpend     Decimal             @default(50) @map("max_bonus_spend") @db.Decimal(5, 2) // max % оплаты бонусами
+  
+  // Status
+  isActive          Boolean             @default(false) @map("is_active")
+  lastRequestAt     DateTime?           @map("last_request_at")
+  
+  // Timestamps
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  
+  // Relations
+  apiLogs           MoySkladApiLog[]
+  
+  @@index([projectId])
+  @@index([authToken])
+  @@map("moysklad_integrations")
+}
+
+// API Log для всех запросов к Loyalty API
+model MoySkladApiLog {
+  id                String              @id @default(cuid())
+  integrationId     String              @map("integration_id")
+  integration       MoySkladIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  
+  // Request details
+  endpoint          String              @map("endpoint") // /counterparty, /retaildemand, etc.
+  method            String              @map("method") // GET, POST
+  requestBody       Json?               @map("request_body")
+  
+  // Response details
+  responseStatus    Int                 @map("response_status") // HTTP status code
+  responseBody      Json?               @map("response_body")
+  
+  // Performance
+  processingTimeMs  Int                 @map("processing_time_ms")
+  
+  // Error details (if failed)
+  errorMessage      String?             @map("error_message") @db.Text
+  
+  // Timestamp
+  createdAt         DateTime            @default(now()) @map("created_at")
+  
+  @@index([integrationId, createdAt])
+  @@index([endpoint])
+  @@index([responseStatus])
+  @@map("moysklad_api_logs")
+}
+
+// Verification codes для подтверждения списания бонусов
+model VerificationCode {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  code      String   @map("code") // 6-digit code
+  expiresAt DateTime @map("expires_at") // 5 minutes from creation
+  isUsed    Boolean  @default(false) @map("is_used")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@index([userId, isUsed, expiresAt])
+  @@map("verification_codes")
 }

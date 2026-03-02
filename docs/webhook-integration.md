@@ -7,9 +7,26 @@
 
 ### 🎯 Что такое Webhook?
 Webhook - это HTTP callback, который отправляется автоматически при определенных событиях на вашем сайте. В нашем случае это:
-- Регистрация нового пользователя
+- Регистрация нового пользователя (автоматическое начисление приветственных бонусов)
 - Совершение покупки
 - Оплата бонусами
+
+### 🎁 Приветственные бонусы
+При регистрации нового пользователя через webhook **автоматически начисляются приветственные бонусы**, если они настроены в проекте:
+
+**Настройка в админ панели:**
+1. Перейдите в настройки проекта
+2. Раздел "Приветственное вознаграждение при регистрации"
+3. Выберите тип: "Бонусы" (фиксированная сумма) или "Скидка" (процент на первую покупку)
+4. Укажите сумму приветственных бонусов (например, 500)
+
+**Как это работает:**
+- Пользователь регистрируется через webhook → автоматически создается в системе
+- Если `welcomeRewardType = BONUS` и `welcomeBonus > 0` → начисляются приветственные бонусы
+- Режим `WITH_BOT`: бонусы начислены, но доступны после активации в Telegram
+- Режим `WITHOUT_BOT`: бонусы начислены и сразу доступны для использования
+
+**Workflow НЕ требуется** - приветственные бонусы начисляются автоматически!
 
 ### 🔗 Endpoint структура
 ```
@@ -42,8 +59,8 @@ Webhook endpoint поддерживает два формата:
 
 ### 2. Базовая интеграция
 ```javascript
-// Пример отправки webhook
-async function sendWebhook(action, payload) {
+// Пример отправки webhook для регистрации пользователя
+async function registerUser(userData) {
   const webhookSecret = 'YOUR_PROJECT_WEBHOOK_SECRET';
   
   const response = await fetch(`https://your-bonus-system.com/api/webhook/${webhookSecret}`, {
@@ -52,14 +69,26 @@ async function sendWebhook(action, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      action: action,
-      ...payload
+      name: userData.name,
+      email: userData.email,
+      phone: userData.phone,
+      // Tilda формат - система автоматически определит это как регистрацию
+      formid: 'registration_form',
+      tranid: `${Date.now()}:${Math.random()}`
     })
   });
   
-  return response.json();
+  const result = await response.json();
+  
+  // result.success === true
+  // result.data.userId - ID созданного пользователя
+  // result.data.earned - сумма начисленных приветственных бонусов
+  
+  return result;
 }
 ```
+
+**Важно:** При первой регистрации пользователя автоматически начисляются приветственные бонусы (если настроено в проекте).
 
 ---
 
