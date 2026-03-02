@@ -1,5 +1,26 @@
 # Changelog
 
+## [2026-03-02] - Добавлена миграция для МойСклад полей
+
+### 🔧 Добавлено
+- **Миграция базы данных для МойСклад интеграции**
+  - Добавлено поле `moysklad_counterparty_id` в таблицу `users` (уникальное)
+  - Добавлено поле `last_sync_at` в таблицу `users`
+  - Добавлено поле `moysklad_sale_id` в таблицу `transactions` с индексом
+  - Миграция: `prisma/migrations/20260302_add_moysklad_fields/migration.sql`
+
+### 📝 Инструкции для production
+На production сервере выполните:
+```bash
+cd /opt/next-shadcn-dashboard-starter
+git pull
+npx prisma migrate deploy
+npx prisma generate
+pm2 restart bonus-app
+```
+
+---
+
 ## [2026-03-02] - Исправление production build ошибок МойСклад интеграции
 
 ### 🐛 Исправлено
