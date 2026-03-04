@@ -1,5 +1,74 @@
 # Changelog
 
+## [2026-03-02] - Завершена InSales интеграция - JavaScript виджет
+
+### 🎯 Добавлено
+- **JavaScript виджет для InSales магазинов**
+  - `public/insales-bonus-widget.js` - основной функционал виджета
+  - `public/insales-bonus-widget.css` - стили виджета
+  - `public/test-insales-widget.html` - тестовая страница
+  
+### ✨ Функционал виджета
+- **Отображение баланса бонусов**
+  - Виджет с градиентным дизайном
+  - Автоматическое обновление баланса при авторизации
+  - Адаптивный дизайн для мобильных устройств
+  
+- **Применение бонусов в корзине**
+  - Форма для списания бонусов на странице оформления заказа
+  - Валидация максимальной суммы списания (настраивается в админке)
+  - Автоматический пересчет итоговой суммы заказа
+  
+- **Бейджи на карточках товаров**
+  - Показывают сколько бонусов можно получить за покупку
+  - Включаются/выключаются в настройках интеграции
+  
+- **Интеграция с InSales**
+  - Автоматическое определение авторизованного пользователя
+  - Отслеживание изменений в корзине через InSales Cart API
+  - Поддержка MutationObserver для динамических изменений
+
+### 🔧 Технические особенности
+- Модульная архитектура (utils, api, ui, core)
+- Debounce для API запросов
+- localStorage для сохранения состояния
+- Валидация email и телефона
+- Обработка ошибок и fallback состояния
+- Поддержка темной темы (prefers-color-scheme)
+
+### 📝 Использование
+```html
+<!-- Вставить в <head> или перед </body> -->
+<script 
+  src="https://your-domain.com/insales-widget-loader.js" 
+  data-project-id="YOUR_PROJECT_ID"
+></script>
+```
+
+### 🎨 Дизайн
+- Градиентный фиолетовый дизайн (667eea → 764ba2)
+- Анимации hover и slide-in
+- Адаптивность для всех размеров экранов
+- Соответствие современным UI/UX стандартам
+
+### 📦 Файлы
+- `public/insales-widget-loader.js` - загрузчик виджета
+- `public/insales-bonus-widget.js` - основной скрипт (новый)
+- `public/insales-bonus-widget.css` - стили (новый)
+- `public/test-insales-widget.html` - тестовая страница (новый)
+
+### ✅ Статус InSales интеграции
+- ✅ Database Schema (Prisma models)
+- ✅ Migration SQL
+- ✅ TypeScript Types
+- ✅ InSales API Client
+- ✅ InSales Service (business logic)
+- ✅ API Endpoints (webhooks, balance, apply-bonuses, widget-settings)
+- ✅ JavaScript Widget (loader + main script + styles)
+- ⏳ Admin UI (следующий этап)
+
+---
+
 ## [2026-03-02] - Добавлена миграция для МойСклад полей
 
 ### 🔧 Добавлено
