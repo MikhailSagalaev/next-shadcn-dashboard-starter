@@ -55,6 +55,7 @@ model Project {
   notificationTemplates NotificationTemplate[]
   retailCrmIntegration RetailCrmIntegration?
   moySkladIntegration  MoySkladIntegration?
+  inSalesIntegration   InSalesIntegration?
   ChatChannel          ChatChannel[]
   Chat                 Chat[]
 
