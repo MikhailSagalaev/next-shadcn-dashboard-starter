@@ -1,5 +1,83 @@
 # Changelog
 
+## [2026-03-02] - InSales Admin UI - Полная реализация
+
+### 🎨 Добавлено
+- **Admin UI для InSales интеграции**
+  - Главная страница: `src/app/dashboard/projects/[id]/integrations/insales/page.tsx`
+  - Форма настроек: `components/integration-form.tsx`
+  - Карточки статистики: `components/stats-cards.tsx`
+  - Credentials и инструкции: `components/credentials.tsx`
+  - Логи webhooks: `components/webhook-logs.tsx`
+
+### ✨ Функционал Admin UI
+- **Форма конфигурации**
+  - Ввод API credentials (apiKey, apiPassword, shopDomain)
+  - Настройки бонусов (bonusPercent, maxBonusSpend)
+  - Переключатели виджета (widgetEnabled, showProductBadges)
+  - Активация/деактивация интеграции
+  - Удаление интеграции
+
+- **Отображение Credentials**
+  - Webhook URL для настройки в InSales
+  - Webhook Secret для подписи
+  - Код виджета для встраивания на сайт
+  - Кнопки копирования для всех полей
+  - Детальные инструкции по установке
+
+- **Статистика**
+  - Всего заказов обработано
+  - Начислено бонусов (₽)
+  - Списано бонусов (₽)
+  - Webhooks (всего/успешные/ошибки)
+  - Success rate (%)
+  - Статус интеграции (активна/неактивна)
+  - Время последнего webhook
+
+- **Логи Webhooks**
+  - Таблица с последними 50 webhooks
+  - Фильтрация по событиям (orders/create, clients/create)
+  - Статус обработки (успешно/ошибка)
+  - HTTP статус код
+  - Раскрываемые детали (payload, response, error)
+  - Кнопка обновления
+
+### 🎨 Дизайн
+- Использован dashboard-design-system
+- Glass-card эффекты для карточек
+- Framer Motion анимации (stagger, slide-in)
+- Адаптивная верстка (mobile-first)
+- Dark mode поддержка
+- Градиентные иконки для статистики
+
+### 📝 Инструкции
+- Пошаговая инструкция по настройке
+- Объяснение как работает интеграция
+- Предупреждения о неактивной интеграции
+- Подсказки для каждого поля формы
+
+### 🔧 Технические детали
+- Server Components для data fetching
+- Client Components для интерактивности
+- React Hook Form + Zod валидация
+- Shadcn/ui компоненты
+- date-fns для форматирования дат
+- Мультитенантность (owner filter)
+
+### ✅ Статус InSales интеграции
+- ✅ Database Schema
+- ✅ Migration SQL
+- ✅ TypeScript Types
+- ✅ InSales API Client
+- ✅ InSales Service
+- ✅ API Endpoints (webhooks, balance, apply-bonuses, widget-settings, admin CRUD, logs)
+- ✅ JavaScript Widget (loader + main + styles + test page)
+- ✅ Admin UI (полностью реализован)
+
+**InSales интеграция завершена на 100%!** 🎉
+
+---
+
 ## [2026-03-02] - Завершена InSales интеграция - JavaScript виджет
 
 ### 🎯 Добавлено
