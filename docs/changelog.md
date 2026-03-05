@@ -1,5 +1,25 @@
 # Changelog
 
+## [2026-03-05] - InSales Integration - Production Build Fix
+
+### 🐛 Исправлено
+- **Build errors исправлены**
+  - Удален несуществующий импорт `BonusService` из `insales-service.ts`
+  - Исправлено использование `encrypt` на `encryptApiToken` в admin API
+  - Production build теперь проходит успешно
+
+### 🔧 Технические детали
+- `insales-service.ts`: Удален импорт `@/lib/services/bonus.service` (файл не существует)
+- `integrations/insales/route.ts`: Заменен `encrypt()` на `encryptApiToken()`
+- Используется прямая работа с БД через Prisma вместо несуществующего сервиса
+
+### ✅ Статус
+- ✅ Build проходит без ошибок
+- ✅ Все импорты корректны
+- ✅ Готово к деплою на production
+
+---
+
 ## [2026-03-04] - InSales Integration - Критические исправления
 
 ### 🐛 Исправлено
