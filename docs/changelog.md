@@ -1,5 +1,56 @@
 # Changelog
 
+## [2026-03-05] - InSales Integration - Next.js 15 Compatibility Fix
+
+### 🐛 Исправлено (Commit: 73272a2)
+- **500 Internal Server Error на странице интеграции**
+  - Исправлено использование `params` в Next.js 15 (требуется `await`)
+  - Все page.tsx и API routes теперь используют `async params: Promise<{ id: string }>`
+  - Исправлено 10+ файлов с динамическими роутами
+
+- **Удален несуществующий BonusService**
+  - Заменен на прямые запросы к БД через Prisma
+  - Реализована логика начисления/списания бонусов без сервиса
+  - Добавлен FIFO алгоритм списания (сначала самые старые бонусы)
+
+- **Добавлен недостающий API route**
+  - Создан `/api/projects/[id]/integrations/insales/logs` для получения webhook логов
+  - Компонент `webhook-logs.tsx` теперь работает корректно
+
+- **Исправлены TypeScript типы**
+  - Добавлены `custom_fields`, `discount_code`, `discount_amount` в `InSalesOrder`
+  - Все типы соответствуют реальной структуре InSales API
+
+### 📋 Исправленные файлы
+**Pages:**
+- `src/app/dashboard/projects/[id]/integrations/insales/page.tsx`
+
+**API Routes:**
+- `src/app/api/projects/[id]/integrations/insales/route.ts` (GET, POST, PUT, DELETE)
+- `src/app/api/projects/[id]/integrations/insales/logs/route.ts` (новый)
+- `src/app/api/insales/webhook/[projectId]/route.ts`
+- `src/app/api/insales/apply-bonuses/[projectId]/route.ts`
+- `src/app/api/insales/balance/[projectId]/route.ts`
+- `src/app/api/insales/widget-settings/[projectId]/route.ts`
+
+**Services:**
+- `src/lib/insales/insales-service.ts` (полная переработка)
+- `src/lib/insales/types.ts`
+
+### 🚀 Деплой
+- Создан `INSALES_FIX_DEPLOYMENT.md` с пошаговыми инструкциями
+- **КРИТИЧНО:** После `git pull` нужно выполнить `npx prisma generate`
+- Prisma Client должен быть сгенерирован с моделями InSales
+
+### ✅ Статус
+- ✅ Все params используют await (Next.js 15)
+- ✅ BonusService удален, используется Prisma напрямую
+- ✅ API route для логов создан
+- ✅ TypeScript типы исправлены
+- ✅ Готово к деплою на production
+
+---
+
 ## [2026-03-05] - InSales Integration - Production Build Fix
 
 ### 🐛 Исправлено
