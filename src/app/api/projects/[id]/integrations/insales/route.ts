@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getCurrentAdmin } from '@/lib/auth';
-import { encrypt } from '@/lib/moysklad/encryption';
+import { encryptApiToken } from '@/lib/moysklad/encryption';
 import crypto from 'crypto';
 import type {
   CreateInSalesIntegrationRequest,
@@ -123,7 +123,7 @@ export async function POST(
     const webhookSecret = crypto.randomBytes(32).toString('hex');
 
     // Шифруем API Password
-    const encryptedPassword = encrypt(body.apiPassword);
+    const encryptedPassword = encryptApiToken(body.apiPassword);
 
     // Создаем интеграцию
     const integration = await db.inSalesIntegration.create({

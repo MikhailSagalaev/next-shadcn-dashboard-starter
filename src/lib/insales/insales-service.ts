@@ -9,7 +9,6 @@
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { UserService } from '@/lib/services/user.service';
-import { BonusService } from '@/lib/services/bonus.service';
 import type {
   InSalesOrder,
   InSalesClient,
