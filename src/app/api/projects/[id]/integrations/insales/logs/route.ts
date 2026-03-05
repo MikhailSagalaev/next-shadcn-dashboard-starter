@@ -32,9 +32,21 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Получаем интеграцию для этого проекта
+    const integration = await db.inSalesIntegration.findUnique({
+      where: { projectId }
+    });
+
+    if (!integration) {
+      return NextResponse.json({
+        success: true,
+        logs: []
+      });
+    }
+
     // Получаем логи (последние 50)
     const logs = await db.inSalesWebhookLog.findMany({
-      where: { projectId },
+      where: { integrationId: integration.id },
       orderBy: { processedAt: 'desc' },
       take: 50
     });

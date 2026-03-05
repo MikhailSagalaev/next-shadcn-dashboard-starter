@@ -71,7 +71,7 @@ async function getIntegrationData(projectId: string) {
   // Статистика webhook логов
   const stats = integration
     ? await db.inSalesWebhookLog.aggregate({
-        where: { projectId },
+        where: { integrationId: integration.id },
         _count: { id: true }
       })
     : null;
@@ -79,7 +79,7 @@ async function getIntegrationData(projectId: string) {
   const successCount = integration
     ? await db.inSalesWebhookLog.count({
         where: {
-          projectId,
+          integrationId: integration.id,
           success: true
         }
       })
@@ -88,7 +88,7 @@ async function getIntegrationData(projectId: string) {
   const errorCount = integration
     ? await db.inSalesWebhookLog.count({
         where: {
-          projectId,
+          integrationId: integration.id,
           success: false
         }
       })
