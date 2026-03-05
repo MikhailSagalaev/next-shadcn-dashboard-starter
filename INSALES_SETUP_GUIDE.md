@@ -72,36 +72,117 @@ https://gupil.ru/dashboard/projects/cmilhq0y600099e7uraiowrmt/integrations/insal
 
 ## Шаг 3: Настройка Webhooks в InSales
 
-### 3.1 Открыть настройки Webhooks
-1. В админ-панели InSales перейдите в **Настройки** → **Webhooks**
+### ⚠️ ВАЖНО: Webhooks в InSales настраиваются через Расширения!
+
+InSales использует систему приложений (расширений) для настройки webhooks. Webhooks НЕ находятся в обычных настройках магазина.
+
+### 3.1 Открыть раздел Расширения
+1. В админ-панели InSales перейдите в **Расширения** (в левом меню)
+2. Или откройте напрямую: `https://[ваш-магазин].myinsales.ru/admin/applications`
+
+### 3.2 Создать приложение для webhooks
+
+**Вариант A: Если есть раздел "Webhooks" или "Уведомления"**
+1. Найдите раздел **"Webhooks"** или **"Уведомления"**
 2. Нажмите **"Добавить webhook"**
+3. Заполните форму (см. ниже)
 
-### 3.2 Создать webhook для заказов
-**Webhook #1: Создание заказа**
-- **URL:** `https://gupil.ru/api/insales/webhook/cmilhq0y600099e7uraiowrmt`
-- **Событие:** `orders/create` (Создание заказа)
-- **Формат:** `JSON`
-- **Активен:** ✅
+**Вариант B: Создать кастомное приложение**
+1. Нажмите **"Создать приложение"** или **"Добавить расширение"**
+2. Выберите тип: **"Webhook"** или **"Интеграция"**
+3. Заполните форму:
+   - **Название:** "Gupil Bonus System"
+   - **Описание:** "Система бонусов и лояльности"
+   - **Webhook URL:** `https://gupil.ru/api/insales/webhook/cmilhq0y600099e7uraiowrmt`
 
-Нажмите **"Сохранить"**
+### 3.3 Настроить события (Topics)
 
-### 3.3 Создать webhook для клиентов
-**Webhook #2: Создание клиента**
-- **URL:** `https://gupil.ru/api/insales/webhook/cmilhq0y600099e7uraiowrmt`
-- **Событие:** `clients/create` (Создание клиента)
-- **Формат:** `JSON`
-- **Активен:** ✅
+Выберите события, на которые нужно подписаться:
 
-Нажмите **"Сохранить"**
+**Обязательные события:**
+- ✅ **orders/create** - Создание заказа (для начисления бонусов)
+- ✅ **clients/create** - Создание клиента (для регистрации пользователя)
 
-### 3.4 (Опционально) Webhook для обновления заказов
-**Webhook #3: Обновление заказа**
-- **URL:** `https://gupil.ru/api/insales/webhook/cmilhq0y600099e7uraiowrmt`
-- **Событие:** `orders/update` (Обновление заказа)
-- **Формат:** `JSON`
-- **Активен:** ✅
+**Опциональные события:**
+- ⚪ **orders/update** - Обновление заказа (для отслеживания изменения статуса оплаты)
+- ⚪ **clients/update** - Обновление клиента
 
-Это нужно для обработки изменения статуса оплаты.
+### 3.4 Формат данных
+- **Формат:** JSON
+- **Метод:** POST
+- **Content-Type:** application/json
+
+### 3.5 Активировать приложение
+1. Сохраните настройки
+2. Убедитесь, что приложение **активно** (переключатель включен)
+3. Проверьте статус: должен быть "Активно" или "Работает"
+
+---
+
+## 🔍 Альтернативный способ: Через API
+
+Если в интерфейсе нет возможности создать webhooks, можно использовать InSales API:
+
+### Создание webhook через API
+
+```bash
+curl -X POST "https://[ваш-магазин].myinsales.ru/admin/webhooks.json" \
+  -H "Content-Type: application/json" \
+  -u "[API_KEY]:[API_PASSWORD]" \
+  -d '{
+    "webhook": {
+      "address": "https://gupil.ru/api/insales/webhook/cmilhq0y600099e7uraiowrmt",
+      "topic": "orders/create",
+      "format_type": "json"
+    }
+  }'
+```
+
+Повторите для `clients/create`:
+
+```bash
+curl -X POST "https://[ваш-магазин].myinsales.ru/admin/webhooks.json" \
+  -H "Content-Type: application/json" \
+  -u "[API_KEY]:[API_PASSWORD]" \
+  -d '{
+    "webhook": {
+      "address": "https://gupil.ru/api/insales/webhook/cmilhq0y600099e7uraiowrmt",
+      "topic": "clients/create",
+      "format_type": "json"
+    }
+  }'
+```
+
+### Проверка созданных webhooks
+
+```bash
+curl -X GET "https://[ваш-магазин].myinsales.ru/admin/webhooks.json" \
+  -H "Content-Type: application/json" \
+  -u "[API_KEY]:[API_PASSWORD]"
+```
+
+Должен вернуть список webhooks с вашими URL.
+
+---
+
+## 📍 Где искать Webhooks в InSales
+
+В зависимости от версии InSales, webhooks могут находиться в:
+
+1. **Расширения** → **Webhooks** (новая версия)
+2. **Расширения** → **Приложения** → **Создать приложение** (старая версия)
+3. **Настройки** → **Интеграции** → **Webhooks** (редко)
+4. Только через API (если UI недоступен)
+
+### Скриншот вашего интерфейса
+
+Судя по вашему скриншоту, у вас открыт раздел **"Настройки"**. Webhooks там НЕ находятся!
+
+**Правильный путь:**
+1. Закройте "Настройки"
+2. В левом меню найдите **"Расширения"** (иконка с пазлом или плагином)
+3. Откройте **"Расширения"**
+4. Там должен быть раздел для webhooks или создания приложений
 
 ---
 
