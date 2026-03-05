@@ -62,6 +62,35 @@ export class InSalesService {
         };
       }
 
+      // Проверяем, не обработан ли уже этот заказ
+      const existingTransaction = await db.transaction.findFirst({
+        where: {
+          projectId,
+          description: {
+            contains: `Заказ #${order.number}`
+          },
+          type: 'EARN'
+        }
+      });
+
+      if (existingTransaction) {
+        logger.info(
+          'Order already processed, skipping',
+          {
+            orderId: order.id,
+            orderNumber: order.number,
+            transactionId: existingTransaction.id
+          },
+          'insales-service'
+        );
+        return {
+          success: true,
+          orderId: order.number,
+          bonusAwarded: 0,
+          message: 'Order already processed'
+        };
+      }
+
       // Находим или создаем пользователя
       const identifier = order.client.email || order.client.phone;
       if (!identifier) {
@@ -109,8 +138,29 @@ export class InSalesService {
       const orderTotal = parseFloat(order.total_price);
 
       // Проверяем, были ли использованы бонусы
-      // (это можно определить по custom полям заказа или по скидке)
-      const bonusSpent = 0; // TODO: получить из custom_fields заказа
+      // Вариант 1: Из custom_fields (если InSales передает)
+      // Вариант 2: Из discount_amount если промокод начинается с BONUS_
+      let bonusSpent = 0;
+
+      // Пытаемся получить из custom_fields
+      if (order.custom_fields && typeof order.custom_fields === 'object') {
+        const customFields = order.custom_fields as Record<string, any>;
+        if (customFields.bonus_spent) {
+          bonusSpent = parseFloat(String(customFields.bonus_spent)) || 0;
+        }
+      }
+
+      // Если не нашли в custom_fields, проверяем discount_code
+      if (bonusSpent === 0 && order.discount_code) {
+        const discountCode = String(order.discount_code);
+        // Наши промокоды имеют формат BONUS_{amount}_{random}
+        if (discountCode.startsWith('BONUS_')) {
+          const match = discountCode.match(/^BONUS_(\d+)_/);
+          if (match) {
+            bonusSpent = parseFloat(match[1]) || 0;
+          }
+        }
+      }
 
       let amountForBonus = orderTotal;
 
