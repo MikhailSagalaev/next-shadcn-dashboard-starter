@@ -1,5 +1,73 @@
 # Changelog
 
+## [2026-03-05] - InSales Integration - Завершение разработки ✅
+
+### 🎯 Завершено
+- **InSales интеграция полностью готова к использованию**
+  - Backend API (webhook, balance, apply-bonuses, widget-settings)
+  - Admin Dashboard (настройки, статистика, логи)
+  - Виджет для InSales магазинов (loader, widget, styles)
+  - Полная документация для разработчика InSales
+  - Тестовая страница и скрипты тестирования
+
+### 📚 Документация
+- ✅ `INSALES_DEVELOPER_TASK.md` - техническое задание для разработчика (ГЛАВНЫЙ ФАЙЛ)
+- ✅ `INSALES_SETUP_GUIDE.md` - полное руководство по настройке
+- ✅ `INSALES_WEBHOOKS_SETUP.md` - детальная инструкция по webhooks (3 способа)
+- ✅ `INSALES_QUICK_SETUP.md` - быстрый старт за 5 минут
+- ✅ `INSALES_QUICK_START.md` - краткая инструкция
+- ✅ `insales-webhook-setup.ps1` - PowerShell скрипт для автоматизации
+- ✅ `INSALES_INTEGRATION_COMPLETE.md` - финальный отчет о завершении
+
+### 🎨 Виджет
+- ✅ `public/insales-widget-loader.js` - загрузчик виджета
+- ✅ `public/insales-bonus-widget.js` - основной скрипт (1000+ строк)
+- ✅ `public/insales-bonus-widget.css` - стили виджета
+- ✅ `public/test-insales-widget.html` - тестовая страница
+- ✅ Отображение баланса бонусов
+- ✅ Форма применения бонусов на checkout
+- ✅ Бейджи на карточках товаров
+- ✅ Responsive дизайн + темная тема
+
+### 🔧 Backend
+- ✅ Webhook endpoint для orders/create и clients/create
+- ✅ API для получения баланса бонусов
+- ✅ API для применения бонусов к заказу
+- ✅ API для настроек виджета
+- ✅ Логирование всех webhook событий
+- ✅ Поддержка BonusBehavior (SPEND_AND_EARN, SPEND_ONLY, EARN_ONLY)
+- ✅ FIFO алгоритм списания бонусов
+
+### 📊 Admin Dashboard
+- ✅ Страница настройки интеграции
+- ✅ Форма ввода API ключей (с шифрованием)
+- ✅ Настройка процента начисления (10%)
+- ✅ Настройка максимального списания (50%)
+- ✅ Включение/выключение виджета
+- ✅ Статистика интеграции
+- ✅ Просмотр логов webhooks
+- ✅ Копирование webhook URL и кода виджета
+
+### 🚀 Деплой
+- ✅ Код развернут на сервере (commits: 73272a2, 13f8e61, 11aefc7, 505fdc5, be45fb8)
+- ✅ Все критические баги исправлены
+- ✅ Next.js 15 совместимость (await params)
+- ✅ Prisma schema обновлена
+- ✅ Готово к настройке webhooks разработчиком InSales
+
+### 📝 Следующие шаги
+1. Передать `INSALES_DEVELOPER_TASK.md` разработчику InSales
+2. Разработчик настраивает 2 webhook (orders/create, clients/create)
+3. Разработчик вставляет код виджета в layout.liquid
+4. Тестирование на реальном магазине
+
+### 🔗 Ссылки
+- **Проект:** https://gupil.ru/dashboard/projects/cmilhq0y600099e7uraiowrmt/integrations/insales
+- **Webhook URL:** https://gupil.ru/api/insales/webhook/cmilhq0y600099e7uraiowrmt
+- **Виджет:** https://gupil.ru/insales-widget-loader.js
+
+---
+
 ## [2026-03-05] - InSales Integration - Next.js 15 Compatibility Fix
 
 ### 🐛 Исправлено (Commit: 73272a2)
