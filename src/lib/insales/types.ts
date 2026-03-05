@@ -50,6 +50,9 @@ export interface InSalesOrder {
     title: string;
   };
   fields_values?: Record<string, any>;
+  custom_fields?: Record<string, any>;
+  discount_code?: string;
+  discount_amount?: string;
 }
 
 // ============================================================================

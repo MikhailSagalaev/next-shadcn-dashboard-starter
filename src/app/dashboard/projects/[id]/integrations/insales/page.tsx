@@ -111,9 +111,10 @@ async function getIntegrationData(projectId: string) {
 export default async function InSalesIntegrationPage({
   params
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { project, integration, stats } = await getIntegrationData(params.id);
+  const { id: projectId } = await params;
+  const { project, integration, stats } = await getIntegrationData(projectId);
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>

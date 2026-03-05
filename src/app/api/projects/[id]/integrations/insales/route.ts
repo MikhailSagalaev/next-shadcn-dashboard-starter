@@ -19,7 +19,7 @@ import type {
 // GET - Получить настройки интеграции
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -27,7 +27,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.id;
+    const { id: projectId } = await params;
 
     // Проверяем владельца проекта
     const project = await db.project.findUnique({
@@ -77,7 +77,7 @@ export async function GET(
 // POST - Создать интеграцию
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -85,7 +85,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.id;
+    const { id: projectId } = await params;
 
     // Проверяем владельца проекта
     const project = await db.project.findUnique({
@@ -175,7 +175,7 @@ export async function POST(
 // PUT - Обновить интеграцию
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -183,7 +183,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.id;
+    const { id: projectId } = await params;
 
     // Проверяем владельца проекта
     const project = await db.project.findUnique({
@@ -226,7 +226,7 @@ export async function PUT(
 
     // Если обновляется пароль, шифруем его
     if (body.apiPassword) {
-      updateData.apiPassword = encrypt(body.apiPassword);
+      updateData.apiPassword = encryptApiToken(body.apiPassword);
     }
 
     // Обновляем интеграцию
@@ -268,7 +268,7 @@ export async function PUT(
 // DELETE - Удалить интеграцию
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -276,7 +276,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.id;
+    const { id: projectId } = await params;
 
     // Проверяем владельца проекта
     const project = await db.project.findUnique({

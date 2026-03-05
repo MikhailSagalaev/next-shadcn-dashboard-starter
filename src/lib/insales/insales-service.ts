@@ -2,7 +2,7 @@
  * @file: insales-service.ts
  * @description: Сервис для обработки InSales webhooks и API запросов
  * @project: SaaS Bonus System
- * @dependencies: Prisma, UserService, BonusService
+ * @dependencies: Prisma, UserService
  * @created: 2026-03-02
  */
 
@@ -21,13 +21,7 @@ import type {
 } from './types';
 
 export class InSalesService {
-  private userService: UserService;
-  private bonusService: BonusService;
-
-  constructor() {
-    this.userService = new UserService();
-    this.bonusService = new BonusService();
-  }
+  constructor() {}
 
   /**
    * Обработка создания заказа
@@ -96,14 +90,11 @@ export class InSalesService {
         throw new Error('No email or phone in order client data');
       }
 
-      let user = await this.userService.findUserByContact(
-        projectId,
-        identifier
-      );
+      let user = await UserService.findUserByContact(projectId, identifier);
 
       if (!user) {
         // Создаем нового пользователя
-        user = await this.userService.createUser({
+        user = await UserService.createUser({
           projectId,
           email: order.client.email,
           phone: order.client.phone,
@@ -213,17 +204,33 @@ export class InSalesService {
       const bonusAmount = Math.floor((amountForBonus * bonusPercent) / 100);
 
       if (bonusAmount > 0) {
-        await this.bonusService.awardBonus({
-          userId: user.id,
-          amount: bonusAmount,
-          type: 'PURCHASE',
-          description: `Покупка #${order.number}`,
-          expiresInDays: project.bonusExpiryDays,
-          metadata: {
-            orderId: order.id,
-            orderNumber: order.number,
-            orderTotal: orderTotal,
-            bonusPercent: bonusPercent
+        // Создаем бонус
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + project.bonusExpiryDays);
+
+        await db.bonus.create({
+          data: {
+            userId: user.id,
+            amount: bonusAmount,
+            type: 'PURCHASE',
+            expiresAt,
+            isActive: true
+          }
+        });
+
+        // Создаем транзакцию
+        await db.transaction.create({
+          data: {
+            userId: user.id,
+            type: 'EARN',
+            amount: bonusAmount,
+            description: `Покупка #${order.number}`,
+            metadata: {
+              orderId: order.id,
+              orderNumber: order.number,
+              orderTotal: orderTotal,
+              bonusPercent: bonusPercent
+            }
           }
         });
 
@@ -308,7 +315,7 @@ export class InSalesService {
         throw new Error('No email or phone in client data');
       }
 
-      const existingUser = await this.userService.findUserByContact(
+      const existingUser = await UserService.findUserByContact(
         projectId,
         identifier
       );
@@ -327,7 +334,7 @@ export class InSalesService {
 
       // Создаем нового пользователя
       // UserService автоматически начислит приветственные бонусы
-      const user = await this.userService.createUser({
+      const user = await UserService.createUser({
         projectId,
         email: client.email,
         phone: client.phone,
@@ -402,10 +409,7 @@ export class InSalesService {
         };
       }
 
-      const user = await this.userService.findUserByContact(
-        projectId,
-        identifier
-      );
+      const user = await UserService.findUserByContact(projectId, identifier);
 
       if (!user) {
         return {
@@ -416,7 +420,21 @@ export class InSalesService {
         };
       }
 
-      const balance = await this.bonusService.getUserBalance(user.id);
+      // Получаем баланс бонусов
+      const bonuses = await db.bonus.findMany({
+        where: {
+          userId: user.id,
+          isActive: true,
+          expiresAt: {
+            gt: new Date()
+          }
+        }
+      });
+
+      const balance = bonuses.reduce(
+        (sum, bonus) => sum + bonus.amount.toNumber(),
+        0
+      );
 
       return {
         success: true,
@@ -468,10 +486,7 @@ export class InSalesService {
         };
       }
 
-      const user = await this.userService.findUserByContact(
-        projectId,
-        identifier
-      );
+      const user = await UserService.findUserByContact(projectId, identifier);
 
       if (!user) {
         return {
@@ -484,7 +499,20 @@ export class InSalesService {
       }
 
       // Проверяем баланс
-      const currentBalance = await this.bonusService.getUserBalance(user.id);
+      const bonuses = await db.bonus.findMany({
+        where: {
+          userId: user.id,
+          isActive: true,
+          expiresAt: {
+            gt: new Date()
+          }
+        }
+      });
+
+      const currentBalance = bonuses.reduce(
+        (sum, bonus) => sum + bonus.amount.toNumber(),
+        0
+      );
 
       if (currentBalance < request.bonusAmount) {
         return {
@@ -531,18 +559,54 @@ export class InSalesService {
         };
       }
 
-      // Списываем бонусы
-      await this.bonusService.spendBonus({
-        userId: user.id,
-        amount: bonusToApply,
-        description: `Оплата заказа #${request.orderId}`,
-        metadata: {
-          orderId: request.orderId,
-          orderTotal: request.orderTotal
+      // Списываем бонусы (FIFO - сначала самые старые)
+      let remainingToSpend = bonusToApply;
+      const sortedBonuses = bonuses.sort(
+        (a, b) => a.expiresAt.getTime() - b.expiresAt.getTime()
+      );
+
+      for (const bonus of sortedBonuses) {
+        if (remainingToSpend <= 0) break;
+
+        const bonusAmount = bonus.amount.toNumber();
+        const amountToDeduct = Math.min(bonusAmount, remainingToSpend);
+
+        if (amountToDeduct >= bonusAmount) {
+          // Полностью используем бонус
+          await db.bonus.update({
+            where: { id: bonus.id },
+            data: { isActive: false }
+          });
+        } else {
+          // Частично используем бонус
+          await db.bonus.update({
+            where: { id: bonus.id },
+            data: {
+              amount: {
+                decrement: amountToDeduct
+              }
+            }
+          });
+        }
+
+        remainingToSpend -= amountToDeduct;
+      }
+
+      // Создаем транзакцию списания
+      await db.transaction.create({
+        data: {
+          userId: user.id,
+          type: 'SPEND',
+          amount: bonusToApply,
+          description: `Оплата заказа #${request.orderId}`,
+          metadata: {
+            orderId: request.orderId,
+            orderTotal: request.orderTotal
+          }
         }
       });
 
-      const newBalance = await this.bonusService.getUserBalance(user.id);
+      const newBalance = currentBalance - bonusToApply;
 
       // Обновляем статистику
       await db.inSalesIntegration.update({

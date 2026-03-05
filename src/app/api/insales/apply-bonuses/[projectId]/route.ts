@@ -13,9 +13,9 @@ import type { ApplyBonusesRequest } from '@/lib/insales/types';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const projectId = params.projectId;
+  const { projectId } = await params;
 
   try {
     // Проверяем интеграцию

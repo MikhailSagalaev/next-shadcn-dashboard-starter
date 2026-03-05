@@ -13,10 +13,10 @@ import type { InSalesWebhookPayload } from '@/lib/insales/types';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   const startTime = Date.now();
-  const projectId = params.projectId;
+  const { projectId } = await params;
 
   try {
     // Получаем интеграцию

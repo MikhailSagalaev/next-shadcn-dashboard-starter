@@ -12,9 +12,9 @@ import { InSalesService } from '@/lib/insales/insales-service';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const projectId = params.projectId;
+  const { projectId } = await params;
 
   try {
     // Проверяем интеграцию
