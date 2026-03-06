@@ -24,15 +24,16 @@ export const metadata = {
 };
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function MoySkladDirectIntegrationPage({
   params
 }: PageProps) {
-  const data = await getIntegrationPageData(params.id);
+  const { id } = await params;
+  const data = await getIntegrationPageData(id);
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
@@ -51,7 +52,7 @@ export default async function MoySkladDirectIntegrationPage({
         <Suspense fallback={<div>Loading status...</div>}>
           <IntegrationStatusCard
             integration={data.integration}
-            projectId={data.projectId}
+            projectId={id}
           />
         </Suspense>
       )}
@@ -67,10 +68,7 @@ export default async function MoySkladDirectIntegrationPage({
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
         {/* Integration Form */}
         <div className='col-span-1'>
-          <IntegrationForm
-            integration={data.integration}
-            projectId={data.projectId}
-          />
+          <IntegrationForm integration={data.integration} projectId={id} />
         </div>
 
         {/* Webhook Credentials */}
@@ -88,7 +86,7 @@ export default async function MoySkladDirectIntegrationPage({
           <SyncLogsTable
             logs={data.recentLogs}
             integrationId={data.integration.id}
-            projectId={data.projectId}
+            projectId={id}
           />
         </div>
       )}
