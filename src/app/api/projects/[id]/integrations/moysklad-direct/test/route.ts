@@ -20,7 +20,7 @@ import { MoySkladClient } from '@/lib/moysklad-direct/client';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -29,7 +29,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id: projectId } = params;
+    const { id: projectId } = await params;
 
     // Verify project ownership
     const project = await db.project.findUnique({
