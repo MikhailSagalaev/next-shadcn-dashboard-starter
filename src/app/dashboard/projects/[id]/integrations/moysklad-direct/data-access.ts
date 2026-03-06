@@ -43,7 +43,8 @@ export interface IntegrationPageData {
     createdAt: Date;
     user: {
       id: string;
-      name: string | null;
+      firstName: string | null;
+      lastName: string | null;
       email: string;
     } | null;
   }>;
@@ -127,7 +128,8 @@ export async function getIntegrationPageData(
             user: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                lastName: true,
                 email: true
               }
             }

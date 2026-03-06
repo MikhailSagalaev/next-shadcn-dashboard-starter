@@ -36,7 +36,8 @@ interface SyncLogsTableProps {
     createdAt: Date;
     user: {
       id: string;
-      name: string | null;
+      firstName: string | null;
+      lastName: string | null;
       email: string;
     } | null;
   }>;
@@ -143,7 +144,11 @@ export function SyncLogsTable({ logs }: SyncLogsTableProps) {
                   <div className='flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400'>
                     {log.user && (
                       <>
-                        <span>{log.user.name || log.user.email}</span>
+                        <span>
+                          {log.user.firstName && log.user.lastName
+                            ? `${log.user.firstName} ${log.user.lastName}`
+                            : log.user.email}
+                        </span>
                         <span className='h-1 w-1 rounded-full bg-zinc-300 dark:bg-zinc-700' />
                       </>
                     )}
