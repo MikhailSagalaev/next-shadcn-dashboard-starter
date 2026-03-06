@@ -239,8 +239,14 @@ export async function POST(
         });
 
         if (!response.ok) {
-          const error = await response.text();
-          throw new Error(error);
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { message: errorText };
+          }
+          throw new Error(JSON.stringify(errorData));
         }
 
         const webhook = await response.json();
@@ -261,9 +267,17 @@ export async function POST(
           'moysklad-direct-api'
         );
       } catch (error) {
+        const errorMessage = (error as Error).message;
+        let parsedError;
+        try {
+          parsedError = JSON.parse(errorMessage);
+        } catch {
+          parsedError = { message: errorMessage };
+        }
+
         errors.push({
           ...config,
-          error: (error as Error).message,
+          error: parsedError,
           success: false
         });
 
@@ -272,7 +286,7 @@ export async function POST(
           {
             projectId,
             config,
-            error
+            error: parsedError
           },
           'moysklad-direct-api'
         );
