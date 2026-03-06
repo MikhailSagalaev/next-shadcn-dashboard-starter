@@ -39,7 +39,28 @@ git pull origin main && pm2 stop all && rm -rf .next && yarn build && pm2 restar
 
 ---
 
-## [2026-03-06] - МойСклад Direct API Integration - Исправление Server Action ошибки
+## [2026-03-06] - МойСклад Direct API Integration - Исправление отсутствующего компонента
+
+### 🐛 Исправлено
+- **Server Action ошибка из-за отсутствующего компонента**
+  - Проблема: `Error: Failed to find Server Action "x"` на странице интеграции
+  - Причина: Отсутствовал компонент `stats-cards.tsx`, который импортировался в `page.tsx`
+  - Решение: Создан компонент `SyncStatsCards` с полной функциональностью
+
+### 🎯 Добавлено
+- **Компонент статистики синхронизации**
+  - `src/app/dashboard/projects/[id]/integrations/moysklad-direct/components/stats-cards.tsx`
+  - Отображает: всего синхронизаций, успешных, с ошибками, время последней синхронизации
+  - Framer Motion анимации для плавного появления
+  - Glass effect стиль с поддержкой dark mode
+  - Responsive дизайн для мобильных устройств
+
+### 📝 Документация
+- `MOYSKLAD_SERVER_ACTION_FIX.md` - описание проблемы и решения
+
+---
+
+## [2026-03-06] - МойСклад Direct API Integration - Исправление Server Action ошибки (устаревшее)
 
 ### 🐛 Исправлено
 - **Server Action ошибка после деплоя**
