@@ -170,11 +170,60 @@ export async function POST(
     const apiToken = decryptApiToken(integration.apiToken);
     const webhookUrl = `https://gupil.ru/api/webhook/moysklad-direct/${projectId}`;
 
+    // Get existing webhooks first
+    const existingResponse = await fetch(`${MOYSKLAD_API_URL}/entity/webhook`, {
+      headers: {
+        Authorization: `Bearer ${apiToken}`
+      }
+    });
+
+    if (!existingResponse.ok) {
+      throw new Error(
+        `Failed to fetch existing webhooks: ${existingResponse.statusText}`
+      );
+    }
+
+    const existingData = await existingResponse.json();
+    const existingWebhooks = existingData.rows.filter(
+      (webhook: any) => webhook.url === webhookUrl
+    );
+
+    // Create a map of existing webhooks for quick lookup
+    const existingMap = new Map(
+      existingWebhooks.map((w: any) => [`${w.entityType}_${w.action}`, w])
+    );
+
     const results = [];
     const errors = [];
+    const skipped = [];
 
     // Create webhooks
     for (const config of WEBHOOK_CONFIGS) {
+      const key = `${config.entityType}_${config.action}`;
+
+      // Check if webhook already exists
+      if (existingMap.has(key)) {
+        const existing = existingMap.get(key);
+        skipped.push({
+          ...config,
+          id: existing.id,
+          success: true,
+          skipped: true
+        });
+
+        logger.info(
+          'Webhook already exists, skipping',
+          {
+            projectId,
+            webhookId: existing.id,
+            entityType: config.entityType,
+            action: config.action
+          },
+          'moysklad-direct-api'
+        );
+        continue;
+      }
+
       try {
         const response = await fetch(`${MOYSKLAD_API_URL}/entity/webhook`, {
           method: 'POST',
@@ -233,8 +282,10 @@ export async function POST(
     return NextResponse.json({
       message: 'Webhooks setup complete',
       created: results.length,
+      skipped: skipped.length,
       failed: errors.length,
       results,
+      skipped,
       errors
     });
   } catch (error) {

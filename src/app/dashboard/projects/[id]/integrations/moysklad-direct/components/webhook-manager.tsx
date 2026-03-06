@@ -39,6 +39,11 @@ export function WebhookManager({ projectId }: WebhookManagerProps) {
   const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
+  // Auto-load webhooks on mount
+  useEffect(() => {
+    fetchWebhooks();
+  }, [projectId]);
+
   const fetchWebhooks = async () => {
     setLoading(true);
     try {
