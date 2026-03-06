@@ -44,7 +44,7 @@ import { Loader2, Save, Trash2, TestTube2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const formSchema = z.object({
-  accountId: z.string().min(1, 'Account ID обязателен'),
+  accountId: z.string().optional().default('МойСклад аккаунт'),
   apiToken: z.string().min(1, 'API Token обязателен'),
   bonusProgramId: z
     .string()
@@ -226,13 +226,17 @@ export function IntegrationForm({
                 name='accountId'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Account ID</FormLabel>
+                    <FormLabel>Account ID (опционально)</FormLabel>
                     <FormControl>
-                      <Input placeholder='a.churova@yandex.ru' {...field} />
+                      <Input
+                        placeholder='Ваш email или название компании'
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription>
-                      Идентификатор аккаунта (email или логин из URL:
-                      #company/[ACCOUNT_ID])
+                      Любой текст для идентификации аккаунта (например: email,
+                      название компании). Используется только для отображения в
+                      UI.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
