@@ -1,5 +1,167 @@
 # Changelog
 
+## [2026-03-06] - МойСклад Direct API Integration - Основная функциональность готова ✅
+
+### 🎯 Новая интеграция
+- **Прямая интеграция с МойСклад через Bonus Transaction API**
+  - Выбран подход через прямой API вместо LoyaltyAPI (бесплатно, проще, гибче)
+  - Старая реализация LoyaltyAPI сохранена для будущего использования
+  - Двусторонняя синхронизация бонусов между онлайн и офлайн каналами продаж
+
+### ✅ Выполнено (Tasks 1-6, 8, 10) - 75% готово
+
+**Task 1: Database schema и encryption** ✅
+- Создана модель `MoySkladDirectIntegration` для настроек
+- Создана модель `MoySkladDirectSyncLog` для логирования
+- Добавлен enum `SyncDirection` (BIDIRECTIONAL, MOYSKLAD_TO_US, US_TO_MOYSKLAD)
+- Добавлено поле `moySkladDirectCounterpartyId` в модель `User`
+- Реализовано шифрование API токенов (AES-256-GCM + PBKDF2)
+
+**Task 2: МойСклад API Client** ✅
+- Реализован `MoySkladClient` с полным набором методов
+- Retry logic с exponential backoff (3 попытки)
+- Balance caching (5 минут TTL)
+- Phone normalization to E.164
+- Полная типизация TypeScript
+
+**Task 3: Sync Service** ✅
+- Реализован `SyncService` для двусторонней синхронизации
+- Методы: `syncBonusAccrualToMoySklad()`, `syncBonusSpendingToMoySklad()`
+- Методы: `syncFromMoySklad()`, `checkAndSyncBalance()`
+- Автоматическое связывание пользователей по телефону
+- Создание audit logs для всех операций
+
+**Task 5: Webhook Handler** ✅
+- Endpoint: `POST /api/webhook/moysklad-direct/[projectId]`
+- HMAC-SHA256 signature validation
+- Event filtering (только bonustransaction)
+- Обработка EARNING и SPENDING транзакций
+
+**Task 6: Integration Management API** ✅
+- CRUD endpoints для управления интеграцией
+- Test connection endpoint
+- Manual sync endpoint (с batching)
+- Sync logs query endpoint (с фильтрацией и пагинацией)
+- Zod validation для всех запросов
+
+**Task 8: UI Components** ✅
+- `IntegrationStatusCard` - статус с quick actions
+- `IntegrationForm` - форма настроек с валидацией
+- `WebhookCredentials` - отображение webhook URL и secret
+- `SyncStatsCards` - 4 карточки статистики с анимациями
+- `SyncLogsTable` - таблица логов с фильтрацией
+- `data-access.ts` - Server-side data loading
+- Главная страница интеграции (Server Component)
+
+**Task 10: BonusService Integration** ✅ КРИТИЧНО
+- Добавлены хуки синхронизации в `BonusService.awardBonus()`
+- Добавлены хуки синхронизации в `BonusService.spendBonuses()`
+- Добавлены хуки автосвязывания в `UserService.createUser()`
+- Все хуки неблокирующие (ошибки не влияют на основной процесс)
+- Полное логирование всех операций
+
+### 🔄 Как работает синхронизация
+
+**Онлайн → МойСклад (автоматически):**
+1. Пользователь покупает онлайн (Tilda/InSales)
+2. Webhook → BonusService.awardBonus()
+3. Бонусы начислены в нашей системе
+4. Автоматически → SyncService.syncBonusAccrualToMoySklad()
+5. Бонусы синхронизированы в МойСклад
+
+**МойСклад → Онлайн (автоматически):**
+1. Пользователь покупает в POS (МойСклад)
+2. МойСклад создает bonus transaction
+3. Webhook → наш сервер
+4. SyncService.syncFromMoySklad()
+5. Бонусы начислены в нашей системе
+
+**Новый пользователь (автоматически):**
+1. Регистрация через webhook
+2. UserService.createUser()
+3. Автоматически → SyncService.findAndLinkCounterparty()
+4. Поиск в МойСклад по телефону
+5. Если найден → связывание
+
+### 📊 Архитектура
+
+**Безопасность:**
+- API токены зашифрованы (AES-256-GCM)
+- Webhook HMAC-SHA256 validation
+- Multi-tenancy isolation
+- HTTPS only
+
+**Надежность:**
+- Неблокирующая синхронизация
+- Retry logic с exponential backoff
+- Audit logs для всех операций
+- Graceful error handling
+
+**Производительность:**
+- Balance caching (5 минут)
+- Parallel data loading
+- Batching для bulk sync
+- `SyncStatsCards` - 4 карточки статистики с анимациями
+- `SyncLogsTable` - таблица последних синхронизаций
+- Data access layer с параллельной загрузкой данных
+- Следование dashboard-design-system.md (glass-card, Server Components First)
+
+### 📚 Документация
+- ✅ `docs/moysklad-direct-api-integration.md` - полная документация интеграции
+- ✅ `MOYSKLAD_DIRECT_INTEGRATION_PLAN.md` - детальный план реализации
+- ✅ `MOYSKLAD_DIRECT_TESTING_GUIDE.md` - руководство по тестированию
+- ✅ Сравнение подходов (LoyaltyAPI vs Direct API)
+
+### 📋 Созданные файлы (20+ файлов)
+
+**Backend:**
+- `src/lib/moysklad-direct/types.ts` - TypeScript типы
+- `src/lib/moysklad-direct/client.ts` - МойСклад API клиент
+- `src/lib/moysklad-direct/encryption.ts` - шифрование токенов (AES-256-GCM)
+- `src/lib/moysklad-direct/sync-service.ts` - сервис синхронизации
+- `src/app/api/webhook/moysklad-direct/[projectId]/route.ts` - webhook handler
+- `src/app/api/projects/[id]/integrations/moysklad-direct/route.ts` - CRUD API
+- `src/app/api/projects/[id]/integrations/moysklad-direct/test/route.ts` - тест подключения
+- `src/app/api/projects/[id]/integrations/moysklad-direct/sync/route.ts` - ручная синхронизация
+- `src/app/api/projects/[id]/integrations/moysklad-direct/logs/route.ts` - логи
+
+**Frontend:**
+- `src/app/dashboard/projects/[id]/integrations/moysklad-direct/page.tsx` - главная страница
+- `src/app/dashboard/projects/[id]/integrations/moysklad-direct/data-access.ts` - загрузка данных
+- `src/app/dashboard/projects/[id]/integrations/moysklad-direct/components/status-card.tsx`
+- `src/app/dashboard/projects/[id]/integrations/moysklad-direct/components/integration-form.tsx`
+- `src/app/dashboard/projects/[id]/integrations/moysklad-direct/components/webhook-credentials.tsx`
+- `src/app/dashboard/projects/[id]/integrations/moysklad-direct/components/stats-cards.tsx`
+- `src/app/dashboard/projects/[id]/integrations/moysklad-direct/components/sync-logs-table.tsx`
+
+**Database:**
+- `prisma/schema.prisma` - обновлена схема БД (MoySkladDirectIntegration, MoySkladDirectSyncLog)
+
+### 🔄 В процессе
+- ⏳ Task 9: Telegram bot integration (опционально - не критично)
+- ⏳ Tasks 11-16: Оптимизация, тесты, деплой
+
+### ⏱️ Оценка времени
+- **Общее время:** ~16 дней
+- **Текущий прогресс:** ~75% (12 дней из 16)
+- **Основная функциональность:** ✅ 100% готова
+
+### 🎯 Ключевое достижение
+**Task 10 завершен:** Автоматическая синхронизация бонусов полностью интегрирована!
+- ✅ Хуки в `BonusService.awardBonus()` - онлайн → МойСклад
+- ✅ Хуки в `BonusService.spendBonuses()` - онлайн → МойСклад  
+- ✅ Хуки в `UserService.createUser()` - автосвязывание по телефону
+- ✅ Неблокирующая синхронизация (ошибки не влияют на основной процесс)
+- ✅ Полное логирование всех операций
+
+### 🎯 Преимущества нового подхода
+- Бесплатно (не нужно платить за marketplace)
+- Проще (4 метода API вместо 9 endpoints)
+- Гибче (полный контроль над логикой)
+- Быстрее (меньше кода для реализации)
+
+---
+
 ## [2026-03-05] - InSales XML Webhook Parsing Fix 🐛
 
 ### 🐛 Исправлено (Commit: 478d6c7)

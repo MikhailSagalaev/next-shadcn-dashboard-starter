@@ -155,6 +155,36 @@ export class UserService {
         // Не бросаем ошибку - пользователь уже создан
       }
 
+      // Автоматическое связывание с МойСклад Direct (неблокирующе)
+      if (normalizedPhone) {
+        try {
+          const { SyncService } = await import(
+            '@/lib/moysklad-direct/sync-service'
+          );
+          const syncService = new SyncService();
+
+          const linked = await syncService.findAndLinkCounterparty(user.id);
+
+          if (linked) {
+            logger.info('Пользователь автоматически связан с МойСклад', {
+              userId: user.id,
+              projectId: data.projectId,
+              phone: normalizedPhone,
+              component: 'user-service'
+            });
+          }
+        } catch (error) {
+          logger.error('Ошибка автосвязывания с МойСклад', {
+            userId: user.id,
+            projectId: data.projectId,
+            error:
+              error instanceof Error ? error.message : 'Неизвестная ошибка',
+            component: 'user-service'
+          });
+          // Не блокируем создание пользователя
+        }
+      }
+
       return user as any;
     } catch (error) {
       logger.error('Ошибка создания пользователя', {
@@ -751,6 +781,29 @@ export class BonusService {
       // Не блокируем основной процесс
     }
 
+    // Синхронизация с МойСклад Direct (неблокирующе)
+    try {
+      const { SyncService } = await import(
+        '@/lib/moysklad-direct/sync-service'
+      );
+      const syncService = new SyncService();
+
+      await syncService.syncBonusAccrualToMoySklad({
+        userId: bonusData.userId,
+        amount: Number(bonusData.amount),
+        source: bonusData.metadata?.source || bonusData.type,
+        description: bonusData.description
+      });
+    } catch (error) {
+      logger.error('Ошибка синхронизации начисления бонусов с МойСклад', {
+        userId: bonusData.userId,
+        bonusId: bonus.id,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'bonus-service'
+      });
+      // Не блокируем основной процесс - синхронизация некритична
+    }
+
     return bonus as any;
   }
 
@@ -891,6 +944,29 @@ export class BonusService {
           error: error instanceof Error ? error.message : 'Неизвестная ошибка',
           component: 'bonus-service'
         });
+      }
+
+      // Синхронизация с МойСклад Direct (неблокирующе)
+      try {
+        const { SyncService } = await import(
+          '@/lib/moysklad-direct/sync-service'
+        );
+        const syncService = new SyncService();
+
+        await syncService.syncBonusSpendingToMoySklad({
+          userId,
+          amount,
+          source: baseMetadata.source || baseMetadata.spendSource || 'manual',
+          description
+        });
+      } catch (error) {
+        logger.error('Ошибка синхронизации списания бонусов с МойСклад', {
+          userId,
+          amount,
+          error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+          component: 'bonus-service'
+        });
+        // Не блокируем основной процесс - синхронизация некритична
       }
     }
 

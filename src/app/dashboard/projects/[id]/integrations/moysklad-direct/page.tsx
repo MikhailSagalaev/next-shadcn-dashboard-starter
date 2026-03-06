@@ -1,0 +1,97 @@
+/**
+ * @file: page.tsx
+ * @description: МойСклад Direct integration settings page
+ * @project: SaaS Bonus System
+ * @dependencies: Next.js 15, React 19
+ * @created: 2026-03-06
+ * @author: AI Assistant + User
+ */
+
+import { Suspense } from 'react';
+import { Heading } from '@/components/ui/heading';
+import { Separator } from '@/components/ui/separator';
+import { getIntegrationPageData } from './data-access';
+import { IntegrationStatusCard } from './components/status-card';
+import { IntegrationForm } from './components/integration-form';
+import { WebhookCredentials } from './components/webhook-credentials';
+import { SyncStatsCards } from './components/stats-cards';
+import { SyncLogsTable } from './components/sync-logs-table';
+
+export const metadata = {
+  title: 'МойСклад Direct Integration | Gupil',
+  description:
+    'Настройка прямой интеграции с МойСклад для синхронизации бонусов'
+};
+
+interface PageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default async function MoySkladDirectIntegrationPage({
+  params
+}: PageProps) {
+  const data = await getIntegrationPageData(params.id);
+
+  return (
+    <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
+      {/* Header */}
+      <div className='flex items-center justify-between'>
+        <Heading
+          title='МойСклад Direct API'
+          description='Прямая интеграция с МойСклад для синхронизации бонусов между онлайн и офлайн каналами'
+        />
+      </div>
+
+      <Separator className='my-4' />
+
+      {/* Status Card */}
+      {data.integration && (
+        <Suspense fallback={<div>Loading status...</div>}>
+          <IntegrationStatusCard
+            integration={data.integration}
+            projectId={data.projectId}
+          />
+        </Suspense>
+      )}
+
+      {/* Stats Cards */}
+      {data.integration && (
+        <Suspense fallback={<div>Loading stats...</div>}>
+          <SyncStatsCards stats={data.stats} />
+        </Suspense>
+      )}
+
+      {/* Main Content Grid */}
+      <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
+        {/* Integration Form */}
+        <div className='col-span-1'>
+          <IntegrationForm
+            integration={data.integration}
+            projectId={data.projectId}
+          />
+        </div>
+
+        {/* Webhook Credentials */}
+        <div className='col-span-1'>
+          <WebhookCredentials
+            webhookUrl={data.webhookUrl}
+            webhookSecret={data.integration?.webhookSecret || null}
+          />
+        </div>
+      </div>
+
+      {/* Recent Sync Logs */}
+      {data.integration && (
+        <div className='grid grid-cols-1'>
+          <SyncLogsTable
+            logs={data.recentLogs}
+            integrationId={data.integration.id}
+            projectId={data.projectId}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
