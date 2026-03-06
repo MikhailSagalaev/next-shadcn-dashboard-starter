@@ -1,5 +1,36 @@
 # Changelog
 
+## [2026-03-05] - InSales XML Webhook Parsing Fix 🐛
+
+### 🐛 Исправлено (Commit: 478d6c7)
+- **InSales webhooks теперь работают корректно**
+  - InSales отправляет webhooks в XML формате, а не JSON
+  - Добавлена функция `parseInSalesXML()` для парсинга XML
+  - Извлечение данных заказа (id, number, total_price, client info)
+  - Извлечение данных клиента (id, email, phone, name)
+  - Поддержка fallback на JSON (на случай изменения формата)
+  - Детальное логирование для отладки
+
+### 📋 Исправленные файлы
+- `src/app/api/insales/webhook/[projectId]/route.ts` - добавлен XML парсинг
+
+### 🚀 Деплой
+- Создан `INSALES_XML_FIX_DEPLOY.md` с инструкциями
+- **КРИТИЧНО:** После `git pull` нужно выполнить `npx prisma generate`
+- Перезапустить приложение: `pm2 restart bonus-app`
+
+### 📝 Дополнительная документация
+- ✅ `INSALES_TASK_SHORT.md` - краткая задача для разработчика (1 страница)
+- ✅ `INSALES_FINAL_SUMMARY.md` - финальное резюме проекта
+
+### ✅ Статус
+- ✅ XML парсинг реализован
+- ✅ Поддержка orders/create и clients/create
+- ✅ Fallback на JSON
+- ✅ Готово к деплою на production
+
+---
+
 ## [2026-03-05] - InSales Integration - Завершение разработки ✅
 
 ### 🎯 Завершено
