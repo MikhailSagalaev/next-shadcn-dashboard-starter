@@ -29,7 +29,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id: projectId } = await params;
+    const resolvedParams = await params;
+    const projectId = resolvedParams.id;
 
     // Verify project ownership
     const project = await db.project.findUnique({

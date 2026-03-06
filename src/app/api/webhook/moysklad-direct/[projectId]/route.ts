@@ -13,47 +13,26 @@ import { logger } from '@/lib/logger';
 import { MoySkladClient } from '@/lib/moysklad-direct/client';
 import { SyncService } from '@/lib/moysklad-direct/sync-service';
 import { MoySkladWebhookPayload } from '@/lib/moysklad-direct/types';
-import crypto from 'crypto';
 
 /**
- * Validate webhook signature using HMAC-SHA256
+ * Note: МойСклад webhooks do NOT use signature validation
+ * According to official documentation: https://dev.moysklad.ru/doc/api/remap/1.2/dictionaries/webhook
+ * МойСклад webhooks are validated by the webhook URL itself (which includes projectId)
  */
-function validateWebhookSignature(
-  payload: string,
-  signature: string,
-  secret: string
-): boolean {
-  try {
-    const hmac = crypto.createHmac('sha256', secret);
-    hmac.update(payload);
-    const expectedSignature = hmac.digest('hex');
-
-    // Timing-safe comparison
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
-  } catch (error) {
-    logger.error(
-      'Error validating webhook signature',
-      { error },
-      'moysklad-direct-webhook'
-    );
-    return false;
-  }
-}
 
 /**
  * POST /api/webhook/moysklad-direct/[projectId]
  *
  * Receives webhook events from МойСклад for bonus transactions
+ * Format: https://dev.moysklad.ru/doc/api/remap/1.2/dictionaries/webhook
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   const startTime = Date.now();
-  const { projectId } = params;
+  const resolvedParams = await params;
+  const projectId = resolvedParams.projectId;
 
   try {
     // Find integration by projectId
@@ -86,49 +65,10 @@ export async function POST(
       );
     }
 
-    if (!integration.webhookSecret) {
-      logger.error(
-        'Webhook secret not configured',
-        { projectId },
-        'moysklad-direct-webhook'
-      );
-      return NextResponse.json(
-        { error: 'Webhook not configured' },
-        { status: 500 }
-      );
-    }
-
     // Read request body
     const bodyText = await request.text();
 
-    // Validate signature
-    const signature = request.headers.get('X-MoySklad-Signature');
-
-    if (!signature) {
-      logger.warn(
-        'Missing webhook signature',
-        { projectId },
-        'moysklad-direct-webhook'
-      );
-      return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
-    }
-
-    const isValidSignature = validateWebhookSignature(
-      bodyText,
-      signature,
-      integration.webhookSecret
-    );
-
-    if (!isValidSignature) {
-      logger.warn(
-        'Invalid webhook signature',
-        { projectId },
-        'moysklad-direct-webhook'
-      );
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    }
-
-    // Parse payload
+    // Parse payload (МойСклад webhook format)
     const payload: MoySkladWebhookPayload = JSON.parse(bodyText);
 
     logger.info(

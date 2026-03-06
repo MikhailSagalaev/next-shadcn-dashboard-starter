@@ -14,6 +14,7 @@ import { getIntegrationPageData } from './data-access';
 import { IntegrationStatusCard } from './components/status-card';
 import { IntegrationForm } from './components/integration-form';
 import { WebhookCredentials } from './components/webhook-credentials';
+import { WebhookManager } from './components/webhook-manager';
 import { SyncStatsCards } from './components/stats-cards';
 import { SyncLogsTable } from './components/sync-logs-table';
 
@@ -79,6 +80,13 @@ export default async function MoySkladDirectIntegrationPage({
           />
         </div>
       </div>
+
+      {/* Webhook Manager */}
+      {data.integration && (
+        <div className='grid grid-cols-1'>
+          <WebhookManager projectId={id} />
+        </div>
+      )}
 
       {/* Recent Sync Logs */}
       {data.integration && (
