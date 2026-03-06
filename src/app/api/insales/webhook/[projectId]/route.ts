@@ -144,14 +144,26 @@ export async function POST(
 
     // InSales отправляет XML, парсим его
     let payload: InSalesWebhookPayload;
+    let rawPayload: any = {};
 
     if (contentType.includes('xml') || body.trim().startsWith('<?xml')) {
       // Парсим XML
       payload = parseInSalesXML(body);
+      // Сохраняем исходный XML для отладки
+      rawPayload = {
+        format: 'xml',
+        raw: body,
+        parsed: payload
+      };
     } else {
       // Fallback на JSON (на случай если формат изменится)
       try {
         payload = JSON.parse(body);
+        rawPayload = {
+          format: 'json',
+          raw: body,
+          parsed: payload
+        };
       } catch (e) {
         throw new Error('Invalid payload format: expected XML or JSON');
       }
@@ -245,7 +257,7 @@ export async function POST(
       data: {
         integrationId: integration.id,
         event: payload.event,
-        payload: payload as any,
+        payload: rawPayload, // Сохраняем исходный XML + распарсенные данные
         status: success ? 200 : 400,
         success,
         response: result,
