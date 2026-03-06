@@ -58,7 +58,9 @@ export class InSalesService {
       // Проверяем, не обработан ли уже этот заказ
       const existingTransaction = await db.transaction.findFirst({
         where: {
-          projectId,
+          user: {
+            projectId
+          },
           description: {
             contains: `Заказ #${order.number}`
           },
