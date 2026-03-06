@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { getCurrentAdmin } from '@/lib/auth';
-import { decrypt } from '@/lib/moysklad-direct/encryption';
+import { decryptApiToken } from '@/lib/moysklad-direct/encryption';
 
 const MOYSKLAD_API_URL = 'https://api.moysklad.ru/api/remap/1.2';
 
@@ -87,7 +87,7 @@ export async function GET(
     }
 
     // Decrypt token
-    const apiToken = decrypt(integration.apiToken);
+    const apiToken = decryptApiToken(integration.apiToken);
 
     // Fetch webhooks from МойСклад
     const response = await fetch(`${MOYSKLAD_API_URL}/entity/webhook`, {
@@ -167,7 +167,7 @@ export async function POST(
     }
 
     // Decrypt token
-    const apiToken = decrypt(integration.apiToken);
+    const apiToken = decryptApiToken(integration.apiToken);
     const webhookUrl = `https://gupil.ru/api/webhook/moysklad-direct/${projectId}`;
 
     const results = [];
@@ -286,7 +286,7 @@ export async function DELETE(
     }
 
     // Decrypt token
-    const apiToken = decrypt(integration.apiToken);
+    const apiToken = decryptApiToken(integration.apiToken);
     const webhookUrl = `https://gupil.ru/api/webhook/moysklad-direct/${projectId}`;
 
     // Get all webhooks
