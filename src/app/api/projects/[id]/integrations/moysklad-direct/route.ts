@@ -21,7 +21,7 @@ import { z } from 'zod';
 
 // Validation schemas
 const createIntegrationSchema = z.object({
-  accountId: z.string().min(1, 'Account ID is required'),
+  accountId: z.string().optional().default('МойСклад аккаунт'),
   apiToken: z.string().min(1, 'API Token is required'),
   bonusProgramId: z.string().uuid('Bonus Program ID must be a valid UUID'),
   syncDirection: z.nativeEnum(SyncDirection).optional(),
@@ -29,7 +29,7 @@ const createIntegrationSchema = z.object({
 });
 
 const updateIntegrationSchema = z.object({
-  accountId: z.string().min(1).optional(),
+  accountId: z.string().optional(),
   apiToken: z.string().min(1).optional(),
   bonusProgramId: z.string().uuid().optional(),
   syncDirection: z.nativeEnum(SyncDirection).optional(),
@@ -44,7 +44,7 @@ const updateIntegrationSchema = z.object({
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -53,7 +53,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id: projectId } = params;
+    const { id: projectId } = await params;
 
     // Verify project ownership
     const project = await db.project.findUnique({
@@ -113,7 +113,7 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -122,7 +122,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id: projectId } = params;
+    const { id: projectId } = await params;
 
     // Verify project ownership
     const project = await db.project.findUnique({
@@ -222,7 +222,7 @@ export async function POST(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -231,7 +231,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id: projectId } = params;
+    const { id: projectId } = await params;
 
     // Verify project ownership
     const project = await db.project.findUnique({
@@ -337,7 +337,7 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -346,7 +346,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id: projectId } = params;
+    const { id: projectId } = await params;
 
     // Verify project ownership
     const project = await db.project.findUnique({
