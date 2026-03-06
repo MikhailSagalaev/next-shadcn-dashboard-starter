@@ -21,7 +21,7 @@ import { z } from 'zod';
 
 // Validation schemas
 const createIntegrationSchema = z.object({
-  accountId: z.string().uuid('Account ID must be a valid UUID'),
+  accountId: z.string().min(1, 'Account ID is required'),
   apiToken: z.string().min(1, 'API Token is required'),
   bonusProgramId: z.string().uuid('Bonus Program ID must be a valid UUID'),
   syncDirection: z.nativeEnum(SyncDirection).optional(),
@@ -29,7 +29,7 @@ const createIntegrationSchema = z.object({
 });
 
 const updateIntegrationSchema = z.object({
-  accountId: z.string().uuid().optional(),
+  accountId: z.string().min(1).optional(),
   apiToken: z.string().min(1).optional(),
   bonusProgramId: z.string().uuid().optional(),
   syncDirection: z.nativeEnum(SyncDirection).optional(),

@@ -44,7 +44,7 @@ import { Loader2, Save, Trash2, TestTube2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const formSchema = z.object({
-  accountId: z.string().uuid('Account ID должен быть в формате UUID'),
+  accountId: z.string().min(1, 'Account ID обязателен'),
   apiToken: z.string().min(1, 'API Token обязателен'),
   bonusProgramId: z
     .string()
@@ -228,13 +228,11 @@ export function IntegrationForm({
                   <FormItem>
                     <FormLabel>Account ID</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder='xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-                        {...field}
-                      />
+                      <Input placeholder='a.churova@yandex.ru' {...field} />
                     </FormControl>
                     <FormDescription>
-                      UUID организации в МойСклад (из URL админ-панели)
+                      Идентификатор аккаунта (email или логин из URL:
+                      #company/[ACCOUNT_ID])
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

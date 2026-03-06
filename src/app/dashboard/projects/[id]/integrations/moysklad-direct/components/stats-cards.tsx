@@ -1,6 +1,6 @@
 /**
  * @file: stats-cards.tsx
- * @description: Sync statistics cards with animations
+ * @description: Sync statistics cards component
  * @project: SaaS Bonus System
  * @dependencies: React 19, framer-motion
  * @created: 2026-03-06
@@ -11,24 +11,14 @@
 
 import { Card } from '@/components/ui/card';
 import { motion } from 'framer-motion';
-import {
-  RefreshCw,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  TrendingUp
-} from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { ArrowUpRight, ArrowDownRight, Users, AlertCircle } from 'lucide-react';
 
 interface SyncStatsCardsProps {
   stats: {
     totalSyncs: number;
     successfulSyncs: number;
     failedSyncs: number;
-    successRate: number;
-    lastSyncTime: Date | null;
-    totalBonusSynced: number;
+    lastSyncDuration: number | null;
   };
 }
 
@@ -50,41 +40,36 @@ export function SyncStatsCards({ stats }: SyncStatsCardsProps) {
     {
       title: 'Всего синхронизаций',
       value: stats.totalSyncs,
-      description: 'Общее количество операций',
-      icon: RefreshCw,
+      description: 'За все время',
+      icon: Users,
       iconColor: 'text-blue-500',
       iconBgColor: 'bg-blue-500/10'
     },
     {
-      title: 'Успешность',
-      value: `${stats.successRate.toFixed(1)}%`,
-      description: `${stats.successfulSyncs} успешных`,
-      icon: CheckCircle2,
+      title: 'Успешных',
+      value: stats.successfulSyncs,
+      description: `${stats.totalSyncs > 0 ? Math.round((stats.successfulSyncs / stats.totalSyncs) * 100) : 0}% от общего числа`,
+      icon: ArrowUpRight,
       iconColor: 'text-emerald-500',
       iconBgColor: 'bg-emerald-500/10'
     },
     {
-      title: 'Последняя синхронизация',
-      value: stats.lastSyncTime
-        ? formatDistanceToNow(new Date(stats.lastSyncTime), {
-            addSuffix: true,
-            locale: ru
-          })
-        : 'Нет данных',
-      description: stats.lastSyncTime
-        ? new Date(stats.lastSyncTime).toLocaleString('ru-RU')
-        : 'Еще не выполнялась',
-      icon: Clock,
-      iconColor: 'text-amber-500',
-      iconBgColor: 'bg-amber-500/10'
+      title: 'С ошибками',
+      value: stats.failedSyncs,
+      description: `${stats.totalSyncs > 0 ? Math.round((stats.failedSyncs / stats.totalSyncs) * 100) : 0}% от общего числа`,
+      icon: AlertCircle,
+      iconColor: 'text-rose-500',
+      iconBgColor: 'bg-rose-500/10'
     },
     {
-      title: 'Всего бонусов',
-      value: stats.totalBonusSynced.toLocaleString('ru-RU'),
-      description: 'Синхронизировано бонусов',
-      icon: TrendingUp,
-      iconColor: 'text-purple-500',
-      iconBgColor: 'bg-purple-500/10'
+      title: 'Последняя синхронизация',
+      value: stats.lastSyncDuration
+        ? `${(stats.lastSyncDuration / 1000).toFixed(2)}s`
+        : 'N/A',
+      description: 'Время выполнения',
+      icon: ArrowDownRight,
+      iconColor: 'text-amber-500',
+      iconBgColor: 'bg-amber-500/10'
     }
   ];
 
@@ -97,7 +82,7 @@ export function SyncStatsCards({ stats }: SyncStatsCardsProps) {
     >
       {statsData.map((stat, index) => (
         <motion.div key={index} variants={item}>
-          <div className='glass-card relative overflow-hidden rounded-xl border border-zinc-200 p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
+          <div className='glass-card relative overflow-hidden rounded-xl border p-6 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50'>
             <div
               className={`absolute top-4 right-4 rounded-full ${stat.iconBgColor} p-2.5 ${stat.iconColor}`}
             >
