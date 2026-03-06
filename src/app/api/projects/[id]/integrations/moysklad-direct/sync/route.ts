@@ -27,7 +27,7 @@ const syncRequestSchema = z.object({
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const admin = await getCurrentAdmin();
@@ -36,7 +36,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id: projectId } = params;
+    const resolvedParams = await params;
+    const projectId = resolvedParams.id;
 
     // Verify project ownership
     const project = await db.project.findUnique({
