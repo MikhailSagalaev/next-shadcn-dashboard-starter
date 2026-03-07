@@ -12,6 +12,7 @@ import { feedbackTemplate } from './templates/feedback.template';
 import { webinarTemplate } from './templates/webinar.template';
 import { supportTemplate } from './templates/support.template';
 import { gamificationTemplate } from './templates/gamification.template';
+import { loyaltyWithSubscriptionTemplate } from './templates/loyalty-with-subscription.template';
 import loyaltySystemWorkflow from '@/lib/workflow-templates/loyalty-system.json';
 
 // Временный импорт для обратной совместимости, в идеале его тоже нужно вынести
@@ -115,7 +116,7 @@ export interface TemplateFilter {
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   tags?: string[];
   search?: string;
-  sortBy?: 'popular' | 'rating' | 'newest' | 'name';
+  sortBy?: 'popular' | 'newest' | 'name';
   limit?: number;
   offset?: number;
 }
@@ -183,9 +184,6 @@ class BotTemplatesService {
     switch (filter.sortBy) {
       case 'popular':
         filteredTemplates.sort((a, b) => b.installs - a.installs);
-        break;
-      case 'rating':
-        filteredTemplates.sort((a, b) => b.rating - a.rating);
         break;
       case 'newest':
         filteredTemplates.sort(
@@ -444,7 +442,7 @@ class BotTemplatesService {
         !userInstallations.some((i) => i.templateId === template.id)
     );
 
-    return recommended.sort((a, b) => b.rating - a.rating).slice(0, limit);
+    return recommended.sort((a, b) => b.installs - a.installs).slice(0, limit);
   }
 
   /**
@@ -466,7 +464,7 @@ class BotTemplatesService {
           ) ||
           template.category.toLowerCase().includes(searchLower)
       )
-      .sort((a, b) => b.rating - a.rating)
+      .sort((a, b) => b.installs - a.installs)
       .slice(0, limit);
   }
 
@@ -563,6 +561,7 @@ class BotTemplatesService {
     // Загружаем все шаблоны
     this.templates = [
       loyaltySystemTemplate,
+      loyaltyWithSubscriptionTemplate,
       shopTemplate,
       feedbackTemplate,
       webinarTemplate,

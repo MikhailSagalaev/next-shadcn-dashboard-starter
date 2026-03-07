@@ -31,7 +31,8 @@ const segmentTranslations: Record<string, string> = {
   mailings: 'Рассылки',
   chats: 'Чаты',
   workflow: 'Workflow',
-  constructor: 'Конструктор'
+  constructor: 'Конструктор',
+  templates: 'Шаблоны'
 };
 
 // Пользовательские маршруты с полными переводами
@@ -44,6 +45,10 @@ const routeMapping: Record<string, BreadcrumbItem[]> = {
   '/dashboard/bonuses': [
     { title: 'Панель управления', link: '/dashboard' },
     { title: 'Бонусы', link: '/dashboard/bonuses' }
+  ],
+  '/dashboard/templates': [
+    { title: 'Панель управления', link: '/dashboard' },
+    { title: 'Шаблоны', link: '/dashboard/templates' }
   ],
   '/dashboard/notifications': [
     { title: 'Панель управления', link: '/dashboard' },

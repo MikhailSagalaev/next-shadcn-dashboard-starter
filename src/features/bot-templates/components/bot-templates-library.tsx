@@ -82,12 +82,13 @@ const categoryIcons = {
   entertainment: Gamepad2,
   utility: Settings,
   marketing: Megaphone,
-  hr: UserCheck
+  hr: UserCheck,
+  loyalty: Star
 };
 
 const categoryLabels = {
   customer_support: 'Поддержка клиентов',
-  ecommerce: 'E-commerce',
+  ecommerce: 'Электронная коммерция',
   lead_generation: 'Генерация лидов',
   booking: 'Бронирование',
   survey: 'Опросы',
@@ -95,7 +96,8 @@ const categoryLabels = {
   entertainment: 'Развлечения',
   utility: 'Утилиты',
   marketing: 'Маркетинг',
-  hr: 'HR'
+  hr: 'HR',
+  loyalty: 'Программы лояльности'
 };
 
 const difficultyLabels = {
@@ -235,9 +237,9 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
     'all' | 'beginner' | 'intermediate' | 'advanced'
   >('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<
-    'popular' | 'rating' | 'newest' | 'name'
-  >('popular');
+  const [sortBy, setSortBy] = useState<'popular' | 'newest' | 'name'>(
+    'popular'
+  );
   const [selectedTemplate, setSelectedTemplate] = useState<BotTemplate | null>(
     null
   );
@@ -363,9 +365,6 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
       case 'popular':
         filtered.sort((a, b) => b.installs - a.installs);
         break;
-      case 'rating':
-        filtered.sort((a, b) => b.rating - a.rating);
-        break;
       case 'newest':
         filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         break;
@@ -459,12 +458,12 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
         <div>
           <h1 className='text-2xl font-bold'>Библиотека шаблонов</h1>
           <p className='text-muted-foreground'>
-            Готовые workflow для быстрого создания ботов
+            Готовые решения для быстрого запуска бонусных программ
           </p>
         </div>
         <div className='text-right'>
           <p className='text-2xl font-bold'>{templates.length}</p>
-          <p className='text-muted-foreground text-sm'>шаблонов доступно</p>
+          <p className='text-muted-foreground text-sm'>доступно шаблонов</p>
         </div>
       </div>
 
@@ -553,10 +552,9 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
                     <SelectValue placeholder='Сортировка' />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='popular'>Популярные</SelectItem>
-                    <SelectItem value='rating'>По рейтингу</SelectItem>
-                    <SelectItem value='newest'>Новые</SelectItem>
-                    <SelectItem value='name'>По названию</SelectItem>
+                    <SelectItem value='popular'>По популярности</SelectItem>
+                    <SelectItem value='newest'>Сначала новые</SelectItem>
+                    <SelectItem value='name'>По алфавиту</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -725,22 +723,13 @@ export const BotTemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
               </div>
 
               {/* Статистика */}
-              <div className='bg-muted/50 grid grid-cols-4 gap-4 rounded-lg p-4'>
+              <div className='bg-muted/50 grid grid-cols-3 gap-4 rounded-lg p-4'>
                 <div className='text-center'>
                   <div className='flex items-center justify-center gap-1 text-2xl font-bold'>
                     <Download className='text-muted-foreground h-5 w-5' />
                     {selectedTemplate.installs}
                   </div>
                   <div className='text-muted-foreground text-xs'>установок</div>
-                </div>
-                <div className='text-center'>
-                  <div className='flex items-center justify-center gap-1 text-2xl font-bold'>
-                    <Star className='h-5 w-5 fill-yellow-400 text-yellow-400' />
-                    {(selectedTemplate.rating || 0).toFixed(1)}
-                  </div>
-                  <div className='text-muted-foreground text-xs'>
-                    {selectedTemplate.reviews} отзывов
-                  </div>
                 </div>
                 <div className='text-center'>
                   <div className='flex items-center justify-center gap-1 text-2xl font-bold'>

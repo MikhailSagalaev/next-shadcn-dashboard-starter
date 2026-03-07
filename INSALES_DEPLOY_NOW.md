@@ -21,7 +21,7 @@ git pull
 npx prisma generate
 
 # 5. Перезапустить приложение
-pm2 restart bonus-app
+npx prisma generate
 
 # 6. Проверить статус
 pm2 status
