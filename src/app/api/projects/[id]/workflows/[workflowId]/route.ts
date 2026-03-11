@@ -13,7 +13,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import type { UpdateWorkflowRequest } from '@/types/workflow';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
-import { validateWorkflowServer } from '@/lib/services/workflow/workflow-validator';
+import { validateWorkflowServer } from '@/lib/services/workflow/server-workflow-validator';
 import { normalizeNodes } from '@/lib/services/workflow/utils/node-utils';
 
 // GET /api/projects/[id]/workflows/[workflowId] - Получить workflow
@@ -107,7 +107,10 @@ export async function PUT(
         (e) => e.type === 'error'
       );
       if (criticalErrors.length > 0) {
-        console.error('Workflow validation failed during PUT:', JSON.stringify(criticalErrors, null, 2));
+        console.error(
+          'Workflow validation failed during PUT:',
+          JSON.stringify(criticalErrors, null, 2)
+        );
         return NextResponse.json(
           {
             error: 'Ошибка валидации workflow',
