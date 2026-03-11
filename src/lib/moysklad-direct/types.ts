@@ -78,12 +78,14 @@ export interface SyncBonusAccrualParams {
   userId: string;
   amount: number;
   source: string;
+  description?: string;
 }
 
 export interface SyncBonusSpendingParams {
   userId: string;
   amount: number;
   source: string;
+  description?: string;
 }
 
 export interface BalanceCheckResult {

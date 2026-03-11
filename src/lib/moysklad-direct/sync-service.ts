@@ -18,6 +18,7 @@ import {
   MoySkladBonusTransaction
 } from './types';
 import { BonusType, TransactionType, SyncDirection } from '@prisma/client';
+import { UserService } from '../services/user.service';
 
 // Global memory lock to prevent race conditions during parallel syncs
 const syncLocks = new Set<string>();
@@ -779,6 +780,9 @@ export class SyncService {
               newOurBalance: finalOurBalance,
               moySkladBalance
             },
+            responseData: {
+              message: correctionMessage || 'Изменений не требуется'
+            },
             status: 'success',
             errorMessage: correctionMessage
           }
@@ -908,17 +912,7 @@ export class SyncService {
    * Get available bonus balance for user
    */
   private async getAvailableBalance(userId: string): Promise<number> {
-    const result = await db.bonus.aggregate({
-      where: {
-        userId,
-        isUsed: false,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-      },
-      _sum: {
-        amount: true
-      }
-    });
-
-    return Number(result._sum.amount || 0);
+    const userBalance = await UserService.getUserBalance(userId);
+    return userBalance.currentBalance;
   }
 }
