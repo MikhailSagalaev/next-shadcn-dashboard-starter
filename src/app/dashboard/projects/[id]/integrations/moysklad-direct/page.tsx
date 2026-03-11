@@ -19,7 +19,7 @@ import { SyncStatsCards } from './components/stats-cards';
 import { SyncLogsTable } from './components/sync-logs-table';
 
 export const metadata = {
-  title: 'МойСклад Direct Integration | Gupil',
+  title: 'МойСклад (Direct API) | Gupil',
   description:
     'Настройка прямой интеграции с МойСклад для синхронизации бонусов'
 };
@@ -41,7 +41,7 @@ export default async function MoySkladDirectIntegrationPage({
       {/* Header */}
       <div className='flex items-center justify-between'>
         <Heading
-          title='МойСклад Direct API'
+          title='МойСклад (Direct API)'
           description='Прямая интеграция с МойСклад для синхронизации бонусов между онлайн и офлайн каналами'
         />
       </div>

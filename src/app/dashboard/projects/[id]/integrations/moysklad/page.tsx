@@ -4,7 +4,7 @@
  * @project: SaaS Bonus System
  * @created: 2026-03-02
  * @author: AI Assistant
- * 
+ *
  * Архитектура: МЫ являемся API provider, МойСклад вызывает НАШИ endpoints
  */
 
@@ -20,8 +20,8 @@ import { MoySkladApiLogs } from './components/api-logs';
 import { MoySkladCredentials } from './components/credentials';
 
 export const metadata = {
-  title: 'МойСклад Loyalty API | Gupil',
-  description: 'Configure МойСклад Loyalty API integration'
+  title: 'МойСклад (Loyalty API) | Gupil',
+  description: 'Настройка интеграции с МойСклад через Loyalty API Provider'
 };
 
 async function getIntegrationData(projectId: string) {
@@ -40,7 +40,7 @@ async function getIntegrationData(projectId: string) {
       id: true,
       name: true,
       bonusBehavior: true,
-      bonusExpiryDays: true,
+      bonusExpiryDays: true
     }
   });
 
@@ -59,7 +59,7 @@ async function getIntegrationData(projectId: string) {
       isActive: true,
       lastRequestAt: true,
       createdAt: true,
-      updatedAt: true,
+      updatedAt: true
     }
   });
 
@@ -68,7 +68,7 @@ async function getIntegrationData(projectId: string) {
     ? await db.moySkladApiLog.aggregate({
         where: { integrationId: integration.id },
         _count: { id: true },
-        _avg: { processingTimeMs: true },
+        _avg: { processingTimeMs: true }
       })
     : null;
 
@@ -100,7 +100,7 @@ async function getIntegrationData(projectId: string) {
       avgProcessingTime: stats?._avg.processingTimeMs || 0,
       successRate: stats?._count.id
         ? ((successCount / stats._count.id) * 100).toFixed(1)
-        : '0',
+        : '0'
     }
   };
 }
@@ -117,7 +117,7 @@ export default async function MoySkladIntegrationPage({
       {/* Header */}
       <div className='flex items-center justify-between'>
         <Heading
-          title='МойСклад Loyalty API'
+          title='МойСклад (Loyalty API)'
           description='Интеграция с МойСклад через Loyalty API Provider'
         />
       </div>
@@ -161,32 +161,37 @@ export default async function MoySkladIntegrationPage({
       {/* Setup Instructions */}
       {!integration && (
         <div className='rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950'>
-          <h3 className='text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4'>
+          <h3 className='mb-4 text-lg font-semibold text-blue-900 dark:text-blue-100'>
             📘 Инструкция по настройке
           </h3>
-          <ol className='list-decimal list-inside space-y-3 text-sm text-blue-800 dark:text-blue-200'>
+          <ol className='list-inside list-decimal space-y-3 text-sm text-blue-800 dark:text-blue-200'>
             <li>
-              <strong>Активируйте интеграцию</strong> - заполните форму ниже и нажмите "Активировать"
+              <strong>Активируйте интеграцию</strong> - заполните форму ниже и
+              нажмите "Активировать"
             </li>
             <li>
-              <strong>Скопируйте credentials</strong> - после активации вы получите Auth Token и Base URL
+              <strong>Скопируйте credentials</strong> - после активации вы
+              получите Auth Token и Base URL
             </li>
             <li>
-              <strong>Установите решение в МойСклад</strong> - перейдите в маркетплейс МойСклад и установите наше решение
+              <strong>Установите решение в МойСклад</strong> - перейдите в
+              маркетплейс МойСклад и установите наше решение
             </li>
             <li>
-              <strong>Настройте интеграцию</strong> - введите Auth Token и Base URL в настройках решения в МойСклад
+              <strong>Настройте интеграцию</strong> - введите Auth Token и Base
+              URL в настройках решения в МойСклад
             </li>
             <li>
-              <strong>Протестируйте</strong> - создайте тестовую продажу в МойСклад и проверьте начисление бонусов
+              <strong>Протестируйте</strong> - создайте тестовую продажу в
+              МойСклад и проверьте начисление бонусов
             </li>
           </ol>
-          
-          <div className='mt-4 p-4 bg-white dark:bg-zinc-900 rounded border border-blue-300 dark:border-blue-800'>
-            <p className='text-sm font-medium text-blue-900 dark:text-blue-100 mb-2'>
+
+          <div className='mt-4 rounded border border-blue-300 bg-white p-4 dark:border-blue-800 dark:bg-zinc-900'>
+            <p className='mb-2 text-sm font-medium text-blue-900 dark:text-blue-100'>
               ℹ️ Важно понимать:
             </p>
-            <ul className='list-disc list-inside space-y-1 text-xs text-blue-700 dark:text-blue-300'>
+            <ul className='list-inside list-disc space-y-1 text-xs text-blue-700 dark:text-blue-300'>
               <li>МойСклад вызывает НАШИ endpoints (мы - API provider)</li>
               <li>Мы рассчитываем скидки и бонусы в реальном времени</li>
               <li>Не требуется синхронизация данных между системами</li>

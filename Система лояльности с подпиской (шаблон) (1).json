@@ -1,6 +1,6 @@
 {
-  "id": "cmjic6qpj00059ex4zlbdomdp",
-  "projectId": "cmfa8oqx000019e372pk9547l",
+  "id": "cmmgbkqku00019e1b3bimcy4u",
+  "projectId": "cmmf0rf0j00049eh2d926hx3t",
   "name": "Система лояльности с подпиской (шаблон)",
   "description": "Система лояльности с обязательной подпиской на канал. Приветственные бонусы начисляются только после подтверждения подписки на канал.",
   "isActive": true,
@@ -171,7 +171,7 @@
               "buttons": [
                 [
                   {
-                    "url": "https://t.me/maokacosmetics",
+                    "url": "https://t.me/example_channel",
                     "text": "📺 Подписаться на канал"
                   }
                 ],
@@ -228,7 +228,7 @@
         "config": {
           "action.check_channel_subscription": {
             "assignTo": "isChannelSubscribed",
-            "channelId": "@maokacosmetics"
+            "channelId": "@example_channel"
           }
         },
         "description": ""
@@ -673,13 +673,13 @@
         "label": "Требуется регистрация на сайте",
         "config": {
           "message": {
-            "text": "🌐 Для участия в программе лояльности необходимо зарегистрироваться на нашем сайте.\n\n📝 Пожалуйста, перейдите по ссылке и создайте аккаунт:\n\n🔗 https://maoka.ru/members/signup\n\n✨ После регистрации вернитесь к боту и поделитесь контактом для активации бонусов!",
+            "text": "🌐 Для участия в программе лояльности необходимо зарегистрироваться на нашем сайте.\n\n📝 Пожалуйста, перейдите по ссылке и создайте аккаунт:\n\n🔗 https://example.com/members/signup\n\n✨ После регистрации вернитесь к боту и поделитесь контактом для активации бонусов!",
             "keyboard": {
               "type": "inline",
               "buttons": [
                 [
                   {
-                    "url": "https://maoka.ru/members/signup",
+                    "url": "https://example.com/members/signup",
                     "text": "🌐 Зарегистрироваться на сайте"
                   }
                 ],
@@ -1357,42 +1357,8 @@
       "animated": true
     }
   ],
-  "variables": [
-    {
-      "id": "telegramUser",
-      "name": "telegramUser",
-      "type": "object",
-      "description": "Данные пользователя по Telegram ID",
-      "defaultValue": null
-    },
-    {
-      "id": "contactUser",
-      "name": "contactUser",
-      "type": "object",
-      "description": "Данные пользователя по контакту/email",
-      "defaultValue": null
-    },
-    {
-      "id": "hasWelcomeBonus",
-      "name": "hasWelcomeBonus",
-      "type": "boolean",
-      "description": "Есть ли приветственные бонусы",
-      "defaultValue": false
-    },
-    {
-      "id": "isChannelSubscribed",
-      "name": "isChannelSubscribed",
-      "type": "boolean",
-      "description": "Подписан ли пользователь на канал",
-      "defaultValue": false
-    }
-  ],
-  "settings": {
-    "autoSave": true,
-    "gridSnap": true,
-    "retryAttempts": 3,
-    "maxExecutionTime": 60000
-  },
-  "createdAt": "2025-12-23T08:42:15.605Z",
-  "updatedAt": "2025-12-28T08:22:38.141Z"
+  "variables": [],
+  "settings": {},
+  "createdAt": "2026-03-07T12:48:43.661Z",
+  "updatedAt": "2026-03-07T12:48:54.706Z"
 }

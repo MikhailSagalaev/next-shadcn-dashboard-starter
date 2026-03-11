@@ -54,6 +54,7 @@ import {
   type OperationMode
 } from './operation-mode-selector';
 import { OperationModeConfirmDialog } from './operation-mode-confirm-dialog';
+import { BonusModeSelector } from './bonus-mode-selector';
 
 interface ProjectSettingsViewProps {
   projectId: string;
@@ -85,6 +86,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
       | 'SPEND_AND_EARN'
       | 'SPEND_ONLY'
       | 'EARN_ONLY',
+    bonusMode: 'SIMPLE' as 'SIMPLE' | 'LEVELS',
     operationMode: 'WITH_BOT' as OperationMode,
     isActive: true,
     welcomeBonusAmount: 0,
@@ -128,6 +130,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
             | 'SPEND_AND_EARN'
             | 'SPEND_ONLY'
             | 'EARN_ONLY',
+          bonusMode: (projectData.bonusMode || 'SIMPLE') as 'SIMPLE' | 'LEVELS',
           operationMode: (projectData.operationMode ||
             'WITH_BOT') as OperationMode,
           isActive: projectData.isActive ?? true,
@@ -184,6 +187,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
       formData.domain !== (project.domain || '') ||
       formData.bonusPercentage !== Number(project.bonusPercentage || 1.0) ||
       formData.bonusExpiryDays !== (project.bonusExpiryDays || 365) ||
+      formData.bonusMode !== (project.bonusMode || 'SIMPLE') ||
       formData.operationMode !== (project.operationMode || 'WITH_BOT') ||
       formData.isActive !== (project.isActive ?? true) ||
       formData.welcomeBonusAmount !== Number(project.welcomeBonus || 0) ||
@@ -548,12 +552,51 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className='space-y-2'>
+                    <Label htmlFor='bonusExpiryDays'>
+                      Срок действия бонусов (дней)
+                    </Label>
+                    <Input
+                      id='bonusExpiryDays'
+                      type='number'
+                      min='1'
+                      max='3650'
+                      step='1'
+                      value={formData.bonusExpiryDays}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bonusExpiryDays: parseInt(e.target.value) || 365
+                        })
+                      }
+                      placeholder='365'
+                    />
+                    <p className='text-muted-foreground text-xs'>
+                      Через сколько дней истекают начисленные бонусы (по
+                      умолчанию 365 дней)
+                    </p>
+                  </div>
                 </div>
 
-                {/* Показываем поле процента только если нет уровней */}
-                {!hasLevels ? (
-                  <div className='space-y-2'>
-                    <Label htmlFor='bonusPercentage'>Процент бонусов (%)</Label>
+                {/* Режим начисления бонусов */}
+                <div className='col-span-2'>
+                  <BonusModeSelector
+                    value={formData.bonusMode}
+                    onChange={(mode) =>
+                      setFormData({ ...formData, bonusMode: mode })
+                    }
+                    hasLevels={hasLevels}
+                    levelsCount={hasLevels ? 1 : 0}
+                  />
+                </div>
+
+                {/* Настройки в зависимости от режима */}
+                {formData.bonusMode === 'SIMPLE' && (
+                  <div className='col-span-2 space-y-2'>
+                    <Label htmlFor='bonusPercentage'>
+                      Процент начисления бонусов (%)
+                    </Label>
                     <Input
                       id='bonusPercentage'
                       type='number'
@@ -567,16 +610,20 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                           bonusPercentage: parseFloat(e.target.value) || 0
                         })
                       }
-                      placeholder='1.0'
+                      placeholder='5.0'
                     />
                     <p className='text-muted-foreground text-xs'>
-                      Базовый процент бонусов за каждую покупку
+                      Пример: При покупке на 1000₽ клиент получит{' '}
+                      {Math.round(1000 * (formData.bonusPercentage / 100))}₽
+                      бонусов
                     </p>
                   </div>
-                ) : (
-                  <div className='space-y-2'>
+                )}
+
+                {formData.bonusMode === 'LEVELS' && (
+                  <div className='col-span-2 space-y-2'>
                     <Label className='text-muted-foreground'>
-                      Процент бонусов
+                      Процент начисления
                     </Label>
                     <div className='rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950'>
                       <p className='text-sm text-blue-700 dark:text-blue-300'>
@@ -587,6 +634,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                         >
                           уровнями бонусов
                         </Link>
+                        . Перейдите в раздел для настройки уровней.
                       </p>
                     </div>
                   </div>

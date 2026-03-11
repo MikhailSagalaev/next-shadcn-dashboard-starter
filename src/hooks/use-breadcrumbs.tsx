@@ -14,6 +14,7 @@ const segmentTranslations: Record<string, string> = {
   projects: 'Проекты',
   settings: 'Настройки',
   integration: 'Интеграция',
+  integrations: 'Интеграции',
   users: 'Пользователи',
   analytics: 'Аналитика',
   bot: 'Бот',
@@ -32,7 +33,11 @@ const segmentTranslations: Record<string, string> = {
   chats: 'Чаты',
   workflow: 'Workflow',
   constructor: 'Конструктор',
-  templates: 'Шаблоны'
+  templates: 'Шаблоны',
+  moysklad: 'МойСклад (Loyalty API)',
+  'moysklad-direct': 'МойСклад (Direct API)',
+  insales: 'InSales',
+  tilda: 'Tilda'
 };
 
 // Пользовательские маршруты с полными переводами

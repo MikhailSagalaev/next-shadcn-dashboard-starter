@@ -6,6 +6,7 @@ export interface Project {
   webhookSecret: string;
   bonusPercentage: number;
   bonusExpiryDays: number;
+  bonusMode?: 'SIMPLE' | 'LEVELS'; // ✨ НОВОЕ: Режим начисления бонусов
   // bonusBehavior: 'SPEND_AND_EARN' | 'SPEND_ONLY' | 'EARN_ONLY';
   operationMode?: 'WITH_BOT' | 'WITHOUT_BOT';
   welcomeBonus: number;
@@ -205,8 +206,10 @@ export type BonusType =
   | 'BIRTHDAY'
   | 'MANUAL'
   | 'REFERRAL'
-  | 'PROMO';
+  | 'PROMO'
+  | 'WELCOME'; // ✨ НОВОЕ: Приветственные бонусы
 export type TransactionType = 'EARN' | 'SPEND' | 'EXPIRE' | 'REFUND';
+export type BonusMode = 'SIMPLE' | 'LEVELS'; // ✨ НОВОЕ: Режим начисления бонусов
 
 // Типы для API
 export interface CreateProjectInput {
@@ -223,6 +226,7 @@ export interface UpdateProjectInput {
   domain?: string;
   bonusPercentage?: number;
   bonusExpiryDays?: number;
+  bonusMode?: BonusMode; // ✨ НОВОЕ: Режим начисления бонусов
   isActive?: boolean;
   botToken?: string;
   botUsername?: string;

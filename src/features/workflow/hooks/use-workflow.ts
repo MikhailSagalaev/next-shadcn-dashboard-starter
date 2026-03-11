@@ -53,7 +53,9 @@ export function useWorkflow(projectId: string) {
     async (workflowId: string) => {
       try {
         setIsLoading(true);
-        const response = await fetch(`/api/projects/${projectId}/workflows/${workflowId}`);
+        const response = await fetch(
+          `/api/projects/${projectId}/workflows/${workflowId}`
+        );
         if (!response.ok) {
           throw new Error('Failed to load workflow');
         }
@@ -140,11 +142,14 @@ export function useWorkflow(projectId: string) {
     async (workflowId: string, updates: UpdateWorkflowRequest) => {
       setIsSaving(true);
       try {
-        const response = await fetch(`/api/projects/${projectId}/workflows/${workflowId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates)
-        });
+        const response = await fetch(
+          `/api/projects/${projectId}/workflows/${workflowId}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+          }
+        );
 
         if (!response.ok) {
           throw new Error('Failed to update workflow');
@@ -196,9 +201,12 @@ export function useWorkflow(projectId: string) {
   const deleteWorkflow = useCallback(
     async (workflowId: string) => {
       try {
-        const response = await fetch(`/api/projects/${projectId}/workflows/${workflowId}`, {
-          method: 'DELETE'
-        });
+        const response = await fetch(
+          `/api/projects/${projectId}/workflows/${workflowId}`,
+          {
+            method: 'DELETE'
+          }
+        );
 
         if (!response.ok) {
           throw new Error('Failed to delete workflow');
@@ -226,63 +234,89 @@ export function useWorkflow(projectId: string) {
   );
 
   // Export workflow
-  const exportWorkflow = useCallback((workflow: Workflow) => {
-    const dataStr = JSON.stringify(workflow, null, 2);
-    const dataUri =
-      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `${workflow.name}.json`;
+  const exportWorkflow = useCallback(
+    (workflow: Workflow) => {
+      const dataStr = JSON.stringify(workflow, null, 2);
+      const dataUri =
+        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+      const exportFileDefaultName = `${workflow.name}.json`;
 
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    toast({
-      title: 'Workflow экспортирован',
-      description: `Workflow "${workflow.name}" успешно экспортирован.`,
-      variant: 'default'
-    });
-  }, [toast]);
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+      toast({
+        title: 'Workflow экспортирован',
+        description: `Workflow "${workflow.name}" успешно экспортирован.`,
+        variant: 'default'
+      });
+    },
+    [toast]
+  );
 
   // Import workflow
-  const importWorkflow = useCallback(async (file: File) => {
-    try {
-      const fileText = await file.text();
-      const importedWorkflow: Workflow = JSON.parse(fileText);
+  const importWorkflow = useCallback(
+    async (file: File) => {
+      try {
+        const fileText = await file.text();
+        const importedWorkflow: Workflow = JSON.parse(fileText);
 
-      // Basic validation
-      if (!importedWorkflow.name || !importedWorkflow.nodes || !importedWorkflow.connections) {
-        throw new Error('Invalid workflow file format');
-      }
+        // Basic validation
+        if (!importedWorkflow.name || !importedWorkflow.nodes) {
+          throw new Error('Invalid workflow file format');
+        }
 
-      // Create a new workflow based on the imported one
-      const newWorkflow = await createWorkflow(
-        `${importedWorkflow.name} (импорт)`,
-        importedWorkflow.description
-      );
+        let nodes = importedWorkflow.nodes;
+        let connections = importedWorkflow.connections || [];
 
-      if (newWorkflow) {
-        // Update the newly created workflow with imported data
-        await updateWorkflow(newWorkflow.id, {
-          nodes: importedWorkflow.nodes,
-          connections: importedWorkflow.connections,
-          variables: importedWorkflow.variables,
-          settings: importedWorkflow.settings
-        });
+        // Extract embedded edges if they were exported inside the nodes array
+        if (Array.isArray(nodes)) {
+          const actualNodes = nodes.filter(
+            (n: any) => !n.id?.toString().startsWith('edge-') && n.position
+          );
+          const embeddedEdges = nodes.filter(
+            (n: any) =>
+              n.id?.toString().startsWith('edge-') || (n.source && n.target)
+          );
+
+          nodes = actualNodes;
+
+          if (embeddedEdges.length > 0 && connections.length === 0) {
+            connections = embeddedEdges as any;
+          }
+        }
+
+        // Create a new workflow based on the imported one
+        const newWorkflow = await createWorkflow(
+          `${importedWorkflow.name} (импорт)`,
+          importedWorkflow.description
+        );
+
+        if (newWorkflow) {
+          // Update the newly created workflow with imported data
+          await updateWorkflow(newWorkflow.id, {
+            nodes,
+            connections,
+            variables: importedWorkflow.variables || [],
+            settings: importedWorkflow.settings || {}
+          });
+          toast({
+            title: 'Workflow импортирован',
+            description: `Workflow "${importedWorkflow.name}" успешно импортирован.`,
+            variant: 'default'
+          });
+        }
+      } catch (error) {
+        console.error('Failed to import workflow:', error);
         toast({
-          title: 'Workflow импортирован',
-          description: `Workflow "${importedWorkflow.name}" успешно импортирован.`,
-          variant: 'default'
+          title: 'Ошибка импорта',
+          description: `Не удалось импортировать workflow: ${error instanceof Error ? error.message : String(error)}`,
+          variant: 'destructive'
         });
       }
-    } catch (error) {
-      console.error('Failed to import workflow:', error);
-      toast({
-        title: 'Ошибка импорта',
-        description: `Не удалось импортировать workflow: ${error instanceof Error ? error.message : String(error)}`,
-        variant: 'destructive'
-      });
-    }
-  }, [createWorkflow, updateWorkflow, toast]);
+    },
+    [createWorkflow, updateWorkflow, toast]
+  );
 
   useEffect(() => {
     loadWorkflows();

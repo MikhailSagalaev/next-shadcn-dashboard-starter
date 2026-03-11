@@ -1,0 +1,1372 @@
+﻿{
+    "id":  "cmmgbkqku00019e1b3bimcy4u",
+    "projectId":  "cmmf0rf0j00049eh2d926hx3t",
+    "name":  "РЎРёСЃС‚РµРјР° Р»РѕСЏР»СЊРЅРѕСЃС‚Рё СЃ РїРѕРґРїРёСЃРєРѕР№ (С€Р°Р±Р»РѕРЅ)",
+    "description":  "РЎРёСЃС‚РµРјР° Р»РѕСЏР»СЊРЅРѕСЃС‚Рё СЃ РѕР±СЏР·Р°С‚РµР»СЊРЅРѕР№ РїРѕРґРїРёСЃРєРѕР№ РЅР° РєР°РЅР°Р». РџСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹ РЅР°С‡РёСЃР»СЏСЋС‚СЃСЏ С‚РѕР»СЊРєРѕ РїРѕСЃР»Рµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ РїРѕРґРїРёСЃРєРё РЅР° РєР°РЅР°Р».",
+    "isActive":  true,
+    "nodes":  [
+                  {
+                      "id":  "start-trigger",
+                      "data":  {
+                                   "label":  "РљРѕРјР°РЅРґР° /start",
+                                   "config":  {
+                                                  "trigger.command":  {
+                                                                          "command":  "/start"
+                                                                      }
+                                              }
+                               },
+                      "type":  "trigger.command",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  122
+                                   },
+                      "position":  {
+                                       "x":  0,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-telegram-user",
+                      "data":  {
+                                   "label":  "РџСЂРѕРІРµСЂРёС‚СЊ РїРѕ Telegram ID",
+                                   "config":  {
+                                                  "action.database_query":  {
+                                                                                "query":  "check_user_by_telegram",
+                                                                                "assignTo":  "telegramUser",
+                                                                                "parameters":  {
+                                                                                                   "projectId":  "{{projectId}}",
+                                                                                                   "telegramId":  "{{telegram.userId}}"
+                                                                                               }
+                                                                            }
+                                              }
+                               },
+                      "type":  "action.database_query",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  406,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-user-status",
+                      "data":  {
+                                   "label":  "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅР°Р№РґРµРЅ?",
+                                   "config":  {
+                                                  "condition":  {
+                                                                    "operator":  "is_not_empty",
+                                                                    "variable":  "telegramUser"
+                                                                }
+                                              }
+                               },
+                      "type":  "condition",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  812,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-user-active",
+                      "data":  {
+                                   "label":  "РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ Р°РєС‚РёРІРµРЅ?",
+                                   "config":  {
+                                                  "condition":  {
+                                                                    "value":  true,
+                                                                    "operator":  "equals",
+                                                                    "variable":  "telegramUser.isActive"
+                                                                }
+                                              }
+                               },
+                      "type":  "condition",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  1218,
+                                       "y":  0
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "active-user-profile",
+                      "data":  {
+                                   "label":  "РџСЂРѕС„РёР»СЊ Р°РєС‚РёРІРЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "рџ‘‹ Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РЅР°Р·Р°Рґ, \u003cb\u003e{user.firstName}\u003c/b\u003e!\n\nрџ’µ Р’Р°С€ Р±Р°Р»Р°РЅСЃ Р±РѕРЅСѓСЃРѕРІ: \u003cb\u003e{user.balanceFormatted}\u003c/b\u003e\nрџ“Љ Р’СЃРµРіРѕ Р·Р°СЂР°Р±РѕС‚Р°РЅРѕ: \u003cb\u003e{user.totalEarnedFormatted}\u003c/b\u003e\nрџ›’ РџРѕС‚СЂР°С‡РµРЅРѕ: \u003cb\u003e{user.totalSpentFormatted}\u003c/b\u003e\nрџЏ† РСЃС‚РµРєР°РµС‚ РІ Р±Р»РёР¶Р°Р№С€РёРµ 30 РґРЅРµР№: \u003cb\u003e{user.expiringBonusesFormatted}\u003c/b\u003e\n\nР’С‹Р±РµСЂРёС‚Рµ РґРµР№СЃС‚РІРёРµ:",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "рџ’° Р‘Р°Р»Р°РЅСЃ",
+                                                                                                           "callback_data":  "menu_balance"
+                                                                                                       },
+                                                                                                       {
+                                                                                                           "text":  "рџ“њ РСЃС‚РѕСЂРёСЏ",
+                                                                                                           "callback_data":  "menu_history"
+                                                                                                       }
+                                                                                                   ],
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "рџЏ† РЈСЂРѕРІРµРЅСЊ",
+                                                                                                           "callback_data":  "menu_level"
+                                                                                                       },
+                                                                                                       {
+                                                                                                           "text":  "рџ‘Ґ Р РµС„РµСЂР°Р»С‹",
+                                                                                                           "callback_data":  "menu_referrals"
+                                                                                                       }
+                                                                                                   ],
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "рџ”— РџСЂРёРіР»Р°СЃРёС‚СЊ",
+                                                                                                           "callback_data":  "menu_invite"
+                                                                                                       },
+                                                                                                       {
+                                                                                                           "text":  "вќ“ РџРѕРјРѕС‰СЊ",
+                                                                                                           "callback_data":  "menu_help"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               },
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  224
+                                   },
+                      "position":  {
+                                       "x":  1624,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "welcome-message",
+                      "data":  {
+                                   "label":  "РџСЂРёРІРµС‚СЃС‚РІРёРµ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "рџЋЃ Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ РїСЂРѕРіСЂР°РјРјСѓ Р»РѕСЏР»СЊРЅРѕСЃС‚Рё!\n\nрџ“є Р”Р»СЏ РїРѕР»СѓС‡РµРЅРёСЏ РїСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹С… Р±РѕРЅСѓСЃРѕРІ РЅРµРѕР±С…РѕРґРёРјРѕ:\n1пёЏвѓЈ РџРѕРґРїРёСЃР°С‚СЊСЃСЏ РЅР° РЅР°С€ РєР°РЅР°Р»\n2пёЏвѓЈ РџРѕРґРµР»РёС‚СЊСЃСЏ РєРѕРЅС‚Р°РєС‚РѕРј РёР»Рё РІРІРµСЃС‚Рё email\n\nрџ’° РџРѕСЃР»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ СѓСЃР»РѕРІРёР№ РІС‹ РїРѕР»СѓС‡РёС‚Рµ Р±РѕРЅСѓСЃС‹!",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "url":  "https://t.me/example_channel",
+                                                                                                           "text":  "рџ“є РџРѕРґРїРёСЃР°С‚СЊСЃСЏ РЅР° РєР°РЅР°Р»"
+                                                                                                       }
+                                                                                                   ],
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "вњ… РЇ РїРѕРґРїРёСЃР°Р»СЃСЏ",
+                                                                                                           "callback_data":  "check_subscription"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               }
+                                                              }
+                                              },
+                                   "description":  ""
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  1624,
+                                       "y":  625
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-subscription-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: РїСЂРѕРІРµСЂРёС‚СЊ РїРѕРґРїРёСЃРєСѓ",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "check_subscription"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  2030,
+                                       "y":  625
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-channel-subscription",
+                      "data":  {
+                                   "label":  "РџСЂРѕРІРµСЂРёС‚СЊ РїРѕРґРїРёСЃРєСѓ РЅР° РєР°РЅР°Р»",
+                                   "config":  {
+                                                  "action.check_channel_subscription":  {
+                                                                                            "assignTo":  "isChannelSubscribed",
+                                                                                            "channelId":  "@example_channel"
+                                                                                        }
+                                              },
+                                   "description":  ""
+                               },
+                      "type":  "action.check_channel_subscription",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  2436,
+                                       "y":  625
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-subscription-result",
+                      "data":  {
+                                   "label":  "РџРѕРґРїРёСЃР°РЅ РЅР° РєР°РЅР°Р»?",
+                                   "config":  {
+                                                  "condition":  {
+                                                                    "value":  true,
+                                                                    "operator":  "equals",
+                                                                    "variable":  "isChannelSubscribed"
+                                                                }
+                                              }
+                               },
+                      "type":  "condition",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  2842,
+                                       "y":  625
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "subscription-required-message",
+                      "data":  {
+                                   "label":  "РўСЂРµР±СѓРµС‚СЃСЏ РїРѕРґРїРёСЃРєР°",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "вќЊ Р’С‹ РЅРµ РїРѕРґРїРёСЃР°РЅС‹ РЅР° РєР°РЅР°Р»!\n\nрџ“є Р”Р»СЏ РїРѕР»СѓС‡РµРЅРёСЏ Р±РѕРЅСѓСЃРѕРІ РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ РїРѕРґРїРёС€РёС‚РµСЃСЊ РЅР° РЅР°С€ РєР°РЅР°Р» Рё РЅР°Р¶РјРёС‚Рµ \"РџСЂРѕРІРµСЂРёС‚СЊ СЃРЅРѕРІР°\".",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "url":  "https://t.me/{{project.telegramChannel}}",
+                                                                                                           "text":  "рџ“є РџРѕРґРїРёСЃР°С‚СЊСЃСЏ РЅР° РєР°РЅР°Р»"
+                                                                                                       }
+                                                                                                   ],
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "рџ”„ РџСЂРѕРІРµСЂРёС‚СЊ СЃРЅРѕРІР°",
+                                                                                                           "callback_data":  "check_subscription"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               }
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  3248,
+                                       "y":  800
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "request-contact-after-subscription",
+                      "data":  {
+                                   "label":  "Р—Р°РїСЂРѕСЃРёС‚СЊ РєРѕРЅС‚Р°РєС‚ РїРѕСЃР»Рµ РїРѕРґРїРёСЃРєРё",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "вњ… РћС‚Р»РёС‡РЅРѕ! Р’С‹ РїРѕРґРїРёСЃР°РЅС‹ РЅР° РєР°РЅР°Р».\n\nрџ“± РўРµРїРµСЂСЊ РїРѕРґРµР»РёС‚РµСЃСЊ РєРѕРЅС‚Р°РєС‚РѕРј РёР»Рё РІРІРµРґРёС‚Рµ email РґР»СЏ Р°РєС‚РёРІР°С†РёРё Р±РѕРЅСѓСЃРѕРІ:",
+                                                                  "keyboard":  {
+                                                                                   "type":  "reply",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "рџ“± РџРѕРґРµР»РёС‚СЊСЃСЏ РєРѕРЅС‚Р°РєС‚РѕРј",
+                                                                                                           "request_contact":  true
+                                                                                                       }
+                                                                                                   ],
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "вњ‰пёЏ Р’РІРµСЃС‚Рё email"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               }
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  224
+                                   },
+                      "position":  {
+                                       "x":  3248,
+                                       "y":  450
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "request-contact-confirmation",
+                      "data":  {
+                                   "label":  "Р—Р°РїСЂРѕСЃРёС‚СЊ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РєРѕРЅС‚Р°РєС‚Р°",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "рџ”Ќ РњС‹ РЅР°С€Р»Рё РІР°С€ Р°РєРєР°СѓРЅС‚, РЅРѕ РѕРЅ РЅРµР°РєС‚РёРІРµРЅ.\n\nрџ“± Р”Р»СЏ Р°РєС‚РёРІР°С†РёРё РїРѕРґРµР»РёС‚РµСЃСЊ РєРѕРЅС‚Р°РєС‚РѕРј РёР»Рё РІРІРµРґРёС‚Рµ email:\n\nвЂў РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ РґР»СЏ РѕС‚РїСЂР°РІРєРё РєРѕРЅС‚Р°РєС‚Р°\nвЂў РР»Рё РІРІРµРґРёС‚Рµ РІР°С€ email РІСЂСѓС‡РЅСѓСЋ",
+                                                                  "keyboard":  {
+                                                                                   "type":  "reply",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "РџРѕРґРµР»РёС‚СЊСЃСЏ РєРѕРЅС‚Р°РєС‚РѕРј",
+                                                                                                           "request_contact":  true
+                                                                                                       }
+                                                                                                   ],
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "Р’РІРµСЃС‚Рё email",
+                                                                                                           "callback_data":  "enter_email"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               }
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  224
+                                   },
+                      "position":  {
+                                       "x":  1624,
+                                       "y":  0
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "enter-email-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: СЂСѓС‡РЅРѕР№ РІРІРѕРґ email",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "enter_email"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  1218,
+                                       "y":  -200
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "enter-email-instructions",
+                      "data":  {
+                                   "label":  "Р—Р°РїСЂРѕСЃРёС‚СЊ email РІСЂСѓС‡РЅСѓСЋ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "вњ‰пёЏ РџРѕР¶Р°Р»СѓР№СЃС‚Р°, СѓРєР°Р¶РёС‚Рµ email, РєРѕС‚РѕСЂС‹Р№ РёСЃРїРѕР»СЊР·РѕРІР°Р»СЃСЏ РЅР° СЃР°Р№С‚Рµ.\n\nРџСЂРѕСЃС‚Рѕ РѕС‚РїСЂР°РІСЊС‚Рµ РµРіРѕ СЃРѕРѕР±С‰РµРЅРёРµРј РІ РѕС‚РІРµС‚ РЅР° СЌС‚Рѕ СЃРѕРѕР±С‰РµРЅРёРµ. Р•СЃР»Рё РѕС€РёР±Р»РёСЃСЊ вЂ” РІРІРµРґРёС‚Рµ РµС‰С‘ СЂР°Р·.",
+                                                                  "keyboard":  {
+                                                                                   "type":  "reply",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "РћС‚РјРµРЅР°"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ],
+                                                                                   "one_time_keyboard":  true
+                                                                               }
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  224
+                                   },
+                      "position":  {
+                                       "x":  2030,
+                                       "y":  -200
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-contact-user",
+                      "data":  {
+                                   "label":  "РџСЂРѕРІРµСЂРёС‚СЊ РїРѕ РєРѕРЅС‚Р°РєС‚Сѓ/email",
+                                   "config":  {
+                                                  "action.database_query":  {
+                                                                                "query":  "check_user_by_contact",
+                                                                                "assignTo":  "contactUser",
+                                                                                "parameters":  {
+                                                                                                   "email":  "{{telegram.message.text}}",
+                                                                                                   "phone":  "{{contactReceived.phoneNumber}}",
+                                                                                                   "projectId":  "{{projectId}}"
+                                                                                               }
+                                                                            }
+                                              }
+                               },
+                      "type":  "action.database_query",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  3654,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-contact-found",
+                      "data":  {
+                                   "label":  "РљРѕРЅС‚Р°РєС‚ РЅР°Р№РґРµРЅ?",
+                                   "config":  {
+                                                  "condition":  {
+                                                                    "operator":  "is_not_empty",
+                                                                    "variable":  "contactUser"
+                                                                }
+                                              }
+                               },
+                      "type":  "condition",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  4060,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-telegram-already-linked",
+                      "data":  {
+                                   "label":  "Telegram СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ?",
+                                   "config":  {
+                                                  "condition":  {
+                                                                    "operator":  "is_not_empty",
+                                                                    "variable":  "contactUser.telegramId"
+                                                                }
+                                              }
+                               },
+                      "type":  "condition",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  4466,
+                                       "y":  186.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "already-active-message",
+                      "data":  {
+                                   "label":  "РЈР¶Рµ Р°РєС‚РёРІРёСЂРѕРІР°РЅ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "вњ… Р’Р°С€ Р°РєРєР°СѓРЅС‚ СѓР¶Рµ Р°РєС‚РёРІРёСЂРѕРІР°РЅ!\n\nрџ’° РўРµРєСѓС‰РёР№ Р±Р°Р»Р°РЅСЃ: {user.balanceFormatted}\nрџ“Љ РЈСЂРѕРІРµРЅСЊ: {user.currentLevel}\nрџЋЃ Р РµС„РµСЂР°Р»СЊРЅС‹Р№ РєРѕРґ: {user.referralCode}\n\nрџ›ЌпёЏ РџСЂРѕРґРѕР»Р¶Р°Р№С‚Рµ РґРµР»Р°С‚СЊ РїРѕРєСѓРїРєРё Рё РєРѕРїРёС‚СЊ Р±РѕРЅСѓСЃС‹!"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  5496,
+                                       "y":  55.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "activate-user",
+                      "data":  {
+                                   "label":  "РђРєС‚РёРІРёСЂРѕРІР°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ",
+                                   "config":  {
+                                                  "action.database_query":  {
+                                                                                "query":  "activate_user",
+                                                                                "parameters":  {
+                                                                                                   "userId":  "{{contactUser.id}}",
+                                                                                                   "telegramId":  "{{telegram.userId}}",
+                                                                                                   "telegramUsername":  "{{telegram.username}}"
+                                                                                               }
+                                                                            }
+                                              }
+                               },
+                      "type":  "action.database_query",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  4872,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-welcome-bonus",
+                      "data":  {
+                                   "label":  "РџСЂРѕРІРµСЂРёС‚СЊ РїСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹",
+                                   "config":  {
+                                                  "action.database_query":  {
+                                                                                "query":  "check_welcome_bonus",
+                                                                                "assignTo":  "hasWelcomeBonus",
+                                                                                "parameters":  {
+                                                                                                   "userId":  "{{contactUser.id}}"
+                                                                                               }
+                                                                            }
+                                              }
+                               },
+                      "type":  "action.database_query",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  5278,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-bonus-exists",
+                      "data":  {
+                                   "label":  "Р•СЃС‚СЊ РїСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹?",
+                                   "config":  {
+                                                  "condition":  {
+                                                                    "value":  false,
+                                                                    "operator":  "equals",
+                                                                    "variable":  "hasWelcomeBonus"
+                                                                }
+                                              }
+                               },
+                      "type":  "condition",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  5684,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "add-welcome-bonus",
+                      "data":  {
+                                   "label":  "РќР°С‡РёСЃР»РёС‚СЊ РїСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹",
+                                   "config":  {
+                                                  "action.database_query":  {
+                                                                                "query":  "add_bonus",
+                                                                                "assignTo":  "",
+                                                                                "parameters":  {
+                                                                                                   "type":  "WELCOME",
+                                                                                                   "amount":  "{{project.referralProgram.welcomeBonus}}",
+                                                                                                   "userId":  "{{contactUser.id}}",
+                                                                                                   "expiresAt":  "",
+                                                                                                   "description":  "РџСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹ Р·Р° РїРѕРґРїРёСЃРєСѓ РЅР° РєР°РЅР°Р» Рё Р°РєС‚РёРІР°С†РёСЋ Р°РєРєР°СѓРЅС‚Р°"
+                                                                                               },
+                                                                                "resultMapping":  {
+
+                                                                                                  }
+                                                                            }
+                                              },
+                                   "description":  ""
+                               },
+                      "type":  "action.database_query",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  162
+                                   },
+                      "position":  {
+                                       "x":  6090,
+                                       "y":  242
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "success-activated-user",
+                      "data":  {
+                                   "label":  "РЈСЃРїРµС€РЅР°СЏ Р°РєС‚РёРІР°С†РёСЏ СЃ Р±РѕРЅСѓСЃР°РјРё",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "рџЋ‰ РђРєРєР°СѓРЅС‚ СѓСЃРїРµС€РЅРѕ Р°РєС‚РёРІРёСЂРѕРІР°РЅ!\n\nрџ’° Р’Р°Рј РЅР°С‡РёСЃР»РµРЅС‹ РїСЂРёРІРµС‚СЃС‚РІРµРЅРЅС‹Рµ Р±РѕРЅСѓСЃС‹ Р·Р° РїРѕРґРїРёСЃРєСѓ РЅР° РєР°РЅР°Р»!\n\nрџ“Љ Р’Р°С€ РїСЂРѕС„РёР»СЊ:\nвЂў Р‘Р°Р»Р°РЅСЃ: {user.balanceFormatted}\nвЂў РЈСЂРѕРІРµРЅСЊ: {user.currentLevel}\nвЂў Р РµС„РµСЂР°Р»СЊРЅС‹Р№ РєРѕРґ: {user.referralCode}\n\nвњЁ Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ РїСЂРѕРіСЂР°РјРјСѓ Р»РѕСЏР»СЊРЅРѕСЃС‚Рё!"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  224
+                                   },
+                      "position":  {
+                                       "x":  6496,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "website-registration-required",
+                      "data":  {
+                                   "label":  "РўСЂРµР±СѓРµС‚СЃСЏ СЂРµРіРёСЃС‚СЂР°С†РёСЏ РЅР° СЃР°Р№С‚Рµ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "рџЊђ Р”Р»СЏ СѓС‡Р°СЃС‚РёСЏ РІ РїСЂРѕРіСЂР°РјРјРµ Р»РѕСЏР»СЊРЅРѕСЃС‚Рё РЅРµРѕР±С…РѕРґРёРјРѕ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ РЅР° РЅР°С€РµРј СЃР°Р№С‚Рµ.\n\nрџ“ќ РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РїРµСЂРµР№РґРёС‚Рµ РїРѕ СЃСЃС‹Р»РєРµ Рё СЃРѕР·РґР°Р№С‚Рµ Р°РєРєР°СѓРЅС‚:\n\nрџ”— https://example.com/members/signup\n\nвњЁ РџРѕСЃР»Рµ СЂРµРіРёСЃС‚СЂР°С†РёРё РІРµСЂРЅРёС‚РµСЃСЊ Рє Р±РѕС‚Сѓ Рё РїРѕРґРµР»РёС‚РµСЃСЊ РєРѕРЅС‚Р°РєС‚РѕРј РґР»СЏ Р°РєС‚РёРІР°С†РёРё Р±РѕРЅСѓСЃРѕРІ!",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "url":  "https://example.com/members/signup",
+                                                                                                           "text":  "рџЊђ Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ РЅР° СЃР°Р№С‚Рµ"
+                                                                                                       }
+                                                                                                   ],
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "рџ”„ РџСЂРѕРІРµСЂРёС‚СЊ СЃРЅРѕРІР°",
+                                                                                                           "callback_data":  "check_again"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               },
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              },
+                                   "description":  ""
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  224
+                                   },
+                      "position":  {
+                                       "x":  6496,
+                                       "y":  549.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "check-again-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: РїСЂРѕРІРµСЂРёС‚СЊ СЃРЅРѕРІР°",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "check_again"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  6904,
+                                       "y":  780
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "end-node",
+                      "data":  {
+                                   "label":  "Р—Р°РІРµСЂС€РµРЅРёРµ",
+                                   "config":  {
+                                                  "flow.end":  {
+
+                                                               }
+                                              }
+                               },
+                      "type":  "flow.end",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  78
+                                   },
+                      "position":  {
+                                       "x":  6902,
+                                       "y":  307.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "menu-balance-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: Р‘Р°Р»Р°РЅСЃ",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "menu_balance"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  122
+                                   },
+                      "position":  {
+                                       "x":  0,
+                                       "y":  549.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "show-balance-details",
+                      "data":  {
+                                   "label":  "РџРѕРєР°Р·Р°С‚СЊ Р±Р°Р»Р°РЅСЃ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "\u003cb\u003eрџ’° Р’Р°С€ Р±Р°Р»Р°РЅСЃ Р±РѕРЅСѓСЃРѕРІ\u003c/b\u003e\n\nрџ’µ \u003cb\u003eРўРµРєСѓС‰РёР№ Р±Р°Р»Р°РЅСЃ:\u003c/b\u003e {user.balanceFormatted}\nрџ“€ \u003cb\u003eР’СЃРµРіРѕ Р·Р°СЂР°Р±РѕС‚Р°РЅРѕ:\u003c/b\u003e {user.totalEarnedFormatted}\nрџ“‰ \u003cb\u003eР’СЃРµРіРѕ РїРѕС‚СЂР°С‡РµРЅРѕ:\u003c/b\u003e {user.totalSpentFormatted}\nрџ›ЌпёЏ \u003cb\u003eРџРѕРєСѓРїРѕРє РЅР° СЃСѓРјРјСѓ:\u003c/b\u003e {user.totalPurchasesFormatted}\n\nвњЁ РџСЂРѕРґРѕР»Р¶Р°Р№С‚Рµ СЃРѕРІРµСЂС€Р°С‚СЊ РїРѕРєСѓРїРєРё РґР»СЏ РЅР°РєРѕРїР»РµРЅРёСЏ Р±РѕРЅСѓСЃРѕРІ!",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "в¬…пёЏ РќР°Р·Р°Рґ РІ РјРµРЅСЋ",
+                                                                                                           "callback_data":  "back_to_menu"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               },
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  406,
+                                       "y":  549.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "menu-history-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: РСЃС‚РѕСЂРёСЏ",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "menu_history"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  122
+                                   },
+                      "position":  {
+                                       "x":  0,
+                                       "y":  791.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "show-history-list",
+                      "data":  {
+                                   "label":  "РџРѕРєР°Р·Р°С‚СЊ РёСЃС‚РѕСЂРёСЋ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "\u003cb\u003eрџ“њ РСЃС‚РѕСЂРёСЏ РѕРїРµСЂР°С†РёР№\u003c/b\u003e\n\n\u003cb\u003eРџРѕСЃР»РµРґРЅРёРµ 10 РѕРїРµСЂР°С†РёР№:\u003c/b\u003e\n\n{transactions.formatted}\n\nРџРѕРєР°Р·Р°РЅС‹ РїРѕСЃР»РµРґРЅРёРµ 10 РѕРїРµСЂР°С†РёР№.\n\nрџ’Ў Р”Р»СЏ РїРѕР»РЅРѕР№ РёСЃС‚РѕСЂРёРё РїРѕСЃРµС‚РёС‚Рµ Р»РёС‡РЅС‹Р№ РєР°Р±РёРЅРµС‚ РЅР° СЃР°Р№С‚Рµ.",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "в¬…пёЏ РќР°Р·Р°Рґ РІ РјРµРЅСЋ",
+                                                                                                           "callback_data":  "back_to_menu"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               },
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  406,
+                                       "y":  791.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "menu-level-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: РЈСЂРѕРІРµРЅСЊ",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "menu_level"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  122
+                                   },
+                      "position":  {
+                                       "x":  0,
+                                       "y":  1033.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "show-level-info",
+                      "data":  {
+                                   "label":  "РџРѕРєР°Р·Р°С‚СЊ СѓСЂРѕРІРµРЅСЊ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "\u003cb\u003eрџЏ† Р’Р°С€ СѓСЂРѕРІРµРЅСЊ:\u003c/b\u003e {user.currentLevel}\n\n\u003cb\u003eрџ“Љ РџСЂРѕРіСЂРµСЃСЃ Рє СЃР»РµРґСѓСЋС‰РµРјСѓ СѓСЂРѕРІРЅСЋ:\u003c/b\u003e\n{user.progressBar} ({user.progressPercent}%)\n\n\u003cb\u003eрџ’° Р‘РѕРЅСѓСЃРЅС‹Р№ РїСЂРѕС†РµРЅС‚:\u003c/b\u003e {user.levelBonusPercent}%\n\u003cb\u003eрџ’µ РџСЂРѕС†РµРЅС‚ РѕРїР»Р°С‚С‹ Р±РѕРЅСѓСЃР°РјРё:\u003c/b\u003e {user.levelPaymentPercent}%\n\n\u003cb\u003eРЎР»РµРґСѓСЋС‰РёР№ СѓСЂРѕРІРµРЅСЊ:\u003c/b\u003e {user.nextLevelName}\n\u003cb\u003eРќСѓР¶РЅРѕ РїРѕРєСѓРїРѕРє РЅР° СЃСѓРјРјСѓ:\u003c/b\u003e {user.nextLevelAmountFormatted}\n\nрџЋЇ РџСЂРѕРґРѕР»Р¶Р°Р№С‚Рµ СЃРѕРІРµСЂС€Р°С‚СЊ РїРѕРєСѓРїРєРё РґР»СЏ РїРѕРІС‹С€РµРЅРёСЏ СѓСЂРѕРІРЅСЏ!",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "в¬…пёЏ РќР°Р·Р°Рґ РІ РјРµРЅСЋ",
+                                                                                                           "callback_data":  "back_to_menu"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               },
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  406,
+                                       "y":  1033.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "menu-referrals-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: Р РµС„РµСЂР°Р»С‹",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "menu_referrals"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  0,
+                                       "y":  1275.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "show-referrals-stats",
+                      "data":  {
+                                   "label":  "РџРѕРєР°Р·Р°С‚СЊ СЂРµС„РµСЂР°Р»С‹",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "\u003cb\u003eрџ‘Ґ Р РµС„РµСЂР°Р»СЊРЅР°СЏ РїСЂРѕРіСЂР°РјРјР°\u003c/b\u003e\n\n\u003cb\u003eрџ“Љ РЎС‚Р°С‚РёСЃС‚РёРєР° РїРѕ РїСЂРѕРµРєС‚Сѓ:\u003c/b\u003e\nрџ‘¤ \u003cb\u003eРџСЂРёРіР»Р°С€РµРЅРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№:\u003c/b\u003e {user.referralCount}\nрџ’° \u003cb\u003eР‘РѕРЅСѓСЃРѕРІ РѕС‚ СЂРµС„РµСЂР°Р»РѕРІ:\u003c/b\u003e {user.referralBonusTotalFormatted}\n\n\u003cb\u003eрџ”— Р’Р°С€Р° СЂРµС„РµСЂР°Р»СЊРЅР°СЏ СЃСЃС‹Р»РєР°:\u003c/b\u003e\n{user.referralLink}\n\nрџ“± РџРѕРґРµР»РёС‚РµСЃСЊ СЃСЃС‹Р»РєРѕР№ СЃ РґСЂСѓР·СЊСЏРјРё Рё РїРѕР»СѓС‡Р°Р№С‚Рµ Р±РѕРЅСѓСЃС‹ Р·Р° РёС… РїРѕРєСѓРїРєРё!\n\nрџ’Ў РџСЂРёРіР»Р°С€Р°Р№С‚Рµ РґСЂСѓР·РµР№ Рё Р·Р°СЂР°Р±Р°С‚С‹РІР°Р№С‚Рµ РІРјРµСЃС‚Рµ!",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "в¬…пёЏ РќР°Р·Р°Рґ РІ РјРµРЅСЋ",
+                                                                                                           "callback_data":  "back_to_menu"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               },
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  406,
+                                       "y":  1275.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "menu-invite-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: РџСЂРёРіР»Р°СЃРёС‚СЊ",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "menu_invite"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  0,
+                                       "y":  1517.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "show-invite-info",
+                      "data":  {
+                                   "label":  "РџРѕРєР°Р·Р°С‚СЊ РїСЂРёРіР»Р°С€РµРЅРёРµ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "\u003cb\u003eрџ”— РџСЂРёРіР»Р°СЃРёС‚Рµ РґСЂСѓР·РµР№ Рё РїРѕР»СѓС‡Р°Р№С‚Рµ Р±РѕРЅСѓСЃС‹!\u003c/b\u003e\n\nРџРѕРґРµР»РёС‚РµСЃСЊ РїРµСЂСЃРѕРЅР°Р»СЊРЅРѕР№ СЃСЃС‹Р»РєРѕР№ Рё РїРѕР»СѓС‡Р°Р№С‚Рµ РІРѕР·РЅР°РіСЂР°Р¶РґРµРЅРёРµ Р·Р° РєР°Р¶РґСѓСЋ РїРѕРєСѓРїРєСѓ РїСЂРёРіР»Р°С€С‘РЅРЅС‹С… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№.\n\n\u003cb\u003eР’Р°С€Р° СЃСЃС‹Р»РєР°:\u003c/b\u003e\n{user.referralLink}\n\n1пёЏвѓЈ РЎРєРѕРїРёСЂСѓР№С‚Рµ СЃСЃС‹Р»РєСѓ\n2пёЏвѓЈ РћС‚РїСЂР°РІСЊС‚Рµ РґСЂСѓР·СЊСЏРј РІ РјРµСЃСЃРµРЅРґР¶РµСЂР°С… РёР»Рё СЃРѕС†СЃРµС‚СЏС…\n3пёЏвѓЈ РџРѕР»СѓС‡Р°Р№С‚Рµ Р±РѕРЅСѓСЃС‹ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё\n\nрџЋЃ Р‘РѕР»СЊС€Рµ РґСЂСѓР·РµР№ вЂ” Р±РѕР»СЊС€Рµ Р±РѕРЅСѓСЃРѕРІ!",
+                                                                  "keyboard":  {
+                                                                                   "type":  "inline",
+                                                                                   "buttons":  [
+                                                                                                   [
+                                                                                                       {
+                                                                                                           "text":  "в¬…пёЏ РќР°Р·Р°Рґ РІ РјРµРЅСЋ",
+                                                                                                           "callback_data":  "back_to_menu"
+                                                                                                       }
+                                                                                                   ]
+                                                                                               ]
+                                                                               },
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  406,
+                                       "y":  1517.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "menu-help-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: РџРѕРјРѕС‰СЊ",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "menu_help"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  122
+                                   },
+                      "position":  {
+                                       "x":  0,
+                                       "y":  1759.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "show-help-info",
+                      "data":  {
+                                   "label":  "РџРѕРєР°Р·Р°С‚СЊ РїРѕРјРѕС‰СЊ",
+                                   "config":  {
+                                                  "message":  {
+                                                                  "text":  "\u003cb\u003eвќ“ РџРѕРјРѕС‰СЊ\u003c/b\u003e\n\n\u003cb\u003eрџЋЇ РљР°Рє СЂР°Р±РѕС‚Р°РµС‚ Р±РѕРЅСѓСЃРЅР°СЏ СЃРёСЃС‚РµРјР°:\u003c/b\u003e\n\nрџ’° \u003cb\u003eР‘РѕРЅСѓСЃС‹\u003c/b\u003e - РЅР°РєР°РїР»РёРІР°Р№С‚Рµ Р±РѕРЅСѓСЃС‹ Р·Р° РїРѕРєСѓРїРєРё\nрџ›’ \u003cb\u003eРЎРїРёСЃР°РЅРёРµ\u003c/b\u003e - РѕРїР»Р°С‡РёРІР°Р№С‚Рµ С‡Р°СЃС‚СЊ РїРѕРєСѓРїРєРё Р±РѕРЅСѓСЃР°РјРё\nрџЏ† \u003cb\u003eРЈСЂРѕРІРЅРё\u003c/b\u003e - РїРѕРІС‹С€Р°Р№С‚Рµ СѓСЂРѕРІРµРЅСЊ РґР»СЏ Р»СѓС‡С€РёС… СѓСЃР»РѕРІРёР№\nрџ‘Ґ \u003cb\u003eР РµС„РµСЂР°Р»С‹\u003c/b\u003e - РїСЂРёРіР»Р°С€Р°Р№С‚Рµ РґСЂСѓР·РµР№ Рё РїРѕР»СѓС‡Р°Р№С‚Рµ Р±РѕРЅСѓСЃС‹\n\n\u003cb\u003eрџ“± РљРѕРјР°РЅРґС‹:\u003c/b\u003e\nвЂў /start - РЅР°С‡Р°С‚СЊ СЂР°Р±РѕС‚Сѓ СЃ Р±РѕС‚РѕРј\nвЂў рџ’° Р‘Р°Р»Р°РЅСЃ - РїРѕСЃРјРѕС‚СЂРµС‚СЊ С‚РµРєСѓС‰РёР№ Р±Р°Р»Р°РЅСЃ\nвЂў рџ“њ РСЃС‚РѕСЂРёСЏ - РёСЃС‚РѕСЂРёСЏ РѕРїРµСЂР°С†РёР№\nвЂў рџЏ† РЈСЂРѕРІРµРЅСЊ - РІР°С€ С‚РµРєСѓС‰РёР№ СѓСЂРѕРІРµРЅСЊ\nвЂў рџ‘Ґ Р РµС„РµСЂР°Р»С‹ - СЂРµС„РµСЂР°Р»СЊРЅР°СЏ РїСЂРѕРіСЂР°РјРјР°\nвЂў рџ”— РџСЂРёРіР»Р°СЃРёС‚СЊ - РїСЂРёРіР»Р°СЃРёС‚СЊ РґСЂСѓРіР°\n\nрџ’¬ Р•СЃР»Рё РІРѕР·РЅРёРєР»Рё РІРѕРїСЂРѕСЃС‹, РЅР°РїРёС€РёС‚Рµ РІ РїРѕРґРґРµСЂР¶РєСѓ!",
+                                                                  "parseMode":  "HTML"
+                                                              }
+                                              }
+                               },
+                      "type":  "message",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  320,
+                                       "height":  204
+                                   },
+                      "position":  {
+                                       "x":  406,
+                                       "y":  1759.5
+                                   },
+                      "selected":  false
+                  },
+                  {
+                      "id":  "back-to-menu-trigger",
+                      "data":  {
+                                   "label":  "РўСЂРёРіРіРµСЂ: РќР°Р·Р°Рґ РІ РјРµРЅСЋ",
+                                   "config":  {
+                                                  "trigger.callback":  {
+                                                                           "callbackData":  "back_to_menu"
+                                                                       }
+                                              }
+                               },
+                      "type":  "trigger.callback",
+                      "dragging":  false,
+                      "measured":  {
+                                       "width":  256,
+                                       "height":  142
+                                   },
+                      "position":  {
+                                       "x":  1218,
+                                       "y":  494
+                                   },
+                      "selected":  false
+                  }
+              ],
+    "connections":  [
+                        {
+                            "id":  "edge-start-trigger-check-telegram-user",
+                            "type":  "default",
+                            "source":  "start-trigger",
+                            "target":  "check-telegram-user",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-telegram-user-check-user-status",
+                            "type":  "default",
+                            "source":  "check-telegram-user",
+                            "target":  "check-user-status",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-user-status-check-user-active",
+                            "type":  "default",
+                            "source":  "check-user-status",
+                            "target":  "check-user-active",
+                            "animated":  true,
+                            "sourceHandle":  "true"
+                        },
+                        {
+                            "id":  "edge-check-user-status-welcome-message",
+                            "type":  "default",
+                            "source":  "check-user-status",
+                            "target":  "welcome-message",
+                            "animated":  true,
+                            "sourceHandle":  "false"
+                        },
+                        {
+                            "id":  "edge-check-user-active-active-user-profile",
+                            "type":  "default",
+                            "source":  "check-user-active",
+                            "target":  "active-user-profile",
+                            "animated":  true,
+                            "sourceHandle":  "true"
+                        },
+                        {
+                            "id":  "edge-check-user-active-request-contact-confirmation",
+                            "type":  "default",
+                            "source":  "check-user-active",
+                            "target":  "request-contact-confirmation",
+                            "animated":  true,
+                            "sourceHandle":  "false"
+                        },
+                        {
+                            "id":  "edge-check-subscription-trigger-check-channel-subscription",
+                            "type":  "default",
+                            "source":  "check-subscription-trigger",
+                            "target":  "check-channel-subscription",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-channel-subscription-check-subscription-result",
+                            "type":  "default",
+                            "source":  "check-channel-subscription",
+                            "target":  "check-subscription-result",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-subscription-result-request-contact-after-subscription",
+                            "type":  "default",
+                            "source":  "check-subscription-result",
+                            "target":  "request-contact-after-subscription",
+                            "animated":  true,
+                            "sourceHandle":  "true"
+                        },
+                        {
+                            "id":  "edge-check-subscription-result-subscription-required-message",
+                            "type":  "default",
+                            "source":  "check-subscription-result",
+                            "target":  "subscription-required-message",
+                            "animated":  true,
+                            "sourceHandle":  "false"
+                        },
+                        {
+                            "id":  "edge-request-contact-after-subscription-check-contact-user",
+                            "type":  "default",
+                            "source":  "request-contact-after-subscription",
+                            "target":  "check-contact-user",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-request-contact-confirmation-check-contact-user",
+                            "type":  "default",
+                            "source":  "request-contact-confirmation",
+                            "target":  "check-contact-user",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-enter-email-trigger-enter-email-instructions",
+                            "type":  "default",
+                            "source":  "enter-email-trigger",
+                            "target":  "enter-email-instructions",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-enter-email-instructions-check-contact-user",
+                            "type":  "default",
+                            "source":  "enter-email-instructions",
+                            "target":  "check-contact-user",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-contact-user-check-contact-found",
+                            "type":  "default",
+                            "source":  "check-contact-user",
+                            "target":  "check-contact-found",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-contact-found-check-telegram-already-linked",
+                            "type":  "default",
+                            "source":  "check-contact-found",
+                            "target":  "check-telegram-already-linked",
+                            "animated":  true,
+                            "sourceHandle":  "true"
+                        },
+                        {
+                            "id":  "edge-check-contact-found-website-registration-required",
+                            "type":  "default",
+                            "source":  "check-contact-found",
+                            "target":  "website-registration-required",
+                            "animated":  true,
+                            "sourceHandle":  "false"
+                        },
+                        {
+                            "id":  "edge-check-telegram-already-linked-already-active-message",
+                            "type":  "default",
+                            "source":  "check-telegram-already-linked",
+                            "target":  "already-active-message",
+                            "animated":  true,
+                            "sourceHandle":  "true"
+                        },
+                        {
+                            "id":  "edge-check-telegram-already-linked-activate-user",
+                            "type":  "default",
+                            "source":  "check-telegram-already-linked",
+                            "target":  "activate-user",
+                            "animated":  true,
+                            "sourceHandle":  "false"
+                        },
+                        {
+                            "id":  "edge-activate-user-check-welcome-bonus",
+                            "type":  "default",
+                            "source":  "activate-user",
+                            "target":  "check-welcome-bonus",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-welcome-bonus-check-bonus-exists",
+                            "type":  "default",
+                            "source":  "check-welcome-bonus",
+                            "target":  "check-bonus-exists",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-bonus-exists-add-welcome-bonus",
+                            "type":  "default",
+                            "source":  "check-bonus-exists",
+                            "target":  "add-welcome-bonus",
+                            "animated":  true,
+                            "sourceHandle":  "true"
+                        },
+                        {
+                            "id":  "edge-check-bonus-exists-success-activated-user",
+                            "type":  "default",
+                            "source":  "check-bonus-exists",
+                            "target":  "success-activated-user",
+                            "animated":  true,
+                            "sourceHandle":  "false"
+                        },
+                        {
+                            "id":  "edge-add-welcome-bonus-success-activated-user",
+                            "type":  "default",
+                            "source":  "add-welcome-bonus",
+                            "target":  "success-activated-user",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-already-active-message-end-node",
+                            "type":  "default",
+                            "source":  "already-active-message",
+                            "target":  "end-node",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-success-activated-user-end-node",
+                            "type":  "default",
+                            "source":  "success-activated-user",
+                            "target":  "end-node",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-website-registration-required-end-node",
+                            "type":  "default",
+                            "source":  "website-registration-required",
+                            "target":  "end-node",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-check-again-trigger-request-contact-confirmation",
+                            "type":  "default",
+                            "source":  "check-again-trigger",
+                            "target":  "request-contact-confirmation",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-menu-balance-trigger-show-balance-details",
+                            "type":  "default",
+                            "source":  "menu-balance-trigger",
+                            "target":  "show-balance-details",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-menu-history-trigger-show-history-list",
+                            "type":  "default",
+                            "source":  "menu-history-trigger",
+                            "target":  "show-history-list",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-menu-level-trigger-show-level-info",
+                            "type":  "default",
+                            "source":  "menu-level-trigger",
+                            "target":  "show-level-info",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-menu-referrals-trigger-show-referrals-stats",
+                            "type":  "default",
+                            "source":  "menu-referrals-trigger",
+                            "target":  "show-referrals-stats",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-menu-invite-trigger-show-invite-info",
+                            "type":  "default",
+                            "source":  "menu-invite-trigger",
+                            "target":  "show-invite-info",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-menu-help-trigger-show-help-info",
+                            "type":  "default",
+                            "source":  "menu-help-trigger",
+                            "target":  "show-help-info",
+                            "animated":  true
+                        },
+                        {
+                            "id":  "edge-back-to-menu-trigger-active-user-profile",
+                            "type":  "default",
+                            "source":  "back-to-menu-trigger",
+                            "target":  "active-user-profile",
+                            "animated":  true
+                        }
+                    ],
+    "variables":  [
+
+                  ],
+    "settings":  {
+
+                 },
+    "createdAt":  "2026-03-07T12:48:43.661Z",
+    "updatedAt":  "2026-03-07T12:48:54.706Z"
+}

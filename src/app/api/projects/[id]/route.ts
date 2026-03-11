@@ -198,6 +198,7 @@ export async function PUT(
         bonusPercentage: body.bonusPercentage,
         bonusExpiryDays: body.bonusExpiryDays,
         bonusBehavior: body.bonusBehavior,
+        bonusMode: body.bonusMode, // ✨ НОВОЕ: Режим начисления бонусов
         operationMode: body.operationMode,
         isActive: body.isActive,
         // Приветственное вознаграждение

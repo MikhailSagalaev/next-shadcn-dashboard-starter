@@ -359,9 +359,13 @@ const CATEGORY_METADATA: Record<
 
 interface WorkflowToolbarProps {
   onAddNode: (nodeType: WorkflowNodeType, position: Position) => void;
+  className?: string;
 }
 
-export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
+export function WorkflowToolbar({
+  onAddNode,
+  className = ''
+}: WorkflowToolbarProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const handleDragStart = useCallback(
@@ -418,7 +422,9 @@ export function WorkflowToolbar({ onAddNode }: WorkflowToolbarProps) {
 
   return (
     <TooltipProvider>
-      <div className='bg-background flex h-[calc(100vh-180px)] max-h-[calc(100vh-180px)] flex-col gap-3 rounded-md border p-3 shadow-lg'>
+      <div
+        className={`bg-background flex flex-col gap-3 rounded-md border p-3 shadow-lg ${className}`}
+      >
         <div className='flex flex-shrink-0 flex-col gap-2'>
           <span className='text-muted-foreground text-xs font-medium uppercase'>
             Добавить ноду

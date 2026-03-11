@@ -693,9 +693,9 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
       </div>
 
       {/* Main content */}
-      <div className='flex flex-1 overflow-hidden'>
+      <div className='relative flex flex-1 overflow-hidden'>
         {/* Canvas */}
-        <div className='relative flex-1 overflow-hidden'>
+        <div className='h-full w-full flex-1'>
           {/* Блокирующий overlay, если нет workflow */}
           {hasNoWorkflow && (
             <div className='bg-background/80 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm'>
@@ -709,9 +709,23 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               </div>
             </div>
           )}
-          {/* Toolbar */}
-          <div className='absolute top-4 left-4 z-10'>
-            <WorkflowToolbar onAddNode={handleAddNode} />
+          {/* Left panel Container */}
+          <div className='pointer-events-none absolute top-4 bottom-8 left-4 z-10 flex w-[260px] flex-col gap-4'>
+            <div className='pointer-events-auto flex min-h-0 flex-1'>
+              <WorkflowToolbar
+                onAddNode={handleAddNode}
+                className='min-h-0 flex-1'
+              />
+            </div>
+            {validationResult && (
+              <div className='pointer-events-auto mb-2 w-full shrink-0'>
+                <WorkflowValidationPanel
+                  result={validationResult}
+                  onFocusNode={handleFocusNode}
+                  className='w-full'
+                />
+              </div>
+            )}
           </div>
           {/* Auto layout button */}
           <div className='absolute top-4 right-4 z-[5]'>
@@ -748,19 +762,13 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
               onInit={setReactFlowInstance}
               nodeTypes={workflowNodeTypes}
               fitView
-              attributionPosition='bottom-left'
+              attributionPosition='bottom-right'
               className='h-full w-full'
               nodesDraggable={!!currentWorkflow}
               nodesConnectable={!!currentWorkflow}
               elementsSelectable={!!currentWorkflow}
             >
-              <Panel position='bottom-left' className='mb-2 ml-2'>
-                <WorkflowValidationPanel
-                  result={validationResult}
-                  onFocusNode={handleFocusNode}
-                  className='w-64'
-                />
-              </Panel>
+              {/* Properties panel */}
               <Background variant={BackgroundVariant.Dots} />
               <Controls />
               <MiniMap

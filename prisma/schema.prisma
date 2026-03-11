@@ -15,6 +15,7 @@ model Project {
   bonusPercentage               Decimal               @default(1.0) @map("bonus_percentage") @db.Decimal(5, 2)
   bonusExpiryDays               Int                   @default(365) @map("bonus_expiry_days")
   bonusBehavior                 BonusBehavior         @default(SPEND_AND_EARN) @map("bonus_behavior")
+  bonusMode                     BonusMode             @default(SIMPLE) @map("bonus_mode")
   operationMode                 OperationMode         @default(WITH_BOT) @map("operation_mode")
   welcomeBonus                  Decimal               @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
   welcomeRewardType             WelcomeRewardType     @default(BONUS) @map("welcome_reward_type")
@@ -532,6 +533,11 @@ enum BonusBehavior {
   SPEND_AND_EARN @map("spend_and_earn")
   SPEND_ONLY     @map("spend_only")
   EARN_ONLY      @map("earn_only")
+}
+
+enum BonusMode {
+  SIMPLE  @map("simple")
+  LEVELS  @map("levels")
 }
 
 enum OperationMode {
