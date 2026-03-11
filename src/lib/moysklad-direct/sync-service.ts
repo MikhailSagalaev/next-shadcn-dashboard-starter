@@ -19,6 +19,9 @@ import {
 } from './types';
 import { BonusType, TransactionType, SyncDirection } from '@prisma/client';
 
+// Global memory lock to prevent race conditions during parallel syncs
+const syncLocks = new Set<string>();
+
 export class SyncService {
   /**
    * Sync bonus accrual from our system to МойСклад (online → offline)
@@ -634,6 +637,22 @@ export class SyncService {
    * Check and compare balances between our system and МойСклад
    */
   async checkAndSyncBalance(userId: string): Promise<BalanceCheckResult> {
+    // Prevent concurrent syncs for the same user
+    if (syncLocks.has(userId)) {
+      logger.warn(
+        'Sync already in progress for user',
+        { userId },
+        'moysklad-direct-sync'
+      );
+      return {
+        ourBalance: 0,
+        moySkladBalance: null,
+        synced: false,
+        error: 'Синхронизация уже выполняется'
+      };
+    }
+
+    syncLocks.add(userId);
     try {
       // Load user with integration
       const user = await db.user.findUnique({
@@ -798,6 +817,8 @@ export class SyncService {
       );
 
       throw error;
+    } finally {
+      syncLocks.delete(userId);
     }
   }
 
