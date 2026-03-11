@@ -16,6 +16,8 @@ import { InSalesIntegrationForm } from './components/integration-form';
 import { InSalesStatsCards } from './components/stats-cards';
 import { InSalesWebhookLogs } from './components/webhook-logs';
 import { InSalesCredentials } from './components/credentials';
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
 
 export const metadata = {
   title: 'InSales Integration | Gupil',
@@ -118,6 +120,15 @@ export default async function InSalesIntegrationPage({
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
+      {/* Breadcrumb */}
+      <Link
+        href={`/dashboard/projects/${projectId}/integrations`}
+        className='text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors'
+      >
+        <ChevronLeft className='h-4 w-4' />
+        Назад к интеграциям
+      </Link>
+
       {/* Header */}
       <div className='flex items-center justify-between'>
         <Heading

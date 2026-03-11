@@ -34,7 +34,8 @@ import {
   FileText,
   Clock,
   Settings,
-  Save
+  Save,
+  ChevronLeft
 } from 'lucide-react';
 
 import { Project } from '@/types';
@@ -517,6 +518,15 @@ export function ProjectIntegrationView({
   return (
     <PageContainer>
       <div className='w-full space-y-6'>
+        {/* Breadcrumb */}
+        <Link
+          href={`/dashboard/projects/${projectId}/integrations`}
+          className='text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors'
+        >
+          <ChevronLeft className='h-4 w-4' />
+          Назад к интеграциям
+        </Link>
+
         {/* Заголовок */}
         <div>
           <h1 className='text-3xl font-bold tracking-tight'>

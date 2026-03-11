@@ -22,7 +22,8 @@ import {
   Code,
   Workflow,
   Gift,
-  Percent
+  Percent,
+  Plug
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -768,18 +769,10 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   Конструктор Workflow
                 </Button>
               </Link>
-              <Link href={`/dashboard/projects/${projectId}/integration`}>
+              <Link href={`/dashboard/projects/${projectId}/integrations`}>
                 <Button variant='outline' className='w-full justify-start'>
-                  <Code className='mr-2 h-4 w-4' />
-                  Интеграция на сайт
-                </Button>
-              </Link>
-              <Link
-                href={`/dashboard/projects/${projectId}/integrations/moysklad-direct`}
-              >
-                <Button variant='outline' className='w-full justify-start'>
-                  <Bot className='mr-2 h-4 w-4' />
-                  Интеграция с МойСклад
+                  <Plug className='mr-2 h-4 w-4' />
+                  Интеграции
                 </Button>
               </Link>
             </CardContent>

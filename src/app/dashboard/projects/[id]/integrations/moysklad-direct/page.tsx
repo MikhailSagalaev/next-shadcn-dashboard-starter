@@ -17,6 +17,8 @@ import { WebhookCredentials } from './components/webhook-credentials';
 import { WebhookManager } from './components/webhook-manager';
 import { SyncStatsCards } from './components/stats-cards';
 import { SyncLogsTable } from './components/sync-logs-table';
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
 
 export const metadata = {
   title: 'МойСклад (Direct API) | Gupil',
@@ -44,6 +46,15 @@ export default async function MoySkladDirectIntegrationPage({
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
+      {/* Breadcrumb */}
+      <Link
+        href={`/dashboard/projects/${id}/integrations`}
+        className='text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors'
+      >
+        <ChevronLeft className='h-4 w-4' />
+        Назад к интеграциям
+      </Link>
+
       {/* Header */}
       <div className='flex items-center justify-between'>
         <Heading
