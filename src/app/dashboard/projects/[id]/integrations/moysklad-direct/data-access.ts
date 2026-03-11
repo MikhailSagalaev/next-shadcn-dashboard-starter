@@ -106,7 +106,7 @@ export async function getIntegrationPageData(
     let pagination = { total: 0, page, limit, totalPages: 0 };
 
     if (integration) {
-      const [syncCounts, bonusSum, logs] = await Promise.all([
+      const [syncCounts, bonusSum, totalLogsCount, logs] = await Promise.all([
         // Count syncs by status
         db.moySkladDirectSyncLog.groupBy({
           by: ['status'],
@@ -173,7 +173,7 @@ export async function getIntegrationPageData(
         user: log.user
       }));
 
-      const totalLogs = bonusSum[0] as unknown as number; // Quick workaround for Promise array unpacking
+      const totalLogs = totalLogsCount;
       pagination = {
         total: totalLogs,
         page,
