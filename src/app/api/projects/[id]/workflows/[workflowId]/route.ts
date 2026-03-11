@@ -107,6 +107,7 @@ export async function PUT(
         (e) => e.type === 'error'
       );
       if (criticalErrors.length > 0) {
+        console.error('Workflow validation failed during PUT:', JSON.stringify(criticalErrors, null, 2));
         return NextResponse.json(
           {
             error: 'Ошибка валидации workflow',

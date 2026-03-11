@@ -710,7 +710,7 @@ export function WorkflowConstructor({ projectId }: WorkflowConstructorProps) {
             </div>
           )}
           {/* Left panel Container */}
-          <div className='pointer-events-none absolute top-4 bottom-8 left-4 z-10 flex w-[260px] flex-col gap-4'>
+          <div className='pointer-events-none absolute top-4 bottom-24 left-4 z-10 flex w-[260px] flex-col gap-4'>
             <div className='pointer-events-auto flex min-h-0 flex-1'>
               <WorkflowToolbar
                 onAddNode={handleAddNode}

@@ -477,7 +477,7 @@ export function WorkflowToolbar({
                               onClick={() => handleAddNodeClick(template.type)}
                             >
                               <div
-                                className='flex h-9 w-9 items-center justify-center rounded-md border'
+                                className='flex h-9 w-9 shrink-0 items-center justify-center rounded-md border'
                                 style={{
                                   borderColor: template.color + '80',
                                   color: template.color
@@ -485,11 +485,11 @@ export function WorkflowToolbar({
                               >
                                 <template.icon className='h-5 w-5' />
                               </div>
-                              <div className='flex flex-col text-left text-sm'>
-                                <span className='leading-tight font-medium'>
+                              <div className='flex min-w-0 flex-col text-left text-sm'>
+                                <span className='truncate leading-tight font-medium'>
                                   {template.label}
                                 </span>
-                                <span className='text-muted-foreground text-xs'>
+                                <span className='text-muted-foreground truncate text-xs'>
                                   {template.type}
                                 </span>
                               </div>
