@@ -23,8 +23,12 @@ import {
   CheckCircle2,
   XCircle
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { useState } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface SyncLogsTableProps {
   logs: Array<{
@@ -43,9 +47,33 @@ interface SyncLogsTableProps {
   }>;
   integrationId: string;
   projectId: string;
+  pagination?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
-export function SyncLogsTable({ logs }: SyncLogsTableProps) {
+export function SyncLogsTable({ logs, pagination }: SyncLogsTableProps) {
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', newPage.toString());
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const toggleExpand = (id: string) => {
+    if (expandedLogId === id) {
+      setExpandedLogId(null);
+    } else {
+      setExpandedLogId(id);
+    }
+  };
   const getOperationLabel = (operation: string) => {
     switch (operation) {
       case 'bonus_accrual':
@@ -160,13 +188,85 @@ export function SyncLogsTable({ logs }: SyncLogsTableProps) {
                     </span>
                   </div>
                 </div>
+
+                {/* Expander Icon */}
+                <div className='ml-4 flex-shrink-0'>
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    className='h-8 w-8 p-0'
+                    onClick={() => toggleExpand(log.id)}
+                  >
+                    {expandedLogId === log.id ? (
+                      <ChevronUp className='h-4 w-4' />
+                    ) : (
+                      <ChevronDown className='h-4 w-4' />
+                    )}
+                  </Button>
+                </div>
               </div>
 
-              {/* Status Badge */}
-              <div className='flex-shrink-0'>{getStatusBadge(log.status)}</div>
+              {/* Expanded details */}
+              {expandedLogId === log.id && (
+                <div className='mt-3 border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800'>
+                  <div className='grid grid-cols-2 gap-4'>
+                    <div>
+                      <p className='text-zinc-500'>ID Операции</p>
+                      <p className='mt-1 font-mono text-xs'>{log.id}</p>
+                    </div>
+                    <div>
+                      <p className='text-zinc-500'>Время (точное)</p>
+                      <p className='mt-1'>
+                        {format(
+                          new Date(log.createdAt),
+                          'dd MMM yyyy HH:mm:ss',
+                          { locale: ru }
+                        )}
+                      </p>
+                    </div>
+                    <div className='col-span-2'>
+                      <p className='text-zinc-500'>Статус детально</p>
+                      <div className='mt-1 rounded bg-zinc-50 p-2 text-xs break-all dark:bg-zinc-800'>
+                        {log.status === 'error'
+                          ? 'Ошибка во время синхронизации'
+                          : 'Успешная обработка'}
+                        {/* You could add the actual raw error field here if it was selected from db */}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
+
+        {/* Pagination logic */}
+        {pagination && pagination.totalPages > 1 && (
+          <div className='mt-6 flex items-center justify-between'>
+            <p className='text-sm text-zinc-500'>
+              Показано 10 из {pagination.total} записей (Страница{' '}
+              {pagination.page} из {pagination.totalPages})
+            </p>
+            <div className='flex gap-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+              >
+                Назад
+              </Button>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={pagination.page >= pagination.totalPages}
+              >
+                Вперед
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

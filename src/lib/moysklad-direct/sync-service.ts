@@ -160,8 +160,8 @@ export class SyncService {
           moySkladTransactionId: transaction.id,
           userId,
           amount,
-          requestData: { source, amount, counterpartyId },
-          responseData: transaction,
+          requestData: { source, amount, counterpartyId } as any,
+          responseData: transaction as any,
           status: 'success'
         }
       });
@@ -345,8 +345,8 @@ export class SyncService {
           moySkladTransactionId: transaction.id,
           userId,
           amount,
-          requestData: { source, amount, counterpartyId },
-          responseData: transaction,
+          requestData: { source, amount, counterpartyId } as any,
+          responseData: transaction as any,
           status: 'success'
         }
       });
@@ -424,8 +424,10 @@ export class SyncService {
       }
 
       // Find user by counterparty ID
-      let user = await db.user.findUnique({
-        where: { moySkladDirectCounterpartyId: counterpartyId }
+      let user = await db.user.findFirst({
+        where: {
+          moySkladDirectCounterpartyId: counterpartyId
+        }
       });
 
       // If not found, try to find by phone
@@ -440,11 +442,20 @@ export class SyncService {
 
         if (counterparty.phone) {
           const normalizedPhone = normalizePhone(counterparty.phone);
+          const phoneWithoutPlus = normalizedPhone.replace('+', '');
+          const phoneWith8 = '8' + phoneWithoutPlus.substring(1);
 
           user = await db.user.findFirst({
             where: {
               projectId: integration.projectId,
-              phone: normalizedPhone
+              phone: {
+                in: [
+                  normalizedPhone,
+                  phoneWithoutPlus,
+                  phoneWith8,
+                  counterparty.phone
+                ]
+              }
             }
           });
 
@@ -554,7 +565,7 @@ export class SyncService {
           moySkladTransactionId: bonusTransaction.id,
           userId: user.id,
           amount,
-          requestData: bonusTransaction,
+          requestData: bonusTransaction as any,
           status: 'success'
         }
       });
@@ -604,7 +615,7 @@ export class SyncService {
           direction: 'incoming',
           moySkladTransactionId: bonusTransaction.id,
           amount: bonusTransaction.bonusValue,
-          requestData: bonusTransaction,
+          requestData: bonusTransaction as any,
           status: 'error',
           errorMessage: (error as Error).message
         }
@@ -675,9 +686,13 @@ export class SyncService {
         const difference = Math.abs(ourBalance - moySkladBalance);
         const synced = difference < 0.01;
 
+        let finalOurBalance = ourBalance;
+        let isSynced = synced;
+        let correctionMessage = null;
+
         if (!synced) {
           logger.warn(
-            'Balance mismatch detected',
+            'Balance mismatch detected, auto-correcting...',
             {
               userId,
               ourBalance,
@@ -686,6 +701,50 @@ export class SyncService {
             },
             'moysklad-direct-sync'
           );
+
+          const expiryDays = user.project.bonusExpiryDays || 365;
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + expiryDays);
+
+          if (moySkladBalance > ourBalance) {
+            const correctAmount = moySkladBalance - ourBalance;
+            const bonus = await db.bonus.create({
+              data: {
+                userId: user.id,
+                amount: correctAmount,
+                type: BonusType.PURCHASE,
+                description: 'Корректировка баланса из МойСклад',
+                expiresAt,
+                metadata: { source: 'moysklad_correction' }
+              }
+            });
+            await db.transaction.create({
+              data: {
+                userId: user.id,
+                bonusId: bonus.id,
+                amount: correctAmount,
+                type: TransactionType.EARN,
+                description: 'Корректировка баланса (прибавка) из МойСклад',
+                metadata: { source: 'moysklad_correction' }
+              }
+            });
+            correctionMessage = `Авто-корректировка: начислено ${correctAmount}`;
+          } else {
+            const correctAmount = ourBalance - moySkladBalance;
+            await db.transaction.create({
+              data: {
+                userId: user.id,
+                amount: correctAmount,
+                type: TransactionType.SPEND,
+                description: 'Корректировка баланса (списание) из МойСклад',
+                metadata: { source: 'moysklad_correction' }
+              }
+            });
+            correctionMessage = `Авто-корректировка: списано ${correctAmount}`;
+          }
+
+          finalOurBalance = moySkladBalance;
+          isSynced = true;
         }
 
         // Create sync log
@@ -695,17 +754,21 @@ export class SyncService {
             operation: 'balance_sync',
             direction: 'incoming',
             userId,
-            amount: ourBalance,
-            requestData: { ourBalance, moySkladBalance },
-            status: synced ? 'success' : 'error',
-            errorMessage: synced ? null : `Balance mismatch: ${difference}`
+            amount: difference > 0 ? difference : ourBalance,
+            requestData: {
+              oldOurBalance: ourBalance,
+              newOurBalance: finalOurBalance,
+              moySkladBalance
+            },
+            status: 'success',
+            errorMessage: correctionMessage
           }
         });
 
         return {
-          ourBalance,
+          ourBalance: finalOurBalance,
           moySkladBalance,
-          synced
+          synced: isSynced
         };
       } catch (error) {
         logger.error(

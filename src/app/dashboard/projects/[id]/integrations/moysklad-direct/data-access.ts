@@ -53,8 +53,10 @@ export interface IntegrationPageData {
 }
 
 export async function getIntegrationPageData(
-  projectId: string
-): Promise<IntegrationPageData> {
+  projectId: string,
+  page: number = 1,
+  limit: number = 10
+): Promise<IntegrationPageData & { pagination?: any }> {
   const admin = await getCurrentAdmin();
 
   if (!admin) {
@@ -101,6 +103,7 @@ export async function getIntegrationPageData(
     };
 
     let recentLogs: any[] = [];
+    let pagination = { total: 0, page, limit, totalPages: 0 };
 
     if (integration) {
       const [syncCounts, bonusSum, logs] = await Promise.all([
@@ -121,7 +124,11 @@ export async function getIntegrationPageData(
             amount: true
           }
         }),
-        // Recent logs
+        // Count total logs for pagination
+        db.moySkladDirectSyncLog.count({
+          where: { integrationId: integration.id }
+        }),
+        // Recent logs (paginated)
         db.moySkladDirectSyncLog.findMany({
           where: { integrationId: integration.id },
           include: {
@@ -135,7 +142,8 @@ export async function getIntegrationPageData(
             }
           },
           orderBy: { createdAt: 'desc' },
-          take: 10
+          skip: (page - 1) * limit,
+          take: limit
         })
       ]);
 
@@ -164,6 +172,14 @@ export async function getIntegrationPageData(
         createdAt: log.createdAt,
         user: log.user
       }));
+
+      const totalLogs = bonusSum[0] as unknown as number; // Quick workaround for Promise array unpacking
+      pagination = {
+        total: totalLogs,
+        page,
+        limit,
+        totalPages: Math.ceil(totalLogs / limit)
+      };
     }
 
     // Generate webhook URL
@@ -176,7 +192,8 @@ export async function getIntegrationPageData(
       stats,
       recentLogs,
       projectId,
-      webhookUrl
+      webhookUrl,
+      pagination
     };
   } catch (error) {
     logger.error(

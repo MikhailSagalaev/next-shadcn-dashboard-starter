@@ -28,13 +28,19 @@ interface PageProps {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    page?: string;
+  }>;
 }
 
 export default async function MoySkladDirectIntegrationPage({
-  params
+  params,
+  searchParams
 }: PageProps) {
   const { id } = await params;
-  const data = await getIntegrationPageData(id);
+  const pageParam = searchParams ? (await searchParams).page : undefined;
+  const page = pageParam ? parseInt(pageParam, 10) : 1;
+  const data = await getIntegrationPageData(id, isNaN(page) ? 1 : page);
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
@@ -61,7 +67,7 @@ export default async function MoySkladDirectIntegrationPage({
       {/* Stats Cards */}
       {data.integration && (
         <Suspense fallback={<div>Loading stats...</div>}>
-          <SyncStatsCards stats={data.stats} />
+          <SyncStatsCards stats={data.stats as any} />
         </Suspense>
       )}
 
@@ -93,6 +99,7 @@ export default async function MoySkladDirectIntegrationPage({
         <div className='grid grid-cols-1'>
           <SyncLogsTable
             logs={data.recentLogs}
+            pagination={data.pagination}
             integrationId={data.integration.id}
             projectId={id}
           />

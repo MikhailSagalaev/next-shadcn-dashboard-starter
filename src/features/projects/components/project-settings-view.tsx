@@ -70,6 +70,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
   const [saving, setSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [hasLevels, setHasLevels] = useState(false);
+  const [levelsCount, setLevelsCount] = useState(0);
   const [usersCount, setUsersCount] = useState(0);
   const [showModeConfirmDialog, setShowModeConfirmDialog] = useState(false);
   const [pendingMode, setPendingMode] = useState<OperationMode | null>(null);
@@ -108,8 +109,15 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
 
       // Проверяем наличие уровней
       if (levelsResponse.ok) {
-        const levelsData = await levelsResponse.json();
-        setHasLevels(Array.isArray(levelsData) && levelsData.length > 0);
+        const levelsJson = await levelsResponse.json();
+        const levelsArray = levelsJson.data || levelsJson;
+        if (Array.isArray(levelsArray)) {
+          setHasLevels(levelsArray.length > 0);
+          setLevelsCount(levelsArray.length);
+        } else {
+          setHasLevels(false);
+          setLevelsCount(0);
+        }
       }
 
       // Получаем количество пользователей
@@ -587,7 +595,7 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                       setFormData({ ...formData, bonusMode: mode })
                     }
                     hasLevels={hasLevels}
-                    levelsCount={hasLevels ? 1 : 0}
+                    levelsCount={levelsCount}
                   />
                 </div>
 
@@ -719,12 +727,14 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                   Управление пользователями
                 </Button>
               </Link>
-              <Link href={`/dashboard/projects/${projectId}/bonus-levels`}>
-                <Button variant='outline' className='w-full justify-start'>
-                  <Coins className='mr-2 h-4 w-4' />
-                  Уровни бонусов
-                </Button>
-              </Link>
+              {formData.bonusMode === 'LEVELS' && (
+                <Link href={`/dashboard/projects/${projectId}/bonus-levels`}>
+                  <Button variant='outline' className='w-full justify-start'>
+                    <Coins className='mr-2 h-4 w-4' />
+                    Уровни бонусов
+                  </Button>
+                </Link>
+              )}
               {project?.operationMode === 'WITH_BOT' ? (
                 <Link href={`/dashboard/projects/${projectId}/referral`}>
                   <Button variant='outline' className='w-full justify-start'>
@@ -762,6 +772,14 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
                 <Button variant='outline' className='w-full justify-start'>
                   <Code className='mr-2 h-4 w-4' />
                   Интеграция на сайт
+                </Button>
+              </Link>
+              <Link
+                href={`/dashboard/projects/${projectId}/integrations/moysklad-direct`}
+              >
+                <Button variant='outline' className='w-full justify-start'>
+                  <Bot className='mr-2 h-4 w-4' />
+                  Интеграция с МойСклад
                 </Button>
               </Link>
             </CardContent>
