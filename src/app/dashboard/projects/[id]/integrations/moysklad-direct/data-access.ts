@@ -47,6 +47,8 @@ export interface IntegrationPageData {
       lastName: string | null;
       email: string;
     } | null;
+    requestData?: any;
+    responseData?: any;
   }>;
   projectId: string;
   webhookUrl: string;
@@ -170,7 +172,9 @@ export async function getIntegrationPageData(
         status: log.status,
         amount: log.amount ? Number(log.amount) : null,
         createdAt: log.createdAt,
-        user: log.user
+        user: log.user,
+        requestData: log.requestData,
+        responseData: log.responseData
       }));
 
       const totalLogs = totalLogsCount;

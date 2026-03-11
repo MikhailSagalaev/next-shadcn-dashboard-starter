@@ -12,13 +12,15 @@
 import { Card } from '@/components/ui/card';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownRight, Users, AlertCircle } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { ru } from 'date-fns/locale';
 
 interface SyncStatsCardsProps {
   stats: {
     totalSyncs: number;
     successfulSyncs: number;
     failedSyncs: number;
-    lastSyncDuration: number | null;
+    lastSyncTime: Date | null;
   };
 }
 
@@ -63,10 +65,13 @@ export function SyncStatsCards({ stats }: SyncStatsCardsProps) {
     },
     {
       title: 'Последняя синхронизация',
-      value: stats.lastSyncDuration
-        ? `${(stats.lastSyncDuration / 1000).toFixed(2)}s`
+      value: stats.lastSyncTime
+        ? formatDistanceToNow(new Date(stats.lastSyncTime), {
+            addSuffix: true,
+            locale: ru
+          })
         : 'N/A',
-      description: 'Время выполнения',
+      description: 'Точное время',
       icon: ArrowDownRight,
       iconColor: 'text-amber-500',
       iconBgColor: 'bg-amber-500/10'
