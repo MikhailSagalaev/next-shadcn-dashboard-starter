@@ -137,6 +137,12 @@ export function validateNodeTypes(
 
   try {
     const { nodeHandlersRegistry } = require('./node-handlers-registry');
+    const { initializeNodeHandlers } = require('./handlers/index');
+    
+    // Убедимся, что хендлеры инициализированы в процессе Next.js API роута
+    if (nodeHandlersRegistry.list().length === 0) {
+      initializeNodeHandlers();
+    }
 
     for (const node of nodes) {
       if (!nodeHandlersRegistry.has(node.type)) {
@@ -167,6 +173,10 @@ export async function validateNodeConfigs(
 
   try {
     const { nodeHandlersRegistry } = require('./node-handlers-registry');
+    const { initializeNodeHandlers } = require('./handlers/index');
+    if (nodeHandlersRegistry.list().length === 0) {
+      initializeNodeHandlers();
+    }
 
     for (const node of nodes) {
       const handler = nodeHandlersRegistry.get(node.type);
