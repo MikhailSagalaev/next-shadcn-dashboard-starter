@@ -19,6 +19,7 @@ import type {
   ApplyBonusesRequest,
   ApplyBonusesResponse
 } from './types';
+import { InSalesApiClient } from './insales-api-client';
 
 export class InSalesService {
   constructor() {}
@@ -43,6 +44,23 @@ export class InSalesService {
       );
 
       // Проверяем статус оплаты
+      if (
+        order.payment_status === 'refunded' ||
+        order.payment_status === 'cancelled' ||
+        order.fulfillment_status === 'cancelled'
+      ) {
+        logger.info(
+          'Order is cancelled or refunded, processing cancellation',
+          {
+            orderId: order.id,
+            paymentStatus: order.payment_status,
+            fulfillmentStatus: order.fulfillment_status
+          },
+          'insales-service'
+        );
+        return this.handleOrderCancellation(projectId, order);
+      }
+
       if (order.payment_status !== 'paid') {
         logger.info(
           'Order not paid yet, skipping bonus award',
@@ -116,7 +134,7 @@ export class InSalesService {
         where: { id: projectId },
         include: {
           bonusLevels: {
-            where: { isActive: true },
+            where: { isUsed: false },
             orderBy: { order: 'asc' }
           }
         }
@@ -186,11 +204,13 @@ export class InSalesService {
 
       // Проверяем уровни лояльности
       if (project.bonusLevels.length > 0) {
-        const userTotalPurchases = user.totalPurchases.toNumber();
+        const userTotalPurchases = Number(user.totalPurchases);
 
         for (const level of project.bonusLevels) {
-          const minAmount = level.minAmount.toNumber();
-          const maxAmount = level.maxAmount?.toNumber();
+          const minAmount = Number(level.minAmount);
+          const maxAmount = level.maxAmount
+            ? Number(level.maxAmount)
+            : undefined;
 
           if (
             userTotalPurchases >= minAmount &&
@@ -216,7 +236,7 @@ export class InSalesService {
             amount: bonusAmount,
             type: 'PURCHASE',
             expiresAt,
-            isActive: true
+            isUsed: false
           }
         });
 
@@ -266,6 +286,15 @@ export class InSalesService {
           totalBonusAwarded: { increment: bonusAmount },
           lastWebhookAt: new Date()
         }
+      });
+
+      // Синхронизируем баланс в InSales API (в фоне, чтобы не блокировать вебхук)
+      this.syncClientBalanceToInSales(projectId, user.id).catch((err) => {
+        logger.error(
+          'Failed to async sync balance',
+          { error: err.message },
+          'insales-service'
+        );
       });
 
       return {
@@ -364,9 +393,9 @@ export class InSalesService {
           project.referralProgram?.isActive &&
           project.referralProgram.welcomeRewardType === 'BONUS'
         ) {
-          welcomeBonus = project.referralProgram.welcomeBonus.toNumber();
+          welcomeBonus = Number(project.referralProgram.welcomeBonus);
         } else if (project.welcomeRewardType === 'BONUS') {
-          welcomeBonus = project.welcomeBonus.toNumber();
+          welcomeBonus = Number(project.welcomeBonus);
         }
       }
 
@@ -426,7 +455,7 @@ export class InSalesService {
       const bonuses = await db.bonus.findMany({
         where: {
           userId: user.id,
-          isActive: true,
+          isUsed: false,
           expiresAt: {
             gt: new Date()
           }
@@ -434,7 +463,7 @@ export class InSalesService {
       });
 
       const balance = bonuses.reduce(
-        (sum, bonus) => sum + bonus.amount.toNumber(),
+        (sum, bonus) => sum + Number(bonus.amount),
         0
       );
 
@@ -504,7 +533,7 @@ export class InSalesService {
       const bonuses = await db.bonus.findMany({
         where: {
           userId: user.id,
-          isActive: true,
+          isUsed: false,
           expiresAt: {
             gt: new Date()
           }
@@ -512,7 +541,7 @@ export class InSalesService {
       });
 
       const currentBalance = bonuses.reduce(
-        (sum, bonus) => sum + bonus.amount.toNumber(),
+        (sum, bonus) => sum + Number(bonus.amount),
         0
       );
 
@@ -570,14 +599,14 @@ export class InSalesService {
       for (const bonus of sortedBonuses) {
         if (remainingToSpend <= 0) break;
 
-        const bonusAmount = bonus.amount.toNumber();
+        const bonusAmount = Number(bonus.amount);
         const amountToDeduct = Math.min(bonusAmount, remainingToSpend);
 
         if (amountToDeduct >= bonusAmount) {
           // Полностью используем бонус
           await db.bonus.update({
             where: { id: bonus.id },
-            data: { isActive: false }
+            data: { isUsed: true }
           });
         } else {
           // Частично используем бонус
@@ -629,6 +658,15 @@ export class InSalesService {
         'insales-service'
       );
 
+      // Синхронизируем баланс в InSales API
+      this.syncClientBalanceToInSales(projectId, user.id).catch((err) => {
+        logger.error(
+          'Failed to async sync balance',
+          { error: err.message },
+          'insales-service'
+        );
+      });
+
       return {
         success: true,
         applied: bonusToApply,
@@ -653,6 +691,347 @@ export class InSalesService {
         discount: 0,
         error: error instanceof Error ? error.message : 'Unknown error'
       };
+    }
+  }
+
+  /**
+   * Обработка обновления клиента
+   */
+  async handleClientUpdate(
+    projectId: string,
+    client: InSalesClient
+  ): Promise<ProcessClientResult> {
+    try {
+      logger.info(
+        'Processing InSales client update',
+        {
+          projectId,
+          clientId: client.id,
+          email: client.email,
+          phone: client.phone
+        },
+        'insales-service'
+      );
+
+      const identifier = client.email || client.phone;
+      if (!identifier) {
+        throw new Error('No email or phone in client data');
+      }
+
+      const existingUser = await UserService.findUserByContact(
+        projectId,
+        identifier
+      );
+
+      if (!existingUser) {
+        // Если пользователя нет, создаем его
+        return this.handleClientCreate(projectId, client);
+      }
+
+      // Обновляем данные пользователя
+      await db.user.update({
+        where: { id: existingUser.id },
+        data: {
+          email: client.email || existingUser.email,
+          phone: client.phone || existingUser.phone,
+          firstName: client.name || existingUser.firstName,
+          lastName: client.surname || existingUser.lastName
+        }
+      });
+
+      return {
+        success: true,
+        userId: existingUser.id
+      };
+    } catch (error) {
+      logger.error(
+        'Error processing InSales client update',
+        {
+          projectId,
+          clientId: client.id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
+        'insales-service'
+      );
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Обработка отмены/возврата заказа
+   */
+  async handleOrderCancellation(
+    projectId: string,
+    order: InSalesOrder
+  ): Promise<ProcessOrderResult> {
+    try {
+      logger.info(
+        'Processing InSales order cancellation',
+        {
+          projectId,
+          orderId: order.id,
+          orderNumber: order.number
+        },
+        'insales-service'
+      );
+
+      const identifier = order.client.email || order.client.phone;
+      if (!identifier) {
+        return { success: true, orderId: order.number };
+      }
+
+      const user = await UserService.findUserByContact(projectId, identifier);
+      if (!user) {
+        return { success: true, orderId: order.number };
+      }
+
+      // 1. Возврат списанных бонусов на баланс (если клиент ими платил)
+      const spendTx = await db.transaction.findFirst({
+        where: {
+          userId: user.id,
+          description: { contains: `Оплата заказа #${order.id}` },
+          type: 'SPEND'
+        }
+      });
+
+      if (spendTx) {
+        // Перепроверяем, не возвращали ли мы их уже
+        const alreadyRefunded = await db.transaction.findFirst({
+          where: {
+            userId: user.id,
+            description: {
+              contains: `Возврат за отмену заказа #${order.number}`
+            },
+            type: 'REFUND'
+          }
+        });
+
+        if (!alreadyRefunded) {
+          const bonusAmount = Number(spendTx.amount);
+          const project = await db.project.findUnique({
+            where: { id: projectId }
+          });
+          const expiresAt = new Date();
+          expiresAt.setDate(
+            expiresAt.getDate() + (project?.bonusExpiryDays || 30)
+          );
+
+          await db.bonus.create({
+            data: {
+              userId: user.id,
+              amount: bonusAmount,
+              type: 'MANUAL', // REFUND missing in BonusType Enum
+              expiresAt,
+              isUsed: false,
+              description: `Возврат за отмену заказа #${order.number}`
+            }
+          });
+
+          await db.transaction.create({
+            data: {
+              userId: user.id,
+              type: 'REFUND',
+              amount: bonusAmount,
+              description: `Возврат за отмену заказа #${order.number}`,
+              metadata: { orderId: order.id, refunded: true }
+            }
+          });
+
+          await db.inSalesIntegration.update({
+            where: { projectId },
+            data: { totalBonusSpent: { decrement: bonusAmount } }
+          });
+
+          logger.info(
+            'Refunded bonuses for cancelled order',
+            { orderId: order.number, amount: bonusAmount },
+            'insales-service'
+          );
+        }
+      }
+
+      // 2. Аннулирование начисленных бонусов за этот заказ (если мы их успели начислить и заказ не был оплачен полностью)
+      const earnTx = await db.transaction.findFirst({
+        where: {
+          userId: user.id,
+          description: { contains: `Покупка #${order.number}` },
+          type: 'EARN'
+        }
+      });
+
+      if (earnTx) {
+        const alreadyCancelled = await db.transaction.findFirst({
+          where: {
+            userId: user.id,
+            description: { contains: `Отмена покупки #${order.number}` },
+            type: 'RETURN'
+          }
+        });
+
+        if (!alreadyCancelled) {
+          const bonusAmount = Number(earnTx.amount);
+
+          const bonuses = await db.bonus.findMany({
+            where: { userId: user.id, isUsed: false },
+            orderBy: { expiresAt: 'asc' }
+          });
+
+          let remainingToCancel = bonusAmount;
+          for (const bonus of bonuses) {
+            if (remainingToCancel <= 0) break;
+            const amt = Number(bonus.amount);
+            const toDeduct = Math.min(amt, remainingToCancel);
+
+            if (toDeduct >= amt) {
+              await db.bonus.update({
+                where: { id: bonus.id },
+                data: { isUsed: true }
+              });
+            } else {
+              await db.bonus.update({
+                where: { id: bonus.id },
+                data: { amount: { decrement: toDeduct } }
+              });
+            }
+            remainingToCancel -= toDeduct;
+          }
+
+          await db.transaction.create({
+            data: {
+              userId: user.id,
+              type: 'RETURN',
+              amount: bonusAmount,
+              description: `Отмена покупки #${order.number}`,
+              metadata: { orderId: order.id, cancelledReward: true }
+            }
+          });
+
+          const orderTotal = parseFloat(order.total_price);
+          await db.user.update({
+            where: { id: user.id },
+            data: { totalPurchases: { decrement: orderTotal } }
+          });
+
+          await db.inSalesIntegration.update({
+            where: { projectId },
+            data: { totalBonusAwarded: { decrement: bonusAmount } }
+          });
+
+          logger.info(
+            'Cancelled earned bonuses for order',
+            { orderId: order.number, amount: bonusAmount },
+            'insales-service'
+          );
+        }
+      }
+
+      // Синхронизируем баланс с InSales
+      this.syncClientBalanceToInSales(projectId, user.id).catch((err) => {
+        logger.error(
+          'Failed to sync balance on cancellation',
+          { error: err.message },
+          'insales-service'
+        );
+      });
+
+      return {
+        success: true,
+        orderId: order.number
+      };
+    } catch (error) {
+      logger.error(
+        'Error cancelling InSales order bonuses',
+        {
+          projectId,
+          orderId: order.id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
+        'insales-service'
+      );
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Синхронизация баланса клиента в InSales
+   */
+  async syncClientBalanceToInSales(
+    projectId: string,
+    userId: string
+  ): Promise<void> {
+    try {
+      const integration = await db.inSalesIntegration.findUnique({
+        where: { projectId }
+      });
+
+      if (!integration || !integration.isActive || !integration.apiKey) {
+        return;
+      }
+
+      const user = await db.user.findUnique({ where: { id: userId } });
+      if (!user || (!user.email && !user.phone)) return;
+
+      const apiClient = new InSalesApiClient({
+        apiKey: integration.apiKey,
+        apiPassword: integration.apiPassword,
+        shopDomain: integration.shopDomain
+      });
+
+      // Ищем клиента в InSales
+      const searchResponse = await apiClient.getClients({
+        email: user.email || undefined,
+        phone: user.phone || undefined
+      });
+
+      // Status codes for success are typically 200, 201 etc.
+      // But we mapped error to !searchResponse.data when API request fails
+      if (searchResponse.error || !searchResponse.data) {
+        logger.warn(
+          'Failed to find InSales client for balance sync',
+          { userId, status: searchResponse.status },
+          'insales-service'
+        );
+        return;
+      }
+
+      const clients = searchResponse.data;
+      if (clients.length === 0) return;
+
+      const insalesClient = clients[0];
+
+      // Подсчитываем актуальный баланс
+      const bonuses = await db.bonus.findMany({
+        where: { userId, isUsed: false, expiresAt: { gt: new Date() } }
+      });
+      const balance = bonuses.reduce((sum, b) => sum + Number(b.amount), 0);
+
+      logger.info(
+        'Syncing balance to InSales',
+        { clientId: insalesClient.id, balance },
+        'insales-service'
+      );
+
+      // Здесь в InSales нужно обновлять определенное доп. поле (например, "Бонусы").
+      // У нас нет жестко зашитого ID этого поля, но мы можем отправлять
+      // его в fields_values_attributes, если пользователь заведет кастомное поле `bonus_balance`.
+      // Пример:
+      // await apiClient.updateClient(insalesClient.id, {
+      //   fields_values_attributes: [{ id: 1234567, value: balance }] // где 1234567 - ID поля бонусов
+      // });
+    } catch (error) {
+      logger.error(
+        'Error syncing balance to InSales',
+        { error },
+        'insales-service'
+      );
     }
   }
 }

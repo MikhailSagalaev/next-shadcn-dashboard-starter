@@ -148,16 +148,33 @@ export class InSalesApiClient {
   async getClients(params?: {
     page?: number;
     per_page?: number;
+    email?: string;
+    phone?: string;
   }): Promise<InSalesApiResponse<InSalesClient[]>> {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.set('page', params.page.toString());
     if (params?.per_page)
       searchParams.set('per_page', params.per_page.toString());
+    if (params?.email) searchParams.set('email', params.email);
+    if (params?.phone) searchParams.set('phone', params.phone);
 
     const query = searchParams.toString();
     const endpoint = `/admin/clients.json${query ? `?${query}` : ''}`;
 
     return this.request<InSalesClient[]>(endpoint);
+  }
+
+  /**
+   * Обновить клиента
+   */
+  async updateClient(
+    clientId: number,
+    data: Partial<InSalesClient> | { fields_values_attributes: any[] }
+  ): Promise<InSalesApiResponse<InSalesClient>> {
+    return this.request<InSalesClient>(`/admin/clients/${clientId}.json`, {
+      method: 'PUT',
+      body: JSON.stringify({ client: data })
+    });
   }
 
   /**

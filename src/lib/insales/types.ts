@@ -169,6 +169,7 @@ export interface ProcessOrderResult {
   orderId?: string;
   bonusAwarded?: number;
   bonusSpent?: number;
+  message?: string;
   error?: string;
 }
 

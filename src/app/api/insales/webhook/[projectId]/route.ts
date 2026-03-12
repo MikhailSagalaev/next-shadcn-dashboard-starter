@@ -213,21 +213,36 @@ export async function POST(
         break;
 
       case 'clients/update':
-        // Пока не обрабатываем обновление клиентов
-        logger.info(
-          'Client update event received (not processed)',
-          { projectId },
-          'insales-webhook'
+        if (!payload.client) {
+          throw new Error('Client data is missing in webhook payload');
+        }
+        result = await insalesService.handleClientUpdate(
+          projectId,
+          payload.client
         );
-        result = {
-          success: true,
-          message: 'Event acknowledged but not processed'
-        };
+        success = result.success;
+        error = result.error;
         break;
 
       case 'orders/delete':
+        if (!payload.order) {
+          // Delete payload in insales might just have ID, but let's see.
+          // If we have order info, cancel it.
+          throw new Error('Order data is missing in webhook payload');
+        }
+        // orders/delete is essentially a cancellation if it hasn't been handled already.
+        // We'll mark it as cancelled.
+        payload.order.payment_status = 'cancelled';
+        result = await insalesService.handleOrderCancellation(
+          projectId,
+          payload.order
+        );
+        success = result.success;
+        error = result.error;
+        break;
+
       case 'clients/delete':
-        // Пока не обрабатываем удаление
+        // Пока не обрабатываем удаление клиентов
         logger.info(
           'Delete event received (not processed)',
           { projectId, event: payload.event },
