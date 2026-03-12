@@ -251,13 +251,13 @@ export async function PUT(
         ? { domain: body.domain || null }
         : {};
 
+    // Основные поля — без bonusMode (он может отсутствовать если миграция не применена на сервере)
     const updateData: Record<string, unknown> = {
       ...domainUpdate,
       name: body.name,
       bonusPercentage: body.bonusPercentage,
       bonusExpiryDays: body.bonusExpiryDays,
       bonusBehavior: body.bonusBehavior,
-      bonusMode: body.bonusMode,
       operationMode: body.operationMode,
       isActive: body.isActive,
       welcomeRewardType: body.welcomeRewardType,
@@ -275,10 +275,45 @@ export async function PUT(
       updateData.workflowTimeoutMs = body.workflowTimeoutMs;
     }
 
+    // Основное обновление через Prisma
     const updatedProject = await db.project.update({
       where: { id },
       data: updateData as Parameters<typeof db.project.update>[0]['data']
     });
+
+    // bonusMode обновляем через raw SQL — это обходит ограничение старого Prisma-клиента
+    // на production-серверах где миграция 20260309_add_bonus_mode ещё не применена.
+    // После применения миграции и пересборки клиента можно убрать этот блок
+    // и вернуть bonusMode в updateData выше.
+    if (body.bonusMode && ['SIMPLE', 'LEVELS'].includes(body.bonusMode)) {
+      try {
+        // Маппинг enum — Prisma использует mapped values в БД
+        const dbBonusMode = body.bonusMode === 'LEVELS' ? 'levels' : 'simple';
+        await db.$executeRaw`
+          UPDATE projects
+          SET bonus_mode = ${dbBonusMode}::text::bonus_mode
+          WHERE id = ${id}
+        `;
+        logger.info('bonusMode обновлён через raw SQL', {
+          projectId: id,
+          bonusMode: body.bonusMode,
+          component: 'projects-api'
+        });
+      } catch (rawError) {
+        // Колонка ещё не существует в БД — логируем предупреждение, не падаем
+        logger.warn(
+          'Не удалось обновить bonusMode через raw SQL (возможно миграция не применена)',
+          {
+            projectId: id,
+            bonusMode: body.bonusMode,
+            error:
+              rawError instanceof Error ? rawError.message : String(rawError),
+            component: 'projects-api',
+            hint: 'Выполните: npx prisma migrate deploy на сервере'
+          }
+        );
+      }
+    }
 
     // Если режим изменился с WITH_BOT на WITHOUT_BOT — останавливаем бот идемпотентно
     if (
