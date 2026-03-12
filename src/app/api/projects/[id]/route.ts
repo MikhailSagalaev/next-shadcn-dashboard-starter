@@ -91,9 +91,30 @@ export async function GET(
       where: { projectId: id }
     });
 
-    // Возвращаем проект с подсчетом пользователей
+    // Читаем bonusMode через raw SQL (Prisma-клиент может не знать о колонке
+    // если миграция 20260309_add_bonus_mode не применена)
+    let bonusModeValue: string | undefined;
+    try {
+      const bonusModeResult = await db.$queryRaw<
+        Array<{ bonus_mode: string }>
+      >`SELECT bonus_mode FROM projects WHERE id = ${id}`;
+      if (bonusModeResult.length > 0 && bonusModeResult[0].bonus_mode) {
+        // Маппинг из БД-значения в enum-значение приложения
+        const dbValue = bonusModeResult[0].bonus_mode;
+        bonusModeValue = dbValue === 'levels' ? 'LEVELS' : 'SIMPLE';
+      }
+    } catch {
+      // Колонка не существует — не добавляем bonusMode в ответ
+      logger.warn(
+        'Не удалось прочитать bonusMode из БД (возможно миграция не применена)',
+        { projectId: id, component: 'projects-api' }
+      );
+    }
+
+    // Возвращаем проект с подсчетом пользователей и bonusMode
     const response = {
       ...project,
+      ...(bonusModeValue !== undefined && { bonusMode: bonusModeValue }),
       _count: {
         users: userCount
       }
@@ -102,6 +123,7 @@ export async function GET(
     logger.info('GET /api/projects/[id]: успешно', {
       projectId: id,
       adminId: admin.sub,
+      bonusMode: bonusModeValue,
       component: 'projects-api'
     });
 
