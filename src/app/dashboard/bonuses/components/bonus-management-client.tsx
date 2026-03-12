@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { Plus, RefreshCw, Settings } from 'lucide-react';
+import { Plus, RefreshCw, Settings, Users, Upload } from 'lucide-react';
 import { BonusStatsCards } from './bonus-stats-cards';
 import { useProjectUsers } from '@/features/bonuses/hooks/use-project-users';
 import { UsersTable } from '@/features/bonuses/components/users-table';
@@ -54,6 +54,8 @@ export function BonusManagementClient({
     useState(false);
   const [selectedUser, setSelectedUser] = useState<DisplayUser | null>(null);
   const [pageSize, setPageSize] = useState(50);
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [groupName, setGroupName] = useState('');
 
   // Users management hook
   const {
@@ -71,13 +73,110 @@ export function BonusManagementClient({
     searchTerm: ''
   });
 
-  // Stats data - matching BonusStats interface from data-access.ts
+  // Stats data
   const statsData = {
     totalProjects: initialData.projects.length,
     totalUsers,
     totalBonuses,
-    activeBonuses: totalBonuses, // Active bonuses from hook
-    expiringSoon: Math.floor(totalBonuses * 0.15) // Mock: 15% expiring soon
+    activeBonuses: totalBonuses,
+    expiringSoon: Math.floor(totalBonuses * 0.15)
+  };
+
+  const clearSelection = useCallback(() => {
+    setSelectedUsers([]);
+  }, []);
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || selectedUsers.length === 0) {
+      toast({
+        title: 'Ошибка',
+        description: 'Введите название группы и выберите пользователей',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/projects/${selectedProjectId}/segments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: groupName,
+            description: `Группа из ${selectedUsers.length} пользователей`,
+            type: 'MANUAL',
+            rules: {}
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Ошибка создания группы');
+      }
+
+      const segment = await response.json();
+
+      const addMemberResponses = await Promise.all(
+        selectedUsers.map((userId) =>
+          fetch(
+            `/api/projects/${selectedProjectId}/segments/${segment.id}/members`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId })
+            }
+          )
+        )
+      );
+
+      const allAdded = addMemberResponses.every((r) => r.ok);
+      if (!allAdded) {
+        throw new Error('Не все пользователи были добавлены в группу');
+      }
+
+      toast({
+        title: 'Успешно',
+        description: `Группа "${groupName}" создана с ${selectedUsers.length} пользователями`
+      });
+
+      setShowCreateGroupDialog(false);
+      setGroupName('');
+      clearSelection();
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось создать группу',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedUsers.length === 0) return;
+    if (!confirm(`Удалить выбранных пользователей (${selectedUsers.length})?`))
+      return;
+    try {
+      const responses = await Promise.all(
+        selectedUsers.map((uid) =>
+          fetch(`/api/projects/${selectedProjectId}/users/${uid}`, {
+            method: 'DELETE'
+          })
+        )
+      );
+      if (responses.every((r) => r.ok)) {
+        clearSelection();
+        refreshUsers();
+        toast({ title: 'Пользователи удалены' });
+      } else {
+        toast({
+          title: 'Часть пользователей не удалена',
+          variant: 'destructive'
+        });
+      }
+    } catch (e) {
+      toast({ title: 'Ошибка удаления', variant: 'destructive' });
+    }
   };
 
   // Handlers
@@ -96,10 +195,13 @@ export function BonusManagementClient({
     [loadUsers]
   );
 
-  const handleProjectChange = useCallback((projectId: string) => {
-    setSelectedProjectId(projectId);
-    setSelectedUsers([]);
-  }, []);
+  const handleProjectChange = useCallback(
+    (projectId: string) => {
+      setSelectedProjectId(projectId);
+      clearSelection();
+    },
+    [clearSelection]
+  );
 
   const handleRefresh = useCallback(async () => {
     await refreshUsers();
@@ -139,7 +241,6 @@ export function BonusManagementClient({
 
   const handleOpenHistoryDialog = useCallback(
     async (userId: string) => {
-      // Открываем страницу пользователя
       router.push(
         `/dashboard/projects/${selectedProjectId}/users?userId=${userId}`
       );
@@ -205,7 +306,6 @@ export function BonusManagementClient({
       const allUsers = await response.json();
       const usersArray = Array.isArray(allUsers?.users) ? allUsers.users : [];
 
-      // Создаем CSV
       const headers = [
         'ID',
         'Имя',
@@ -327,7 +427,20 @@ export function BonusManagementClient({
             Настройки
           </Button>
 
-          <Button onClick={() => setShowImportDialog(true)}>Импорт CSV</Button>
+          {selectedUsers.length > 0 && (
+            <Button
+              variant='outline'
+              onClick={() => setShowCreateGroupDialog(true)}
+            >
+              <Users className='mr-2 h-4 w-4' />
+              Создать группу ({selectedUsers.length})
+            </Button>
+          )}
+
+          <Button variant='outline' onClick={() => setShowImportDialog(true)}>
+            <Upload className='mr-2 h-4 w-4' />
+            Импорт CSV
+          </Button>
 
           <Button onClick={() => setShowCreateUserDialog(true)}>
             <Plus className='mr-2 h-4 w-4' />
@@ -343,7 +456,22 @@ export function BonusManagementClient({
 
       {/* Users Table */}
       <UsersTable
-        data={users}
+        data={users.map((user: any) => ({
+          ...user,
+          name:
+            user.firstName && user.lastName
+              ? `${user.firstName} ${user.lastName}`.trim()
+              : user.email || 'Без имени',
+          bonusBalance: user.bonusBalance || 0,
+          totalEarned: user.totalEarned || 0,
+          createdAt: user.registeredAt
+            ? new Date(user.registeredAt)
+            : new Date(),
+          updatedAt: user.registeredAt
+            ? new Date(user.registeredAt)
+            : new Date(),
+          isActive: user.isActive !== undefined ? user.isActive : false
+        }))}
         projectId={selectedProjectId}
         onSelectionChange={setSelectedUsers}
         onBonusAwardClick={handleBonusAwardClick}
@@ -366,6 +494,7 @@ export function BonusManagementClient({
         selectedCount={selectedUsers.length}
         onClearSelection={() => setSelectedUsers([])}
         onShowRichNotifications={() => setShowRichNotificationDialog(true)}
+        onDeleteSelected={handleDeleteSelected}
       />
 
       {/* Dialogs */}

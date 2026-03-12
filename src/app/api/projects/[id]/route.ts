@@ -156,24 +156,36 @@ export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  let id = '';
   try {
     const admin = await getCurrentAdmin();
     if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = await context.params;
+    const params = await context.params;
+    id = params.id;
 
     // Проверяем доступ к проекту
     await ProjectService.verifyProjectAccess(id, admin.sub);
 
-    // Фиксируем текущий режим для корректной остановки бота
+    // Фиксируем текущий проект
     const existingProject = await db.project.findUnique({
       where: { id },
-      select: { operationMode: true }
+      select: { operationMode: true, domain: true }
     });
 
     const body = await request.json();
+
+    logger.info('PUT /api/projects/[id]: получены данные', {
+      projectId: id,
+      adminId: admin.sub,
+      bonusMode: body.bonusMode,
+      bonusBehavior: body.bonusBehavior,
+      operationMode: body.operationMode,
+      welcomeRewardType: body.welcomeRewardType,
+      component: 'projects-api'
+    });
 
     // Валидация operationMode
     const validOperationModes = ['WITH_BOT', 'WITHOUT_BOT'];
@@ -190,34 +202,82 @@ export async function PUT(
       );
     }
 
+    // Валидация bonusBehavior
+    const validBonusBehaviors = ['SPEND_AND_EARN', 'SPEND_ONLY', 'EARN_ONLY'];
+    if (
+      body.bonusBehavior &&
+      !validBonusBehaviors.includes(body.bonusBehavior)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Недопустимое значение bonusBehavior. Допустимые значения: SPEND_AND_EARN, SPEND_ONLY, EARN_ONLY'
+        },
+        { status: 400 }
+      );
+    }
+
+    // Валидация bonusMode
+    const validBonusModes = ['SIMPLE', 'LEVELS'];
+    if (body.bonusMode && !validBonusModes.includes(body.bonusMode)) {
+      return NextResponse.json(
+        {
+          error:
+            'Недопустимое значение bonusMode. Допустимые значения: SIMPLE, LEVELS'
+        },
+        { status: 400 }
+      );
+    }
+
+    // Валидация welcomeRewardType
+    const validWelcomeRewardTypes = ['BONUS', 'DISCOUNT'];
+    if (
+      body.welcomeRewardType &&
+      !validWelcomeRewardTypes.includes(body.welcomeRewardType)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Недопустимое значение welcomeRewardType. Допустимые значения: BONUS, DISCOUNT'
+        },
+        { status: 400 }
+      );
+    }
+
+    // Строим объект данных для обновления
+    // domain обновляем только если он реально изменился (во избежание unique constraint ошибок)
+    const domainUpdate =
+      body.domain !== undefined && body.domain !== existingProject?.domain
+        ? { domain: body.domain || null }
+        : {};
+
+    const updateData: Record<string, unknown> = {
+      ...domainUpdate,
+      name: body.name,
+      bonusPercentage: body.bonusPercentage,
+      bonusExpiryDays: body.bonusExpiryDays,
+      bonusBehavior: body.bonusBehavior,
+      bonusMode: body.bonusMode,
+      operationMode: body.operationMode,
+      isActive: body.isActive,
+      welcomeRewardType: body.welcomeRewardType,
+      firstPurchaseDiscountPercent: body.firstPurchaseDiscountPercent
+    };
+
+    // Числовые поля — только если переданы
+    if (body.welcomeBonusAmount !== undefined) {
+      updateData.welcomeBonus = body.welcomeBonusAmount;
+    }
+    if (body.workflowMaxSteps !== undefined) {
+      updateData.workflowMaxSteps = body.workflowMaxSteps;
+    }
+    if (body.workflowTimeoutMs !== undefined) {
+      updateData.workflowTimeoutMs = body.workflowTimeoutMs;
+    }
+
     const updatedProject = await db.project.update({
       where: { id },
-      data: {
-        name: body.name,
-        domain: body.domain,
-        bonusPercentage: body.bonusPercentage,
-        bonusExpiryDays: body.bonusExpiryDays,
-        bonusBehavior: body.bonusBehavior,
-        bonusMode: body.bonusMode, // ✨ НОВОЕ: Режим начисления бонусов
-        operationMode: body.operationMode,
-        isActive: body.isActive,
-        // Приветственное вознаграждение
-        welcomeBonus:
-          body.welcomeBonusAmount !== undefined
-            ? body.welcomeBonusAmount
-            : undefined,
-        welcomeRewardType: body.welcomeRewardType,
-        firstPurchaseDiscountPercent: body.firstPurchaseDiscountPercent,
-        // ✨ НОВОЕ: Workflow лимиты
-        workflowMaxSteps:
-          body.workflowMaxSteps !== undefined
-            ? body.workflowMaxSteps
-            : undefined,
-        workflowTimeoutMs:
-          body.workflowTimeoutMs !== undefined
-            ? body.workflowTimeoutMs
-            : undefined
-      }
+      data: updateData as Parameters<typeof db.project.update>[0]['data']
     });
 
     // Если режим изменился с WITH_BOT на WITHOUT_BOT — останавливаем бот идемпотентно
@@ -250,16 +310,57 @@ export async function PUT(
 
     return NextResponse.json(updatedProject);
   } catch (error) {
-    const { id } = await context.params;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorCode = (error as Record<string, unknown>)?.code;
+    const errorMeta = (error as Record<string, unknown>)?.meta;
 
     // Обработка ошибок доступа
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    logger.error('Ошибка обновления проекта', { projectId: id, error });
+    // Обработка ошибки уникальности домена
+    if (errorCode === 'P2002') {
+      logger.warn('Домен уже занят другим проектом', {
+        projectId: id,
+        error: errorMeta,
+        component: 'projects-api'
+      });
+      return NextResponse.json(
+        { error: 'Этот домен уже используется другим проектом' },
+        { status: 409 }
+      );
+    }
+
+    try {
+      logger.error('Ошибка обновления проекта', {
+        projectId: id,
+        error: errorMessage,
+        code: errorCode,
+        meta: errorMeta,
+        stack: errorStack,
+        component: 'projects-api'
+      });
+    } catch (logError) {
+      console.error('Ошибка обновления проекта', {
+        projectId: id,
+        error: errorMessage,
+        code: errorCode,
+        stack: errorStack
+      });
+    }
+
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера' },
+      {
+        error: 'Внутренняя ошибка сервера',
+        ...(isDev && {
+          details: errorMessage,
+          code: errorCode,
+          stack: errorStack
+        })
+      },
       { status: 500 }
     );
   }

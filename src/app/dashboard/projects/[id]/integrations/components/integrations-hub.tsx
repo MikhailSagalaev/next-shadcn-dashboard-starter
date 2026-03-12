@@ -224,16 +224,6 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
           <IntegrationCard key={integration.name} {...integration} />
         ))}
       </div>
-
-      {/* Info block */}
-      <div className='rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950'>
-        <p className='text-sm text-blue-800 dark:text-blue-200'>
-          💡 <strong>Совет:</strong> Вы можете использовать несколько интеграций
-          одновременно. Например, Tilda + МойСклад — популярная связка для
-          розничных магазинов: Tilda принимает заказы, МойСклад управляет
-          клиентами и бонусами.
-        </p>
-      </div>
     </div>
   );
 }
