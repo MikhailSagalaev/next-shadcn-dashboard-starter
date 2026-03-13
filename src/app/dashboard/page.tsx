@@ -187,7 +187,11 @@ export default async function DashboardPage() {
 
       <div className='grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-7'>
         <div className='col-span-1 lg:col-span-4'>
-          <DashboardCharts data={stats.userGrowth} />
+          <DashboardCharts
+            data={stats.userGrowth}
+            dataByDays={stats.userGrowthByDays}
+            dataByWeeks={stats.userGrowthByWeeks}
+          />
         </div>
         <div className='col-span-1 lg:col-span-3'>
           <QuickActions />

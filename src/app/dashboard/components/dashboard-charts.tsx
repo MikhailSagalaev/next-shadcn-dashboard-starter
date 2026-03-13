@@ -26,69 +26,46 @@ import {
 } from 'recharts';
 import { useTheme } from 'next-themes';
 
-interface MonthlyUserGrowth {
+interface UserGrowthPoint {
   name: string;
   total: number;
 }
 
 interface DashboardChartsProps {
-  data: MonthlyUserGrowth[];
+  data: UserGrowthPoint[];
+  dataByDays: UserGrowthPoint[];
+  dataByWeeks: UserGrowthPoint[];
 }
 
 type TimeRange = 'days' | 'weeks' | 'months';
 
-export function DashboardCharts({ data }: DashboardChartsProps) {
+export function DashboardCharts({
+  data,
+  dataByDays,
+  dataByWeeks
+}: DashboardChartsProps) {
   const { theme } = useTheme();
   const [timeRange, setTimeRange] = useState<TimeRange>('months');
 
-  // Функция для группировки данных по выбранному периоду
-  const getChartData = () => {
-    if (data.length === 0) {
-      return [
-        { name: 'Янв', total: 0 },
-        { name: 'Фев', total: 0 },
-        { name: 'Мар', total: 0 },
-        { name: 'Апр', total: 0 },
-        { name: 'Май', total: 0 },
-        { name: 'Июн', total: 0 }
-      ];
+  const getChartData = (): UserGrowthPoint[] => {
+    switch (timeRange) {
+      case 'days':
+        return dataByDays.length > 0 ? dataByDays : [{ name: '-', total: 0 }];
+      case 'weeks':
+        return dataByWeeks.length > 0 ? dataByWeeks : [{ name: '-', total: 0 }];
+      case 'months':
+      default:
+        return data.length > 0
+          ? data
+          : [
+              { name: 'Янв', total: 0 },
+              { name: 'Фев', total: 0 },
+              { name: 'Мар', total: 0 },
+              { name: 'Апр', total: 0 },
+              { name: 'Май', total: 0 },
+              { name: 'Июн', total: 0 }
+            ];
     }
-
-    // Для месяцев используем исходные данные
-    if (timeRange === 'months') {
-      return data;
-    }
-
-    // Для дней и недель - упрощенная логика (можно расширить)
-    // В реальности нужно будет добавить соответствующие данные из data-access
-    if (timeRange === 'days') {
-      // Показываем последние 30 дней
-      const days = [];
-      const now = new Date();
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - i);
-        days.push({
-          name: `${date.getDate()}/${date.getMonth() + 1}`,
-          total: Math.floor(Math.random() * 100) // TODO: заменить на реальные данные
-        });
-      }
-      return days;
-    }
-
-    if (timeRange === 'weeks') {
-      // Показываем последние 12 недель
-      const weeks = [];
-      for (let i = 11; i >= 0; i--) {
-        weeks.push({
-          name: `Нед ${12 - i}`,
-          total: Math.floor(Math.random() * 100) // TODO: заменить на реальные данные
-        });
-      }
-      return weeks;
-    }
-
-    return data;
   };
 
   const chartData = getChartData();

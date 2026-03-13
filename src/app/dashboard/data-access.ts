@@ -12,10 +12,13 @@ export interface RecentProject {
   createdAt: string;
 }
 
-export interface MonthlyUserGrowth {
+export interface UserGrowthPoint {
   name: string;
   total: number;
 }
+
+/** @deprecated use UserGrowthPoint */
+export type MonthlyUserGrowth = UserGrowthPoint;
 
 export interface SystemStats {
   totalProjects: number;
@@ -24,7 +27,9 @@ export interface SystemStats {
   activeBots: number;
   totalBonuses: number;
   recentProjects: RecentProject[];
-  userGrowth: MonthlyUserGrowth[];
+  userGrowth: UserGrowthPoint[];
+  userGrowthByDays: UserGrowthPoint[];
+  userGrowthByWeeks: UserGrowthPoint[];
 }
 
 export async function getDashboardStats(): Promise<SystemStats> {
@@ -153,8 +158,14 @@ export async function getDashboardStats(): Promise<SystemStats> {
       activeWorkflowsCount
     );
 
-    // Получаем статистику роста пользователей за последние 6 месяцев
-    const userGrowth = await getUserGrowthStats(admin.sub);
+    // Получаем статистику роста пользователей за все периоды
+    const [userGrowth, userGrowthByDays, userGrowthByWeeks] = await Promise.all(
+      [
+        getUserGrowthStats(admin.sub),
+        getUserGrowthByDays(admin.sub),
+        getUserGrowthByWeeks(admin.sub)
+      ]
+    );
 
     return {
       totalProjects,
@@ -169,7 +180,9 @@ export async function getDashboardStats(): Promise<SystemStats> {
         botStatus: project.botSettings?.isActive ? 'ACTIVE' : 'INACTIVE',
         createdAt: project.createdAt.toISOString()
       })),
-      userGrowth
+      userGrowth,
+      userGrowthByDays,
+      userGrowthByWeeks
     };
   } catch (error) {
     logger.error(
@@ -185,7 +198,9 @@ export async function getDashboardStats(): Promise<SystemStats> {
       activeBots: 0,
       totalBonuses: 0,
       recentProjects: [],
-      userGrowth: []
+      userGrowth: [],
+      userGrowthByDays: [],
+      userGrowthByWeeks: []
     };
   }
 }
@@ -278,6 +293,138 @@ async function getUserGrowthStats(
   } catch (error) {
     logger.error(
       'Error fetching user growth stats',
+      { error },
+      'dashboard-service'
+    );
+    return [];
+  }
+}
+
+/**
+ * Получить статистику роста пользователей по дням (последние 30 дней)
+ */
+async function getUserGrowthByDays(
+  ownerId: string
+): Promise<UserGrowthPoint[]> {
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    const users = await db.user.findMany({
+      where: {
+        project: { ownerId },
+        registeredAt: { gte: thirtyDaysAgo }
+      },
+      select: { registeredAt: true },
+      orderBy: { registeredAt: 'asc' }
+    });
+
+    // Инициализируем последние 30 дней нулями
+    const dailyData = new Map<string, number>();
+    const now = new Date();
+    const dayKeys: string[] = [];
+
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      dailyData.set(key, 0);
+      dayKeys.push(key);
+    }
+
+    // Подсчитываем количество регистраций за каждый день
+    for (const user of users) {
+      const d = new Date(user.registeredAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (dailyData.has(key)) {
+        dailyData.set(key, (dailyData.get(key) || 0) + 1);
+      }
+    }
+
+    return dayKeys.map((key) => {
+      const parts = key.split('-');
+      const day = parseInt(parts[2]);
+      const month = parseInt(parts[1]);
+      return {
+        name: `${day}/${month}`,
+        total: dailyData.get(key) || 0
+      };
+    });
+  } catch (error) {
+    logger.error(
+      'Error fetching daily user growth stats',
+      { error },
+      'dashboard-service'
+    );
+    return [];
+  }
+}
+
+/**
+ * Получить статистику роста пользователей по неделям (последние 12 недель)
+ */
+async function getUserGrowthByWeeks(
+  ownerId: string
+): Promise<UserGrowthPoint[]> {
+  try {
+    const twelveWeeksAgo = new Date();
+    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 12 * 7);
+    twelveWeeksAgo.setHours(0, 0, 0, 0);
+
+    const users = await db.user.findMany({
+      where: {
+        project: { ownerId },
+        registeredAt: { gte: twelveWeeksAgo }
+      },
+      select: { registeredAt: true },
+      orderBy: { registeredAt: 'asc' }
+    });
+
+    // Строим 12 недельных бакетов, заканчивая текущей неделей
+    const now = new Date();
+    const weekBuckets: {
+      start: Date;
+      end: Date;
+      label: string;
+      count: number;
+    }[] = [];
+
+    for (let i = 11; i >= 0; i--) {
+      const weekEnd = new Date(now);
+      weekEnd.setDate(weekEnd.getDate() - i * 7);
+      weekEnd.setHours(23, 59, 59, 999);
+
+      const weekStart = new Date(weekEnd);
+      weekStart.setDate(weekStart.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+
+      weekBuckets.push({
+        start: weekStart,
+        end: weekEnd,
+        label: `Нед ${12 - i}`,
+        count: 0
+      });
+    }
+
+    // Распределяем пользователей по неделям
+    for (const user of users) {
+      const regDate = new Date(user.registeredAt);
+      for (const bucket of weekBuckets) {
+        if (regDate >= bucket.start && regDate <= bucket.end) {
+          bucket.count++;
+          break;
+        }
+      }
+    }
+
+    return weekBuckets.map((bucket) => ({
+      name: bucket.label,
+      total: bucket.count
+    }));
+  } catch (error) {
+    logger.error(
+      'Error fetching weekly user growth stats',
       { error },
       'dashboard-service'
     );
