@@ -47,8 +47,6 @@ interface CachedWorkflowProcessorEntry {
 }
 
 export class WorkflowRuntimeService {
-  private static activeVersionsCache: Map<string, CachedWorkflowVersionEntry> =
-    new Map();
   private static activeFlowsCache: Map<string, CachedWorkflowProcessorEntry> =
     new Map();
   private static compiledFlowsCache: Map<string, any> = new Map();
@@ -86,20 +84,17 @@ export class WorkflowRuntimeService {
   }
 
   private static setMemoryCache(
-    projectId: string,
-    version: WorkflowVersion
+    _projectId: string,
+    _version: WorkflowVersion
   ): void {
-    this.activeVersionsCache.set(projectId, {
-      version,
-      expiresAt: Date.now() + ACTIVE_VERSION_MEMORY_TTL_MS
-    });
+    // Memory cache for versions removed to ensure multi-instance consistency
+    // Relying on Redis and DB instead
   }
 
   private static async cacheActiveVersion(
     projectId: string,
     version: WorkflowVersion
   ): Promise<void> {
-    this.setMemoryCache(projectId, version);
     await CacheService.set(
       this.getActiveVersionCacheKey(projectId),
       this.serializeWorkflowVersion(version),
@@ -107,18 +102,9 @@ export class WorkflowRuntimeService {
     );
   }
 
-  private static getCachedVersion(projectId: string): WorkflowVersion | null {
-    const cachedEntry = this.activeVersionsCache.get(projectId);
-    if (!cachedEntry) {
-      return null;
-    }
-
-    if (cachedEntry.expiresAt < Date.now()) {
-      this.activeVersionsCache.delete(projectId);
-      return null;
-    }
-
-    return cachedEntry.version;
+  private static getCachedVersion(_projectId: string): WorkflowVersion | null {
+    // Memory cache for versions removed to ensure multi-instance consistency
+    return null;
   }
 
   private static getCachedProcessor(
@@ -133,6 +119,7 @@ export class WorkflowRuntimeService {
     }
 
     const isSameWorkflow =
+      cachedEntry.projectId === projectId &&
       cachedEntry.workflowId === workflowVersion.workflowId &&
       cachedEntry.version === workflowVersion.version;
     const isExpired = cachedEntry.expiresAt < Date.now();
@@ -181,7 +168,6 @@ export class WorkflowRuntimeService {
    */
   static async invalidateCache(projectId: string): Promise<void> {
     logger.debug('Invalidating workflow cache', { projectId });
-    this.activeVersionsCache.delete(projectId);
     this.activeFlowsCache.delete(projectId);
     this.compiledFlowsCache.delete(projectId);
     await CacheService.delete(this.getActiveVersionCacheKey(projectId));
@@ -189,7 +175,6 @@ export class WorkflowRuntimeService {
   }
 
   static async clearAllCache(): Promise<void> {
-    this.activeVersionsCache.clear();
     this.activeFlowsCache.clear();
     this.compiledFlowsCache.clear();
     await CacheService.deletePattern('project:*:workflow:*');
@@ -202,18 +187,11 @@ export class WorkflowRuntimeService {
    */
   static async hasActiveWorkflow(projectId: string): Promise<boolean> {
     try {
-      const cachedVersion = this.getCachedVersion(projectId);
-      if (cachedVersion) {
-        return true;
-      }
-
       const cachedInRedis = await CacheService.get<SerializedWorkflowVersion>(
         this.getActiveVersionCacheKey(projectId)
       );
 
       if (cachedInRedis) {
-        const hydrated = this.deserializeWorkflowVersion(cachedInRedis);
-        this.setMemoryCache(projectId, hydrated);
         return true;
       }
 
@@ -255,34 +233,13 @@ export class WorkflowRuntimeService {
       // Инициализируем handlers
       this.initializeHandlers();
 
-      // Проверяем кэш в памяти
-      const memoryCached = this.getCachedVersion(projectId);
-      if (memoryCached) {
-        const memoryConnections = memoryCached.connections || [];
-        console.log('📦 Возвращаем workflow из кэша в памяти', {
-          projectId,
-          workflowId: memoryCached.workflowId,
-          version: memoryCached.version,
-          versionId: memoryCached.id,
-          connectionsCount: memoryConnections.length,
-          menuInviteConnections: memoryConnections
-            .filter((c: any) => c.source === 'menu-invite-trigger')
-            .map((c: any) => ({
-              source: c.source,
-              target: c.target
-            }))
-        });
-        return memoryCached;
-      }
-
-      // Пробуем загрузить из Redis
+      // Пробуем загрузить из Redis (общий для всех процессов)
       const redisCached = await CacheService.get<SerializedWorkflowVersion>(
         this.getActiveVersionCacheKey(projectId)
       );
 
       if (redisCached) {
         const hydrated = this.deserializeWorkflowVersion(redisCached);
-        this.setMemoryCache(projectId, hydrated);
         const redisConnections = hydrated.connections || [];
         console.log('📦 Возвращаем workflow из Redis кэша', {
           projectId,
