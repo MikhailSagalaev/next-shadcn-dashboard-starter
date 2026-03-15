@@ -30,8 +30,8 @@ export async function POST(
     // ✅ КРИТИЧНО: Убеждаемся что боты инициализированы
     await ensureBotsInitialized();
 
-    // Получаем webhook handler для проекта
-    let webhookHandler = botManager.getWebhookHandler(projectId);
+    // Получаем webhook handler для проекта (теперь асинхронно с поддержкой lazy-loading)
+    let webhookHandler = await botManager.getWebhookHandler(projectId);
 
     if (!webhookHandler) {
       logger.error(`❌ Webhook handler не найден для проекта`, {

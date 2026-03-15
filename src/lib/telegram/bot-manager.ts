@@ -1324,18 +1324,54 @@ class BotManager {
 
   /**
    * Получение webhook handler для конкретного проекта
-   * Всегда возвращает webhook (unified webhook architecture)
+   * Если бот не найден в памяти, пробует загрузить его из БД (lazy loading)
    */
-  getWebhookHandler(projectId: string) {
-    const botInstance = this.bots.get(projectId);
+  async getWebhookHandler(projectId: string) {
+    let botInstance = this.bots.get(projectId);
 
+    // ✅ КРИТИЧНО: Lazy-loading если бота нет в памяти
     if (!botInstance || !botInstance.isActive) {
-      logger.warn(`Bot instance не найден или неактивен`, {
+      logger.info(`🔍 Бот не найден в памяти, пробуем инициализировать`, {
         projectId,
-        exists: !!botInstance,
-        isActive: botInstance?.isActive,
         component: 'bot-manager'
       });
+
+      try {
+        const botSettings = await db.botSettings.findUnique({
+          where: { projectId },
+          include: { project: true }
+        });
+
+        if (
+          botSettings &&
+          botSettings.isActive &&
+          botSettings.project.operationMode === 'WITH_BOT'
+        ) {
+          logger.info(`🚀 Lazy-loading бота для проекта`, {
+            projectId,
+            component: 'bot-manager'
+          });
+          botInstance = await this.createBot(projectId, botSettings as any);
+        }
+      } catch (error) {
+        logger.error(`❌ Ошибка lazy-loading бота`, {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+          component: 'bot-manager'
+        });
+      }
+    }
+
+    if (!botInstance || !botInstance.isActive) {
+      logger.warn(
+        `Bot instance не найден или неактивен после попытки инициализации`,
+        {
+          projectId,
+          exists: !!botInstance,
+          isActive: botInstance?.isActive,
+          component: 'bot-manager'
+        }
+      );
       return null;
     }
 
@@ -1346,11 +1382,6 @@ class BotManager {
       });
       return null;
     }
-
-    logger.info(`Webhook handler найден для проекта`, {
-      projectId,
-      component: 'bot-manager'
-    });
 
     return botInstance.webhook;
   }
@@ -1417,18 +1448,20 @@ export async function ensureBotsInitialized(): Promise<void> {
   // Запускаем инициализацию
   botsInitializationPromise = (async () => {
     try {
-      const stats = botManager.getStats();
-      if (stats.total === 0) {
-        logger.info('🚀 Автоматический запуск ботов...', {
-          component: 'bot-manager'
-        });
-        await botManager.loadAllBots();
-        logger.info('✅ Боты успешно запущены', {
-          component: 'bot-manager',
-          stats: botManager.getStats()
-        });
-      }
+      logger.info('🚀 Проверка необходимости инициализации ботов...', {
+        component: 'bot-manager',
+        currentBotsCount: botManager.getStats().total
+      });
+
+      // ✅ КРИТИЧНО: Убираем проверку stats.total === 0
+      // Даже если один бот уже создан вручную, мы должны загрузить остальные из БД
+      await botManager.loadAllBots();
+
       globalForBotManager.botsInitialized = true;
+      logger.info('✅ Все активные боты загружены из БД', {
+        component: 'bot-manager',
+        totalInManager: botManager.getStats().total
+      });
     } catch (error) {
       logger.error('❌ Ошибка автоматического запуска ботов', {
         error: error instanceof Error ? error.message : 'Unknown error',
