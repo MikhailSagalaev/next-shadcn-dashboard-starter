@@ -22,23 +22,23 @@ export interface UserProfileData {
   phone?: string;
   telegramId?: string;
   telegramUsername?: string;
-  
+
   // Финансовая информация
   balance: number;
   totalEarned: number;
   totalSpent: number;
   totalPurchases: number;
-  
+
   // Уровень и рефералы
   currentLevel: string;
   referralCode?: string;
   referredBy?: string;
   referrerName?: string;
-  
+
   // Даты
   registeredAt: Date;
   updatedAt: Date;
-  
+
   // История
   transactionHistory: any[];
   activeBonuses: any[];
@@ -64,7 +64,10 @@ export class UserVariablesService {
     userId: string,
     projectId: string
   ): Promise<Record<string, any>> {
-    logger.debug('UserVariablesService.getUserVariables called', { userId, projectId });
+    logger.debug('UserVariablesService.getUserVariables called', {
+      userId,
+      projectId
+    });
 
     // ✅ КРИТИЧНО: Логируем projectId для отладки на сервере
     logger.debug('projectId validation', {
@@ -75,11 +78,17 @@ export class UserVariablesService {
     });
 
     try {
-      console.log('🔍 UserVariablesService.getUserVariables started', { userId, projectId });
+      console.log('🔍 UserVariablesService.getUserVariables started', {
+        userId,
+        projectId
+      });
 
       // ✅ Проверяем кеш user variables
-      const { WorkflowRuntimeService } = await import('@/lib/services/workflow-runtime.service');
-      const cachedVariables = await WorkflowRuntimeService.getCachedUserVariables(projectId, userId);
+      const { WorkflowRuntimeService } = await import(
+        '@/lib/services/workflow-runtime.service'
+      );
+      const cachedVariables =
+        await WorkflowRuntimeService.getCachedUserVariables(projectId, userId);
       if (cachedVariables) {
         console.log('✅ Returning cached user variables', {
           userId,
@@ -90,14 +99,14 @@ export class UserVariablesService {
       }
 
       // Получаем полный профиль пользователя
-      const profile = await QueryExecutor.execute(db, 'get_user_profile', { userId });
-      console.log('🔍 QueryExecutor returned profile', {
-        profileExists: !!profile,
-        profileKeys: profile ? Object.keys(profile) : [],
-        balance: profile?.balance,
-        expiringBonuses: profile?.expiringBonuses,
-        referralCount: profile?.referralCount
+      const profileStartTime = Date.now();
+      const profile = await QueryExecutor.execute(db, 'get_user_profile', {
+        userId
       });
+      logger.info(
+        `🚀 [PERF] get_user_profile took ${Date.now() - profileStartTime}ms`,
+        { userId }
+      );
 
       if (!profile) {
         logger.warn('User profile not found', { userId });
@@ -113,28 +122,34 @@ export class UserVariablesService {
       });
 
       // Получаем реферальную ссылку
-      console.log('🔗 Getting referral data...');
+      const referralLinkStartTime = Date.now();
       let referralData;
       try {
         referralData = await QueryExecutor.execute(db, 'get_referral_link', {
           userId,
           projectId
         });
-        console.log('✅ Referral data received', { referralData });
+        logger.info(
+          `🚀 [PERF] get_referral_link took ${Date.now() - referralLinkStartTime}ms`,
+          { userId, projectId }
+        );
       } catch (error) {
         console.error('❌ Failed to get referral data', error);
         referralData = null;
       }
 
-      // Получаем информацию об уровнях
-      console.log('🏆 Getting progress data...');
+      // Получаем инормацию об уровнях
+      const progressStartTime = Date.now();
       let progressData;
       try {
         progressData = await BonusLevelService.calculateProgressToNextLevel(
           projectId,
           profile.totalPurchases
         );
-        console.log('✅ Progress data received', { progressData });
+        logger.info(
+          `🚀 [PERF] calculateProgressToNextLevel took ${Date.now() - progressStartTime}ms`,
+          { projectId }
+        );
       } catch (error) {
         console.error('❌ Failed to get progress data', error);
         progressData = {
@@ -158,23 +173,29 @@ export class UserVariablesService {
 
       // Форматируем историю транзакций для отображения
       const formatTransactionHistory = (transactions: any[]) => {
-        return transactions.slice(0, 5).map(t => {
-          const amount = Number(t.amount);
-          const sign = t.type === 'EARN' ? '+' : '-';
-          const date = formatDate(t.createdAt);
-          return `${sign}${amount} бонусов - ${t.description || 'Операция'} (${date})`;
-        }).join('\n');
+        return transactions
+          .slice(0, 5)
+          .map((t) => {
+            const amount = Number(t.amount);
+            const sign = t.type === 'EARN' ? '+' : '-';
+            const date = formatDate(t.createdAt);
+            return `${sign}${amount} бонусов - ${t.description || 'Операция'} (${date})`;
+          })
+          .join('\n');
       };
 
       // Форматируем активные бонусы для отображения
       const formatActiveBonuses = (bonuses: any[]) => {
-        return bonuses.slice(0, 3).map(b => {
-          const amount = Number(b.amount);
-          const expires = b.expiresAt ? 
-            ` (до ${formatDate(b.expiresAt)})` : 
-            ' (без срока)';
-          return `${amount} бонусов${expires}`;
-        }).join('\n');
+        return bonuses
+          .slice(0, 3)
+          .map((b) => {
+            const amount = Number(b.amount);
+            const expires = b.expiresAt
+              ? ` (до ${formatDate(b.expiresAt)})`
+              : ' (без срока)';
+            return `${amount} бонусов${expires}`;
+          })
+          .join('\n');
       };
 
       // ✨ НОВОЕ: Генератор прогресс-бара для уровня (использует реальные данные прогресса)
@@ -183,7 +204,7 @@ export class UserVariablesService {
         const percent = Math.max(0, Math.min(100, progressPercent));
         const filled = Math.floor(percent / 25); // 4 блока по 25%
         const empty = 4 - filled;
-        
+
         const bar = '▰'.repeat(filled) + '▱'.repeat(empty);
         return `${bar} (${Math.round(percent)}%)`;
       };
@@ -193,31 +214,40 @@ export class UserVariablesService {
         if (!transactions || transactions.length === 0) {
           return '📭 История операций пуста';
         }
-        
-        return transactions.slice(0, 10).map((t, index) => {
-          const amount = Number(t.amount);
-          const icon = t.type === 'EARN' ? '💚' : '💸';
-          const sign = t.type === 'EARN' ? '+' : '-';
-          const date = new Intl.DateTimeFormat('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-          }).format(new Date(t.createdAt));
-          
-          return `${index + 1}. ${icon} ${sign}${Math.abs(amount)} бонусов • ${t.description || 'Операция'}\n   📅 ${date}`;
-        }).join('\n\n');
+
+        return transactions
+          .slice(0, 10)
+          .map((t, index) => {
+            const amount = Number(t.amount);
+            const icon = t.type === 'EARN' ? '💚' : '💸';
+            const sign = t.type === 'EARN' ? '+' : '-';
+            const date = new Intl.DateTimeFormat('ru-RU', {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }).format(new Date(t.createdAt));
+
+            return `${index + 1}. ${icon} ${sign}${Math.abs(amount)} бонусов • ${t.description || 'Операция'}\n   📅 ${date}`;
+          })
+          .join('\n\n');
       };
 
       // ✅ КРИТИЧНО: Реферальная статистика ПОЛЬЗОВАТЕЛЯ, а не проекта!
+      const referralStatsStartTime = Date.now();
       let referralCount = 0;
       let referralBonusTotal = 0;
       try {
-        console.log('🔍 Getting user referral stats for user:', userId, 'project:', projectId);
-        const userStats = await ReferralService.getUserReferralStats(userId, projectId);
+        const userStats = await ReferralService.getUserReferralStats(
+          userId,
+          projectId
+        );
         referralCount = userStats.referralCount || 0;
         referralBonusTotal = userStats.referralBonusTotal || 0;
-        console.log('✅ User referral stats:', { referralCount, referralBonusTotal });
+        logger.info(
+          `🚀 [PERF] getUserReferralStats took ${Date.now() - referralStatsStartTime}ms`,
+          { userId, projectId }
+        );
       } catch (error) {
         console.error('❌ Error getting user referral stats:', error);
         // игнорируем, не критично для сообщений
@@ -228,7 +258,9 @@ export class UserVariablesService {
         'user.id': profile.userId,
         'user.firstName': profile.firstName || 'Не указано',
         'user.lastName': profile.lastName || 'Не указано',
-        'user.fullName': `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'Не указано',
+        'user.fullName':
+          `${profile.firstName || ''} ${profile.lastName || ''}`.trim() ||
+          'Не указано',
         'user.email': profile.email || 'Не указано',
         'user.phone': profile.phone || 'Не указано',
         'user.telegramId': profile.telegramId || 'Не указано',
@@ -265,18 +297,31 @@ export class UserVariablesService {
           // Если это уже строка, возвращаем как есть
           return String(level);
         })(),
-        'user.progressBar': generateProgressBar(progressData.progressPercent || 0), // Используем реальный процент прогресса
+        'user.progressBar': generateProgressBar(
+          progressData.progressPercent || 0
+        ), // Используем реальный процент прогресса
         'user.referralCode': profile.referralCode || 'Не сгенерирован',
         'user.referredBy': profile.referredBy || 'Нет',
         'user.referrerName': profile.referrerName || 'Нет',
 
         // Информация об уровнях
         'user.levelBonusPercent': progressData.currentLevel?.bonusPercent || 0,
-        'user.levelPaymentPercent': progressData.currentLevel?.paymentPercent || 0,
-        'user.nextLevelName': progressData.nextLevel?.name || (progressData.currentLevel ? 'Максимальный уровень достигнут' : 'Уровень не определен'),
+        'user.levelPaymentPercent':
+          progressData.currentLevel?.paymentPercent || 0,
+        'user.nextLevelName':
+          progressData.nextLevel?.name ||
+          (progressData.currentLevel
+            ? 'Максимальный уровень достигнут'
+            : 'Уровень не определен'),
         'user.nextLevelAmount': progressData.amountNeeded || 0,
-        'user.nextLevelAmountFormatted': progressData.nextLevel ? `${progressData.amountNeeded || 0} руб.` : '0 руб.',
-        'user.progressPercent': progressData.nextLevel ? progressData.progressPercent : (progressData.currentLevel ? 100 : 0),
+        'user.nextLevelAmountFormatted': progressData.nextLevel
+          ? `${progressData.amountNeeded || 0} руб.`
+          : '0 руб.',
+        'user.progressPercent': progressData.nextLevel
+          ? progressData.progressPercent
+          : progressData.currentLevel
+            ? 100
+            : 0,
 
         // Даты
         'user.registeredAt': formatDate(profile.registeredAt),
@@ -285,9 +330,13 @@ export class UserVariablesService {
         // История и статистика
         'user.transactionCount': profile.transactionCount,
         'user.bonusCount': profile.bonusCount,
-        'user.transactionHistory': formatTransactionHistory(profile.transactionHistory),
+        'user.transactionHistory': formatTransactionHistory(
+          profile.transactionHistory
+        ),
         'user.activeBonuses': formatActiveBonuses(profile.activeBonuses),
-        'transactions.formatted': formatTransactionsDetailed(profile.transactionHistory), // ✨ НОВОЕ
+        'transactions.formatted': formatTransactionsDetailed(
+          profile.transactionHistory
+        ), // ✨ НОВОЕ
 
         // Реферальная ссылка
         'user.referralLink': referralData?.referralLink || 'Недоступно',
@@ -321,7 +370,8 @@ export class UserVariablesService {
         currentLevel: result['user.currentLevel'],
         currentLevelFromProfile: profile.currentLevel,
         currentLevelFromProgress: progressData.currentLevel?.name,
-        nextLevel: progressData.nextLevel?.name || 'Максимальный уровень достигнут',
+        nextLevel:
+          progressData.nextLevel?.name || 'Максимальный уровень достигнут',
         nextLevelAmount: progressData.amountNeeded,
         progressPercent: progressData.progressPercent,
         progressBar: result['user.progressBar'],
@@ -330,7 +380,9 @@ export class UserVariablesService {
 
       // ✅ Кешируем результат user variables (импорт уже выполнен выше)
       try {
-        const { WorkflowRuntimeService: WRS } = await import('@/lib/services/workflow-runtime.service');
+        const { WorkflowRuntimeService: WRS } = await import(
+          '@/lib/services/workflow-runtime.service'
+        );
         await WRS.cacheUserVariables(projectId, userId, result);
       } catch (cacheError) {
         console.warn('Failed to cache user variables:', cacheError);
@@ -349,20 +401,25 @@ export class UserVariablesService {
       });
 
       return result;
-
     } catch (error) {
-      logger.error('❌ Failed to get user variables - RETURNING FALLBACK VALUES', {
-        userId,
-        projectId,
-        error: error.message,
-        stack: error.stack
-      });
+      logger.error(
+        '❌ Failed to get user variables - RETURNING FALLBACK VALUES',
+        {
+          userId,
+          projectId,
+          error: error.message,
+          stack: error.stack
+        }
+      );
 
-      console.log('❌ UserVariablesService.getUserVariables ERROR - returning fallback', {
-        userId,
-        projectId,
-        errorMessage: error.message
-      });
+      console.log(
+        '❌ UserVariablesService.getUserVariables ERROR - returning fallback',
+        {
+          userId,
+          projectId,
+          errorMessage: error.message
+        }
+      );
 
       // Возвращаем базовые переменные в случае ошибки
       // ⚠️ ВАЖНО: Все переменные должны быть заполнены, даже если с дефолтными значениями
@@ -398,8 +455,10 @@ export class UserVariablesService {
     userId: string
   ): Promise<Record<string, any>> {
     try {
-      const profile = await QueryExecutor.execute(db, 'get_user_profile', { userId });
-      
+      const profile = await QueryExecutor.execute(db, 'get_user_profile', {
+        userId
+      });
+
       if (!profile) {
         return {};
       }
@@ -411,7 +470,6 @@ export class UserVariablesService {
         'user.currentLevel': profile.currentLevel,
         'user.referralCode': profile.referralCode || 'Нет'
       };
-
     } catch (error) {
       logger.error('Failed to get basic user variables', { userId, error });
       return {};
@@ -427,9 +485,9 @@ export class UserVariablesService {
     limit: number = 10
   ): Promise<Record<string, any>> {
     try {
-      const transactions = await QueryExecutor.execute(db, 'get_transactions', { 
-        userId, 
-        limit 
+      const transactions = await QueryExecutor.execute(db, 'get_transactions', {
+        userId,
+        limit
       });
 
       if (!transactions || transactions.length === 0) {
@@ -449,18 +507,24 @@ export class UserVariablesService {
           hour: '2-digit',
           minute: '2-digit'
         }).format(new Date(t.createdAt));
-        
+
         return `${sign}${amount} бонусов - ${t.description || 'Операция'} (${date})`;
       };
 
       return {
-        'user.transactionHistory': transactions.map(formatTransaction).join('\n'),
+        'user.transactionHistory': transactions
+          .map(formatTransaction)
+          .join('\n'),
         'user.transactionCount': transactions.length,
-        'user.lastTransaction': transactions[0] ? formatTransaction(transactions[0]) : 'Нет'
+        'user.lastTransaction': transactions[0]
+          ? formatTransaction(transactions[0])
+          : 'Нет'
       };
-
     } catch (error) {
-      logger.error('Failed to get transaction history variables', { userId, error });
+      logger.error('Failed to get transaction history variables', {
+        userId,
+        error
+      });
       return {};
     }
   }
@@ -474,10 +538,14 @@ export class UserVariablesService {
     projectId: string
   ): Promise<Record<string, any>> {
     try {
-      const referralData = await QueryExecutor.execute(db, 'get_referral_link', { 
-        userId, 
-        projectId 
-      });
+      const referralData = await QueryExecutor.execute(
+        db,
+        'get_referral_link',
+        {
+          userId,
+          projectId
+        }
+      );
 
       if (!referralData) {
         return {
@@ -493,7 +561,6 @@ export class UserVariablesService {
         'user.projectName': referralData.projectName,
         'user.hasReferralCode': 'Да'
       };
-
     } catch (error) {
       logger.error('Failed to get referral variables', { userId, error });
       return {};

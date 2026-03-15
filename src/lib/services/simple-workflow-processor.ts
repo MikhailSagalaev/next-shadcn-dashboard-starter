@@ -86,6 +86,7 @@ export class SimpleWorkflowProcessor {
     ctx: Context,
     trigger: 'start' | 'message' | 'callback'
   ): Promise<boolean> {
+    const processStartTime = Date.now();
     let context: ExecutionContext | null = null;
 
     try {
@@ -215,6 +216,7 @@ export class SimpleWorkflowProcessor {
       // ✅ Используем новый метод getOrCreateSessionId для корректной работы с сессиями
       const sessionId = await this.getOrCreateSessionId(ctx);
 
+      const contextStartTime = Date.now();
       context = await ExecutionContextManager.createContext(
         this.projectId,
         this.workflowVersion.workflowId,
@@ -228,6 +230,13 @@ export class SimpleWorkflowProcessor {
         ctx.callbackQuery?.data,
         contact // Передаём contact
       );
+      logger.info(
+        `🚀 [PERF] Context creation took ${Date.now() - contextStartTime}ms`,
+        {
+          executionId: context.executionId,
+          projectId: this.projectId
+        }
+      );
 
       // ✅ КРИТИЧНО: Сохраняем callbackQueryId для answerCallbackQuery
       if (ctx.callbackQuery?.id) {
@@ -240,11 +249,15 @@ export class SimpleWorkflowProcessor {
         hasCallback: !!ctx.callbackQuery,
         callbackData: ctx.callbackQuery?.data
       });
+      const triggerNodeStartTime = Date.now();
       const startNode = this.findTriggerNode(trigger, ctx);
-      logger.debug('findTriggerNode result', {
-        startNodeId: startNode?.id,
-        startNodeType: startNode?.type
-      });
+      logger.info(
+        `🚀 [PERF] findTriggerNode took ${Date.now() - triggerNodeStartTime}ms`,
+        {
+          startNodeId: startNode?.id,
+          executionId: context.executionId
+        }
+      );
 
       if (!startNode) {
         logger.debug('CRITICAL: No start node found', {});
@@ -326,12 +339,14 @@ export class SimpleWorkflowProcessor {
         // Не бросаем ошибку, так как workflow выполнился успешно
       }
 
-      logger.info('✅ Workflow успешно выполнен', {
-        projectId: this.projectId,
-        workflowId: this.workflowVersion.workflowId,
-        executionId: context.executionId,
-        steps: context.step
-      });
+      logger.info(
+        `✅ [PERF] SimpleWorkflowProcessor.process COMPLETED in ${Date.now() - processStartTime}ms`,
+        {
+          projectId: this.projectId,
+          executionId: context.executionId,
+          steps: context.step
+        }
+      );
 
       return true;
     } catch (error) {

@@ -122,10 +122,19 @@ export class MessageHandler extends BaseNodeHandler {
             userId: context.userId
           });
 
+          const userVarsStartTime = Date.now();
           const userVariables = await UserVariablesService.getUserVariables(
             context.services.db,
             context.userId,
             context.projectId
+          );
+          logger.info(
+            `🚀 [PERF] UserVariablesService.getUserVariables took ${Date.now() - userVarsStartTime}ms`,
+            {
+              userId: context.userId,
+              projectId: context.projectId,
+              executionId: context.executionId
+            }
           );
 
           this.logStep(context, node, 'User variables loaded', 'debug', {
@@ -305,7 +314,15 @@ export class MessageHandler extends BaseNodeHandler {
         }
       }
 
+      const sendMessageStartTime = Date.now();
       await context.services.http.post(telegramApiUrl, payload);
+      logger.info(
+        `🚀 [PERF] Telegram sendMessage took ${Date.now() - sendMessageStartTime}ms`,
+        {
+          chatId: context.telegram.chatId,
+          executionId: context.executionId
+        }
+      );
 
       this.logStep(context, node, 'Message sent successfully', 'info', {
         originalText: messageConfig?.text,

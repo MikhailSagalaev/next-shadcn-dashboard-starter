@@ -926,7 +926,9 @@ export class ExecutionContextManager {
   private static createHttpClient() {
     const axios = require('axios');
     const client = axios.create({
-      timeout: 10000, // 10 секунд таймаут
+      timeout: 30000, // Увеличено до 30 секунд для предотвращения таймаутов при нагрузке
+      maxContentLength: 5 * 1024 * 1024, // Лимит 5МБ на ответ
+      maxBodyLength: 5 * 1024 * 1024, // Лимит 5МБ на тело запроса
       headers: {
         'Content-Type': 'application/json'
       }
