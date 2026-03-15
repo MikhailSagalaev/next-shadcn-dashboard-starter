@@ -1257,28 +1257,34 @@ class BotManager {
         }
       );
 
-      for (const botSettings of allBotSettings) {
-        try {
-          // Преобразуем настройки для BotManager
-          const botSettingsForManager = {
-            ...botSettings,
-            welcomeMessage:
-              typeof botSettings.welcomeMessage === 'string'
-                ? botSettings.welcomeMessage
-                : 'Добро пожаловать! 🎉\n\nЭто бот бонусной программы.'
-          };
-          await this.createBot(
-            botSettings.projectId,
-            botSettingsForManager as any
-          );
-        } catch (error) {
-          logger.error(`Ошибка загрузки бота ${botSettings.projectId}`, {
-            projectId: botSettings.projectId,
-            error:
-              error instanceof Error ? error.message : 'Неизвестная ошибка',
-            component: 'bot-manager'
-          });
-        }
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < allBotSettings.length; i += BATCH_SIZE) {
+        const batch = allBotSettings.slice(i, i + BATCH_SIZE);
+
+        await Promise.allSettled(
+          batch.map(async (botSettings) => {
+            try {
+              const botSettingsForManager = {
+                ...botSettings,
+                welcomeMessage:
+                  typeof botSettings.welcomeMessage === 'string'
+                    ? botSettings.welcomeMessage
+                    : 'Добро пожаловать! 🎉\n\nЭто бот бонусной программы.'
+              };
+              await this.createBot(
+                botSettings.projectId,
+                botSettingsForManager as any
+              );
+            } catch (error) {
+              logger.error(`Ошибка загрузки бота ${botSettings.projectId}`, {
+                projectId: botSettings.projectId,
+                error:
+                  error instanceof Error ? error.message : 'Неизвестная ошибка',
+                component: 'bot-manager'
+              });
+            }
+          })
+        );
       }
 
       logger.info(`Загружено ${this.bots.size} ботов`, {
