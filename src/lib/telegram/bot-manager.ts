@@ -413,7 +413,8 @@ class BotManager {
 
     const promises = Array.from(this.bots.keys()).map(async (projectId) => {
       try {
-        await this.stopBot(projectId);
+        // Вызываем stopBot БЕЗ обновления БД, так как это экстренная очистка
+        await this.stopBot(projectId, false);
         logger.info(`Экстренная остановка бота ${projectId} - успешно`, {
           projectId,
           component: 'bot-manager'
@@ -494,8 +495,9 @@ class BotManager {
         component: 'bot-manager'
       });
 
-      // КРИТИЧНО: Останавливаем существующий бот если есть
-      await this.stopBot(projectId);
+      // КРИТИЧНО: Останавливаем существующий бот если есть, НО НЕ обновляем БД
+      // так как мы сейчас запустим его заново
+      await this.stopBot(projectId, false);
 
       // Добавляем задержку для избежания конфликтов Telegram API
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -925,7 +927,7 @@ class BotManager {
         bot,
         webhook: webhook as any, // null в dev режиме, webhookCallback в prod режиме
         runner: runner, // Runner instance для polling режима
-        isActive: botSettings.isActive,
+        isActive: true, // Всегда true, так как бот только что успешно запущен
         projectId,
         lastUpdated: new Date(),
         isPolling // true в dev (polling), false в prod (webhook)
@@ -1039,10 +1041,10 @@ class BotManager {
         component: 'bot-manager'
       });
 
-      // Сначала останавливаем существующий бот
+      // Сначала останавливаем существующий бот БЕЗ обновления БД
       if (existingBot) {
         try {
-          await this.stopBot(projectId);
+          await this.stopBot(projectId, false);
           logger.info('Старый бот остановлен перед обновлением токена', {
             projectId,
             component: 'bot-manager'
@@ -1097,8 +1099,10 @@ class BotManager {
 
   /**
    * Остановка и удаление бота (форсированная)
+   * @param projectId ID проекта
+   * @param updateDb Нужно ли обновлять статус isActive в БД (по умолчанию true)
    */
-  async stopBot(projectId: string): Promise<void> {
+  async stopBot(projectId: string, updateDb: boolean = true): Promise<void> {
     const botInstance = this.bots.get(projectId);
 
     if (botInstance) {
@@ -1197,22 +1201,24 @@ class BotManager {
       // КРИТИЧНО: Удаляем из map в любом случае
       this.bots.delete(projectId);
 
-      // Синхронизируем isActive в БД при остановке
-      try {
-        await db.botSettings.update({
-          where: { projectId },
-          data: { isActive: false }
-        });
-        logger.info(`✅ Статус бота синхронизирован с БД (isActive=false)`, {
-          projectId,
-          component: 'bot-manager'
-        });
-      } catch (dbError) {
-        logger.error(`Ошибка синхронизации статуса бота в БД`, {
-          projectId,
-          error: dbError instanceof Error ? dbError.message : 'Unknown error',
-          component: 'bot-manager'
-        });
+      // Синхронизируем isActive в БД при остановке если это необходимо
+      if (updateDb) {
+        try {
+          await db.botSettings.update({
+            where: { projectId },
+            data: { isActive: false }
+          });
+          logger.info(`✅ Статус бота синхронизирован с БД (isActive=false)`, {
+            projectId,
+            component: 'bot-manager'
+          });
+        } catch (dbError) {
+          logger.error(`Ошибка синхронизации статуса бота в БД`, {
+            projectId,
+            error: dbError instanceof Error ? dbError.message : 'Unknown error',
+            component: 'bot-manager'
+          });
+        }
       }
 
       logger.info(`🗑️ Бот ${projectId} удален из менеджера`, {
