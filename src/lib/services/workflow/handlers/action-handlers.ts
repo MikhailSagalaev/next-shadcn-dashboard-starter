@@ -661,9 +661,6 @@ export class ApiRequestHandler extends BaseNodeHandler {
       timeout
     });
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-
     // Подготавливаем данные для расширенного логирования HTTP
     let httpRequestData: any = null;
     let httpResponseData: any = null;
@@ -681,24 +678,6 @@ export class ApiRequestHandler extends BaseNodeHandler {
         {} as Record<string, string>
       );
 
-      const options: RequestInit = {
-        method,
-        headers: normalizedHeaders,
-        signal: controller.signal
-      };
-
-      if (method !== 'GET' && method !== 'DELETE') {
-        if (typeof body === 'string') {
-          options.body = body;
-        } else if (body !== undefined && body !== null) {
-          options.body = JSON.stringify(body);
-          options.headers = {
-            'Content-Type': 'application/json',
-            ...normalizedHeaders
-          };
-        }
-      }
-
       // ✅ Сохраняем данные HTTP запроса для логирования
       httpRequestData = {
         url: safeUrl,
@@ -707,26 +686,22 @@ export class ApiRequestHandler extends BaseNodeHandler {
         body: body
       };
 
-      const response = await fetch(safeUrl, options);
-      const contentType = response.headers.get('content-type') || '';
-      let responseData: any = null;
+      const options = {
+        headers: normalizedHeaders,
+        timeout
+      };
 
-      if (contentType.includes('application/json')) {
-        responseData = await response.json().catch(() => null);
-      } else {
-        responseData = await response.text().catch(() => null);
-      }
+      const responseData = await context.services.http[
+        method.toLowerCase() as 'get' | 'post' | 'put' | 'delete'
+      ](
+        safeUrl,
+        method !== 'GET' && method !== 'DELETE' ? body : options,
+        method !== 'GET' && method !== 'DELETE' ? options : undefined
+      );
 
       // ✅ Сохраняем данные HTTP ответа для логирования
-      const responseHeaders: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-
       httpResponseData = {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders,
+        status: 200, // Axios возвращает данные только при успехе (для нашего враппера)
         body: responseData
       };
 
@@ -740,9 +715,9 @@ export class ApiRequestHandler extends BaseNodeHandler {
           nodeId: node.id,
           nodeType: 'action.api_request',
           step: context.step,
-          level: response.ok ? 'info' : 'error',
-          message: response.ok ? 'API request completed' : 'API request failed',
-          status: response.ok ? 'success' : 'error',
+          level: 'info',
+          message: 'API request completed',
+          status: 'success',
           inputData: { url: safeUrl, method, body },
           outputData: responseData,
           httpRequest: httpRequestData,
@@ -753,17 +728,8 @@ export class ApiRequestHandler extends BaseNodeHandler {
         console.error('Failed to log HTTP payload:', logError);
       }
 
-      if (!response.ok) {
-        this.logStep(context, node, 'API request failed', 'error', {
-          status: response.status,
-          statusText: response.statusText,
-          response: responseData
-        });
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-
       this.logStep(context, node, 'API request completed', 'info', {
-        status: response.status,
+        status: 200,
         hasResponseData: responseData !== null,
         durationMs
       });
@@ -815,12 +781,7 @@ export class ApiRequestHandler extends BaseNodeHandler {
         console.error('Failed to log HTTP error:', logError);
       }
 
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`API request timeout reached (${timeout} ms)`);
-      }
       throw error;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -911,15 +872,19 @@ export class SendNotificationHandler extends BaseNodeHandler {
         );
         break;
       case 'webhook':
-        await this.sendWebhookNotification(recipient, {
-          projectId: context.projectId,
-          userId: context.userId,
-          title,
-          message: messageText,
-          priority: config.priority,
-          templateData,
-          timestamp: context.now().toISOString()
-        });
+        await this.sendWebhookNotification(
+          recipient,
+          {
+            projectId: context.projectId,
+            userId: context.userId,
+            title,
+            message: messageText,
+            priority: config.priority,
+            templateData,
+            timestamp: context.now().toISOString()
+          },
+          context
+        );
         break;
       default:
         throw new Error(`Unsupported notification type: ${notificationType}`);
@@ -1021,23 +986,14 @@ export class SendNotificationHandler extends BaseNodeHandler {
 
   private async sendWebhookNotification(
     url: string,
-    payload: Record<string, any>
+    payload: Record<string, any>,
+    context: ExecutionContext
   ): Promise<void> {
     if (!url) {
       throw new Error('Webhook URL is required');
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Webhook request failed with status ${response.status}`);
-    }
+    await context.services.http.post(url, payload);
   }
 }
 

@@ -185,27 +185,23 @@ export class ExternalApiIntegration {
     headers: Record<string, string>,
     body: any,
     timeout: number
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
+  ): Promise<any> {
+    const axios = require('axios');
     try {
-      const response = await fetch(url, {
+      const response = await axios({
         method,
+        url,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal
+        data: body,
+        timeout,
+        validateStatus: () => true // Axios не бросает ошибку при 4xx/5xx если так настроено
       });
 
-      clearTimeout(timeoutId);
       return response;
     } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
+      if ((error as any).code === 'ECONNABORTED') {
         throw new Error('Request timeout');
       }
-
       throw error;
     }
   }
@@ -213,51 +209,18 @@ export class ExternalApiIntegration {
   /**
    * Парсинг ответа API
    */
-  private parseResponse(response: Response, duration: number): ApiResponse {
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-
+  private parseResponse(response: any, duration: number): ApiResponse {
     return {
-      success: response.ok,
+      success: response.status >= 200 && response.status < 300,
       status: response.status,
-      headers,
+      headers: response.headers,
       duration,
-      data: null, // Будет заполнено после парсинга
-      error: response.ok ? undefined : `HTTP ${response.status}`
+      data: response.data,
+      error:
+        response.status >= 200 && response.status < 300
+          ? undefined
+          : `HTTP ${response.status}`
     };
-  }
-
-  /**
-   * Получение и парсинг тела ответа
-   */
-  async getResponseData(
-    response: ApiResponse,
-    rawResponse: Response
-  ): Promise<ApiResponse> {
-    try {
-      const contentType = response.headers['content-type'] || '';
-
-      if (contentType.includes('application/json')) {
-        response.data = await rawResponse.json();
-      } else if (contentType.includes('text/')) {
-        response.data = await rawResponse.text();
-      } else {
-        response.data = await rawResponse.blob();
-      }
-
-      return response;
-    } catch (error) {
-      logger.warn('Failed to parse response data', {
-        error: error instanceof Error ? error.message : String(error),
-        contentType: response.headers['content-type']
-      });
-
-      response.data = null;
-      response.error = 'Failed to parse response';
-      return response;
-    }
   }
 
   /**

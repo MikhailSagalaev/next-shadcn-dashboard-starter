@@ -924,32 +924,30 @@ export class ExecutionContextManager {
    * Создает HTTP клиент для выполнения запросов
    */
   private static createHttpClient() {
+    const axios = require('axios');
+    const client = axios.create({
+      timeout: 10000, // 10 секунд таймаут
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
     return {
       get: async (url: string, options?: any) => {
-        const response = await fetch(url, { ...options, method: 'GET' });
-        return response.json();
+        const response = await client.get(url, options);
+        return response.data;
       },
       post: async (url: string, data?: any, options?: any) => {
-        const response = await fetch(url, {
-          ...options,
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...options?.headers },
-          body: data ? JSON.stringify(data) : undefined
-        });
-        return response.json();
+        const response = await client.post(url, data, options);
+        return response.data;
       },
       put: async (url: string, data?: any, options?: any) => {
-        const response = await fetch(url, {
-          ...options,
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...options?.headers },
-          body: data ? JSON.stringify(data) : undefined
-        });
-        return response.json();
+        const response = await client.put(url, data, options);
+        return response.data;
       },
       delete: async (url: string, options?: any) => {
-        const response = await fetch(url, { ...options, method: 'DELETE' });
-        return response.json();
+        const response = await client.delete(url, options);
+        return response.data;
       }
     };
   }

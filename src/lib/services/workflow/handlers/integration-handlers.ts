@@ -20,7 +20,10 @@ export class WebhookIntegrationHandler extends BaseNodeHandler {
     return nodeType === 'integration.webhook';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['integration.webhook'];
 
     if (!config) {
@@ -33,7 +36,9 @@ export class WebhookIntegrationHandler extends BaseNodeHandler {
     }
 
     const method = (config.method || 'POST').toUpperCase();
-    const headers = await resolveTemplateValue<Record<string, string | number | boolean>>(config.headers || {}, context);
+    const headers = await resolveTemplateValue<
+      Record<string, string | number | boolean>
+    >(config.headers || {}, context);
     const body = await resolveTemplateValue(config.body, context);
     const timeout = config.timeout ?? 15000;
     const retries = config.retries ?? 0;
@@ -50,7 +55,7 @@ export class WebhookIntegrationHandler extends BaseNodeHandler {
     while (true) {
       attempt += 1;
       try {
-        await this.performRequest(url, method, headers, body, timeout);
+        await this.performRequest(url, method, headers, body, timeout, context);
         return null;
       } catch (error) {
         if (attempt > retries + 1) {
@@ -58,12 +63,18 @@ export class WebhookIntegrationHandler extends BaseNodeHandler {
         }
 
         const delay = Math.min(2000 * attempt, 10000);
-        this.logStep(context, node, 'Webhook attempt failed, retrying', 'warn', {
-          attempt,
-          retries,
-          delay,
-          error: error instanceof Error ? error.message : String(error)
-        });
+        this.logStep(
+          context,
+          node,
+          'Webhook attempt failed, retrying',
+          'warn',
+          {
+            attempt,
+            retries,
+            delay,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        );
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -74,13 +85,13 @@ export class WebhookIntegrationHandler extends BaseNodeHandler {
     method: string,
     headers: Record<string, string | number | boolean>,
     body: any,
-    timeout: number
+    timeout: number,
+    context: ExecutionContext
   ): Promise<void> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-
     try {
-      const normalizedHeaders: Record<string, string> = Object.entries(headers || {}).reduce(
+      const normalizedHeaders: Record<string, string> = Object.entries(
+        headers || {}
+      ).reduce(
         (acc, [key, value]) => {
           if (value !== undefined && value !== null) {
             acc[key] = String(value);
@@ -90,30 +101,20 @@ export class WebhookIntegrationHandler extends BaseNodeHandler {
         {} as Record<string, string>
       );
 
-      const options: RequestInit = {
-        method,
+      const options: any = {
         headers: normalizedHeaders,
-        signal: controller.signal
+        timeout // Используем кастомный таймаут из конфига ноды
       };
 
-      if (method !== 'GET' && method !== 'DELETE') {
-        if (typeof body === 'string') {
-          options.body = body;
-        } else if (body !== undefined && body !== null) {
-          options.body = JSON.stringify(body);
-          options.headers = {
-            'Content-Type': 'application/json',
-            ...normalizedHeaders
-          };
-        }
-      }
-
-      const response = await fetch(url, options);
-      if (!response.ok) {
-        throw new Error(`Webhook responded with status ${response.status}`);
-      }
-    } finally {
-      clearTimeout(timer);
+      await context.services.http[
+        method.toLowerCase() as 'get' | 'post' | 'put' | 'delete'
+      ](
+        url,
+        method !== 'GET' && method !== 'DELETE' ? body : options,
+        method !== 'GET' && method !== 'DELETE' ? options : undefined
+      );
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -134,28 +135,41 @@ export class AnalyticsIntegrationHandler extends BaseNodeHandler {
     return nodeType === 'integration.analytics';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     const config = node.data.config?.['integration.analytics'];
 
     if (!config) {
       throw new Error('Analytics integration configuration is missing');
     }
 
-    const eventName = (await resolveTemplateString(config.event, context)).trim();
+    const eventName = (
+      await resolveTemplateString(config.event, context)
+    ).trim();
     if (!eventName) {
       throw new Error('Analytics event name is required');
     }
 
     const analyticsUrl = process.env.ANALYTICS_SERVICE_URL;
     if (!analyticsUrl) {
-      this.logStep(context, node, 'ANALYTICS_SERVICE_URL is not set. Skipping analytics integration.', 'warn');
+      this.logStep(
+        context,
+        node,
+        'ANALYTICS_SERVICE_URL is not set. Skipping analytics integration.',
+        'warn'
+      );
       return null;
     }
 
-    const properties = await resolveTemplateValue<Record<string, any>>(config.properties || {}, context);
-    const userId = (config.userId
+    const properties = await resolveTemplateValue<Record<string, any>>(
+      config.properties || {},
+      context
+    );
+    const userId = config.userId
       ? (await resolveTemplateString(config.userId, context)).trim()
-      : context.userId || context.telegram.userId || 'anonymous');
+      : context.userId || context.telegram.userId || 'anonymous';
 
     await ExternalApiIntegration.trackEvent(analyticsUrl, {
       eventName,
@@ -183,4 +197,3 @@ export class AnalyticsIntegrationHandler extends BaseNodeHandler {
     };
   }
 }
-
