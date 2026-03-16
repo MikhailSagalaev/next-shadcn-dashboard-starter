@@ -58,10 +58,6 @@ function parseInSalesXML(
     event
   };
 
-  // Проверяем корневой тег XML для более точной детекции
-  const rootTagMatch = xml.match(/<([a-z0-9_-]+)[^>]*>/i);
-  const rootTag = rootTagMatch ? rootTagMatch[1] : '';
-
   logger.debug(
     'Parsing InSales XML',
     { rootTag, event, xmlPreview: xml.substring(0, 100) },
