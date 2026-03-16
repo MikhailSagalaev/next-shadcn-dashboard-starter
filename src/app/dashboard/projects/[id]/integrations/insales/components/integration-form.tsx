@@ -42,6 +42,7 @@ const formSchema = z.object({
     .regex(/^[a-zA-Z0-9-]+\.myinsales\.ru$/, 'Формат: yourshop.myinsales.ru'),
   bonusPercent: z.number().min(0).max(100),
   maxBonusSpend: z.number().min(0).max(100),
+  useProjectSettings: z.boolean(),
   widgetEnabled: z.boolean(),
   showProductBadges: z.boolean(),
   isActive: z.boolean()
@@ -73,11 +74,14 @@ export function InSalesIntegrationForm({
       shopDomain: integration?.shopDomain || '',
       bonusPercent: integration?.bonusPercent || defaultBonusPercent,
       maxBonusSpend: integration?.maxBonusSpend || 50,
+      useProjectSettings: integration?.useProjectSettings ?? true,
       widgetEnabled: integration?.widgetEnabled ?? true,
       showProductBadges: integration?.showProductBadges ?? true,
       isActive: integration?.isActive ?? true
     }
   });
+
+  const useProjectSettings = form.watch('useProjectSettings');
 
   async function onSubmit(data: FormValues) {
     try {
@@ -236,6 +240,37 @@ export function InSalesIntegrationForm({
 
             <Separator />
 
+            {/* Settings Inheritance */}
+            <div className='space-y-4'>
+              <h1 className='text-sm font-medium'>Управление настройками</h1>
+
+              <FormField
+                control={form.control}
+                name='useProjectSettings'
+                render={({ field }) => (
+                  <FormItem className='bg-muted/30 flex flex-row items-center justify-between rounded-lg border p-4'>
+                    <div className='space-y-0.5'>
+                      <FormLabel className='text-base font-semibold tracking-tight uppercase'>
+                        Использовать настройки проекта
+                      </FormLabel>
+                      <FormDescription>
+                        Процент начисления и лимиты будут наследоваться из общих
+                        настроек проекта.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Separator />
+
             {/* Bonus Settings */}
             <div className='space-y-4'>
               <h3 className='text-sm font-medium'>Настройки бонусов</h3>
@@ -251,6 +286,7 @@ export function InSalesIntegrationForm({
                         type='number'
                         min='0'
                         max='100'
+                        disabled={useProjectSettings}
                         {...field}
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value))
@@ -258,7 +294,9 @@ export function InSalesIntegrationForm({
                       />
                     </FormControl>
                     <FormDescription>
-                      Сколько процентов от суммы покупки начислять бонусами
+                      {useProjectSettings
+                        ? `Используется значение проекта: ${defaultBonusPercent}%`
+                        : 'Сколько процентов от суммы покупки начислять бонусами'}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -276,6 +314,7 @@ export function InSalesIntegrationForm({
                         type='number'
                         min='0'
                         max='100'
+                        disabled={useProjectSettings}
                         {...field}
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value))
@@ -283,8 +322,9 @@ export function InSalesIntegrationForm({
                       />
                     </FormControl>
                     <FormDescription>
-                      Максимальный процент заказа, который можно оплатить
-                      бонусами
+                      {useProjectSettings
+                        ? 'Лимит оплаты бонусами будет взят из настроек уровней лояльности проекта'
+                        : 'Максимальный процент заказа, который можно оплатить бонусами'}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

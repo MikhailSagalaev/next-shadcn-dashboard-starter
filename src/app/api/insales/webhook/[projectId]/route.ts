@@ -18,19 +18,44 @@ import type {
 /**
  * Парсит XML от InSales в объект
  */
-function parseInSalesXML(xml: string): InSalesWebhookPayload {
-  // Определяем тип события по тегу <topic>
+function parseInSalesXML(
+  xml: string,
+  eventFromHeader?: string
+): InSalesWebhookPayload {
+  // Определяем тип события по тегу <topic> (если есть) или из заголовка
   const topicMatch = xml.match(/<topic>([^<]+)<\/topic>/);
-  const event = (
-    topicMatch ? topicMatch[1] : 'orders/create'
+  let event = (
+    topicMatch ? topicMatch[1] : eventFromHeader || 'orders/create'
   ) as InSalesWebhookEvent;
+
+  // Нормализация события (InSales может слать client/create вместо clients/create)
+  if (event === ('client/create' as any)) event = 'clients/create';
+  if (event === ('client/update' as any)) event = 'clients/update';
+  if (event === ('client/delete' as any)) event = 'clients/delete';
+  if (event === ('order/create' as any)) event = 'orders/create';
+  if (event === ('order/update' as any)) event = 'orders/update';
+  if (event === ('order/delete' as any)) event = 'orders/delete';
 
   const payload: InSalesWebhookPayload = {
     event
   };
 
+  // Проверяем корневой тег XML для более точной детекции
+  const rootTagMatch = xml.match(/<([a-z0-9_-]+)[^>]*>/i);
+  const rootTag = rootTagMatch ? rootTagMatch[1] : '';
+
+  logger.debug(
+    'Parsing InSales XML',
+    { rootTag, event, xmlPreview: xml.substring(0, 100) },
+    'insales-webhook'
+  );
+
   // Парсим данные заказа для orders/create
-  if (event === 'orders/create' || event === 'orders/update') {
+  if (
+    event === 'orders/create' ||
+    event === 'orders/update' ||
+    rootTag === 'order'
+  ) {
     const idMatch = xml.match(/<id[^>]*>(\d+)<\/id>/);
     const numberMatch = xml.match(/<number>([^<]+)<\/number>/);
     const totalPriceMatch = xml.match(
@@ -69,7 +94,12 @@ function parseInSalesXML(xml: string): InSalesWebhookPayload {
   }
 
   // Парсим данные клиента для clients/create
-  if (event === 'clients/create' || event === 'clients/update') {
+  if (
+    event === 'clients/create' ||
+    event === 'clients/update' ||
+    rootTag === 'client' ||
+    rootTag === 'individual'
+  ) {
     const idMatch = xml.match(/<id[^>]*>(\d+)<\/id>/);
     const emailMatch = xml.match(/<email>([^<]+)<\/email>/);
     const phoneMatch = xml.match(/<phone>([^<]+)<\/phone>/);
@@ -146,23 +176,40 @@ export async function POST(
     let payload: InSalesWebhookPayload;
     let rawPayload: any = {};
 
+    const insalesTopic = request.headers.get('x-insales-topic');
+    logger.debug(
+      'InSales webhook headers',
+      {
+        projectId,
+        topic: insalesTopic,
+        headers: Object.fromEntries(request.headers.entries())
+      },
+      'insales-webhook'
+    );
+
     if (contentType.includes('xml') || body.trim().startsWith('<?xml')) {
       // Парсим XML
-      payload = parseInSalesXML(body);
+      payload = parseInSalesXML(body, insalesTopic || undefined);
       // Сохраняем исходный XML для отладки
       rawPayload = {
         format: 'xml',
         raw: body,
-        parsed: payload
+        parsed: payload,
+        headerTopic: insalesTopic
       };
     } else {
       // Fallback на JSON (на случай если формат изменится)
       try {
         payload = JSON.parse(body);
+        // Нормализация события для JSON
+        if (payload.event === ('client/create' as any))
+          payload.event = 'clients/create';
+
         rawPayload = {
           format: 'json',
           raw: body,
-          parsed: payload
+          parsed: payload,
+          headerTopic: insalesTopic
         };
       } catch (e) {
         throw new Error('Invalid payload format: expected XML or JSON');
@@ -173,7 +220,9 @@ export async function POST(
       'InSales webhook parsed',
       {
         projectId,
-        event: payload.event
+        event: payload.event,
+        hasOrder: !!payload.order,
+        hasClient: !!payload.client
       },
       'insales-webhook'
     );

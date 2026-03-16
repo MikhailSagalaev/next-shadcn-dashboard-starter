@@ -1329,6 +1329,7 @@ model InSalesIntegration {
   // Настройки бонусной программы
   bonusPercent      Int      @default(10) @map("bonus_percent") // % начисления бонусов
   maxBonusSpend     Int      @default(50) @map("max_bonus_spend") // max % оплаты бонусами
+  useProjectSettings Boolean @default(true) @map("use_project_settings")
   
   // Widget Settings
   widgetEnabled     Boolean  @default(true) @map("widget_enabled")

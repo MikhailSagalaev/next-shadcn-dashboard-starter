@@ -129,19 +129,28 @@ export class InSalesService {
         );
       }
 
-      // Получаем настройки проекта
-      const project = await db.project.findUnique({
-        where: { id: projectId },
-        include: {
-          bonusLevels: {
-            where: { isUsed: false },
-            orderBy: { order: 'asc' }
+      // Получаем настройки проекта и интеграции
+      const [project, integration] = await Promise.all([
+        db.project.findUnique({
+          where: { id: projectId },
+          include: {
+            bonusLevels: {
+              where: { isActive: true },
+              orderBy: { order: 'asc' }
+            }
           }
-        }
-      });
+        }),
+        db.inSalesIntegration.findUnique({
+          where: { projectId }
+        })
+      ]);
 
       if (!project) {
         throw new Error('Project not found');
+      }
+
+      if (!integration) {
+        throw new Error('InSales integration not found');
       }
 
       // Рассчитываем сумму для начисления бонусов
@@ -200,26 +209,34 @@ export class InSalesService {
       }
 
       // Определяем процент начисления
-      let bonusPercent = project.bonusPercentage.toNumber();
+      let bonusPercent = 0;
 
-      // Проверяем уровни лояльности
-      if (project.bonusLevels.length > 0) {
-        const userTotalPurchases = Number(user.totalPurchases);
+      if (integration.useProjectSettings) {
+        // Используем настройки проекта
+        bonusPercent = project.bonusPercentage.toNumber();
 
-        for (const level of project.bonusLevels) {
-          const minAmount = Number(level.minAmount);
-          const maxAmount = level.maxAmount
-            ? Number(level.maxAmount)
-            : undefined;
+        // Проверяем уровни лояльности
+        if (project.bonusLevels.length > 0) {
+          const userTotalPurchases = Number(user.totalPurchases);
 
-          if (
-            userTotalPurchases >= minAmount &&
-            (!maxAmount || userTotalPurchases < maxAmount)
-          ) {
-            bonusPercent = level.bonusPercent;
-            break;
+          for (const level of project.bonusLevels) {
+            const minAmount = Number(level.minAmount);
+            const maxAmount = level.maxAmount
+              ? Number(level.maxAmount)
+              : undefined;
+
+            if (
+              userTotalPurchases >= minAmount &&
+              (!maxAmount || userTotalPurchases < maxAmount)
+            ) {
+              bonusPercent = level.bonusPercent;
+              break;
+            }
           }
         }
+      } else {
+        // Используем специфичные настройки интеграции
+        bonusPercent = integration.bonusPercent;
       }
 
       // Начисляем бонусы
@@ -555,24 +572,63 @@ export class InSalesService {
         };
       }
 
-      // Получаем настройки проекта
-      const integration = await db.inSalesIntegration.findUnique({
-        where: { projectId }
-      });
+      // Получаем настройки проекта и интеграции
+      const [project, integration] = await Promise.all([
+        db.project.findUnique({
+          where: { id: projectId },
+          include: {
+            bonusLevels: {
+              where: { isActive: true },
+              orderBy: { order: 'asc' }
+            }
+          }
+        }),
+        db.inSalesIntegration.findUnique({
+          where: { projectId }
+        })
+      ]);
 
-      if (!integration) {
+      if (!project || !integration) {
         return {
           success: false,
           applied: 0,
           newBalance: currentBalance,
           discount: 0,
-          error: 'Integration not configured'
+          error: 'Integration or project not configured'
         };
       }
 
       // Проверяем максимальный процент оплаты бонусами
-      const maxBonusAmount =
-        (request.orderTotal * integration.maxBonusSpend) / 100;
+      let maxBonusPercent = integration.maxBonusSpend;
+
+      if (integration.useProjectSettings) {
+        // Если проект использует уровни, берем из уровня пользователя
+        if (project.bonusLevels.length > 0) {
+          const userTotalPurchases = Number(user.totalPurchases);
+          // По умолчанию берем первый уровень (или 100 если нет уровней вообще)
+          maxBonusPercent = project.bonusLevels[0].paymentPercent;
+
+          for (const level of project.bonusLevels) {
+            const minAmount = Number(level.minAmount);
+            const maxAmount = level.maxAmount
+              ? Number(level.maxAmount)
+              : undefined;
+
+            if (
+              userTotalPurchases >= minAmount &&
+              (!maxAmount || userTotalPurchases < maxAmount)
+            ) {
+              maxBonusPercent = level.paymentPercent;
+              break;
+            }
+          }
+        } else {
+          // Если уровней нет, ищем глобальный лимит или используем 100%
+          maxBonusPercent = 100;
+        }
+      }
+
+      const maxBonusAmount = (request.orderTotal * maxBonusPercent) / 100;
 
       const bonusToApply = Math.min(
         request.bonusAmount,

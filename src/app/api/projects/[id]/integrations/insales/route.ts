@@ -135,6 +135,7 @@ export async function POST(
         webhookSecret,
         bonusPercent: body.bonusPercent || 10,
         maxBonusSpend: body.maxBonusSpend || 50,
+        useProjectSettings: (body as any).useProjectSettings ?? true,
         widgetEnabled: true,
         showProductBadges: true,
         isActive: false // Активируется вручную
@@ -223,6 +224,8 @@ export async function PUT(
     if (body.showProductBadges !== undefined)
       updateData.showProductBadges = body.showProductBadges;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    if ((body as any).useProjectSettings !== undefined)
+      updateData.useProjectSettings = (body as any).useProjectSettings;
 
     // Если обновляется пароль, шифруем его
     if (body.apiPassword) {
