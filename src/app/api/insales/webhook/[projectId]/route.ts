@@ -22,19 +22,37 @@ function parseInSalesXML(
   xml: string,
   eventFromHeader?: string
 ): InSalesWebhookPayload {
+  // Определяем корневой тег XML для более точной детекции
+  const rootTagMatch = xml.match(/<([a-z0-9_-]+)[^>]*>/i);
+  const rootTag = rootTagMatch ? rootTagMatch[1] : '';
+
   // Определяем тип события по тегу <topic> (если есть) или из заголовка
   const topicMatch = xml.match(/<topic>([^<]+)<\/topic>/);
   let event = (
-    topicMatch ? topicMatch[1] : eventFromHeader || 'orders/create'
+    topicMatch ? topicMatch[1] : eventFromHeader
   ) as InSalesWebhookEvent;
 
+  // Если из заголовков/тега <topic> событие не пришло или оно дефолтное,
+  // обязательно уточняем по корневому тегу, так как InSales часто не присылает тему
+  if (!event || event === 'orders/create') {
+    if (rootTag === 'individual' || rootTag === 'client') {
+      event = 'clients/create';
+    } else if (rootTag === 'order') {
+      event = 'orders/create';
+    }
+  }
+
+  // Если все еще нет события - ставим дефолт
+  if (!event) event = 'orders/create';
+
   // Нормализация события (InSales может слать client/create вместо clients/create)
-  if (event === ('client/create' as any)) event = 'clients/create';
-  if (event === ('client/update' as any)) event = 'clients/update';
-  if (event === ('client/delete' as any)) event = 'clients/delete';
-  if (event === ('order/create' as any)) event = 'orders/create';
-  if (event === ('order/update' as any)) event = 'orders/update';
-  if (event === ('order/delete' as any)) event = 'orders/delete';
+  const normalizedEvent = event.toString();
+  if (normalizedEvent === 'client/create') event = 'clients/create';
+  if (normalizedEvent === 'client/update') event = 'clients/update';
+  if (normalizedEvent === 'client/delete') event = 'clients/delete';
+  if (normalizedEvent === 'order/create') event = 'orders/create';
+  if (normalizedEvent === 'order/update') event = 'orders/update';
+  if (normalizedEvent === 'order/delete') event = 'orders/delete';
 
   const payload: InSalesWebhookPayload = {
     event
@@ -50,12 +68,8 @@ function parseInSalesXML(
     'insales-webhook'
   );
 
-  // Парсим данные заказа для orders/create
-  if (
-    event === 'orders/create' ||
-    event === 'orders/update' ||
-    rootTag === 'order'
-  ) {
+  // Парсим данные заказа для orders/*
+  if (event.startsWith('orders/') || rootTag === 'order') {
     const idMatch = xml.match(/<id[^>]*>(\d+)<\/id>/);
     const numberMatch = xml.match(/<number>([^<]+)<\/number>/);
     const totalPriceMatch = xml.match(
@@ -93,10 +107,9 @@ function parseInSalesXML(
     };
   }
 
-  // Парсим данные клиента для clients/create
+  // Парсим данные клиента для clients/*
   if (
-    event === 'clients/create' ||
-    event === 'clients/update' ||
+    event.startsWith('clients/') ||
     rootTag === 'client' ||
     rootTag === 'individual'
   ) {
