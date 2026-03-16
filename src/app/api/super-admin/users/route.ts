@@ -12,6 +12,9 @@ import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    const { requireSuperAdmin } = await import('@/lib/auth');
+    await requireSuperAdmin();
+
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -22,9 +25,7 @@ export async function GET(request: NextRequest) {
     const where: any = {};
 
     if (search) {
-      where.OR = [
-        { email: { contains: search, mode: 'insensitive' } }
-      ];
+      where.OR = [{ email: { contains: search, mode: 'insensitive' } }];
     }
 
     if (role) {
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({
-      users: users.map(u => ({
+      users: users.map((u) => ({
         ...u,
         projectsCount: u._count.projects
       })),

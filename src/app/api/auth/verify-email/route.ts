@@ -13,6 +13,7 @@ import { db } from '@/lib/db';
 import { setSessionCookie, signJwt } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib';
+import { BillingService } from '@/lib/services/billing.service';
 
 const verifySchema = z.object({
   token: z.string().min(1)
@@ -47,7 +48,10 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
       new Date(account.emailVerificationExpires) < new Date()
     ) {
       return NextResponse.json(
-        { error: 'Токен подтверждения истек. Пожалуйста, запросите новое письмо.' },
+        {
+          error:
+            'Токен подтверждения истек. Пожалуйста, запросите новое письмо.'
+        },
         { status: 400 }
       );
     }
@@ -61,6 +65,46 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
         emailVerificationExpires: null
       }
     });
+
+    // Автоматически создаем Free подписку, если ее нет
+    try {
+      const existingSubscription = await BillingService.getActiveSubscription(
+        account.id
+      );
+      if (!existingSubscription) {
+        // Ищем план со slug 'free' или 'starter'
+        const freePlan = await db.subscriptionPlan.findFirst({
+          where: {
+            OR: [{ slug: 'free' }, { slug: 'starter' }, { price: 0 }],
+            isActive: true
+          },
+          orderBy: { price: 'asc' }
+        });
+
+        if (freePlan) {
+          await BillingService.createSubscription({
+            adminId: account.id,
+            planId: freePlan.id
+          });
+          logger.info(
+            'Automatic free subscription created on email verification',
+            {
+              accountId: account.id,
+              planId: freePlan.id
+            }
+          );
+        }
+      }
+    } catch (billingError) {
+      logger.error('Failed to create automatic subscription', {
+        error:
+          billingError instanceof Error
+            ? billingError.message
+            : 'Unknown error',
+        accountId: account.id
+      });
+      // Не прерываем процесс верификации из-за ошибки биллинга
+    }
 
     // Создаем сессию для пользователя
     const jwtToken = await signJwt({
@@ -91,10 +135,7 @@ async function handlePOST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    return NextResponse.json(
-      { error: 'Внутренняя ошибка' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Внутренняя ошибка' }, { status: 500 });
   }
 }
 
@@ -124,13 +165,9 @@ async function handleGET(request: NextRequest): Promise<NextResponse> {
       error: err instanceof Error ? err.message : 'Unknown error'
     });
 
-    return NextResponse.json(
-      { error: 'Внутренняя ошибка' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Внутренняя ошибка' }, { status: 500 });
   }
 }
 
 export const POST = withAuthRateLimit(handlePOST);
 export const GET = handleGET;
-

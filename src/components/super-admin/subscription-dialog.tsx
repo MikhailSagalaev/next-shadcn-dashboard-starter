@@ -48,12 +48,14 @@ interface SubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  initialAdminId?: string;
 }
 
 export function SubscriptionDialog({
   open,
   onOpenChange,
-  onSuccess
+  onSuccess,
+  initialAdminId
 }: SubscriptionDialogProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -69,20 +71,28 @@ export function SubscriptionDialog({
   useEffect(() => {
     if (open) {
       fetchPlans();
-      fetchAdmins();
-      // Сброс формы
-      setSelectedAdminId('');
+      if (initialAdminId) {
+        setSelectedAdminId(initialAdminId);
+        // Force fetch admins even without search to ensure the selected user is in the list
+        fetchAdmins();
+      } else {
+        fetchAdmins();
+        setSelectedAdminId('');
+      }
+      // Reset form
       setSelectedPlanId('');
       setPromoCode('');
       setTrialDays(0);
       setAdminSearch('');
     }
-  }, [open]);
+  }, [open, initialAdminId]);
 
   const fetchPlans = async () => {
     try {
       setLoadingPlans(true);
-      const res = await fetch('/api/super-admin/subscription-plans?isActive=true');
+      const res = await fetch(
+        '/api/super-admin/subscription-plans?isActive=true'
+      );
       if (!res.ok) throw new Error('Failed to fetch plans');
       const data = await res.json();
       setPlans(data.plans || []);
@@ -104,7 +114,29 @@ export function SubscriptionDialog({
       const res = await fetch(`/api/super-admin/users?${params}`);
       if (!res.ok) throw new Error('Failed to fetch admins');
       const data = await res.json();
-      setAdmins(data.users || []);
+      let fetchedUsers = data.users || [];
+
+      // Если есть initialAdminId и он не попал в результаты поиска, пробуем загрузить его отдельно
+      if (
+        initialAdminId &&
+        !fetchedUsers.find((u: any) => u.id === initialAdminId)
+      ) {
+        try {
+          const userRes = await fetch(
+            `/api/super-admin/users?search=${initialAdminId}`
+          );
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            if (userData.users && userData.users.length > 0) {
+              fetchedUsers = [...userData.users, ...fetchedUsers];
+            }
+          }
+        } catch (e) {
+          console.error('Error fetching specific user:', e);
+        }
+      }
+
+      setAdmins(fetchedUsers);
     } catch (error) {
       console.error('Error fetching admins:', error);
       toast.error('Ошибка загрузки администраторов');
@@ -154,14 +186,16 @@ export function SubscriptionDialog({
       onOpenChange(false);
     } catch (error) {
       console.error('Error creating subscription:', error);
-      toast.error(error instanceof Error ? error.message : 'Ошибка при создании подписки');
+      toast.error(
+        error instanceof Error ? error.message : 'Ошибка при создании подписки'
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedPlan = plans.find(p => p.id === selectedPlanId);
-  const selectedAdmin = admins.find(a => a.id === selectedAdminId);
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId);
+  const selectedAdmin = admins.find((a) => a.id === selectedAdminId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -180,7 +214,7 @@ export function SubscriptionDialog({
           <div className='space-y-2'>
             <Label htmlFor='admin-search'>Поиск администратора</Label>
             <div className='relative'>
-              <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+              <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform' />
               <Input
                 id='admin-search'
                 placeholder='Введите email администратора...'
@@ -198,7 +232,10 @@ export function SubscriptionDialog({
                 <Loader2 className='h-5 w-5 animate-spin' />
               </div>
             ) : (
-              <Select value={selectedAdminId} onValueChange={setSelectedAdminId}>
+              <Select
+                value={selectedAdminId}
+                onValueChange={setSelectedAdminId}
+              >
                 <SelectTrigger id='admin'>
                   <SelectValue placeholder='Выберите администратора' />
                 </SelectTrigger>
@@ -212,7 +249,7 @@ export function SubscriptionDialog({
               </Select>
             )}
             {selectedAdmin && (
-              <div className='text-sm text-muted-foreground'>
+              <div className='text-muted-foreground text-sm'>
                 Выбран: {selectedAdmin.email}
               </div>
             )}
@@ -239,8 +276,9 @@ export function SubscriptionDialog({
               </Select>
             )}
             {selectedPlan && (
-              <div className='text-sm text-muted-foreground'>
-                Выбран план: {selectedPlan.name} - {selectedPlan.price} {selectedPlan.currency}
+              <div className='text-muted-foreground text-sm'>
+                Выбран план: {selectedPlan.name} - {selectedPlan.price}{' '}
+                {selectedPlan.currency}
               </div>
             )}
           </div>
@@ -269,10 +307,17 @@ export function SubscriptionDialog({
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={loading}>
+          <Button
+            variant='outline'
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+          >
             Отмена
           </Button>
-          <Button onClick={handleSubmit} disabled={loading || !selectedAdminId || !selectedPlanId}>
+          <Button
+            onClick={handleSubmit}
+            disabled={loading || !selectedAdminId || !selectedPlanId}
+          >
             {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             Создать подписку
           </Button>

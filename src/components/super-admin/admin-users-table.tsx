@@ -38,6 +38,17 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { MoreHorizontal, CreditCard } from 'lucide-react';
+import { SubscriptionDialog } from './subscription-dialog';
+import { toast } from 'sonner';
 
 interface AdminUser {
   id: string;
@@ -74,10 +85,11 @@ export function AdminUsersTable() {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-                  limit: limit.toString(),
-          ...(debouncedSearch && { search: debouncedSearch }),
-          ...(roleFilter && roleFilter !== 'all' && { role: roleFilter }),
-          ...(activeFilter && activeFilter !== 'all' && { isActive: activeFilter })
+        limit: limit.toString(),
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(roleFilter && roleFilter !== 'all' && { role: roleFilter }),
+        ...(activeFilter &&
+          activeFilter !== 'all' && { isActive: activeFilter })
       });
 
       const res = await fetch(`/api/super-admin/users?${params}`);
@@ -130,7 +142,7 @@ export function AdminUsersTable() {
     },
     {
       accessorKey: 'emailVerified',
-      header: 'Email',
+      header: 'Статус Email',
       cell: ({ row }) => {
         const verified = row.getValue('emailVerified') as boolean;
         return (
@@ -154,8 +166,55 @@ export function AdminUsersTable() {
         const date = new Date(row.getValue('createdAt'));
         return <div>{date.toLocaleDateString('ru-RU')}</div>;
       }
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => {
+        const user = row.original;
+        return <UserActions user={user} />;
+      }
     }
   ];
+
+  function UserActions({ user }: { user: AdminUser }) {
+    const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
+
+    return (
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant='ghost' className='h-8 w-8 p-0'>
+              <MoreHorizontal className='h-4 w-4' />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align='end'>
+            <DropdownMenuLabel>Действия</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => setShowSubscriptionDialog(true)}>
+              <CreditCard className='mr-2 h-4 w-4' />
+              Выдать подписку
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className='text-muted-foreground' disabled>
+              Редактировать
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {showSubscriptionDialog && (
+          <SubscriptionDialog
+            open={showSubscriptionDialog}
+            onOpenChange={setShowSubscriptionDialog}
+            onSuccess={() => {
+              toast.success('Подписка успешно выдана');
+              fetchUsers();
+            }}
+            initialAdminId={user.id}
+          />
+        )}
+      </>
+    );
+  }
 
   const [pagination, setPagination] = useState({
     pageIndex: page - 1,
@@ -185,8 +244,8 @@ export function AdminUsersTable() {
     <div className='space-y-4'>
       {/* Фильтры */}
       <div className='flex items-center gap-2'>
-        <div className='relative flex-1 max-w-sm'>
-          <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+        <div className='relative max-w-sm flex-1'>
+          <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
           <Input
             placeholder='Поиск по email...'
             value={search}
@@ -254,7 +313,10 @@ export function AdminUsersTable() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className='h-24 text-center'>
+                <TableCell
+                  colSpan={columns.length}
+                  className='h-24 text-center'
+                >
                   <Loader2 className='mx-auto h-6 w-6 animate-spin' />
                 </TableCell>
               </TableRow>
