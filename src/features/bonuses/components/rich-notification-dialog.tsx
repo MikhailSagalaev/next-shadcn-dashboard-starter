@@ -104,13 +104,17 @@ interface RichNotificationDialogProps {
   onOpenChange: (open: boolean) => void;
   selectedUserIds: string[];
   projectId: string;
+  isSelectAll?: boolean;
+  totalUsers?: number;
 }
 
 export function RichNotificationDialog({
   open,
   onOpenChange,
   selectedUserIds,
-  projectId
+  projectId,
+  isSelectAll = false,
+  totalUsers = 0
 }: RichNotificationDialogProps) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<number>(0);
@@ -319,7 +323,10 @@ export function RichNotificationDialog({
         message: values.message,
         channel: 'telegram',
         priority: 'normal',
-        userIds: selectedUserIds.length > 0 ? selectedUserIds : undefined,
+        userIds:
+          !isSelectAll && selectedUserIds.length > 0
+            ? selectedUserIds
+            : undefined,
         metadata: {
           imageUrl: values.imageUrl || undefined,
           buttons: validButtons.length > 0 ? validButtons : undefined,
@@ -448,7 +455,9 @@ export function RichNotificationDialog({
           </DialogTitle>
           <DialogDescription>
             Отправка уведомлений с поддержкой изображений и кнопок{' '}
-            {selectedUserIds.length} выбранным пользователям
+            {isSelectAll
+              ? `всем пользователям проекта (${totalUsers})`
+              : `${selectedUserIds.length} выбранным пользователям`}
           </DialogDescription>
         </DialogHeader>
 
@@ -784,7 +793,10 @@ export function RichNotificationDialog({
             </Card>
 
             <div className='text-muted-foreground text-xs'>
-              Получатели: {selectedUserIds.length} пользователей
+              Получатели:{' '}
+              {isSelectAll
+                ? `Все пользователи (${totalUsers})`
+                : `${selectedUserIds.length} пользователей`}
             </div>
           </div>
         </div>

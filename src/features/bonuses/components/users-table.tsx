@@ -75,7 +75,9 @@ import type { DisplayUser as User } from '../types';
 interface UsersTableProps {
   data: User[];
   projectId?: string;
-  onExport: () => void;
+  onExport?: () => void;
+  onExportCSV?: () => void;
+  onExportExcel?: () => void;
   onSelectionChange?: (selectedIds: string[]) => void;
   onProfileClick?: (user: User) => void;
   onHistoryClick?: (userId: string) => void;
@@ -94,6 +96,8 @@ export function UsersTable({
   data,
   projectId,
   onExport,
+  onExportCSV,
+  onExportExcel,
   onSelectionChange,
   onProfileClick,
   onHistoryClick,
@@ -464,6 +468,8 @@ export function UsersTable({
         searchPlaceholder='Поиск пользователей...'
         searchColumn='name'
         onExport={onExport}
+        onExportCSV={onExportCSV}
+        onExportExcel={onExportExcel}
       />
 
       <div className='rounded-md border'>

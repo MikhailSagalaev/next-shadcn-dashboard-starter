@@ -10,14 +10,22 @@ import { DataTableViewOptions } from '@/components/ui/table/data-table-view-opti
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Cross2Icon } from '@radix-ui/react-icons';
-import { Download } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText } from 'lucide-react';
 
 interface DataTableToolbarProps<TData> extends React.ComponentProps<'div'> {
   table: Table<TData>;
   searchPlaceholder?: string;
   searchColumn?: string;
   onExport?: () => void;
+  onExportCSV?: () => void;
+  onExportExcel?: () => void;
 }
 
 export function DataTableToolbar<TData>({
@@ -27,6 +35,8 @@ export function DataTableToolbar<TData>({
   searchPlaceholder = 'Поиск...',
   searchColumn,
   onExport,
+  onExportCSV,
+  onExportExcel,
   ...props
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
@@ -69,16 +79,29 @@ export function DataTableToolbar<TData>({
       </div>
       <div className='flex items-center gap-2'>
         {children}
-        {onExport && (
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={onExport}
-            className='gap-2'
-          >
-            <Download className='h-4 w-4' />
-            Экспорт
-          </Button>
+        {(onExport || onExportCSV || onExportExcel) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant='outline' size='sm' className='gap-2'>
+                <Download className='h-4 w-4' />
+                Экспорт
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end'>
+              {(onExportCSV || onExport) && (
+                <DropdownMenuItem onClick={onExportCSV || onExport}>
+                  <FileText className='mr-2 h-4 w-4' />
+                  Экспорт в CSV
+                </DropdownMenuItem>
+              )}
+              {onExportExcel && (
+                <DropdownMenuItem onClick={onExportExcel}>
+                  <FileSpreadsheet className='mr-2 h-4 w-4' />
+                  Экспорт в Excel
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         <DataTableViewOptions table={table} />
       </div>

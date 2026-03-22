@@ -73,6 +73,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { Loader2 } from 'lucide-react';
+import * as xlsx from 'xlsx';
 import type { Project, User, Bonus } from '@/types/bonus';
 import type { DisplayUser } from '@/features/bonuses/types';
 import { UserCreateDialog } from './user-create-dialog';
@@ -129,6 +130,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const [profileUser, setProfileUser] = useState<UserWithBonuses | null>(null);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [isSelectAllMode, setIsSelectAllMode] = useState(false);
 
   // Users management hook
   const {
@@ -425,8 +427,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     }
   }, [projectId]);
 
-  // Функция для экспорта всех пользователей
-  const handleExportAll = useCallback(async () => {
+  const handleExportCSV = useCallback(async () => {
     try {
       // Получаем все данные без пагинации
       const response = await fetch(
@@ -501,7 +502,62 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         error instanceof Error ? error.message : 'Unknown error';
 
       toast({
-        title: 'Ошибка экспорта',
+        title: 'Ошибка экспорта CSV',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    }
+  }, [projectId, toast]);
+
+  const handleExportExcel = useCallback(async () => {
+    try {
+      // Получаем все данные (пагинация отключена благодаря высокому лимиту)
+      const response = await fetch(
+        `/api/projects/${projectId}/users?limit=1000000`
+      );
+      if (!response.ok) {
+        throw new Error('Не удалось получить данные пользователей');
+      }
+
+      const allUsers = await response.json();
+      const usersArray = Array.isArray(allUsers?.users) ? allUsers.users : [];
+
+      const excelData = usersArray.map((user: any) => ({
+        ID: user.id || '',
+        Имя:
+          user.firstName && user.lastName
+            ? `${user.firstName} ${user.lastName}`.trim()
+            : user.email || '',
+        Email: user.email || '',
+        Телефон: user.phone || '',
+        'Активные бонусы': user.bonusBalance || 0,
+        'Всего бонусов': user.totalEarned || 0,
+        'Дата регистрации': user.registeredAt
+          ? new Date(user.registeredAt).toLocaleDateString('ru-RU')
+          : '',
+        Статус: user.isActive ? 'Активен' : 'Неактивен',
+        Уровень: user.currentLevel || 'Базовый'
+      }));
+
+      const worksheet = xlsx.utils.json_to_sheet(excelData);
+      const workbook = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Users');
+
+      xlsx.writeFile(
+        workbook,
+        `project-users-${projectId}-${new Date().toISOString().split('T')[0]}.xlsx`
+      );
+
+      toast({
+        title: 'Экспорт Excel завершен',
+        description: `Экспортировано ${usersArray.length} пользователей`
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
+      toast({
+        title: 'Ошибка экспорта Excel',
         description: errorMessage,
         variant: 'destructive'
       });
@@ -675,7 +731,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
 
   return (
     <div
-      className={`flex flex-1 flex-col space-y-6 ${selectedUsers.length > 0 ? 'pb-24' : ''}`}
+      className={`flex min-w-0 flex-1 flex-col space-y-6 ${selectedUsers.length > 0 ? 'pb-24' : ''}`}
     >
       {/* Header */}
       <div className='flex items-center justify-between'>
@@ -830,6 +886,18 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               >
                 Выбрать все
               </Button>
+              <Button
+                variant='default'
+                size='sm'
+                onClick={() => {
+                  setIsSelectAllMode(true);
+                  setShowRichNotificationDialog(true);
+                }}
+                disabled={totalUsers === 0}
+              >
+                <Mail className='mr-2 h-4 w-4' />
+                Рассылка всем ({totalUsers})
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -871,7 +939,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               onProfileClick={handleUserProfile}
               onDeleteUser={handleDeleteUser}
               onUserUpdated={() => loadUsers(currentPage)}
-              onExport={handleExportAll}
+              onExportCSV={handleExportCSV}
+              onExportExcel={handleExportExcel}
               loading={usersLoading}
               totalCount={totalUsers}
               currentPage={currentPage}
@@ -1289,8 +1358,13 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       {/* Rich Notification Dialog */}
       <RichNotificationDialog
         open={showRichNotificationDialog}
-        onOpenChange={setShowRichNotificationDialog}
-        selectedUserIds={selectedUsers}
+        onOpenChange={(open) => {
+          setShowRichNotificationDialog(open);
+          if (!open) setIsSelectAllMode(false);
+        }}
+        selectedUserIds={isSelectAllMode ? [] : selectedUsers}
+        isSelectAll={isSelectAllMode}
+        totalUsers={totalUsers}
         projectId={projectId}
       />
 

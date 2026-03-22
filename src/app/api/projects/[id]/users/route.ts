@@ -44,7 +44,7 @@ async function getHandler(
     const page = parseInt(url.searchParams.get('page') || '1', 10);
     const limit = Math.min(
       parseInt(url.searchParams.get('limit') || '50', 10),
-      1000
+      1000000
     );
     const search = url.searchParams.get('search') || undefined;
 
