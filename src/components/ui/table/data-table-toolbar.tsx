@@ -55,7 +55,7 @@ export function DataTableToolbar<TData>({
       role='toolbar'
       aria-orientation='horizontal'
       className={cn(
-        'flex w-full items-start justify-between gap-2 p-1',
+        'flex w-full flex-col items-start justify-between gap-4 p-1 sm:flex-row sm:items-center',
         className
       )}
       {...props}
@@ -77,7 +77,7 @@ export function DataTableToolbar<TData>({
           </Button>
         )}
       </div>
-      <div className='flex items-center gap-2'>
+      <div className='flex flex-wrap items-center gap-2'>
         {children}
         {(onExport || onExportCSV || onExportExcel) && (
           <DropdownMenu>

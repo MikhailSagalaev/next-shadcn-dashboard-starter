@@ -734,14 +734,14 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       className={`flex min-w-0 flex-1 flex-col space-y-6 ${selectedUsers.length > 0 ? 'pb-24' : ''}`}
     >
       {/* Header */}
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div>
           <Heading
             title={`Пользователи: ${project?.name || 'Проект'}`}
             description={`Управление пользователями и их бонусами (${totalUsers} пользователей)`}
           />
         </div>
-        <div className='flex items-center space-x-2'>
+        <div className='flex flex-wrap items-center gap-2'>
           {selectedUsers.length > 0 && (
             <Button
               variant='outline'
@@ -852,15 +852,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       {/* Data Table */}
       <Card>
         <CardHeader>
-          <div className='flex items-center justify-between'>
+          <div className='flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between'>
             <div>
               <CardTitle>Список пользователей</CardTitle>
               <CardDescription>
                 Управление пользователями проекта и их бонусными счетами
               </CardDescription>
             </div>
-            <div className='flex items-center space-x-2'>
-              <div className='relative w-64'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <div className='relative w-full sm:w-64'>
                 <Search className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
                 <Input
                   type='text'

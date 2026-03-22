@@ -548,7 +548,7 @@ export function BonusManagementPageRefactored({
   return (
     <div className={`w-full space-y-6 ${className ?? ''}`}>
       {/* Header */}
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <div>
           <h1 className='text-3xl font-bold tracking-tight'>
             Управление бонусами
@@ -560,7 +560,7 @@ export function BonusManagementPageRefactored({
           </p>
         </div>
 
-        <div className='flex items-center space-x-2'>
+        <div className='flex flex-wrap items-center gap-2'>
           {projects.length > 1 && (
             <Select
               value={currentProjectId || ''}
@@ -603,10 +603,10 @@ export function BonusManagementPageRefactored({
 
       {/* Controls */}
       <Card>
-        <CardHeader>
-          <div className='flex items-center justify-between'>
+        <CardHeader className='space-y-4'>
+          <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
             <div>
-              <CardTitle className='flex items-center space-x-2'>
+              <CardTitle className='flex flex-wrap items-center gap-2'>
                 <Users className='h-5 w-5' />
                 <span>Пользователи</span>
                 {!isLoading && (
@@ -620,7 +620,7 @@ export function BonusManagementPageRefactored({
               </CardDescription>
             </div>
 
-            <div className='flex items-center space-x-2'>
+            <div className='flex flex-wrap items-center gap-2'>
               <Button
                 variant='outline'
                 size='sm'
@@ -643,8 +643,8 @@ export function BonusManagementPageRefactored({
           </div>
 
           {/* Search */}
-          <div className='flex items-center space-x-4'>
-            <div className='relative max-w-sm flex-1'>
+          <div className='mt-4 flex flex-wrap items-center gap-4'>
+            <div className='relative w-full max-w-sm sm:flex-1'>
               <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform' />
               <Input
                 placeholder='Поиск по имени, email или телефону...'
@@ -961,7 +961,8 @@ export function BonusManagementPageRefactored({
                                           ).toLocaleString('ru-RU')}
                                         </span>
                                         <span className='text-destructive font-medium'>
-                                          -{Number(child.amount).toFixed(2)} бонусов
+                                          -{Number(child.amount).toFixed(2)}{' '}
+                                          бонусов
                                         </span>
                                         {child.metadata?.spentFromBonusId ? (
                                           <span className='opacity-70'>
