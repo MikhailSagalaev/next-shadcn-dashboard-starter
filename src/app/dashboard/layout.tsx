@@ -22,10 +22,12 @@ export default async function DashboardLayout({
     <KBar>
       <SidebarProvider defaultOpen={defaultOpen}>
         <AppSidebar />
-        <SidebarInset className='h-screen'>
+        <SidebarInset className='h-screen min-w-0'>
           <Header />
           {/* page main content */}
-          <div className='flex-1 overflow-y-scroll'>{children}</div>
+          <div className='flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-scroll'>
+            {children}
+          </div>
           {/* page main content ends */}
         </SidebarInset>
       </SidebarProvider>
