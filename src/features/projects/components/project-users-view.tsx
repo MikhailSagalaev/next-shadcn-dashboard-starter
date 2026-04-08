@@ -446,6 +446,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         'Имя',
         'Email',
         'Телефон',
+        'Telegram ID',
         'Активные бонусы',
         'Всего бонусов',
         'Дата регистрации',
@@ -460,6 +461,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
           : user.email || '',
         user.email || '',
         user.phone || '',
+        user.telegramId || '',
         user.bonusBalance || 0,
         user.totalEarned || 0,
         user.registeredAt
@@ -530,6 +532,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             : user.email || '',
         Email: user.email || '',
         Телефон: user.phone || '',
+        'Telegram ID': user.telegramId || '',
         'Активные бонусы': user.bonusBalance || 0,
         'Всего бонусов': user.totalEarned || 0,
         'Дата регистрации': user.registeredAt
