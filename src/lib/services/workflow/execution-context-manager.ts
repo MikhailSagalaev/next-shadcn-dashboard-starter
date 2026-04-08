@@ -155,7 +155,9 @@ export class ExecutionContextManager {
     telegramUsername?: string,
     messageText?: string,
     callbackData?: string,
-    contact?: TelegramContact
+    contact?: TelegramContact,
+    platform: 'telegram' | 'max' = 'telegram',
+    rawContext?: any
   ): Promise<ExecutionContext> {
     // Получаем токен бота и настройки лимитов для проекта
     const [botSettings, project] = await Promise.all([
@@ -281,6 +283,7 @@ export class ExecutionContextManager {
       version,
       sessionId,
       userId,
+      platform,
       telegram: {
         chatId: telegramChatId || sessionId,
         userId: telegramUserId || '',
@@ -304,6 +307,15 @@ export class ExecutionContextManager {
       maxSteps: maxSteps // ✨ Используем настройки проекта
     };
 
+    // Прикрепляем сырой контекст платформы если есть
+    if (rawContext) {
+      if (platform === 'max') {
+        (context as any)._maxContext = rawContext;
+      } else {
+        (context as any)._grammyContext = rawContext;
+      }
+    }
+
     return context;
   }
 
@@ -317,7 +329,9 @@ export class ExecutionContextManager {
     telegramUsername?: string,
     messageText?: string,
     callbackData?: string,
-    contact?: TelegramContact
+    contact?: TelegramContact,
+    platform: 'telegram' | 'max' = 'telegram',
+    rawContext?: any
   ): Promise<ExecutionContext> {
     // Получаем существующий execution
     const execution = await db.workflowExecution.findUnique({
@@ -380,6 +394,7 @@ export class ExecutionContextManager {
       version: execution.version,
       sessionId: execution.sessionId,
       userId: execution.userId || undefined,
+      platform,
       telegram: {
         chatId:
           telegramChatId || execution.telegramChatId || execution.sessionId,
@@ -403,6 +418,15 @@ export class ExecutionContextManager {
       step: 0, // Сбрасываем step для возобновления
       maxSteps: maxSteps // ✨ Используем настройки проекта
     };
+
+    // Прикрепляем сырой контекст платформы если есть
+    if (rawContext) {
+      if (platform === 'max') {
+        (context as any)._maxContext = rawContext;
+      } else {
+        (context as any)._grammyContext = rawContext;
+      }
+    }
 
     return context;
   }
@@ -890,6 +914,7 @@ export class ExecutionContextManager {
       version: subVersion,
       sessionId: subSessionId,
       userId: parentContext.userId,
+      platform: parentContext.platform,
       // Наследуем telegram контекст от родителя
       telegram: {
         ...parentContext.telegram

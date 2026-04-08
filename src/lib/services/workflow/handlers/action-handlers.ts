@@ -26,6 +26,7 @@ import type {
   ExecutionContext,
   ValidationResult
 } from '@/types/workflow';
+import { sendPlatformMessage, sendPlatformAction } from '../platform-messaging';
 
 /**
  * Обработчик для action.database_query
@@ -903,12 +904,8 @@ export class SendNotificationHandler extends BaseNodeHandler {
       throw new Error('Telegram recipient (chatId) is required');
     }
 
-    const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
-    await context.services.http.post(telegramApiUrl, {
-      chat_id: chatId,
-      text: message,
-      parse_mode: 'HTML',
-      disable_web_page_preview: templateData?.disablePreview === true
+    await sendPlatformMessage(context, message, {
+      parseMode: 'HTML'
     });
   }
 
@@ -1039,7 +1036,7 @@ export class CheckUserLinkedHandler extends BaseNodeHandler {
 
     const result = await QueryExecutor.execute(
       context.services.db,
-      'check_user_by_telegram',
+      'check_user_by_platform',
       params
     );
 
@@ -1112,7 +1109,7 @@ export class FindUserByContactHandler extends BaseNodeHandler {
 
     const user = await QueryExecutor.execute(
       context.services.db,
-      'check_user_by_telegram',
+      'check_user_by_platform',
       params
     );
 
@@ -1197,20 +1194,29 @@ export class LinkTelegramAccountHandler extends BaseNodeHandler {
       throw new Error('User not found for linking');
     }
 
+    const isMax = context.platform === 'max';
     const updatedUser = await db.user.update({
       where: { id: user.id },
-      data: {
-        telegramId: telegramIdBigInt,
-        telegramUsername: context.telegram.username || user.telegramUsername,
-        isActive: true
-      }
+      data: isMax
+        ? {
+            maxId: BigInt(telegramIdValue),
+            maxUsername: context.telegram.username || (user as any).maxUsername,
+            isActive: true
+          }
+        : {
+            telegramId: telegramIdBigInt,
+            telegramUsername:
+              context.telegram.username || user.telegramUsername,
+            isActive: true
+          }
     });
 
     await context.variables.set(
       'linkedUser',
       {
         ...updatedUser,
-        telegramId: updatedUser.telegramId?.toString()
+        telegramId: updatedUser.telegramId?.toString(),
+        maxId: updatedUser.maxId?.toString()
       },
       'session'
     );
@@ -1369,60 +1375,78 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
         );
       }
 
-      // Вызываем Telegram API getChatMember
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/getChatMember`;
-
-      const response = await context.services.http.post(telegramApiUrl, {
-        chat_id: channelId,
-        user_id: parseInt(userId, 10)
-      });
-
+      // Вызываем Telegram API getChatMember (только для Telegram)
       let isSubscribed = false;
       let memberStatus: string = 'left';
 
-      if (response?.ok && response?.result) {
-        memberStatus = response.result.status;
-
-        // Определяем требуемые статусы (по умолчанию: member, administrator, creator)
-        const requiredStatuses: string[] = config.requiredStatus || [
-          'member',
-          'administrator',
-          'creator'
-        ];
-
-        isSubscribed = requiredStatuses.includes(memberStatus);
-
-        this.logStep(context, node, 'Channel subscription checked', 'info', {
-          channelId,
-          userId,
-          memberStatus,
-          isSubscribed
-        });
+      if (context.platform === 'max') {
+        // Для MAX пока считаем, что подписан (или добавить проверку если MAX API позволяет)
+        isSubscribed = true;
+        memberStatus = 'member';
       } else {
-        // Обработка ошибок Telegram API
-        const errorCode = response?.error_code;
-        const errorDescription = response?.description || 'Unknown error';
+        const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/getChatMember`;
 
-        this.logStep(context, node, 'Telegram API error', 'warn', {
-          channelId,
-          userId,
-          errorCode,
-          errorDescription
-        });
-
-        // Типичные ошибки:
-        // 400: Bad Request (неверный chat_id или user_id)
-        // 403: Forbidden (бот не является участником канала)
-        if (errorCode === 400 || errorCode === 403) {
-          logger.warn('Channel subscription check failed', {
-            projectId: context.projectId,
+        let response: any = null;
+        try {
+          response = await context.services.http.post(telegramApiUrl, {
+            chat_id: channelId,
+            user_id: parseInt(userId, 10)
+          });
+        } catch (apiError: any) {
+          // Обрабатываем ошибки Axios (например, 400 или 403)
+          this.logStep(context, node, 'Telegram API request failed', 'warn', {
             channelId,
+            userId,
+            error: apiError.message,
+            responseData: apiError.response?.data
+          });
+          response = apiError.response?.data;
+        }
+
+        if (response?.ok && response?.result) {
+          memberStatus = response.result.status;
+
+          // Определяем требуемые статусы (по умолчанию: member, administrator, creator)
+          const requiredStatuses: string[] = config.requiredStatus || [
+            'member',
+            'administrator',
+            'creator'
+          ];
+
+          isSubscribed = requiredStatuses.includes(memberStatus);
+
+          this.logStep(context, node, 'Channel subscription checked', 'info', {
+            channelId,
+            userId,
+            memberStatus,
+            isSubscribed
+          });
+        } else {
+          // Обработка ошибок Telegram API
+          const errorCode = response?.error_code;
+          const errorDescription = response?.description || 'Unknown error';
+
+          this.logStep(context, node, 'Telegram API error', 'warn', {
+            channelId,
+            userId,
             errorCode,
             errorDescription
           });
-        }
 
-        isSubscribed = false;
+          // Типичные ошибки:
+          // 400: Bad Request (неверный chat_id или user_id)
+          // 403: Forbidden (бот не является участником канала)
+          if (errorCode === 400 || errorCode === 403) {
+            console.warn('Channel subscription check failed', {
+              projectId: context.projectId,
+              channelId,
+              errorCode,
+              errorDescription
+            });
+          }
+
+          isSubscribed = false;
+        }
       }
 
       // Сохраняем результат в переменную
@@ -1537,9 +1561,16 @@ export class MenuCommandHandler extends BaseNodeHandler {
         try {
           const found = await QueryExecutor.execute(
             context.services.db,
-            'check_user_by_telegram',
+            'check_user_by_platform',
             {
-              telegramId: context.telegram.userId,
+              telegramId:
+                context.platform === 'telegram'
+                  ? context.telegram.userId
+                  : undefined,
+              maxId:
+                context.platform === 'max'
+                  ? context.telegram.userId
+                  : undefined,
               projectId: context.projectId
             }
           );
@@ -1573,12 +1604,10 @@ export class MenuCommandHandler extends BaseNodeHandler {
           { command }
         );
         // Отправляем сообщение об ошибке
-        const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
-        await context.services.http.post(telegramApiUrl, {
-          chat_id: context.telegram.chatId,
-          text: '❌ Для использования меню необходимо привязать аккаунт. Введите /start для начала.',
-          parse_mode: 'HTML'
-        });
+        await sendPlatformMessage(
+          context,
+          '❌ Для использования меню необходимо привязать аккаунт. Введите /start для начала.'
+        );
         return null;
       }
 
@@ -1709,19 +1738,8 @@ ${userVariables['user.referralLink']}
         };
       }
 
-      // Отправляем сообщение
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
-      const payload: any = {
-        chat_id: context.telegram.chatId,
-        text: messageText,
-        parse_mode: 'HTML'
-      };
-
-      if (keyboard) {
-        payload.reply_markup = keyboard;
-      }
-
-      await context.services.http.post(telegramApiUrl, payload);
+      // Отправляем сообщение через платформо-агностичный хелпер
+      await sendPlatformMessage(context, messageText, keyboard);
 
       this.logStep(
         context,

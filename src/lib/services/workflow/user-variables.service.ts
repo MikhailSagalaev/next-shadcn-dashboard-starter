@@ -265,6 +265,8 @@ export class UserVariablesService {
         'user.phone': profile.phone || 'Не указано',
         'user.telegramId': profile.telegramId || 'Не указано',
         'user.telegramUsername': profile.telegramUsername || 'Не указано',
+        'user.maxId': profile.maxId || 'Не указано',
+        'user.maxUsername': profile.maxUsername || 'Не указано',
 
         // Финансовая информация
         'user.balance': profile.balance,

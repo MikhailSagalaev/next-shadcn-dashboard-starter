@@ -486,6 +486,23 @@ export class SyncService {
         throw new Error(`User not found for counterparty ${counterpartyId}`);
       }
 
+      // Check if this transaction has already been processed
+      const existingBonus = await db.bonus.findUnique({
+        where: { externalId: bonusTransaction.id }
+      });
+
+      if (existingBonus) {
+        logger.info(
+          'Bonus transaction already processed, skipping',
+          {
+            userId: user.id,
+            moySkladTransactionId: bonusTransaction.id
+          },
+          'moysklad-direct-sync'
+        );
+        return;
+      }
+
       const amount = bonusTransaction.bonusValue;
       const transactionType = bonusTransaction.transactionType;
 
@@ -503,6 +520,7 @@ export class SyncService {
             type: BonusType.PURCHASE,
             description: `Офлайн покупка в МойСклад: ${bonusTransaction.description || ''}`,
             expiresAt,
+            externalId: bonusTransaction.id,
             metadata: {
               source: 'moysklad_offline',
               moySkladTransactionId: bonusTransaction.id
@@ -518,6 +536,7 @@ export class SyncService {
             amount,
             type: TransactionType.EARN,
             description: 'Начисление бонусов за офлайн покупку',
+            externalId: bonusTransaction.id,
             metadata: {
               source: 'moysklad_offline',
               moySkladTransactionId: bonusTransaction.id
@@ -542,6 +561,7 @@ export class SyncService {
             amount,
             type: TransactionType.SPEND,
             description: 'Списание бонусов в офлайн покупке',
+            externalId: bonusTransaction.id,
             metadata: {
               source: 'moysklad_offline',
               moySkladTransactionId: bonusTransaction.id

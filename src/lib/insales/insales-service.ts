@@ -73,17 +73,10 @@ export class InSalesService {
         };
       }
 
-      // Проверяем, не обработан ли уже этот заказ
-      const existingTransaction = await db.transaction.findFirst({
-        where: {
-          user: {
-            projectId
-          },
-          description: {
-            contains: `Заказ #${order.number}`
-          },
-          type: 'EARN'
-        }
+      // Проверяем, не обработан ли уже этот заказ (используем уникальный внешний ID)
+      const externalId = `insales_order_${order.id}`;
+      const existingTransaction = await db.transaction.findUnique({
+        where: { externalId }
       });
 
       if (existingTransaction) {
@@ -247,13 +240,15 @@ export class InSalesService {
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + project.bonusExpiryDays);
 
+        const externalId = `insales_order_${order.id}`;
         await db.bonus.create({
           data: {
             userId: user.id,
             amount: bonusAmount,
             type: 'PURCHASE',
             expiresAt,
-            isUsed: false
+            isUsed: false,
+            externalId
           }
         });
 
@@ -264,6 +259,7 @@ export class InSalesService {
             type: 'EARN',
             amount: bonusAmount,
             description: `Покупка #${order.number}`,
+            externalId,
             metadata: {
               orderId: order.id,
               orderNumber: order.number,

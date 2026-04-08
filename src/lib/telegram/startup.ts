@@ -168,5 +168,20 @@ export async function startupBots() {
   // Уменьшаем задержку для быстрого запуска ботов
   setTimeout(async () => {
     await initializeAllBots();
+
+    // ✅ Также инициализируем MAX ботов
+    try {
+      const { maxBotManager } = await import('@/lib/max-bot/bot-manager');
+      await maxBotManager.loadAllBots();
+      logger.info('[MAX] MAX боты инициализированы при старте', {
+        stats: maxBotManager.getStats(),
+        component: 'bot-startup'
+      });
+    } catch (error) {
+      logger.error('[MAX] Ошибка инициализации MAX ботов при старте', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        component: 'bot-startup'
+      });
+    }
   }, 500); // 500ms после запуска (изменено с 3000ms)
 }

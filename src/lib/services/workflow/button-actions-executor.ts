@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { QueryExecutor } from './query-executor';
 import { ProjectVariablesService } from '@/lib/services/project-variables.service';
 import { UserVariablesService } from './user-variables.service';
+import { sendPlatformMessage } from './platform-messaging';
 import type { ExecutionContext } from '@/types/workflow';
 
 /**
@@ -18,27 +19,39 @@ import type { ExecutionContext } from '@/types/workflow';
  */
 export interface ButtonAction {
   id?: string;
-  type: 'database_query' | 'send_message' | 'condition' | 'set_variable' | 'get_variable' | 'delay';
-  
+  type:
+    | 'database_query'
+    | 'send_message'
+    | 'condition'
+    | 'set_variable'
+    | 'get_variable'
+    | 'delay';
+
   // Для database_query
   query?: string;
   parameters?: Record<string, any>;
   assignTo?: string;
-  
+
   // Для send_message
   text?: string;
   parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2';
-  
+
   // Для condition
   variable?: string;
-  operator?: 'is_empty' | 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains';
+  operator?:
+    | 'is_empty'
+    | 'equals'
+    | 'not_equals'
+    | 'greater_than'
+    | 'less_than'
+    | 'contains';
   value?: any;
   true_actions?: ButtonAction[];
   false_actions?: ButtonAction[];
-  
+
   // Для set_variable
   key?: string;
-  
+
   // Для delay
   seconds?: number;
 }
@@ -61,7 +74,7 @@ export class ButtonActionsExecutor {
 
     for (let i = 0; i < actions.length; i++) {
       const action = actions[i];
-      
+
       logger.info(`📌 Выполнение действия ${i + 1}/${actions.length}`, {
         actionId: action.id || `action-${i}`,
         actionType: action.type,
@@ -141,7 +154,10 @@ export class ButtonActionsExecutor {
     });
 
     // Разрешаем переменные в параметрах
-    const resolvedParams = this.resolveVariables(action.parameters || {}, context);
+    const resolvedParams = this.resolveVariables(
+      action.parameters || {},
+      context
+    );
 
     // Добавляем projectId
     if (!resolvedParams.projectId) {
@@ -196,15 +212,29 @@ export class ButtonActionsExecutor {
       try {
         const found = await QueryExecutor.execute(
           context.services.db,
-          'check_user_by_telegram',
-          { telegramId: context.telegram.userId, projectId: context.projectId }
+          'check_user_by_platform',
+          {
+            telegramId:
+              context.platform === 'telegram'
+                ? context.telegram.userId
+                : undefined,
+            maxId:
+              context.platform === 'max' ? context.telegram.userId : undefined,
+            projectId: context.projectId
+          }
         );
         if (found?.id) {
           userId = found.id;
-          logger.debug('Resolved userId from telegramId', { userId });
+          logger.debug('Resolved userId from platformId', {
+            userId,
+            platform: context.platform
+          });
         }
       } catch (e) {
-        logger.warn('Failed resolve userId from telegramId', { error: e });
+        logger.warn('Failed resolve userId from platformId', {
+          error: e,
+          platform: context.platform
+        });
       }
     }
 
@@ -231,8 +261,10 @@ export class ButtonActionsExecutor {
         logger.warn('Failed to load user variables', { error, userId });
 
         // Добавляем базовые переменные даже без userId
-        additionalVariables['user.firstName'] = context.telegram.firstName || 'Пользователь';
-        additionalVariables['user.telegramUsername'] = context.telegram.username || '';
+        additionalVariables['user.firstName'] =
+          context.telegram.firstName || 'Пользователь';
+        additionalVariables['user.telegramUsername'] =
+          context.telegram.username || '';
         additionalVariables['user.balanceFormatted'] = '0 бонусов';
         additionalVariables['user.currentLevel'] = 'Базовый';
         additionalVariables['user.referralCode'] = 'Недоступно';
@@ -242,8 +274,10 @@ export class ButtonActionsExecutor {
       logger.debug('No userId available, using basic variables');
 
       // Добавляем базовые переменные даже без userId
-      additionalVariables['user.firstName'] = context.telegram.firstName || 'Пользователь';
-      additionalVariables['user.telegramUsername'] = context.telegram.username || '';
+      additionalVariables['user.firstName'] =
+        context.telegram.firstName || 'Пользователь';
+      additionalVariables['user.telegramUsername'] =
+        context.telegram.username || '';
       additionalVariables['user.balanceFormatted'] = '0 бонусов';
       additionalVariables['user.currentLevel'] = 'Базовый';
       additionalVariables['user.referralCode'] = 'Недоступно';
@@ -256,18 +290,10 @@ export class ButtonActionsExecutor {
       additionalVariables
     );
 
-    // Отправляем через Telegram API
-    const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
-
-    const response = await context.services.http.post(telegramApiUrl, {
-      chat_id: context.telegram.chatId,
-      text: messageText,
-      parse_mode: action.parse_mode || 'HTML'
+    // Отправляем через платформо-независимый хелпер
+    await sendPlatformMessage(context, messageText, {
+      parseMode: action.parse_mode || 'HTML'
     });
-
-    if (!response.data.ok) {
-      throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
-    }
 
     logger.info('✅ Message sent successfully');
   }
@@ -289,14 +315,20 @@ export class ButtonActionsExecutor {
     });
 
     // Получаем значение переменной
-    const variableValue = await context.variables.get(action.variable, 'session');
+    const variableValue = await context.variables.get(
+      action.variable,
+      'session'
+    );
 
     // Оцениваем условие
     let conditionResult = false;
 
     switch (action.operator) {
       case 'is_empty':
-        conditionResult = !variableValue || variableValue === null || variableValue === undefined;
+        conditionResult =
+          !variableValue ||
+          variableValue === null ||
+          variableValue === undefined;
         break;
 
       case 'equals':
@@ -331,10 +363,14 @@ export class ButtonActionsExecutor {
 
     // Выполняем соответствующие действия
     if (conditionResult && action.true_actions) {
-      logger.debug('✅ Executing TRUE branch', { actionsCount: action.true_actions.length });
+      logger.debug('✅ Executing TRUE branch', {
+        actionsCount: action.true_actions.length
+      });
       await this.executeActions(action.true_actions, context);
     } else if (!conditionResult && action.false_actions) {
-      logger.debug('❌ Executing FALSE branch', { actionsCount: action.false_actions.length });
+      logger.debug('❌ Executing FALSE branch', {
+        actionsCount: action.false_actions.length
+      });
       await this.executeActions(action.false_actions, context);
     }
   }
@@ -372,7 +408,10 @@ export class ButtonActionsExecutor {
 
     await context.variables.set(action.assignTo, value, 'session');
 
-    logger.info('📥 Variable retrieved', { key: action.key, assignTo: action.assignTo });
+    logger.info('📥 Variable retrieved', {
+      key: action.key,
+      assignTo: action.assignTo
+    });
   }
 
   /**
@@ -386,7 +425,7 @@ export class ButtonActionsExecutor {
 
     logger.info(`⏳ Delaying for ${seconds} seconds`);
 
-    await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 
     logger.info('✅ Delay completed');
   }
@@ -413,24 +452,27 @@ export class ButtonActionsExecutor {
   private static resolveValue(value: any, context: ExecutionContext): any {
     if (typeof value === 'string') {
       // Заменяем {{telegram.userId}} и подобные
-      return value.replace(/\{\{([^}]+)\}\}/g, (match: string, varPath: string) => {
-        const parts = varPath.split('.');
+      return value.replace(
+        /\{\{([^}]+)\}\}/g,
+        (match: string, varPath: string) => {
+          const parts = varPath.split('.');
 
-        // Telegram переменные
-        if (parts[0] === 'telegram') {
-          const telegramContext: any = context.telegram;
-          let result = telegramContext;
+          // Telegram переменные
+          if (parts[0] === 'telegram') {
+            const telegramContext: any = context.telegram;
+            let result = telegramContext;
 
-          for (let i = 1; i < parts.length; i++) {
-            result = result?.[parts[i]];
+            for (let i = 1; i < parts.length; i++) {
+              result = result?.[parts[i]];
+            }
+
+            return result !== undefined ? String(result) : match;
           }
 
-          return result !== undefined ? String(result) : match;
+          // Возвращаем как есть для других переменных
+          return match;
         }
-
-        // Возвращаем как есть для других переменных
-        return match;
-      });
+      );
     }
 
     return value;
@@ -438,4 +480,3 @@ export class ButtonActionsExecutor {
 }
 
 export default ButtonActionsExecutor;
-

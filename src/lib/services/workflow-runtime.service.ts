@@ -873,11 +873,13 @@ export class WorkflowRuntimeService {
             const resumedContext = await ExecutionContextManager.resumeContext(
               waitingExecution.id,
               chatId,
-              context.from?.id,
+              context.from?.id ? String(context.from.id) : undefined,
               context.from?.username,
               messageText,
               trigger === 'callback' ? context.callbackQuery?.data : undefined,
-              contactData
+              contactData,
+              (context as any)._platform || 'telegram',
+              context // Передаём сырой контекст платформы
             );
 
             // ✅ КРИТИЧНО: Сохраняем контакт/email в переменные для использования в workflow

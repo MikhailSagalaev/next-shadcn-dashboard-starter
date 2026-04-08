@@ -283,7 +283,9 @@ export async function PUT(
       operationMode: body.operationMode,
       isActive: body.isActive,
       welcomeRewardType: body.welcomeRewardType,
-      firstPurchaseDiscountPercent: body.firstPurchaseDiscountPercent
+      firstPurchaseDiscountPercent: body.firstPurchaseDiscountPercent,
+      maxPaymentPercentage: body.maxPaymentPercentage,
+      bonusMode: body.bonusMode
     };
 
     // Числовые поля — только если переданы
@@ -311,11 +313,11 @@ export async function PUT(
       try {
         // Маппинг enum — Prisma использует mapped values в БД
         const dbBonusMode = body.bonusMode === 'LEVELS' ? 'levels' : 'simple';
-        await db.$executeRaw`
+        await db.$executeRawUnsafe(`
           UPDATE projects
-          SET bonus_mode = ${dbBonusMode}::text::bonus_mode
-          WHERE id = ${id}
-        `;
+          SET bonus_mode = '${dbBonusMode}'::bonus_mode
+          WHERE id = '${id}'
+        `);
         logger.info('bonusMode обновлён через raw SQL', {
           projectId: id,
           bonusMode: body.bonusMode,

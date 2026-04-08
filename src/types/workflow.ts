@@ -528,6 +528,7 @@ export interface ExecutionContext {
   version: number;
   sessionId: string;
   userId?: string;
+  platform: 'telegram' | 'max';
   telegram: TelegramContext;
   variables: VariableManager;
   logger: {

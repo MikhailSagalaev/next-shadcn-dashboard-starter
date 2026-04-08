@@ -15,6 +15,11 @@ import type {
   ExecutionContext,
   ValidationResult
 } from '@/types/workflow';
+import {
+  sendPlatformMedia,
+  sendPlatformAction,
+  sendPlatformMessage
+} from '../platform-messaging';
 
 /**
  * Конфигурация для отправки фото
@@ -35,7 +40,10 @@ export class PhotoMessageHandler extends BaseNodeHandler {
     return nodeType === 'message.photo';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data?.config?.['message.photo'] as PhotoMessageConfig;
 
@@ -68,39 +76,16 @@ export class PhotoMessageHandler extends BaseNodeHandler {
         hasCaption: !!caption
       });
 
-      // Отправляем фото через Telegram API
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendPhoto`;
-
-      const payload: any = {
-        chat_id: context.telegram.chatId,
-        photo: photo
-      };
-
-      if (caption) {
-        payload.caption = caption;
-        payload.parse_mode = config.parse_mode || 'HTML';
-      }
-
-      if (config.has_spoiler) {
-        payload.has_spoiler = true;
-      }
-
-      if (config.disable_notification) {
-        payload.disable_notification = true;
-      }
-
-      const response = await context.services.http.post(telegramApiUrl, payload);
-
-      if (!response.data.ok) {
-        throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
-      }
-
-      this.logStep(context, node, 'Photo sent successfully', 'info', {
-        messageId: response.data.result?.message_id
+      // Отправляем фото через платформо-независимый хелпер
+      await sendPlatformMedia(context, 'photo', photo, {
+        caption,
+        parseMode: config.parse_mode || 'HTML',
+        hasSpoiler: config.has_spoiler
       });
 
-      return null;
+      this.logStep(context, node, 'Photo sent successfully', 'info');
 
+      return null;
     } catch (error) {
       this.logStep(context, node, 'Failed to send photo', 'error', { error });
       throw error;
@@ -123,7 +108,10 @@ export class PhotoMessageHandler extends BaseNodeHandler {
       errors.push('Caption must be a string');
     }
 
-    if (config.parse_mode && !['HTML', 'Markdown', 'MarkdownV2'].includes(config.parse_mode)) {
+    if (
+      config.parse_mode &&
+      !['HTML', 'Markdown', 'MarkdownV2'].includes(config.parse_mode)
+    ) {
       errors.push('parse_mode must be one of: HTML, Markdown, MarkdownV2');
     }
 
@@ -158,7 +146,10 @@ export class VideoMessageHandler extends BaseNodeHandler {
     return nodeType === 'message.video';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data?.config?.['message.video'] as VideoMessageConfig;
 
@@ -188,38 +179,16 @@ export class VideoMessageHandler extends BaseNodeHandler {
         hasCaption: !!caption
       });
 
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendVideo`;
-
-      const payload: any = {
-        chat_id: context.telegram.chatId,
-        video: video
-      };
-
-      if (caption) {
-        payload.caption = caption;
-        payload.parse_mode = config.parse_mode || 'HTML';
-      }
-
-      if (config.duration) payload.duration = config.duration;
-      if (config.width) payload.width = config.width;
-      if (config.height) payload.height = config.height;
-      if (config.thumbnail) payload.thumbnail = config.thumbnail;
-      if (config.has_spoiler) payload.has_spoiler = true;
-      if (config.supports_streaming) payload.supports_streaming = true;
-      if (config.disable_notification) payload.disable_notification = true;
-
-      const response = await context.services.http.post(telegramApiUrl, payload);
-
-      if (!response.data.ok) {
-        throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
-      }
-
-      this.logStep(context, node, 'Video sent successfully', 'info', {
-        messageId: response.data.result?.message_id
+      // Отправляем видео через платформо-независимый хелпер
+      await sendPlatformMedia(context, 'video', video, {
+        caption,
+        parseMode: config.parse_mode || 'HTML',
+        hasSpoiler: config.has_spoiler
       });
 
-      return null;
+      this.logStep(context, node, 'Video sent successfully', 'info');
 
+      return null;
     } catch (error) {
       this.logStep(context, node, 'Failed to send video', 'error', { error });
       throw error;
@@ -265,9 +234,14 @@ export class DocumentMessageHandler extends BaseNodeHandler {
     return nodeType === 'message.document';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
-      const config = node.data?.config?.['message.document'] as DocumentMessageConfig;
+      const config = node.data?.config?.[
+        'message.document'
+      ] as DocumentMessageConfig;
 
       if (!config) {
         throw new Error('Document message configuration is missing');
@@ -293,36 +267,19 @@ export class DocumentMessageHandler extends BaseNodeHandler {
         document: document.substring(0, 50)
       });
 
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendDocument`;
-
-      const payload: any = {
-        chat_id: context.telegram.chatId,
-        document: document
-      };
-
-      if (caption) {
-        payload.caption = caption;
-        payload.parse_mode = config.parse_mode || 'HTML';
-      }
-
-      if (config.thumbnail) payload.thumbnail = config.thumbnail;
-      if (config.disable_content_type_detection) payload.disable_content_type_detection = true;
-      if (config.disable_notification) payload.disable_notification = true;
-
-      const response = await context.services.http.post(telegramApiUrl, payload);
-
-      if (!response.data.ok) {
-        throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
-      }
-
-      this.logStep(context, node, 'Document sent successfully', 'info', {
-        messageId: response.data.result?.message_id
+      // Отправляем документ через платформо-независимый хелпер
+      await sendPlatformMedia(context, 'document', document, {
+        caption,
+        parseMode: config.parse_mode || 'HTML'
       });
 
-      return null;
+      this.logStep(context, node, 'Document sent successfully', 'info');
 
+      return null;
     } catch (error) {
-      this.logStep(context, node, 'Failed to send document', 'error', { error });
+      this.logStep(context, node, 'Failed to send document', 'error', {
+        error
+      });
       throw error;
     }
   }
@@ -354,7 +311,10 @@ export class EditMessageHandler extends BaseNodeHandler {
     return nodeType === 'message.edit';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data?.config?.['message.edit'];
 
@@ -380,23 +340,16 @@ export class EditMessageHandler extends BaseNodeHandler {
 
       this.logStep(context, node, 'Editing message', 'info', { messageId });
 
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/editMessageText`;
-
-      const response = await context.services.http.post(telegramApiUrl, {
-        chat_id: context.telegram.chatId,
-        message_id: messageId,
+      // Редактируем сообщение через платформо-независимый хелпер
+      await sendPlatformAction(context, 'edit_text', {
+        messageId: String(messageId),
         text: newText,
-        parse_mode: config.parse_mode || 'HTML'
+        parseMode: config.parse_mode || 'HTML'
       });
-
-      if (!response.data.ok) {
-        throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
-      }
 
       this.logStep(context, node, 'Message edited successfully', 'info');
 
       return null;
-
     } catch (error) {
       this.logStep(context, node, 'Failed to edit message', 'error', { error });
       throw error;
@@ -434,7 +387,10 @@ export class DeleteMessageHandler extends BaseNodeHandler {
     return nodeType === 'message.delete';
   }
 
-  async execute(node: WorkflowNode, context: ExecutionContext): Promise<string | null> {
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
     try {
       const config = node.data?.config?.['message.delete'];
 
@@ -446,23 +402,18 @@ export class DeleteMessageHandler extends BaseNodeHandler {
 
       this.logStep(context, node, 'Deleting message', 'info', { messageId });
 
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/deleteMessage`;
-
-      const response = await context.services.http.post(telegramApiUrl, {
-        chat_id: context.telegram.chatId,
-        message_id: messageId
+      // Удаляем сообщение через платформо-независимый хелпер
+      await sendPlatformAction(context, 'delete', {
+        messageId: String(messageId)
       });
-
-      if (!response.data.ok) {
-        throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
-      }
 
       this.logStep(context, node, 'Message deleted successfully', 'info');
 
       return null;
-
     } catch (error) {
-      this.logStep(context, node, 'Failed to delete message', 'error', { error });
+      this.logStep(context, node, 'Failed to delete message', 'error', {
+        error
+      });
       throw error;
     }
   }
@@ -485,4 +436,3 @@ export class DeleteMessageHandler extends BaseNodeHandler {
     };
   }
 }
-

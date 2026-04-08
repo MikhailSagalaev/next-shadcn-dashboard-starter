@@ -1151,6 +1151,14 @@
     "@lexical/selection" "0.39.0"
     lexical "0.39.0"
 
+"@maxhub/max-bot-api@^0.2.2":
+  version "0.2.2"
+  resolved "https://registry.npmjs.org/@maxhub/max-bot-api/-/max-bot-api-0.2.2.tgz"
+  integrity sha512-Su3Ar7L+lsOctu7V5+me+eh+84l909ka3LtlPVuBbSz1fygk5L/F45HQp1vaUGg9sRpQ6/qoyKg6HJgemnX3mg==
+  dependencies:
+    debug "^4.3.7"
+    vcf "^2.1.2"
+
 "@mdx-js/mdx@^3.0.0":
   version "3.1.1"
   resolved "https://registry.npmjs.org/@mdx-js/mdx/-/mdx-3.1.1.tgz"
@@ -4327,7 +4335,7 @@ debug@^3.2.7:
   dependencies:
     ms "^2.1.1"
 
-debug@^4.0.0, debug@^4.1.0, debug@^4.1.1, debug@^4.3.1, debug@^4.3.2, debug@^4.3.4, debug@^4.4.0, debug@^4.4.3, debug@4:
+debug@^4.0.0, debug@^4.1.0, debug@^4.1.1, debug@^4.3.1, debug@^4.3.2, debug@^4.3.4, debug@^4.3.7, debug@^4.4.0, debug@^4.4.3, debug@4:
   version "4.4.3"
   resolved "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz"
   integrity sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==
@@ -5275,6 +5283,11 @@ flatted@^3.2.9:
   version "3.3.3"
   resolved "https://registry.npmjs.org/flatted/-/flatted-3.3.3.tgz"
   integrity sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==
+
+foldline@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.npmjs.org/foldline/-/foldline-1.1.0.tgz"
+  integrity sha512-9SheyADS50hjvFYjFJ3OB/GlDz2mD1T2CHd7auIk4Uto5YYWPBcw8iYo3F+gENJ+/SOeH9tT0loHZSqlUlumTA==
 
 follow-redirects@^1.15.11:
   version "1.15.11"
@@ -10479,6 +10492,14 @@ vaul@^1.1.2:
   integrity sha512-ZFkClGpWyI2WUQjdLJ/BaGuV6AVQiJ3uELGk3OYtP+B6yCO7Cmn9vPFXVJkRaGkOJu3m8bQMgtyzNHixULceQA==
   dependencies:
     "@radix-ui/react-dialog" "^1.1.1"
+
+vcf@^2.1.2:
+  version "2.1.2"
+  resolved "https://registry.npmjs.org/vcf/-/vcf-2.1.2.tgz"
+  integrity sha512-oLYtZ+GJPjpKS950fw70+HavdP7ZO2Q+xMCMeCyiUKuXkJJJG1/wUjCKTagPryS1gApYjZOWW/khmdLsch8jxg==
+  dependencies:
+    camelcase "^5.0.0"
+    foldline "^1.1.0"
 
 vfile-location@^5.0.0:
   version "5.0.3"

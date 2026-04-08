@@ -16,6 +16,7 @@ import { ProjectVariablesService } from '@/lib/services/project-variables.servic
 import { UserVariablesService } from '../user-variables.service';
 import { QueryExecutor } from '../query-executor';
 import { logger } from '@/lib/logger';
+import { sendPlatformMessage } from '../platform-messaging';
 import {
   WaitForInputHandler,
   WAITING_FOR_USER_INPUT
@@ -65,9 +66,16 @@ export class MessageHandler extends BaseNodeHandler {
         try {
           const found = await QueryExecutor.execute(
             context.services.db as any,
-            'check_user_by_telegram',
+            'check_user_by_platform',
             {
-              telegramId: context.telegram.userId,
+              telegramId:
+                context.platform === 'telegram'
+                  ? context.telegram.userId
+                  : undefined,
+              maxId:
+                context.platform === 'max'
+                  ? context.telegram.userId
+                  : undefined,
               projectId: context.projectId
             }
           );
@@ -105,12 +113,10 @@ export class MessageHandler extends BaseNodeHandler {
         );
 
         // Отправляем сообщение об ошибке привязки аккаунта
-        const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
-        await context.services.http.post(telegramApiUrl, {
-          chat_id: context.telegram.chatId,
-          text: '❌ Для использования меню необходимо привязать аккаунт. Введите /start для начала.',
-          parse_mode: 'HTML'
-        });
+        await sendPlatformMessage(
+          context,
+          '❌ Для использования меню необходимо привязать аккаунт. Введите /start для начала.'
+        );
 
         return null; // Останавливаем выполнение workflow
       }
@@ -290,17 +296,14 @@ export class MessageHandler extends BaseNodeHandler {
           messageText.includes('{') && messageText.includes('}')
       });
 
-      // Отправляем сообщение через Telegram API
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
+      // ✨ Отправляем сообщение через платформо-независимый хелпер
+      const sendMessageStartTime = Date.now();
 
-      // Подготавливаем payload для API
-      const payload: any = {
-        chat_id: context.telegram.chatId,
-        text: messageText,
-        parse_mode: messageConfig?.parseMode || 'HTML'
+      // Подготавливаем опции (клавиатура)
+      const options: any = {
+        parseMode: messageConfig?.parseMode || 'HTML'
       };
 
-      // ✨ Добавляем клавиатуру если она настроена (делегируем KeyboardBuilder)
       const keyboardConfig =
         messageConfig?.keyboard || (node.data?.config as any)?.keyboard;
       if (keyboardConfig) {
@@ -310,15 +313,16 @@ export class MessageHandler extends BaseNodeHandler {
           additionalVariables
         );
         if (keyboard) {
-          payload.reply_markup = keyboard;
+          options.replyMarkup = keyboard;
         }
       }
 
-      const sendMessageStartTime = Date.now();
-      await context.services.http.post(telegramApiUrl, payload);
+      await sendPlatformMessage(context, messageText, options);
+
       logger.info(
-        `🚀 [PERF] Telegram sendMessage took ${Date.now() - sendMessageStartTime}ms`,
+        `🚀 [PERF] Message sending took ${Date.now() - sendMessageStartTime}ms`,
         {
+          platform: context.platform,
           chatId: context.telegram.chatId,
           executionId: context.executionId
         }

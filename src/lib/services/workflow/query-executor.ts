@@ -14,14 +14,16 @@ import { logger } from '@/lib/logger';
  * Типы для параметров запросов
  */
 export interface CheckUserParams {
-  telegramId: string;
+  telegramId?: string;
+  maxId?: string;
   projectId: string;
   phone?: string;
   email?: string;
 }
 
 export interface CreateUserParams {
-  telegramId: string;
+  telegramId?: string;
+  maxId?: string;
   projectId: string;
   username?: string;
   firstName?: string;
@@ -64,10 +66,10 @@ export interface UpdateUserParams {
  */
 export const SAFE_QUERIES = {
   /**
-   * Проверить пользователя по Telegram ID, телефону или email
+   * Проверить пользователя по Telegram ID, MAX ID, телефону или email
    */
-  check_user_by_telegram: async (db: PrismaClient, params: CheckUserParams) => {
-    logger.debug('Executing check_user_by_telegram', { params });
+  check_user_by_platform: async (db: PrismaClient, params: CheckUserParams) => {
+    logger.debug('Executing check_user_by_platform', { params });
 
     // Сначала ищем по Telegram ID
     if (params.telegramId) {
@@ -102,6 +104,59 @@ export const SAFE_QUERIES = {
           birthDate: user.birthDate,
           telegramId: user.telegramId?.toString(),
           telegramUsername: user.telegramUsername,
+          maxId: user.maxId?.toString(),
+          maxUsername: user.maxUsername,
+          isActive: user.isActive,
+          registeredAt: user.registeredAt,
+          updatedAt: user.updatedAt,
+          currentLevel: user.currentLevel,
+          referralCode: user.referralCode,
+          referredBy: user.referredBy,
+          totalPurchases: Number(user.totalPurchases),
+          utmCampaign: user.utmCampaign,
+          utmContent: user.utmContent,
+          utmMedium: user.utmMedium,
+          utmSource: user.utmSource,
+          utmTerm: user.utmTerm,
+          balance
+        };
+      }
+    }
+
+    // Ищем по MAX ID
+    if (params.maxId) {
+      let user = await db.user.findFirst({
+        where: {
+          maxId: BigInt(params.maxId),
+          projectId: params.projectId
+        },
+        include: {
+          bonuses: {
+            where: {
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+            }
+          }
+        }
+      });
+
+      if (user) {
+        const balance = user.bonuses.reduce(
+          (sum, bonus) => sum + Number(bonus.amount),
+          0
+        );
+
+        return {
+          id: user.id,
+          projectId: user.projectId,
+          email: user.email,
+          phone: user.phone,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          birthDate: user.birthDate,
+          telegramId: user.telegramId?.toString(),
+          telegramUsername: user.telegramUsername,
+          maxId: user.maxId?.toString(),
+          maxUsername: user.maxUsername,
           isActive: user.isActive,
           registeredAt: user.registeredAt,
           updatedAt: user.updatedAt,
@@ -152,6 +207,8 @@ export const SAFE_QUERIES = {
           birthDate: user.birthDate,
           telegramId: user.telegramId?.toString(),
           telegramUsername: user.telegramUsername,
+          maxId: user.maxId?.toString(),
+          maxUsername: user.maxUsername,
           isActive: user.isActive,
           registeredAt: user.registeredAt,
           updatedAt: user.updatedAt,
@@ -202,6 +259,8 @@ export const SAFE_QUERIES = {
           birthDate: user.birthDate,
           telegramId: user.telegramId?.toString(),
           telegramUsername: user.telegramUsername,
+          maxId: user.maxId?.toString(),
+          maxUsername: user.maxUsername,
           isActive: user.isActive,
           registeredAt: user.registeredAt,
           updatedAt: user.updatedAt,
@@ -228,16 +287,26 @@ export const SAFE_QUERIES = {
   create_user: async (db: PrismaClient, params: CreateUserParams) => {
     logger.debug('Executing create_user', { params });
 
+    const data: any = {
+      projectId: params.projectId,
+      firstName: params.firstName,
+      lastName: params.lastName,
+      phone: params.phone,
+      email: params.email
+    };
+
+    if (params.telegramId) {
+      data.telegramId = BigInt(params.telegramId);
+      data.telegramUsername = params.username;
+    }
+
+    if (params.maxId) {
+      data.maxId = BigInt(params.maxId);
+      data.maxUsername = params.username;
+    }
+
     const user = await db.user.create({
-      data: {
-        telegramId: BigInt(params.telegramId),
-        projectId: params.projectId,
-        telegramUsername: params.username,
-        firstName: params.firstName,
-        lastName: params.lastName,
-        phone: params.phone,
-        email: params.email
-      }
+      data
     });
 
     return user;
@@ -679,6 +748,8 @@ export const SAFE_QUERIES = {
       phone: user.phone,
       telegramId: user.telegramId?.toString(),
       telegramUsername: user.telegramUsername,
+      maxId: user.maxId?.toString(),
+      maxUsername: user.maxUsername,
 
       // Финансовая информация
       balance,

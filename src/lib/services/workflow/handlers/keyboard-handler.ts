@@ -29,6 +29,7 @@ import type {
   ExecutionContext,
   ValidationResult
 } from '@/types/workflow';
+import { sendPlatformMessage } from '../platform-messaging';
 
 /**
  * Типы кнопок для inline клавиатуры
@@ -412,26 +413,13 @@ export class InlineKeyboardHandler extends BaseNodeHandler {
         }
       );
 
-      // Отправляем сообщение с клавиатурой через Telegram API
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
-
-      const response = await context.services.http.post(telegramApiUrl, {
-        chat_id: context.telegram.chatId,
-        text: messageText,
-        reply_markup: inlineKeyboard,
-        parse_mode: config.parse_mode || 'HTML',
-        disable_web_page_preview: config.disable_web_page_preview || false
+      // Отправляем сообщение с клавиатурой через платформо-независимый хелпер
+      await sendPlatformMessage(context, messageText, {
+        replyMarkup: inlineKeyboard,
+        parseMode: config.parse_mode || 'HTML'
       });
 
-      if (!response.data.ok) {
-        throw new Error(
-          `Telegram API error: ${response.data.description || 'Unknown error'}`
-        );
-      }
-
-      this.logStep(context, node, 'Inline keyboard sent successfully', 'info', {
-        messageId: response.data.result?.message_id
-      });
+      this.logStep(context, node, 'Inline keyboard sent successfully', 'info');
 
       // ✨ Используем унифицированный WaitForInputHandler для установки состояния ожидания
       const keyboardConfig = {
@@ -646,25 +634,13 @@ export class ReplyKeyboardHandler extends BaseNodeHandler {
         }
       );
 
-      // Отправляем сообщение
-      const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
-
-      const response = await context.services.http.post(telegramApiUrl, {
-        chat_id: context.telegram.chatId,
-        text: messageText,
-        reply_markup: replyKeyboard,
-        parse_mode: config.parse_mode || 'HTML'
+      // Отправляем сообщение с клавиатурой через платформо-независимый хелпер
+      await sendPlatformMessage(context, messageText, {
+        replyMarkup: replyKeyboard,
+        parseMode: config.parse_mode || 'HTML'
       });
 
-      if (!response.data.ok) {
-        throw new Error(
-          `Telegram API error: ${response.data.description || 'Unknown error'}`
-        );
-      }
-
-      this.logStep(context, node, 'Reply keyboard sent successfully', 'info', {
-        messageId: response.data.result?.message_id
-      });
+      this.logStep(context, node, 'Reply keyboard sent successfully', 'info');
 
       // ✨ Используем унифицированный WaitForInputHandler для установки состояния ожидания
       const keyboardConfig = {

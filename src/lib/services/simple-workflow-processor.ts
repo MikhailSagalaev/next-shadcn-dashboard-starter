@@ -228,7 +228,9 @@ export class SimpleWorkflowProcessor {
         ctx.from?.username,
         ctx.message?.text,
         ctx.callbackQuery?.data,
-        contact // Передаём contact
+        contact, // Передаём contact
+        (ctx as any)._platform || 'telegram',
+        ctx // Передаём сырой контекст платформы
       );
       logger.info(
         `🚀 [PERF] Context creation took ${Date.now() - contextStartTime}ms`,

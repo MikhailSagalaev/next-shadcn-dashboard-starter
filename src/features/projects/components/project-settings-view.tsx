@@ -93,7 +93,8 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
     isActive: true,
     welcomeBonusAmount: 0,
     welcomeRewardType: 'BONUS' as WelcomeRewardType,
-    firstPurchaseDiscountPercent: 10
+    firstPurchaseDiscountPercent: 10,
+    maxPaymentPercentage: 100
   });
 
   const loadProject = async () => {
@@ -147,7 +148,8 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
           welcomeRewardType: (projectData.welcomeRewardType ||
             'BONUS') as WelcomeRewardType,
           firstPurchaseDiscountPercent:
-            projectData.firstPurchaseDiscountPercent || 10
+            projectData.firstPurchaseDiscountPercent || 10,
+          maxPaymentPercentage: Number(projectData.maxPaymentPercentage) || 100
         });
       } else if (projectResponse.status === 403) {
         // Проект не принадлежит текущему админу
@@ -202,7 +204,9 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
       formData.welcomeBonusAmount !== Number(project.welcomeBonus || 0) ||
       formData.welcomeRewardType !== (project.welcomeRewardType || 'BONUS') ||
       formData.firstPurchaseDiscountPercent !==
-        (project.firstPurchaseDiscountPercent || 10);
+        (project.firstPurchaseDiscountPercent || 10) ||
+      formData.maxPaymentPercentage !==
+        Number(project.maxPaymentPercentage || 100);
 
     setIsDirty(hasChanges);
   }, [formData, project]);
@@ -602,31 +606,58 @@ export function ProjectSettingsView({ projectId }: ProjectSettingsViewProps) {
 
                 {/* Настройки в зависимости от режима */}
                 {formData.bonusMode === 'SIMPLE' && (
-                  <div className='col-span-2 space-y-2'>
-                    <Label htmlFor='bonusPercentage'>
-                      Процент начисления бонусов (%)
-                    </Label>
-                    <Input
-                      id='bonusPercentage'
-                      type='number'
-                      min='0'
-                      max='100'
-                      step='0.01'
-                      value={formData.bonusPercentage}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          bonusPercentage: parseFloat(e.target.value) || 0
-                        })
-                      }
-                      placeholder='5.0'
-                    />
-                    <p className='text-muted-foreground text-xs'>
-                      Пример: При покупке на 1000₽ клиент получит{' '}
-                      {Math.round(1000 * (formData.bonusPercentage / 100))}₽
-                      бонусов
-                    </p>
-                  </div>
+                  <>
+                    <div className='col-span-2 space-y-2'>
+                      <Label htmlFor='bonusPercentage'>
+                        Процент начисления бонусов (%)
+                      </Label>
+                      <Input
+                        id='bonusPercentage'
+                        type='number'
+                        min='0'
+                        max='100'
+                        step='0.01'
+                        value={formData.bonusPercentage}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            bonusPercentage: parseFloat(e.target.value) || 0
+                          })
+                        }
+                        placeholder='5.0'
+                      />
+                      <p className='text-muted-foreground text-xs'>
+                        Пример: При покупке на 1000₽ клиент получит{' '}
+                        {Math.round(1000 * (formData.bonusPercentage / 100))}₽
+                        бонусов
+                      </p>
+                    </div>
+
+                    <div className='col-span-2 space-y-2'>
+                      <Label htmlFor='maxPaymentPercentage'>
+                        Макс. % списания бонусов (%)
+                      </Label>
+                      <Input
+                        id='maxPaymentPercentage'
+                        type='number'
+                        min='0'
+                        max='100'
+                        step='1'
+                        value={formData.maxPaymentPercentage}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            maxPaymentPercentage: parseInt(e.target.value) || 0
+                          })
+                        }
+                        placeholder='100'
+                      />
+                      <p className='text-muted-foreground text-xs'>
+                        Максимальный процент от суммы заказа, который можно
+                        оплатить бонусами
+                      </p>
+                    </div>
+                  </>
                 )}
 
                 {formData.bonusMode === 'LEVELS' && (

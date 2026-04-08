@@ -1,0 +1,1061 @@
+{
+  "id": "cmjic6qpj00059ex4zlbdomdp",
+  "projectId": "cmfa8oqx000019e372pk9547l",
+  "name": "Система лояльности с подпиской (шаблон)",
+  "description": "Система лояльности с обязательной подпиской на канал. Приветственные бонусы начисляются только после подтверждения подписки на канал.",
+  "isActive": true,
+  "nodes": [
+    {
+      "id": "start-trigger",
+      "data": {
+        "label": "Команда /start",
+        "config": {
+          "trigger.command": {
+            "command": "/start"
+          }
+        }
+      },
+      "type": "trigger.command",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 0,
+        "y": 307.5
+      },
+      "selected": false
+    },
+    {
+      "id": "check-telegram-user",
+      "data": {
+        "label": "Проверить по Telegram ID",
+        "config": {
+          "action.database_query": {
+            "query": "check_user_by_telegram",
+            "assignTo": "telegramUser",
+            "parameters": {
+              "projectId": "{{projectId}}",
+              "telegramId": "{{telegram.userId}}"
+            }
+          }
+        }
+      },
+      "type": "action.database_query",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 406,
+        "y": 307.5
+      },
+      "selected": false
+    },
+    {
+      "id": "check-user-status",
+      "data": {
+        "label": "Пользователь найден?",
+        "config": {
+          "condition": {
+            "operator": "is_not_empty",
+            "variable": "telegramUser"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 812,
+        "y": 307.5
+      },
+      "selected": false
+    },
+    {
+      "id": "check-user-active",
+      "data": {
+        "label": "Пользователь активен?",
+        "config": {
+          "condition": {
+            "value": true,
+            "operator": "equals",
+            "variable": "telegramUser.isActive"
+          }
+        }
+      },
+      "type": "condition",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      },
+      "position": {
+        "x": 1218,
+        "y": 0
+      },
+      "selected": false
+    },
+    {
+      "id": "active-user-profile",
+      "data": {
+        "label": "Профиль активного пользователя",
+        "config": {
+          "message": {
+            "text": "Мы рады снова приветствовать вас🤍.\n\nСпасибо, что выбрали MAOKA.\nЕсли вам нужна помощь в подборе средств, мы готовы ответить на все ваши вопросы.",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "Отдел заботы",
+                    "url": "https://t.me/maokahelp"
+                  }
+                ]
+              ]
+            },
+            "parseMode": "HTML"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 320,
+        "height": 224
+      },
+      "position": {
+        "x": 1624,
+        "y": 307.5
+      },
+      "selected": false
+    },
+    {
+      "id": "end-node",
+      "data": {
+        "label": "Завершение",
+        "config": {
+          "flow.end": {}
+        }
+      },
+      "type": "flow.end",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 78
+      },
+      "position": {
+        "x": 6902,
+        "y": 307.5
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-balance-trigger",
+      "data": {
+        "label": "Триггер: Баланс",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_balance"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 0,
+        "y": 549.5
+      },
+      "selected": false
+    },
+    {
+      "id": "show-balance-details",
+      "data": {
+        "label": "Показать баланс",
+        "config": {
+          "message": {
+            "text": "<b>💰 Ваш баланс бонусов</b>\n\n💵 <b>Текущий баланс:</b> {user.balanceFormatted}\n📈 <b>Всего заработано:</b> {user.totalEarnedFormatted}\n📉 <b>Всего потрачено:</b> {user.totalSpentFormatted}\n🛍️ <b>Покупок на сумму:</b> {user.totalPurchasesFormatted}\n\n✨ Продолжайте совершать покупки для накопления бонусов!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "⬅️ Назад в меню",
+                    "callback_data": "back_to_menu"
+                  }
+                ]
+              ]
+            },
+            "parseMode": "HTML"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 320,
+        "height": 204
+      },
+      "position": {
+        "x": 406,
+        "y": 549.5
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-history-trigger",
+      "data": {
+        "label": "Триггер: История",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_history"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 0,
+        "y": 791.5
+      },
+      "selected": false
+    },
+    {
+      "id": "show-history-list",
+      "data": {
+        "label": "Показать историю",
+        "config": {
+          "message": {
+            "text": "<b>📜 История операций</b>\n\n<b>Последние 10 операций:</b>\n\n{transactions.formatted}\n\nПоказаны последние 10 операций.\n\n💡 Для полной истории посетите личный кабинет на сайте.",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "⬅️ Назад в меню",
+                    "callback_data": "back_to_menu"
+                  }
+                ]
+              ]
+            },
+            "parseMode": "HTML"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 320,
+        "height": 204
+      },
+      "position": {
+        "x": 406,
+        "y": 791.5
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-level-trigger",
+      "data": {
+        "label": "Триггер: Уровень",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_level"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 0,
+        "y": 1033.5
+      },
+      "selected": false
+    },
+    {
+      "id": "show-level-info",
+      "data": {
+        "label": "Показать уровень",
+        "config": {
+          "message": {
+            "text": "<b>🏆 Ваш уровень:</b> {user.currentLevel}\n\n<b>📊 Прогресс к следующему уровню:</b>\n{user.progressBar} ({user.progressPercent}%)\n\n<b>💰 Бонусный процент:</b> {user.levelBonusPercent}%\n<b>💵 Процент оплаты бонусами:</b> {user.levelPaymentPercent}%\n\n<b>Следующий уровень:</b> {user.nextLevelName}\n<b>Нужно покупок на сумму:</b> {user.nextLevelAmountFormatted}\n\n🎯 Продолжайте совершать покупки для повышения уровня!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "⬅️ Назад в меню",
+                    "callback_data": "back_to_menu"
+                  }
+                ]
+              ]
+            },
+            "parseMode": "HTML"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 320,
+        "height": 204
+      },
+      "position": {
+        "x": 406,
+        "y": 1033.5
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-referrals-trigger",
+      "data": {
+        "label": "Триггер: Рефералы",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_referrals"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 0,
+        "y": 1275.5
+      },
+      "selected": false
+    },
+    {
+      "id": "show-referrals-stats",
+      "data": {
+        "label": "Показать рефералы",
+        "config": {
+          "message": {
+            "text": "<b>👥 Реферальная программа</b>\n\n<b>📊 Статистика по проекту:</b>\n👤 <b>Приглашено пользователей:</b> {user.referralCount}\n💰 <b>Бонусов от рефералов:</b> {user.referralBonusTotalFormatted}\n\n<b>🔗 Ваша реферальная ссылка:</b>\n{user.referralLink}\n\n📱 Поделитесь ссылкой с друзьями и получайте бонусы за их покупки!\n\n💡 Приглашайте друзей и зарабатывайте вместе!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "⬅️ Назад в меню",
+                    "callback_data": "back_to_menu"
+                  }
+                ]
+              ]
+            },
+            "parseMode": "HTML"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 320,
+        "height": 204
+      },
+      "position": {
+        "x": 406,
+        "y": 1275.5
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-invite-trigger",
+      "data": {
+        "label": "Триггер: Пригласить",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_invite"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 0,
+        "y": 1517.5
+      },
+      "selected": false
+    },
+    {
+      "id": "show-invite-info",
+      "data": {
+        "label": "Показать приглашение",
+        "config": {
+          "message": {
+            "text": "<b>🔗 Пригласите друзей и получайте бонусы!</b>\n\nПоделитесь персональной ссылкой и получайте вознаграждение за каждую покупку приглашённых пользователей.\n\n<b>Ваша ссылка:</b>\n{user.referralLink}\n\n1️⃣ Скопируйте ссылку\n2️⃣ Отправьте друзьям в мессенджерах или соцсетях\n3️⃣ Получайте бонусы автоматически\n\n🎁 Больше друзей — больше бонусов!",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "⬅️ Назад в меню",
+                    "callback_data": "back_to_menu"
+                  }
+                ]
+              ]
+            },
+            "parseMode": "HTML"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 320,
+        "height": 204
+      },
+      "position": {
+        "x": 406,
+        "y": 1517.5
+      },
+      "selected": false
+    },
+    {
+      "id": "menu-help-trigger",
+      "data": {
+        "label": "Триггер: Помощь",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "menu_help"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 122
+      },
+      "position": {
+        "x": 0,
+        "y": 1759.5
+      },
+      "selected": false
+    },
+    {
+      "id": "show-help-info",
+      "data": {
+        "label": "Показать помощь",
+        "config": {
+          "message": {
+            "text": "<b>❓ Помощь</b>\n\n<b>🎯 Как работает бонусная система:</b>\n\n💰 <b>Бонусы</b> - накапливайте бонусы за покупки\n🛒 <b>Списание</b> - оплачивайте часть покупки бонусами\n🏆 <b>Уровни</b> - повышайте уровень для лучших условий\n👥 <b>Рефералы</b> - приглашайте друзей и получайте бонусы\n\n<b>📱 Команды:</b>\n• /start - начать работу с ботом\n• 💰 Баланс - посмотреть текущий баланс\n• 📜 История - история операций\n• 🏆 Уровень - ваш текущий уровень\n• 👥 Рефералы - реферальная программа\n• 🔗 Пригласить - пригласить друга\n\n💬 Если возникли вопросы, напишите в поддержку!",
+            "parseMode": "HTML"
+          }
+        }
+      },
+      "type": "message",
+      "dragging": false,
+      "measured": {
+        "width": 320,
+        "height": 204
+      },
+      "position": {
+        "x": 406,
+        "y": 1759.5
+      },
+      "selected": false
+    },
+    {
+      "id": "back-to-menu-trigger",
+      "data": {
+        "label": "Триггер: Назад в меню",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "back_to_menu"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "dragging": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      },
+      "position": {
+        "x": 1218,
+        "y": 494
+      },
+      "selected": false
+    },
+    {
+      "id": "welcome-message",
+      "data": {
+        "label": "Приветственное сообщение",
+        "config": {
+          "message": {
+            "text": "Добро пожаловать в MAOKA 🤍\nСпасибо, что выбрали наш бренд.\n\nМы ценим ваше внимание к качеству и заботе о себе.\n\nМы приготовили для вас подарок.\nНажмите на кнопку ниже, чтобы получить его.",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "text": "Получить подарок",
+                    "callback_data": "start_get_gift"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "type": "message",
+      "position": {
+        "x": 1624,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "trigger-start-get-gift",
+      "data": {
+        "label": "Триггер: Получить подарок",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "start_get_gift"
+          }
+        }
+      },
+      "type": "trigger.callback",
+      "position": {
+        "x": 2030,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "message-checking-subscription",
+      "type": "message",
+      "data": {
+        "label": "Проверка подписки",
+        "config": {
+          "message": {
+            "text": "Проверяю вашу подписку на наш Telegram-канал @maokacosmetics ⏳"
+          }
+        }
+      },
+      "position": {
+        "x": 2436,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "action-check-channel-subscription",
+      "type": "action.check_channel_subscription",
+      "data": {
+        "label": "Проверка подписки на канал",
+        "config": {
+          "action.check_channel_subscription": {
+            "assignTo": "isChannelSubscribed",
+            "channelId": "@maokacosmetics"
+          }
+        }
+      },
+      "position": {
+        "x": 2842,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "condition-subscription-result",
+      "type": "condition",
+      "data": {
+        "label": "Подписан на канал?",
+        "config": {
+          "condition": {
+            "value": true,
+            "operator": "equals",
+            "variable": "isChannelSubscribed"
+          }
+        }
+      },
+      "position": {
+        "x": 3248,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "message-subscription-failed",
+      "type": "message",
+      "data": {
+        "label": "Проверка не пройдена",
+        "config": {
+          "message": {
+            "text": "Вы не подписаны на @maokacosmetics, где мы публикуем полезные видео, советы по макияжу, а также рассказываем о новинках и акциях.\n\nПосле подписки нажмите на кнопку «Проверить подписку».",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "url": "https://t.me/maokacosmetics",
+                    "text": "Подписаться на канал"
+                  }
+                ],
+                [
+                  {
+                    "text": "Проверить подписку",
+                    "callback_data": "check_subscription_again"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "position": {
+        "x": 3654,
+        "y": 800
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "trigger-check-subscription-again",
+      "type": "trigger.callback",
+      "data": {
+        "label": "Триггер: проверить снова",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "check_subscription_again"
+          }
+        }
+      },
+      "position": {
+        "x": 3654,
+        "y": 1000
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "message-subscription-success",
+      "type": "message",
+      "data": {
+        "label": "Проверка пройдена",
+        "config": {
+          "message": {
+            "text": "Проверка успешно пройдена.\nРады, что вы с нами!🤍"
+          }
+        }
+      },
+      "position": {
+        "x": 3654,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "message-gift",
+      "type": "message",
+      "data": {
+        "label": "Подарок",
+        "config": {
+          "message": {
+            "text": "Для вас — скидка 10% на заказы на Wildberries. (https://www.wildberries.ru/brands/311557915-maoka)\nЧтобы получить её, используйте промокод M1VFI3W7.\nОн будет действовать до конца месяца (его можно применять неограниченное количество раз).\n\nЕсли у вас возникнут вопросы, наши специалисты готовы помочь вам в любой момент🤍.",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "url": "https://www.wildberries.ru/brands/311557915-maoka",
+                    "text": "Магазин Wildberries"
+                  }
+                ],
+                [
+                  {
+                    "url": "https://t.me/maokahelp",
+                    "text": "Отдел заботы"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "position": {
+        "x": 4060,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "delay-before-about-us",
+      "type": "flow.delay",
+      "data": {
+        "label": "Задержка пару минут",
+        "config": {
+          "flow.delay": {
+            "delayMs": 120000
+          }
+        }
+      },
+      "position": {
+        "x": 4466,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "message-about-us",
+      "type": "message",
+      "data": {
+        "label": "О нас",
+        "config": {
+          "message": {
+            "text": "Благодарим за ваш интерес к MAOKA.\n\n— Натуральные и безопасные составы\n— Минимализм и экологичный подход к упаковке\n— Этичное производство без тестирования на животных\n\nПодписывайтесь на наши социальные сети — там мы делимся новинками, акциями и полезными материалами.",
+            "photo": "https://picsum.photos/800/600",
+            "keyboard": {
+              "type": "inline",
+              "buttons": [
+                [
+                  {
+                    "url": "https://www.wildberries.ru/brands/311557915-maoka",
+                    "text": "Перейти в магазин Wildberries"
+                  }
+                ],
+                [
+                  {
+                    "url": "https://instagram.com/maokacosmetics",
+                    "text": "Инстаграм"
+                  }
+                ],
+                [
+                  {
+                    "url": "https://vk.ru/maokacosmetics",
+                    "text": "ВКонтакте"
+                  }
+                ],
+                [
+                  {
+                    "url": "https://max.ru/id741521791140_biz",
+                    "text": "Канал МАХ"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      "position": {
+        "x": 4872,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 162
+      }
+    },
+    {
+      "id": "create-telegram-user",
+      "type": "action.database_query",
+      "data": {
+        "label": "Создать пользователя",
+        "config": {
+          "action.database_query": {
+            "query": "create_user",
+            "parameters": {
+              "projectId": "{{projectId}}",
+              "telegramId": "{{telegram.userId}}",
+              "username": "{{telegram.username}}",
+              "firstName": "{{telegram.firstName}}",
+              "lastName": "{{telegram.lastName}}"
+            }
+          }
+        }
+      },
+      "position": {
+        "x": 3857,
+        "y": 625
+      },
+      "dragging": false,
+      "selected": false,
+      "measured": {
+        "width": 256,
+        "height": 142
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "edge-start-trigger-check-telegram-user",
+      "type": "default",
+      "source": "start-trigger",
+      "target": "check-telegram-user",
+      "animated": true
+    },
+    {
+      "id": "edge-check-telegram-user-check-user-status",
+      "type": "default",
+      "source": "check-telegram-user",
+      "target": "check-user-status",
+      "animated": true
+    },
+    {
+      "id": "edge-check-user-status-check-user-active",
+      "type": "default",
+      "source": "check-user-status",
+      "target": "check-user-active",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-check-user-active-active-user-profile",
+      "type": "default",
+      "source": "check-user-active",
+      "target": "active-user-profile",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-menu-balance-trigger-show-balance-details",
+      "type": "default",
+      "source": "menu-balance-trigger",
+      "target": "show-balance-details",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-history-trigger-show-history-list",
+      "type": "default",
+      "source": "menu-history-trigger",
+      "target": "show-history-list",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-level-trigger-show-level-info",
+      "type": "default",
+      "source": "menu-level-trigger",
+      "target": "show-level-info",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-referrals-trigger-show-referrals-stats",
+      "type": "default",
+      "source": "menu-referrals-trigger",
+      "target": "show-referrals-stats",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-invite-trigger-show-invite-info",
+      "type": "default",
+      "source": "menu-invite-trigger",
+      "target": "show-invite-info",
+      "animated": true
+    },
+    {
+      "id": "edge-menu-help-trigger-show-help-info",
+      "type": "default",
+      "source": "menu-help-trigger",
+      "target": "show-help-info",
+      "animated": true
+    },
+    {
+      "id": "edge-back-to-menu-trigger-active-user-profile",
+      "type": "default",
+      "source": "back-to-menu-trigger",
+      "target": "active-user-profile",
+      "animated": true
+    },
+    {
+      "id": "edge-check-user-status-welcome-message",
+      "type": "default",
+      "source": "check-user-status",
+      "target": "welcome-message",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-trigger-start-get-gift-message-checking-subscription",
+      "type": "default",
+      "source": "trigger-start-get-gift",
+      "target": "message-checking-subscription",
+      "animated": true
+    },
+    {
+      "id": "edge-message-checking-subscription-action-check-channel-subscription",
+      "type": "default",
+      "source": "message-checking-subscription",
+      "target": "action-check-channel-subscription",
+      "animated": true
+    },
+    {
+      "id": "edge-action-check-channel-subscription-condition-subscription-result",
+      "type": "default",
+      "source": "action-check-channel-subscription",
+      "target": "condition-subscription-result",
+      "animated": true
+    },
+    {
+      "id": "edge-condition-subscription-result-message-subscription-success",
+      "type": "default",
+      "source": "condition-subscription-result",
+      "target": "message-subscription-success",
+      "animated": true,
+      "sourceHandle": "true"
+    },
+    {
+      "id": "edge-condition-subscription-result-message-subscription-failed",
+      "type": "default",
+      "source": "condition-subscription-result",
+      "target": "message-subscription-failed",
+      "animated": true,
+      "sourceHandle": "false"
+    },
+    {
+      "id": "edge-trigger-check-subscription-again-message-checking-subscription",
+      "type": "default",
+      "source": "trigger-check-subscription-again",
+      "target": "message-checking-subscription",
+      "animated": true
+    },
+    {
+      "id": "edge-message-subscription-success-create-telegram-user",
+      "type": "default",
+      "source": "message-subscription-success",
+      "target": "create-telegram-user",
+      "animated": true
+    },
+    {
+      "id": "edge-create-telegram-user-message-gift",
+      "type": "default",
+      "source": "create-telegram-user",
+      "target": "message-gift",
+      "animated": true
+    },
+    {
+      "id": "edge-message-gift-delay-before-about-us",
+      "type": "default",
+      "source": "message-gift",
+      "target": "delay-before-about-us",
+      "animated": true
+    },
+    {
+      "id": "edge-delay-before-about-us-message-about-us",
+      "type": "default",
+      "source": "delay-before-about-us",
+      "target": "message-about-us",
+      "animated": true
+    },
+    {
+      "id": "edge-message-about-us-end-node",
+      "type": "default",
+      "source": "message-about-us",
+      "target": "end-node",
+      "animated": true
+    }
+  ],
+  "variables": [
+    {
+      "id": "telegramUser",
+      "name": "telegramUser",
+      "type": "object",
+      "description": "Данные пользователя по Telegram ID",
+      "defaultValue": null
+    },
+    {
+      "id": "contactUser",
+      "name": "contactUser",
+      "type": "object",
+      "description": "Данные пользователя по контакту/email",
+      "defaultValue": null
+    },
+    {
+      "id": "hasWelcomeBonus",
+      "name": "hasWelcomeBonus",
+      "type": "boolean",
+      "description": "Есть ли приветственные бонусы",
+      "defaultValue": false
+    },
+    {
+      "id": "isChannelSubscribed",
+      "name": "isChannelSubscribed",
+      "type": "boolean",
+      "description": "Подписан ли пользователь на канал",
+      "defaultValue": false
+    }
+  ],
+  "settings": {
+    "autoSave": true,
+    "gridSnap": true,
+    "retryAttempts": 3,
+    "maxExecutionTime": 60000
+  },
+  "createdAt": "2025-12-23T08:42:15.605Z",
+  "updatedAt": "2025-12-28T08:22:38.141Z"
+}

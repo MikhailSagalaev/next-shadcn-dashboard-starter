@@ -8,6 +8,7 @@
  */
 
 import { botManager } from './bot-manager';
+import { maxBotManager } from '../max-bot/bot-manager';
 import type { User, Bonus, BonusType } from '@/types/bonus';
 import { logger } from '@/lib/logger';
 
@@ -19,8 +20,8 @@ export async function sendBonusNotification(
   bonus: Bonus,
   projectId: string
 ): Promise<void> {
-  if (!user.telegramId) {
-    return; // Пользователь не связан с Telegram
+  if (!user.telegramId && !user.maxId) {
+    return; // Пользователь не связан ни с одной платформой
   }
 
   let botInstance = botManager.getBot(projectId);
@@ -54,14 +55,29 @@ export async function sendBonusNotification(
       `📄 Описание: ${bonus.description || 'Без описания'}\n\n` +
       `⏰ Срок действия: ${bonus.expiresAt ? bonus.expiresAt.toLocaleDateString('ru-RU') : 'Бессрочно'}`;
 
-    await botInstance.bot.api.sendMessage(Number(user.telegramId), message, {
-      parse_mode: 'Markdown'
-    });
+    // Отправляем в Telegram если есть ID
+    if (user.telegramId && botInstance && botInstance.isActive) {
+      await botInstance.bot.api.sendMessage(Number(user.telegramId), message, {
+        parse_mode: 'Markdown'
+      });
+      logger.info(`Уведомление отправлено пользователю ${user.id} в Telegram`, {
+        telegramId: user.telegramId,
+        projectId
+      });
+    }
 
-    logger.info(`Уведомление отправлено пользователю ${user.id} в Telegram`, {
-      telegramId: user.telegramId,
-      projectId
-    });
+    // Отправляем в MAX если есть ID
+    if (user.maxId) {
+      await maxBotManager.sendMessageToUser(
+        projectId,
+        Number(user.maxId),
+        message.replace(/\*/g, '') // MAX может не поддерживать Markdown в таком виде, упрощаем
+      );
+      logger.info(`Уведомление отправлено пользователю ${user.id} в MAX`, {
+        maxId: user.maxId,
+        projectId
+      });
+    }
   } catch (error) {
     logger.error(`Ошибка отправки уведомления пользователю ${user.id}`, {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -81,29 +97,43 @@ export async function sendBonusSpentNotification(
   description: string,
   projectId: string
 ): Promise<void> {
-  if (!user.telegramId) {
-    return;
-  }
-
   try {
-    const botInstance = botManager.getBot(projectId);
-    if (!botInstance || !botInstance.isActive) {
-      return;
-    }
-
     const message =
       `💸 *Бонусы потрачены*\n\n` +
       `💰 Сумма: *-${amount} бонусов*\n` +
       `📄 За: ${description}\n\n` +
       `Спасибо за покупку!`;
 
-    await botInstance.bot.api.sendMessage(Number(user.telegramId), message, {
-      parse_mode: 'Markdown'
-    });
+    // Telegram
+    if (user.telegramId) {
+      const botInstance = botManager.getBot(projectId);
+      if (botInstance && botInstance.isActive) {
+        await botInstance.bot.api.sendMessage(
+          Number(user.telegramId),
+          message,
+          {
+            parse_mode: 'Markdown'
+          }
+        );
+      }
+    }
 
-    // console.log(`✅ Уведомление о списании отправлено пользователю ${user.id}`);
+    // MAX
+    if (user.maxId) {
+      await maxBotManager.sendMessageToUser(
+        projectId,
+        Number(user.maxId),
+        message.replace(/\*/g, '')
+      );
+    }
   } catch (error) {
-    // console.error(`❌ Ошибка отправки уведомления о списании пользователю ${user.id}:`, error);
+    logger.error(
+      `Ошибка отправки уведомления о списании пользователю ${user.id}`,
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        projectId
+      }
+    );
   }
 }
 
@@ -116,16 +146,7 @@ export async function sendBonusExpiryWarning(
   expiryDate: Date,
   projectId: string
 ): Promise<void> {
-  if (!user.telegramId) {
-    return;
-  }
-
   try {
-    const botInstance = botManager.getBot(projectId);
-    if (!botInstance || !botInstance.isActive) {
-      return;
-    }
-
     const daysLeft = Math.ceil(
       (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
     );
@@ -137,13 +158,36 @@ export async function sendBonusExpiryWarning(
       `⏰ Осталось дней: *${daysLeft}*\n\n` +
       `Поспешите воспользоваться бонусами! 🏃‍♂️`;
 
-    await botInstance.bot.api.sendMessage(Number(user.telegramId), message, {
-      parse_mode: 'Markdown'
-    });
+    // Telegram
+    if (user.telegramId) {
+      const botInstance = botManager.getBot(projectId);
+      if (botInstance && botInstance.isActive) {
+        await botInstance.bot.api.sendMessage(
+          Number(user.telegramId),
+          message,
+          {
+            parse_mode: 'Markdown'
+          }
+        );
+      }
+    }
 
-    // console.log(`✅ Предупреждение об истечении отправлено пользователю ${user.id}`);
+    // MAX
+    if (user.maxId) {
+      await maxBotManager.sendMessageToUser(
+        projectId,
+        Number(user.maxId),
+        message.replace(/\*/g, '')
+      );
+    }
   } catch (error) {
-    // console.error(`❌ Ошибка отправки предупреждения пользователю ${user.id}:`, error);
+    logger.error(
+      `Ошибка отправки предупреждения об истечении пользователю ${user.id}`,
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        projectId
+      }
+    );
   }
 }
 
@@ -186,54 +230,81 @@ export async function sendRichBroadcastMessage(
     // Проверяем/создаём активного бота через BotManager
     let instance = botManager.getBot(projectId);
     if (!instance || !instance.isActive) {
-      const settings = await db.botSettings.findUnique({
+      const settings = (await db.botSettings.findUnique({
         where: { projectId }
-      });
-      if (!settings || !settings.botToken || settings.isActive === false) {
-        return { sent: 0, failed: 1 };
-      }
-      try {
-        instance = await botManager.createBot(projectId, settings as any);
-      } catch {
-        return { sent: 0, failed: 1 };
+      })) as any;
+      if (settings?.botToken && settings?.isActive !== false) {
+        try {
+          instance = await botManager.createBot(projectId, settings);
+        } catch (e) {
+          // ignore
+        }
       }
     }
 
-    // Готовим список пользователей
-    let targetUserIds: string[];
-    if (userIds && userIds.length > 0) {
-      targetUserIds = userIds;
-    } else {
-      const dbUsers = await db.user.findMany({
-        where: { projectId, telegramId: { not: null }, isActive: true },
-        select: { id: true }
-      });
-      targetUserIds = dbUsers.map((u: { id: string }) => u.id);
+    // Выполняем рассылку Telegram
+    let telegramResult = { sentCount: 0, failedCount: 0 };
+    if (instance && instance.isActive) {
+      const telegramUserIds =
+        userIds && userIds.length > 0
+          ? userIds
+          : (
+              await db.user.findMany({
+                where: { projectId, telegramId: { not: null }, isActive: true },
+                select: { id: true }
+              })
+            ).map((u: { id: string }) => u.id);
+
+      if (telegramUserIds.length > 0) {
+        telegramResult = await botManager.sendRichBroadcastMessage(
+          projectId,
+          telegramUserIds,
+          notification.message,
+          {
+            imageUrl: notification.imageUrl,
+            buttons: notification.buttons,
+            parseMode: notification.parseMode || 'Markdown'
+          }
+        );
+      }
     }
 
-    if (targetUserIds.length === 0) {
-      const { logger } = await import('@/lib/logger');
-      logger.warn(
-        'Список получателей пуст, рассылка пропущена',
-        { projectId },
-        'notifications'
+    // Выполняем рассылку MAX
+    let maxResult = { sentCount: 0, failedCount: 0 };
+    const maxUserIds =
+      userIds && userIds.length > 0
+        ? userIds
+        : (
+            await db.user.findMany({
+              where: { projectId, maxId: { not: null }, isActive: true },
+              select: { id: true }
+            })
+          ).map((u: { id: string }) => u.id);
+
+    if (maxUserIds.length > 0) {
+      maxResult = await maxBotManager.sendRichBroadcastMessage(
+        projectId,
+        maxUserIds,
+        notification.message,
+        {
+          buttons: notification.buttons?.map((b) => ({
+            text: b.text,
+            url: b.url,
+            payload: b.callback_data
+          }))
+        }
       );
-      return { sent: 0, failed: 0 };
     }
 
-    const result = await botManager.sendRichBroadcastMessage(
-      projectId,
-      targetUserIds,
-      notification.message,
-      {
-        imageUrl: notification.imageUrl,
-        buttons: notification.buttons,
-        parseMode: notification.parseMode || 'Markdown'
-      }
-    );
-
-    return { sent: result.sentCount, failed: result.failedCount };
+    return {
+      sent: telegramResult.sentCount + maxResult.sentCount,
+      failed: telegramResult.failedCount + maxResult.failedCount
+    };
   } catch (error) {
+    logger.error('Ошибка массовой рассылки (Telegram + MAX)', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      projectId
+    });
     return { sent: 0, failed: 1 };
   }
 }

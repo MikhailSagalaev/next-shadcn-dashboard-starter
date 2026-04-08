@@ -20,6 +20,7 @@ model Project {
   welcomeBonus                  Decimal               @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
   welcomeRewardType             WelcomeRewardType     @default(BONUS) @map("welcome_reward_type")
   firstPurchaseDiscountPercent  Int                   @default(0) @map("first_purchase_discount_percent")
+  maxPaymentPercentage          Decimal               @default(100) @map("max_payment_percentage") @db.Decimal(5, 2)
   isActive                      Boolean               @default(true) @map("is_active")
   widgetVersion                 String                @default("legacy") @map("widget_version") // "legacy" | "universal"
   createdAt                     DateTime              @default(now()) @map("created_at")
@@ -27,6 +28,8 @@ model Project {
   botStatus                     BotStatus             @default(INACTIVE) @map("bot_status")
   botToken                      String?               @map("bot_token")
   botUsername                   String?               @map("bot_username")
+  maxBotToken                   String?               @map("max_bot_token")
+  maxBotUsername                String?               @map("max_bot_username")
   ownerId                       String?               @map("owner_id")
   // Конфигурируемые лимиты workflow
   workflowMaxSteps              Int                   @default(100) @map("workflow_max_steps")
@@ -124,6 +127,8 @@ model BotSettings {
   projectId          String   @unique @map("project_id")
   botToken           String   @map("bot_token")
   botUsername        String   @map("bot_username")
+  maxBotToken        String?  @map("max_bot_token")
+  maxBotUsername     String?  @map("max_bot_username")
   isActive           Boolean  @default(true) @map("is_active")
   welcomeMessage     Json?    @default("{\"text\": \"Добро пожаловать! Отправьте свой номер телефона для привязки аккаунта.\"}") @map("welcome_message")
   createdAt          DateTime @default(now()) @map("created_at")
@@ -222,6 +227,8 @@ model User {
   birthDate               DateTime?          @map("birth_date") @db.Date
   telegramId              BigInt?            @map("telegram_id")
   telegramUsername        String?            @map("telegram_username")
+  maxId                   BigInt?            @unique @map("max_id")
+  maxUsername             String?            @map("max_username")
   isActive                Boolean            @default(false) @map("is_active")
   registeredAt            DateTime           @default(now()) @map("registered_at")
   updatedAt               DateTime           @updatedAt @map("updated_at")
@@ -274,6 +281,7 @@ model Bonus {
   metadata     Json?
   createdAt    DateTime      @default(now()) @map("created_at")
   referralLevel Int?         @map("referral_level")
+  externalId   String?       @unique @map("external_id")
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
 
@@ -291,6 +299,7 @@ model Transaction {
   createdAt       DateTime        @default(now()) @map("created_at")
   appliedPercent  Int?            @map("applied_percent")
   isReferralBonus Boolean         @default(false) @map("is_referral_bonus")
+  externalId      String?         @unique @map("external_id")
   referralUserId  String?         @map("referral_user_id")
   referralLevel   Int?            @map("referral_level")
   userLevel       String?         @map("user_level")
@@ -434,6 +443,7 @@ model WorkflowExecution {
   sessionId      String        @map("session_id")
   userId         String?       @map("user_id")
   telegramChatId String?       @map("telegram_chat_id")
+  maxChatId      String?       @map("max_chat_id")
   status         String
   startedAt      DateTime      @default(now()) @map("started_at")
   finishedAt     DateTime?     @map("finished_at")

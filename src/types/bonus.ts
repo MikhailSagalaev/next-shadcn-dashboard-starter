@@ -12,6 +12,7 @@ export interface Project {
   welcomeBonus: number;
   welcomeRewardType: WelcomeRewardType;
   firstPurchaseDiscountPercent: number;
+  maxPaymentPercentage: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -157,6 +158,7 @@ export interface Bonus {
   isUsed: boolean;
   createdAt: Date;
   referralLevel?: number | null;
+  externalId?: string | null;
   user?: User;
   transactions?: Transaction[];
 }
@@ -170,6 +172,7 @@ export interface Transaction {
   description?: string | null;
   metadata?: Record<string, any> | null;
   createdAt: Date;
+  externalId?: string | null;
 
   // Контекст уровня пользователя
   userLevel?: string | null; // Уровень пользователя на момент операции
@@ -231,6 +234,7 @@ export interface UpdateProjectInput {
   botToken?: string;
   botUsername?: string;
   botStatus?: BotStatus;
+  maxPaymentPercentage?: number;
 }
 
 export interface CreateUserInput {
