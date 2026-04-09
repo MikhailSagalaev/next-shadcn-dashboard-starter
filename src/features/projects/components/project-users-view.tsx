@@ -930,6 +930,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     ? `${user.firstName} ${user.lastName}`.trim()
                     : user.email || 'Без имени',
                 bonusBalance: user.bonusBalance || 0,
+                activeBonuses: user.bonusBalance || 0,
                 totalEarned: user.totalEarned || 0,
                 createdAt: new Date(user.registeredAt),
                 updatedAt: new Date(user.registeredAt),

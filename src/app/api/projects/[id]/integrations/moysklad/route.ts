@@ -15,21 +15,17 @@ import { z } from 'zod';
 const IntegrationSchema = z.object({
   bonusPercentage: z.number().min(0).max(100),
   maxBonusSpend: z.number().min(0).max(100),
-  isActive: z.boolean(),
+  isActive: z.boolean()
 });
 
 // POST - Create integration
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: projectId } = await params;
     const admin = await getCurrentAdmin();
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const projectId = params.id;
 
     // Проверяем владельца проекта
     const project = await db.project.findFirst({
@@ -83,30 +79,40 @@ export async function POST(
         baseUrl,
         bonusPercentage,
         maxBonusSpend,
-        isActive,
+        isActive
       }
     });
 
-    logger.info('МойСклад integration created', {
-      projectId,
-      integrationId: integration.id,
-      isActive,
-    }, 'moysklad-integration');
+    logger.info(
+      'МойСклад integration created',
+      {
+        projectId,
+        integrationId: integration.id,
+        isActive
+      },
+      'moysklad-integration'
+    );
 
-    return NextResponse.json({
-      success: true,
-      authToken: rawToken, // Возвращаем незахешированный токен ОДИН РАЗ
-      baseUrl,
-      integration: {
-        id: integration.id,
-        bonusPercentage: integration.bonusPercentage,
-        maxBonusSpend: integration.maxBonusSpend,
-        isActive: integration.isActive,
-      }
-    }, { status: 201 });
-
+    return NextResponse.json(
+      {
+        success: true,
+        authToken: rawToken, // Возвращаем незахешированный токен ОДИН РАЗ
+        baseUrl,
+        integration: {
+          id: integration.id,
+          bonusPercentage: integration.bonusPercentage,
+          maxBonusSpend: integration.maxBonusSpend,
+          isActive: integration.isActive
+        }
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    logger.error('Error creating МойСклад integration', { error }, 'moysklad-integration');
+    logger.error(
+      'Error creating МойСклад integration',
+      { error },
+      'moysklad-integration'
+    );
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -117,15 +123,11 @@ export async function POST(
 // PUT - Update integration
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: projectId } = await params;
     const admin = await getCurrentAdmin();
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const projectId = params.id;
 
     // Проверяем владельца проекта
     const project = await db.project.findFirst({
@@ -170,15 +172,19 @@ export async function PUT(
       data: {
         bonusPercentage,
         maxBonusSpend,
-        isActive,
+        isActive
       }
     });
 
-    logger.info('МойСклад integration updated', {
-      projectId,
-      integrationId: integration.id,
-      isActive,
-    }, 'moysklad-integration');
+    logger.info(
+      'МойСклад integration updated',
+      {
+        projectId,
+        integrationId: integration.id,
+        isActive
+      },
+      'moysklad-integration'
+    );
 
     return NextResponse.json({
       success: true,
@@ -186,12 +192,15 @@ export async function PUT(
         id: integration.id,
         bonusPercentage: integration.bonusPercentage,
         maxBonusSpend: integration.maxBonusSpend,
-        isActive: integration.isActive,
+        isActive: integration.isActive
       }
     });
-
   } catch (error) {
-    logger.error('Error updating МойСклад integration', { error }, 'moysklad-integration');
+    logger.error(
+      'Error updating МойСклад integration',
+      { error },
+      'moysklad-integration'
+    );
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

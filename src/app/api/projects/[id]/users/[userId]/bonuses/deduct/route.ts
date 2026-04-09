@@ -15,16 +15,16 @@ import { withApiRateLimit } from '@/lib';
 
 async function postHandler(
   request: NextRequest,
-  { params }: { params: { id: string; userId: string } }
+  { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
-    const { id: projectId, userId } = params;
+    const { id: projectId, userId } = await params;
     const body = await request.json();
 
     const { amount, description } = body;
 
     // Валидация
-    if (!amount || amount <= 0) {
+    if (amount === undefined || amount === null || amount <= 0) {
       return NextResponse.json(
         { error: 'Сумма должна быть больше 0' },
         { status: 400 }
@@ -46,42 +46,47 @@ async function postHandler(
       );
     }
 
-    // Проверяем баланс пользователя
-    const userBalance = await UserService.getUserBalance(userId);
-    if (userBalance.currentBalance < amount) {
-      return NextResponse.json(
-        { error: 'Недостаточно бонусов на балансе пользователя' },
-        { status: 400 }
+    // Проверяем баланс пользователя (используем реальный spendable balance из BonusService)
+    try {
+      // Списываем бонусы через BonusService
+      const transactions = await BonusService.spendBonuses(
+        userId,
+        amount,
+        description || 'Ручное списание через админ-панель'
       );
-    }
 
-    // Списываем бонусы через BonusService
-    const transactions = await BonusService.spendBonuses(
-      userId,
-      amount,
-      description || 'Ручное списание через админ-панель'
-    );
+      // Получаем новый баланс для ответа
+      const userBalance = await UserService.getUserBalance(userId);
 
-    logger.info('Бонусы успешно списаны', {
-      projectId,
-      userId,
-      amount,
-      transactionsCount: transactions.length,
-      component: 'bonus-deduction-api'
-    });
+      logger.info('Бонусы успешно списаны', {
+        projectId,
+        userId,
+        amount,
+        transactionsCount: transactions.length,
+        component: 'bonus-deduction-api'
+      });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Бонусы успешно списаны',
-        deducted: {
-          amount,
-          transactionsCount: transactions.length
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Бонусы успешно списаны',
+          deducted: {
+            amount,
+            transactionsCount: transactions.length
+          },
+          newBalance: userBalance.currentBalance
         },
-        newBalance: userBalance.currentBalance - amount
-      },
-      { status: 200 }
-    );
+        { status: 200 }
+      );
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '';
+
+      if (errorMessage.includes('Недостаточно бонусов')) {
+        return NextResponse.json({ error: errorMessage }, { status: 400 });
+      }
+
+      throw error; // Бросаем дальше для общего catch
+    }
   } catch (error) {
     logger.error('Ошибка списания бонусов', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',

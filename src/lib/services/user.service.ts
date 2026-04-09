@@ -377,44 +377,58 @@ export class UserService {
 
   // Получение баланса пользователя с учётом уровня
   static async getUserBalance(userId: string): Promise<UserBalance> {
-    const [earnTransactions, spendTransactions, expiringSoon] =
-      await Promise.all([
-        db.transaction.aggregate({
-          where: {
-            userId,
-            type: 'EARN'
-          },
-          _sum: {
-            amount: true
+    const [
+      earnTransactions,
+      spendTransactions,
+      expiringSoon,
+      activeBonusesSum
+    ] = await Promise.all([
+      db.transaction.aggregate({
+        where: {
+          userId,
+          type: 'EARN'
+        },
+        _sum: {
+          amount: true
+        }
+      }),
+      db.transaction.aggregate({
+        where: {
+          userId,
+          type: 'SPEND'
+        },
+        _sum: {
+          amount: true
+        }
+      }),
+      db.bonus.aggregate({
+        where: {
+          userId,
+          isUsed: false,
+          expiresAt: {
+            gte: new Date(),
+            lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 дней
           }
-        }),
-        db.transaction.aggregate({
-          where: {
-            userId,
-            type: 'SPEND'
-          },
-          _sum: {
-            amount: true
-          }
-        }),
-        db.bonus.aggregate({
-          where: {
-            userId,
-            isUsed: false,
-            expiresAt: {
-              gte: new Date(),
-              lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 дней
-            }
-          },
-          _sum: {
-            amount: true
-          }
-        })
-      ]);
+        },
+        _sum: {
+          amount: true
+        }
+      }),
+      db.bonus.aggregate({
+        where: {
+          userId,
+          isUsed: false,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+        },
+        _sum: {
+          amount: true
+        }
+      })
+    ]);
 
     const totalEarned = Number(earnTransactions._sum.amount || 0);
-    const totalSpent = Number(spendTransactions._sum.amount || 0);
-    const currentBalance = totalEarned - totalSpent;
+    const totalSpent = Math.abs(Number(spendTransactions._sum.amount || 0));
+    const currentBalance = Number(activeBonusesSum._sum.amount || 0);
     const expiringSoonAmount = Number(expiringSoon._sum.amount || 0);
 
     return {
