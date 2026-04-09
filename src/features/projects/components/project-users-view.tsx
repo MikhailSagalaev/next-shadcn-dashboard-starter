@@ -938,6 +938,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               projectId={projectId}
               onSelectionChange={setSelectedUsers}
               onBonusAwardClick={(user: any) => handleOpenBonusDialog(user)}
+              onBonusDeductClick={(user: any) =>
+                handleOpenDeductionDialog(user)
+              }
               onHistoryClick={handleOpenHistoryDialog}
               onProfileClick={handleUserProfile}
               onDeleteUser={handleDeleteUser}
@@ -1459,6 +1462,22 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                                 (совмещено {t.metadata.spendAggregatedCount}{' '}
                                 операций)
                               </span>
+                            ) : null}
+                            {t.type === 'EARN' &&
+                            (t.userLevel ||
+                              (t.metadata &&
+                                (t.metadata.bonusPercent ||
+                                  t.metadata.appliedPercent))) ? (
+                              <div className='text-muted-foreground mt-1 text-xs'>
+                                Уровень:{' '}
+                                <span className='text-primary font-medium'>
+                                  {t.userLevel || 'Базовый'}
+                                </span>
+                                {t.metadata?.bonusPercent ||
+                                t.metadata?.appliedPercent
+                                  ? ` (${t.metadata.bonusPercent || t.metadata.appliedPercent}% от ${t.metadata.orderTotal || 'заказа'})`
+                                  : ''}
+                              </div>
                             ) : null}
                             {Array.isArray(t.aggregatedTransactions) &&
                             t.aggregatedTransactions.length > 0 ? (

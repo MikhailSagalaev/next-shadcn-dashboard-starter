@@ -82,6 +82,7 @@ interface UsersTableProps {
   onProfileClick?: (user: User) => void;
   onHistoryClick?: (userId: string) => void;
   onBonusAwardClick?: (user: User) => void;
+  onBonusDeductClick?: (user: User) => void;
   onDeleteUser?: (user: User) => void;
   onUserUpdated?: () => void;
   loading?: boolean;
@@ -102,6 +103,7 @@ export function UsersTable({
   onProfileClick,
   onHistoryClick,
   onBonusAwardClick,
+  onBonusDeductClick,
   onDeleteUser,
   onUserUpdated,
   loading = false,
@@ -343,6 +345,28 @@ export function UsersTable({
       }
     },
     {
+      accessorKey: 'currentLevel',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant='ghost'
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Уровень
+            <ArrowUpDown className='ml-2 h-4 w-4' />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const level = row.getValue('currentLevel') as string | undefined;
+        return (
+          <Badge variant={level ? 'outline' : 'secondary'}>
+            {level || 'Базовый'}
+          </Badge>
+        );
+      }
+    },
+    {
       accessorKey: 'createdAt',
       header: ({ column }) => {
         return (
@@ -388,8 +412,15 @@ export function UsersTable({
                 <Gift className='mr-2 h-4 w-4' />
                 Начислить бонусы
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onHistoryClick?.(user.id)}>
+              <DropdownMenuItem
+                onClick={() => onBonusDeductClick?.(user)}
+                className='text-destructive focus:text-destructive'
+              >
                 <Coins className='mr-2 h-4 w-4' />
+                Списать бонусы
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onHistoryClick?.(user.id)}>
+                <History className='mr-2 h-4 w-4' />
                 История бонусов
               </DropdownMenuItem>
               <DropdownMenuSeparator />
