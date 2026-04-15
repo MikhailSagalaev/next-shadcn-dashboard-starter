@@ -509,7 +509,7 @@ export class SyncService {
       // Process based on transaction type
       if (transactionType === 'EARNING') {
         // Create bonus record
-        const expiryDays = integration.project.bonusExpiryDays;
+        const expiryDays = integration.project.bonusExpiryDays || 365;
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
@@ -621,7 +621,14 @@ export class SyncService {
       logger.error(
         'Error syncing from МойСклад',
         {
-          error,
+          error:
+            error instanceof Error
+              ? {
+                  message: error.message,
+                  stack: error.stack,
+                  name: error.name
+                }
+              : error,
           integrationId,
           transactionId: bonusTransaction.id
         },

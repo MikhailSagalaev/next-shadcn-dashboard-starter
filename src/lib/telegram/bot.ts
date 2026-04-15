@@ -38,6 +38,7 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
   });
 
   const proxyUrl = process.env.TELEGRAM_PROXY_URL;
+  const apiRoot = process.env.TELEGRAM_API_ROOT;
   let bot: Bot<MyContext>;
 
   if (proxyUrl) {
@@ -48,9 +49,20 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
     const agent = new HttpsProxyAgent(proxyUrl);
     bot = new Bot<MyContext>(token, {
       client: {
+        apiRoot, // use custom apiRoot if provided
         baseFetchConfig: {
           agent
         }
+      }
+    });
+  } else if (apiRoot) {
+    logger.info('Creating bot with custom API root (Bridge)', {
+      projectId,
+      apiRoot
+    });
+    bot = new Bot<MyContext>(token, {
+      client: {
+        apiRoot
       }
     });
   } else {

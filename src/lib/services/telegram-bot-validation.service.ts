@@ -63,14 +63,30 @@ export class TelegramBotValidationService {
    */
   private static getBotInstance(token: string) {
     const proxyUrl = process.env.TELEGRAM_PROXY_URL;
+    const apiRoot = process.env.TELEGRAM_API_ROOT;
+
     if (proxyUrl) {
       logger.debug('Using proxy for Telegram Bot API', {
         proxy: proxyUrl.replace(/:[^:]+@/, ':***@'), // Mask password
         tokenPreview: token.substring(0, 10) + '...'
       });
       const agent = new HttpsProxyAgent(proxyUrl);
-      return new Bot(token, { client: { baseFetchConfig: { agent } } });
+      return new Bot(token, {
+        client: {
+          apiRoot,
+          baseFetchConfig: { agent }
+        }
+      });
     }
+
+    if (apiRoot) {
+      logger.debug('Using custom API root for Telegram Bot API', {
+        apiRoot,
+        tokenPreview: token.substring(0, 10) + '...'
+      });
+      return new Bot(token, { client: { apiRoot } });
+    }
+
     return new Bot(token);
   }
 
@@ -83,6 +99,7 @@ export class TelegramBotValidationService {
       env: {
         nodeEnv: process.env.NODE_ENV,
         hasProxy: !!process.env.TELEGRAM_PROXY_URL,
+        hasApiRoot: !!process.env.TELEGRAM_API_ROOT,
         appUrl: process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL
       }
     };
@@ -258,7 +275,7 @@ export class TelegramBotValidationService {
     testChatId?: string
   ): Promise<BotTestResult> {
     try {
-      const tempBot = new Bot(token);
+      const tempBot = this.getBotInstance(token);
 
       // 1. Проверяем базовую информацию о боте
       const botInfo = await tempBot.api.getMe();
@@ -363,7 +380,7 @@ export class TelegramBotValidationService {
    */
   static async getBotInfo(token: string) {
     try {
-      const tempBot = new Bot(token);
+      const tempBot = this.getBotInstance(token);
       const botInfo = await tempBot.api.getMe();
 
       return {
@@ -387,7 +404,7 @@ export class TelegramBotValidationService {
    */
   static async setBotCommands(token: string) {
     try {
-      const tempBot = new Bot(token);
+      const tempBot = this.getBotInstance(token);
 
       const commands = [
         { command: 'start', description: '🚀 Начать работу с ботом' },

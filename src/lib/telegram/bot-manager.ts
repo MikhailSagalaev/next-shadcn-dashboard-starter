@@ -56,10 +56,26 @@ class BotManager {
     // Берем публичный базовый URL приложения. Предпочитаем NEXT_PUBLIC_APP_URL,
     // затем APP_URL, и только затем dev-значение. Это позволяет в продакшене
     // работать по IP/HTTP без хаков и автоматически выбирать режим.
-    this.WEBHOOK_BASE_URL =
+    let webhookBaseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.APP_URL ||
       'http://localhost:5006';
+
+    // В продакшене 0.0.0.0 невалиден для вебхуков Telegram
+    if (
+      process.env.NODE_ENV === 'production' &&
+      webhookBaseUrl.includes('0.0.0.0')
+    ) {
+      logger.warn(
+        '⚠️ WEBHOOK_BASE_URL содержит 0.0.0.0 в продакшене. Это может помешать работе вебхуков Telegram.',
+        {
+          webhookBaseUrl,
+          component: 'bot-manager'
+        }
+      );
+    }
+
+    this.WEBHOOK_BASE_URL = webhookBaseUrl;
 
     // Активируем глобальный обработчик ошибок для 409 конфликтов
     setupGlobalErrorHandler();
