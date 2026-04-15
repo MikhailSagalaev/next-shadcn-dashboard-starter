@@ -9,6 +9,7 @@
  */
 
 import { Bot, Context, SessionFlavor } from 'grammy';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { logger } from '@/lib/logger';
 import {
   BotSessionService,
@@ -27,14 +28,34 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
   logger.info(`🤖 СОЗДАНИЕ ЭКЗЕМПЛЯРА БОТА`, {
     projectId,
     token: '***' + token.slice(-4),
-    botSettings: botSettings ? {
-      botUsername: botSettings.botUsername,
-      isActive: botSettings.isActive
-    } : null,
+    botSettings: botSettings
+      ? {
+          botUsername: botSettings.botUsername,
+          isActive: botSettings.isActive
+        }
+      : null,
     component: 'bot-factory'
   });
 
-  const bot = new Bot<MyContext>(token);
+  const proxyUrl = process.env.TELEGRAM_PROXY_URL;
+  let bot: Bot<MyContext>;
+
+  if (proxyUrl) {
+    logger.info('Creating bot with proxy agent', {
+      projectId,
+      proxy: proxyUrl.replace(/:[^:]+@/, ':***@')
+    });
+    const agent = new HttpsProxyAgent(proxyUrl);
+    bot = new Bot<MyContext>(token, {
+      client: {
+        baseFetchConfig: {
+          agent
+        }
+      }
+    });
+  } else {
+    bot = new Bot<MyContext>(token);
+  }
 
   // Настраиваем базовые middleware
   bot.use(BotSessionService.createSessionMiddleware(projectId));
@@ -65,12 +86,15 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
 
   // ✨ Deduplication для callback queries - предотвращает повторную обработку
   const processedCallbacks = new Set<string>();
-  
+
   // Очистка старых callback IDs каждые 5 минут
-  setInterval(() => {
-    processedCallbacks.clear();
-    logger.debug('🧹 Cleared processed callbacks cache');
-  }, 5 * 60 * 1000);
+  setInterval(
+    () => {
+      processedCallbacks.clear();
+      logger.debug('🧹 Cleared processed callbacks cache');
+    },
+    5 * 60 * 1000
+  );
 
   // Middleware для обработки через Workflow
   bot.use(async (ctx, next) => {
@@ -78,7 +102,7 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       // Получаем projectId из сессии
       const projectId = ctx.session?.projectId;
       if (!projectId) {
-        logger.warn('⚠️ НЕТ projectId В СЕССИИ ПРИ CALLBACK!', { 
+        logger.warn('⚠️ НЕТ projectId В СЕССИИ ПРИ CALLBACK!', {
           hasSession: !!ctx.session,
           sessionKeys: ctx.session ? Object.keys(ctx.session) : [],
           hasCallbackQuery: !!ctx.callbackQuery,
@@ -96,7 +120,7 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
         trigger = 'start';
       } else if (ctx.callbackQuery) {
         trigger = 'callback';
-        
+
         // ✅ КРИТИЧНО: Deduplication для callback queries
         const callbackId = ctx.callbackQuery.id;
         if (processedCallbacks.has(callbackId)) {
@@ -109,25 +133,30 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
           await ctx.answerCallbackQuery().catch(() => {});
           return; // Прерываем обработку дубликата
         }
-        
+
         // Помечаем как обработанный
         processedCallbacks.add(callbackId);
-        
+
         // ✅ КРИТИЧНО: Немедленно отвечаем на callback query
         // Это предотвращает повторную отправку от Telegram
         ctx.answerCallbackQuery().catch((err) => {
-          logger.error('Failed to answer callback query', { 
+          logger.error('Failed to answer callback query', {
             error: err.message,
-            callbackId 
+            callbackId
           });
         });
       }
 
-      logger.info('🔍 Проверка наличия активного workflow', { trigger, projectId, userId: ctx.from?.id });
+      logger.info('🔍 Проверка наличия активного workflow', {
+        trigger,
+        projectId,
+        userId: ctx.from?.id
+      });
 
       // Проверяем наличие активного workflow ДО выполнения
-      const hasActiveWorkflow = await WorkflowRuntimeService.hasActiveWorkflow(projectId);
-      
+      const hasActiveWorkflow =
+        await WorkflowRuntimeService.hasActiveWorkflow(projectId);
+
       if (!hasActiveWorkflow) {
         logger.debug('❌ Активный workflow не найден, используем fallback', {
           projectId,
@@ -139,8 +168,16 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       }
 
       // Выполняем workflow через новый сервис
-      logger.info('🚀 Выполнение workflow', { trigger, projectId, userId: ctx.from?.id });
-      const processed = await WorkflowRuntimeService.executeWorkflow(projectId, trigger, ctx);
+      logger.info('🚀 Выполнение workflow', {
+        trigger,
+        projectId,
+        userId: ctx.from?.id
+      });
+      const processed = await WorkflowRuntimeService.executeWorkflow(
+        projectId,
+        trigger,
+        ctx
+      );
 
       logger.info('📊 Результат выполнения workflow', {
         processed,
@@ -153,11 +190,14 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
 
       // 🔄 ДЛЯ CALLBACK QUERIES: Если workflow не обработал callback, позволяем fallback handler'у
       if (trigger === 'callback' && !processed) {
-        logger.warn('⚠️ Workflow вернул false для callback, но продолжаем обработку', {
-          projectId,
-          callbackData: ctx.callbackQuery?.data,
-          trigger
-        });
+        logger.warn(
+          '⚠️ Workflow вернул false для callback, но продолжаем обработку',
+          {
+            projectId,
+            callbackData: ctx.callbackQuery?.data,
+            trigger
+          }
+        );
         // НЕ передаем в fallback handler, чтобы не показывать ошибку пользователю
         // Просто отвечаем на callback query и завершаем
         if (ctx.callbackQuery) {
@@ -171,7 +211,6 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       // ✅ КРИТИЧНО: Для сообщений и успешно обработанных workflow - всегда останавливаем middleware
       // Это предотвращает дублирование сообщений
       return;
-      
     } catch (error) {
       logger.error('💥 Критическая ошибка при обработке workflow', {
         projectId: ctx.session?.projectId,
@@ -192,35 +231,37 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
   // Диагностическая команда для проверки работы бота
   bot.command('test', async (ctx) => {
     logger.info('Обработка команды /test (fallback)', { projectId });
-    await ctx.reply('✅ Бот работает! Команда /test получена и обработана.\n\n⚠️ Активный workflow не найден, используется fallback режим.');
+    await ctx.reply(
+      '✅ Бот работает! Команда /test получена и обработана.\n\n⚠️ Активный workflow не найден, используется fallback режим.'
+    );
   });
 
   // Fallback для команды /start
   bot.command('start', async (ctx) => {
     logger.info('Обработка команды /start (fallback)', { projectId });
-    
+
     await ctx.reply(
       '👋 Добро пожаловать!\n\n' +
-      '⚠️ Для этого бота не настроен активный сценарий (workflow).\n\n' +
-      '📝 Администратор должен:\n' +
-      '1. Перейти в раздел "Шаблоны ботов"\n' +
-      '2. Выбрать шаблон \n' +
-      '3. Установить его для этого проекта\n' +
-      '4. Активировать workflow\n\n' +
-      '💡 После этого бот будет работать по настроенному сценарию.'
+        '⚠️ Для этого бота не настроен активный сценарий (workflow).\n\n' +
+        '📝 Администратор должен:\n' +
+        '1. Перейти в раздел "Шаблоны ботов"\n' +
+        '2. Выбрать шаблон \n' +
+        '3. Установить его для этого проекта\n' +
+        '4. Активировать workflow\n\n' +
+        '💡 После этого бот будет работать по настроенному сценарию.'
     );
   });
 
   // Fallback для всех остальных сообщений
   bot.on('message', async (ctx) => {
     logger.info('Обработка сообщения (fallback)', {
-        projectId,
+      projectId,
       messageType: ctx.message.text ? 'text' : 'other'
     });
-    
+
     await ctx.reply(
       '⚠️ Бот работает в режиме fallback.\n\n' +
-      'Для полноценной работы необходимо настроить и активировать workflow в панели управления.'
+        'Для полноценной работы необходимо настроить и активировать workflow в панели управления.'
     );
   });
 
@@ -234,26 +275,25 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       userId: ctx.from?.id,
       chatId: ctx.chat?.id
     });
-    
+
     logger.info('Обработка callback (fallback)', {
       projectId,
       data: ctx.callbackQuery.data
     });
-    
+
     await ctx.answerCallbackQuery({
       text: '⚠️ Workflow не настроен'
     });
-    
+
     await ctx.reply(
       '⚠️ Для обработки действий необходимо настроить workflow в панели управления.'
     );
   });
 
   logger.info(`✅ Бот создан успешно`, {
-      projectId,
+    projectId,
     component: 'bot-factory'
   });
 
   return bot;
 }
-

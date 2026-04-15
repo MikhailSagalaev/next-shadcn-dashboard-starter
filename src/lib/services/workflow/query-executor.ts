@@ -70,7 +70,6 @@ export const SAFE_QUERIES = {
    */
   check_user_by_platform: async (db: PrismaClient, params: CheckUserParams) => {
     logger.debug('Executing check_user_by_platform', { params });
-
     // Сначала ищем по Telegram ID
     if (params.telegramId) {
       let user = await db.user.findFirst({
@@ -279,6 +278,13 @@ export const SAFE_QUERIES = {
     }
 
     return null;
+  },
+
+  /**
+   * Alias for check_user_by_platform for backward compatibility
+   */
+  check_user_by_telegram: async (db: PrismaClient, params: CheckUserParams) => {
+    return SAFE_QUERIES.check_user_by_platform(db, params);
   },
 
   /**

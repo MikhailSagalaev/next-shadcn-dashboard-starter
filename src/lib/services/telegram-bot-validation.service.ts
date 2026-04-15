@@ -10,6 +10,11 @@
 
 import { Bot } from 'grammy';
 import { logger } from '@/lib/logger';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import dns from 'dns';
+import { promisify } from 'util';
+
+const lookupDns = promisify(dns.lookup);
 
 export interface BotValidationResult {
   isValid: boolean;
@@ -54,6 +59,54 @@ export interface BotStatusInfo {
 
 export class TelegramBotValidationService {
   /**
+   * Helper to get bot instance with proxy if configured
+   */
+  private static getBotInstance(token: string) {
+    const proxyUrl = process.env.TELEGRAM_PROXY_URL;
+    if (proxyUrl) {
+      logger.debug('Using proxy for Telegram Bot API', {
+        proxy: proxyUrl.replace(/:[^:]+@/, ':***@'), // Mask password
+        tokenPreview: token.substring(0, 10) + '...'
+      });
+      const agent = new HttpsProxyAgent(proxyUrl);
+      return new Bot(token, { client: { baseFetchConfig: { agent } } });
+    }
+    return new Bot(token);
+  }
+
+  /**
+   * Diagnostic to check if Telegram API is reachable via DNS and TCP
+   */
+  private static async runDiagnostics() {
+    const diagnostics: any = {
+      timestamp: new Date().toISOString(),
+      env: {
+        nodeEnv: process.env.NODE_ENV,
+        hasProxy: !!process.env.TELEGRAM_PROXY_URL,
+        appUrl: process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL
+      }
+    };
+
+    try {
+      const startTime = Date.now();
+      const lookup = await lookupDns('api.telegram.org');
+      diagnostics.dns = {
+        resolved: true,
+        address: lookup.address,
+        family: lookup.family,
+        durationMs: Date.now() - startTime
+      };
+    } catch (e) {
+      diagnostics.dns = {
+        resolved: false,
+        error: e instanceof Error ? e.message : String(e)
+      };
+    }
+
+    return diagnostics;
+  }
+
+  /**
    * Полная проверка статуса бота (используется для API bot/status)
    */
   static async getBotStatus(token: string): Promise<BotStatusInfo> {
@@ -66,7 +119,13 @@ export class TelegramBotValidationService {
         };
       }
 
-      const tempBot = new Bot(token);
+      // Run diagnostics for logging
+      const diagData = await this.runDiagnostics();
+      logger.info('Telegram connectivity diagnostics', {
+        diagnostics: diagData
+      });
+
+      const tempBot = this.getBotInstance(token);
 
       // Проверяем основную информацию о боте
       const botInfo = await tempBot.api.getMe();
@@ -82,7 +141,8 @@ export class TelegramBotValidationService {
       // Определяем режим получения обновлений без вызова getUpdates,
       // чтобы не сбивать активный long polling в BotManager
       const hasWebhook = Boolean(webhookInfo?.url);
-      const canReceiveUpdates = hasWebhook || process.env.NODE_ENV !== 'production';
+      const canReceiveUpdates =
+        hasWebhook || process.env.NODE_ENV !== 'production';
       const lastUpdate = null;
 
       logger.info('Bot status checked successfully', {
@@ -144,8 +204,8 @@ export class TelegramBotValidationService {
         };
       }
 
-      // Создаем временный экземпляр бота для проверки
-      const tempBot = new Bot(token);
+      // Создаем временный экземпляр бота для проверки с поддержкой прокси
+      const tempBot = this.getBotInstance(token);
 
       // Получаем информацию о боте
       const botInfo = await tempBot.api.getMe();
@@ -218,7 +278,8 @@ export class TelegramBotValidationService {
 
       // 3. Оцениваем возможность получения обновлений без getUpdates,
       // чтобы не провоцировать конфликт polling/webhook
-      const canReceiveUpdates = webhookStatus !== 'not set' || process.env.NODE_ENV !== 'production';
+      const canReceiveUpdates =
+        webhookStatus !== 'not set' || process.env.NODE_ENV !== 'production';
       const lastUpdateTime = null;
 
       // 4. Если указан тестовый чат, отправляем сообщение
