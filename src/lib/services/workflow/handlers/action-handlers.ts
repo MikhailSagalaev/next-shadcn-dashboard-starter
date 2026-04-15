@@ -1407,7 +1407,9 @@ export class CheckChannelSubscriptionHandler extends BaseNodeHandler {
         isSubscribed = true;
         memberStatus = 'member';
       } else {
-        const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/getChatMember`;
+        const apiRoot =
+          process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org';
+        const telegramApiUrl = `${apiRoot}/bot${context.telegram.botToken}/getChatMember`;
 
         let response: any = null;
         try {

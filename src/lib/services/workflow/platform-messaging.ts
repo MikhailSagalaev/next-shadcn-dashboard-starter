@@ -97,7 +97,8 @@ async function sendTelegramMessage(
     replyMarkup?: any;
   }
 ): Promise<void> {
-  const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/sendMessage`;
+  const apiRoot = process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org';
+  const telegramApiUrl = `${apiRoot}/bot${context.telegram.botToken}/sendMessage`;
 
   const payload: any = {
     chat_id: context.telegram.chatId,
@@ -124,7 +125,8 @@ async function sendTelegramMedia(
       : type === 'video'
         ? 'sendVideo'
         : 'sendDocument';
-  const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/${method}`;
+  const apiRoot = process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org';
+  const telegramApiUrl = `${apiRoot}/bot${context.telegram.botToken}/${method}`;
 
   const payload: any = {
     chat_id: context.telegram.chatId,
@@ -144,7 +146,8 @@ async function sendTelegramAction(
   options: any
 ): Promise<void> {
   const method = action === 'delete' ? 'deleteMessage' : 'editMessageText';
-  const telegramApiUrl = `https://api.telegram.org/bot${context.telegram.botToken}/${method}`;
+  const apiRoot = process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org';
+  const telegramApiUrl = `${apiRoot}/bot${context.telegram.botToken}/${method}`;
 
   const payload: any = {
     chat_id: context.telegram.chatId,

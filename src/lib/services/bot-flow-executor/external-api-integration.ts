@@ -388,7 +388,7 @@ export class ExternalApiIntegration {
     const request: ApiRequest = {
       id: `telegram_send_${Date.now()}`,
       method: 'POST',
-      url: `https://api.telegram.org/bot${botToken}/sendMessage`,
+      url: `${process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org'}/bot${botToken}/sendMessage`,
       body: {
         chat_id: chatId,
         text,
