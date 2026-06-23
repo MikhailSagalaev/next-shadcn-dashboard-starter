@@ -9,7 +9,10 @@
 
 import { Bot, Context } from '@maxhub/max-bot-api';
 import { logger } from '@/lib/logger';
+import { db } from '@/lib/db';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
+import { PartnerCabinetService } from '@/lib/services/partner-cabinet.service';
+import { convertTelegramKeyboardToMax } from '@/lib/services/workflow/platform-messaging';
 
 /**
  * Создание экземпляра MAX бота с поддержкой Workflow
@@ -42,6 +45,20 @@ export function createMaxBot(token: string, projectId: string) {
   // Middleware для обработки через Workflow
   bot.use(async (ctx: Context, next: () => Promise<void>) => {
     try {
+      // Партнёрский кабинет: вывод средств — до workflow (как в Telegram).
+      // Callback'и кабинета не являются workflow-узлами, поэтому обрабатываем
+      // их здесь напрямую, иначе на MAX кнопка вывода была бы мёртвой.
+      if (ctx.updateType === 'message_callback') {
+        const data = (ctx as any).callback?.payload as string | undefined;
+        if (
+          data === 'payout_request' ||
+          (typeof data === 'string' && data.startsWith('payout_cancel:'))
+        ) {
+          const handled = await handleMaxPayoutCallback(projectId, ctx, data);
+          if (handled) return;
+        }
+      }
+
       const hasActiveWorkflow =
         await WorkflowRuntimeService.hasActiveWorkflow(projectId);
 
@@ -124,6 +141,50 @@ export function createMaxBot(token: string, projectId: string) {
   });
 
   return bot;
+}
+
+/**
+ * Обрабатывает callback'и вывода средств (payout_request / payout_cancel) на MAX.
+ * Переиспользует платформо-нейтральный PartnerCabinetService.resolvePayoutAction
+ * и рендерит результат через MAX API (ctx.reply + конвертация клавиатуры).
+ *
+ * @returns true, если callback обработан (workflow дальше не запускаем).
+ */
+async function handleMaxPayoutCallback(
+  projectId: string,
+  ctx: Context,
+  data: string
+): Promise<boolean> {
+  const maxUserId = ctx.user?.user_id;
+  if (!maxUserId) return false;
+
+  const user = await db.user.findFirst({
+    where: { projectId, maxId: BigInt(maxUserId) },
+    select: { id: true }
+  });
+  if (!user) return false;
+
+  const result = await PartnerCabinetService.resolvePayoutAction(
+    projectId,
+    user.id,
+    data,
+    { source: 'max_bot' }
+  );
+  if (!result) return false;
+
+  try {
+    await (ctx as any).answerOnCallback({ notification: result.toast });
+  } catch {
+    /* answer мог устареть — не критично */
+  }
+
+  const extra: Record<string, unknown> = { format: 'html' };
+  if (result.replyMarkup) {
+    const kb = convertTelegramKeyboardToMax(result.replyMarkup);
+    if (kb) extra.attachments = [kb];
+  }
+  await ctx.reply(result.text, extra as any);
+  return true;
 }
 
 /**

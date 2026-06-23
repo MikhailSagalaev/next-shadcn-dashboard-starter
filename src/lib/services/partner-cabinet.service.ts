@@ -127,23 +127,20 @@ export class PartnerCabinetService {
         return true;
       }
 
-      // Вывод средств (план 007): партнёр запрашивает вывод всего доступного
-      // баланса. Сумма-частями — отдельный conversation-флоу (follow-up).
-      if (data === 'payout_request') {
-        await this.handlePayoutRequest(projectId, userId, ctx);
-        return true;
-      }
-
-      if (data.startsWith('payout_cancel:')) {
-        const payoutId = data.split(':')[1];
-        try {
-          await PayoutService.cancelPayout(payoutId, userId);
-          await ctx.answerCallbackQuery({ text: 'Заявка отозвана' });
-          await ctx.reply('↩️ Заявка на вывод отозвана, бонусы возвращены.');
-        } catch (error) {
-          await ctx.answerCallbackQuery({ text: 'Не удалось отозвать' });
+      // Вывод средств (план 007): партнёр запрашивает/отзывает вывод. Логика
+      // платформо-нейтральна (resolvePayoutAction) — рендерим её в grammy здесь
+      // и в MAX-боте отдельно.
+      if (data === 'payout_request' || data.startsWith('payout_cancel:')) {
+        const result = await this.resolvePayoutAction(projectId, userId, data, {
+          requestTelegramId: ctx.from?.id
+        });
+        if (result) {
+          await ctx.answerCallbackQuery({ text: result.toast }).catch(() => {});
           await ctx.reply(
-            `⚠️ ${error instanceof Error ? error.message : 'Не удалось отозвать заявку'}`
+            result.text,
+            result.replyMarkup
+              ? { parse_mode: 'HTML', reply_markup: result.replyMarkup }
+              : { parse_mode: 'HTML' }
           );
         }
         return true;
@@ -286,52 +283,64 @@ export class PartnerCabinetService {
   }
 
   /**
-   * Заявка на вывод всего доступного баланса (план 007). Идемпотентна по
-   * минутному bucket'у externalId — двойной тап не создаёт две заявки.
+   * Платформо-нейтральная логика вывода средств (план 007). Возвращает ЧТО
+   * показать (toast + текст + опц. клавиатуру в Telegram-формате), а рендерит
+   * вызывающий — grammy (Telegram) или MAX-бот. Идемпотентна по минутному
+   * bucket'у externalId — двойной тап не создаёт две заявки.
+   *
+   * @returns null, если data не относится к выводу.
    */
-  static async handlePayoutRequest(
+  static async resolvePayoutAction(
     projectId: string,
     userId: string,
-    ctx: Context
-  ): Promise<void> {
-    const balanceAgg = await db.bonus.aggregate({
-      where: {
-        userId,
-        isUsed: false,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-      },
-      _sum: { amount: true }
-    });
-    const available = Number(balanceAgg._sum.amount ?? 0);
-
-    if (available <= 0) {
-      await ctx.answerCallbackQuery({ text: 'Нечего выводить' });
-      await ctx.reply('💸 Доступных к выводу средств нет.');
-      return;
-    }
-
-    const bucket = new Date().toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
-    const externalId = `payout_req_${userId}_${bucket}`;
-
-    try {
-      const payout = await PayoutService.requestPayout({
-        projectId,
-        userId,
-        amount: available,
-        requestTelegramId: ctx.from?.id,
-        externalId
+    data: string,
+    opts: { requestTelegramId?: number; source?: string } = {}
+  ): Promise<{
+    toast: string;
+    text: string;
+    replyMarkup?: {
+      inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+    };
+  } | null> {
+    if (data === 'payout_request') {
+      const balanceAgg = await db.bonus.aggregate({
+        where: {
+          userId,
+          isUsed: false,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+        },
+        _sum: { amount: true }
       });
-      // Уведомить директора организации (неблокирующе).
-      await PartnerNotificationService.notifyDirectorAboutPayoutRequest(
-        payout.id,
-        projectId
-      );
+      const available = Number(balanceAgg._sum.amount ?? 0);
 
-      await ctx.answerCallbackQuery({ text: 'Заявка создана' });
-      await ctx.reply(
-        `✅ Заявка на вывод ${formatRub(Number(payout.amount))} создана.\n\nОжидайте подтверждения администратора.`,
-        {
-          reply_markup: {
+      if (available <= 0) {
+        return {
+          toast: 'Нечего выводить',
+          text: '💸 Доступных к выводу средств нет.'
+        };
+      }
+
+      const bucket = new Date().toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
+      const externalId = `payout_req_${userId}_${bucket}`;
+
+      try {
+        const payout = await PayoutService.requestPayout({
+          projectId,
+          userId,
+          amount: available,
+          requestTelegramId: opts.requestTelegramId,
+          requestSource: opts.source,
+          externalId
+        });
+        // Уведомить директора организации (неблокирующе, обе платформы).
+        await PartnerNotificationService.notifyDirectorAboutPayoutRequest(
+          payout.id,
+          projectId
+        );
+        return {
+          toast: 'Заявка создана',
+          text: `✅ Заявка на вывод ${formatRub(Number(payout.amount))} создана.\n\nОжидайте подтверждения администратора.`,
+          replyMarkup: {
             inline_keyboard: [
               [
                 {
@@ -341,14 +350,32 @@ export class PartnerCabinetService {
               ]
             ]
           }
-        }
-      );
-    } catch (error) {
-      await ctx.answerCallbackQuery({ text: 'Не удалось создать заявку' });
-      await ctx.reply(
-        `⚠️ ${error instanceof Error ? error.message : 'Не удалось создать заявку на вывод'}`
-      );
+        };
+      } catch (error) {
+        return {
+          toast: 'Не удалось создать заявку',
+          text: `⚠️ ${error instanceof Error ? error.message : 'Не удалось создать заявку на вывод'}`
+        };
+      }
     }
+
+    if (data.startsWith('payout_cancel:')) {
+      const payoutId = data.split(':')[1];
+      try {
+        await PayoutService.cancelPayout(payoutId, userId);
+        return {
+          toast: 'Заявка отозвана',
+          text: '↩️ Заявка на вывод отозвана, бонусы возвращены.'
+        };
+      } catch (error) {
+        return {
+          toast: 'Не удалось отозвать',
+          text: `⚠️ ${error instanceof Error ? error.message : 'Не удалось отозвать заявку'}`
+        };
+      }
+    }
+
+    return null;
   }
 
   static async renderPendingRequests(

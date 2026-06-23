@@ -191,7 +191,7 @@ function telegramParseModeToMaxFormat(
  *   Keyboard.button.requestContact(text)
  *   Keyboard.button.requestGeoLocation(text, extra?)
  */
-function convertTelegramKeyboardToMax(telegramReplyMarkup: any): any {
+export function convertTelegramKeyboardToMax(telegramReplyMarkup: any): any {
   try {
     const Keyboard = require('@maxhub/max-bot-api').Keyboard;
 

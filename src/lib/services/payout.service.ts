@@ -25,6 +25,8 @@ export interface RequestPayoutInput {
   requestTelegramId?: bigint | number;
   payoutMethod?: string;
   payoutDetails?: Record<string, unknown>;
+  /** Канал заявки: 'telegram_bot' (по умолчанию) | 'max_bot'. */
+  requestSource?: string;
   /** Детерминированный ключ для идемпотентности двойного тапа в боте. */
   externalId?: string;
 }
@@ -81,6 +83,7 @@ export class PayoutService {
           userId,
           amount: new Prisma.Decimal(amount),
           status: 'REQUESTED',
+          requestSource: input.requestSource ?? 'telegram_bot',
           requestTelegramId:
             input.requestTelegramId != null
               ? BigInt(input.requestTelegramId)
