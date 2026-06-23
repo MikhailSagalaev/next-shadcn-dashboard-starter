@@ -174,7 +174,9 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
           data.startsWith('partner_team_remove:') ||
           data.startsWith('partner_team_tab:') ||
           data.startsWith('partner_team_page:') ||
-          data === 'partner_requests';
+          data === 'partner_requests' ||
+          data === 'payout_request' ||
+          data.startsWith('payout_cancel:');
 
         if (isPartnerCabinet) {
           const handled = await PartnerCabinetService.tryHandleTelegramCallback(

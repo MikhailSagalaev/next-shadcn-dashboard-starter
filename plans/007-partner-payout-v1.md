@@ -97,8 +97,26 @@ runtime-verified end-to-end (dev DB was down):
   Both fire-and-forget (swallow errors), wired at call sites (admin action route
   + bot handler) to keep `PayoutService` pure. Both build clean.
 
+### Platform note: Telegram vs MAX
+
+- **Telegram**: fully wired. `payout_request` / `payout_cancel:` are routed to
+  `PartnerCabinetService.tryHandleTelegramCallback` via the `isPartnerCabinet`
+  gate in `telegram/bot.ts` (this gate was initially missing these two callbacks
+  — they were dead until added; fixed).
+- **MAX**: the bot (`src/lib/max-bot/bot.ts`) routes everything through
+  `WorkflowRuntimeService.executeWorkflow` and never calls
+  `tryHandleTelegramCallback`, which is grammy-Context-specific. So the payout
+  **buttons** (request/cancel) do NOT work on MAX — same as the existing
+  partner-cabinet callbacks (approve/reject), which are Telegram-only by design.
+  Payout **notifications** DO reach MAX users (`dispatchPartnerNotification`
+  sends to Telegram + MAX). The user docs describe the cabinet as a Telegram
+  feature. Full MAX support requires a platform-agnostic cabinet callback path
+  (separate effort).
+
 ### Still TODO
 
+- **MAX interactive payout** (request/cancel buttons) — needs a MAX-compatible
+  cabinet callback bridge.
 - **Settings UI** for `payoutMinAmount` / `payoutHoldDays` (currently editable
   only via Prisma/DB).
 - **Partial-amount** bot conversation (currently full-balance only).
