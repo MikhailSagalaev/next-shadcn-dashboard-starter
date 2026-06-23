@@ -63,6 +63,7 @@ model Project {
   inSalesIntegration   InSalesIntegration?
   ChatChannel          ChatChannel[]
   Chat                 Chat[]
+  payouts              Payout[]
 
   /// Персональные планы % по уровням (блогеры / инфлюенсеры)
   referralPlansEnabled            Boolean                  @default(false) @map("referral_plans_enabled")
@@ -238,12 +239,79 @@ model ReferralProgram {
   welcomeRewardType          WelcomeRewardType @default(BONUS) @map("welcome_reward_type")
   firstPurchaseDiscountPercent Int             @default(0) @map("first_purchase_discount_percent")
   description                String?
+
+  // Настройки вывода b2b-комиссии (план 007). 0 = без порога / без выдержки.
+  payoutMinAmount            Decimal           @default(0) @map("payout_min_amount") @db.Decimal(10, 2)
+  payoutHoldDays             Int               @default(0) @map("payout_hold_days")
+
   createdAt                  DateTime          @default(now()) @map("created_at")
   updatedAt                  DateTime          @updatedAt @map("updated_at")
   project                    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   levels                     ReferralLevel[]
 
   @@map("referral_programs")
+}
+
+/// Заявка партнёра на вывод заработанной комиссии в деньги (план 007).
+/// Надстройка-реестр над бонусным ledger'ом: комиссия остаётся бонусами,
+/// конвертация 1:1 в деньги фиксируется в момент PAID. Бонусы резервируются
+/// (debit) уже на REQUESTED — см. docs/partner-payout-flow-design.md.
+model Payout {
+  id                String       @id @default(cuid())
+  projectId         String       @map("project_id")
+  userId            String       @map("user_id") // партнёр-получатель
+
+  amount            Decimal      @db.Decimal(10, 2) // сумма вывода (бонусы → деньги 1:1)
+  currency          String       @default("RUB")
+
+  status            PayoutStatus @default(REQUESTED)
+
+  // Канал и идентичность заявителя (решение: только бот).
+  requestSource     String       @default("telegram_bot") @map("request_source")
+  requestTelegramId BigInt?      @map("request_telegram_id")
+
+  // Реквизиты выплаты, как их указал партнёр (свободная форма в v1).
+  payoutMethod      String?      @map("payout_method")
+  payoutDetails     Json?        @map("payout_details") // маскировать в логах
+
+  // Аудит переходов состояния.
+  requestedAt       DateTime     @default(now()) @map("requested_at")
+  reviewedBy        String?      @map("reviewed_by")
+  reviewedAt        DateTime?    @map("reviewed_at")
+  rejectReason      String?      @map("reject_reason")
+  paidAt            DateTime?    @map("paid_at")
+  paidBy            String?      @map("paid_by")
+  failReason        String?      @map("fail_reason")
+  cancelledAt       DateTime?    @map("cancelled_at")
+
+  // Учёт/бухгалтерия: № платёжки / строки выгрузки.
+  externalRef       String?      @map("external_ref")
+
+  // Идемпотентность заявки (дисциплина externalId плана 001).
+  externalId        String?      @unique @map("external_id")
+
+  // Связь с ledger: spendBatchId резерва (для возврата при reject/cancel/fail).
+  ledgerBatchId     String?      @map("ledger_batch_id")
+
+  metadata          Json?        @default("{}")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  project           Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([projectId, userId, status])
+  @@map("payouts")
+}
+
+enum PayoutStatus {
+  REQUESTED @map("requested") // подана из бота, бонусы зарезервированы (hold)
+  APPROVED  @map("approved") // админ одобрил, ждёт ручной выплаты
+  PAID      @map("paid") // деньги выплачены, бонусы списаны окончательно
+  REJECTED  @map("rejected") // админ отклонил, резерв возвращён
+  CANCELLED @map("cancelled") // партнёр отозвал до одобрения, резерв возвращён
+  FAILED    @map("failed") // выплата сорвалась после APPROVED, резерв возвращён
 }
 
 model ReferralLevel {
@@ -425,6 +493,8 @@ model User {
   partnerParentId        String?                 @map("partner_parent_id")
   partnerParent          User?                   @relation("PartnerParent", fields: [partnerParentId], references: [id], onDelete: SetNull)
   partnerChildren        User[]                  @relation("PartnerParent")
+
+  payouts                Payout[]
 
   @@unique([projectId, email])
   @@unique([projectId, phone])
