@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { TildaParserService } from '@/lib/services/integration/tilda-parser.service';
 import { OrderProcessingService } from '@/lib/services/orders/order-processing.service';
+import { AdminNotificationService } from '@/lib/services/admin-notification.service';
 
 export async function POST(
   req: NextRequest,
@@ -150,6 +151,26 @@ export async function POST(
             success: false
           }
         });
+
+        // In-app уведомление владельцу проекта (колокольчик). Fire-and-forget:
+        // не меняем ответ/статус вебхука; dedupeKey глушит шторм ошибок (60 мин).
+        void AdminNotificationService.notifyProjectOwner(project.id, {
+          type: 'integration_error',
+          severity: 'error',
+          title: 'Ошибка обработки вебхука',
+          message:
+            'Входящий вебхук завершился ошибкой — заказ мог не обработаться.',
+          link: `/dashboard/projects/${project.id}/integrations`,
+          dedupeKey: `integration_error:webhook:${project.id}`
+        }).catch((notifyError) =>
+          logger.error('Failed to create admin notification (integration_error)', {
+            projectId: project.id,
+            error:
+              notifyError instanceof Error
+                ? notifyError.message
+                : String(notifyError)
+          })
+        );
       }
     } catch (logError) {
       logger.error('Failed to log webhook error', logError);

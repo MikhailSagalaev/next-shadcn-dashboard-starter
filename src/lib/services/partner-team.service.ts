@@ -11,6 +11,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { PartnerOrganizationService } from './partner-organization.service';
 import { PartnerNotificationService } from './partner-notification.service';
+import { AdminNotificationService } from './admin-notification.service';
 import { ReferralCommissionService } from './referral-commission.service';
 
 export type TeamListFilter = 'direct' | 'clients' | 'partners' | 'all';
@@ -417,6 +418,27 @@ export class PartnerTeamService {
     void PartnerNotificationService.notifyJoinRequestPending(
       request.id,
       params.projectId
+    );
+
+    // In-app уведомление владельцу проекта (колокольчик). Fire-and-forget:
+    // сбой уведомления не должен ломать создание заявки на вступление.
+    void AdminNotificationService.notifyProjectOwner(params.projectId, {
+      type: 'referral_join_request',
+      severity: 'warning',
+      title: 'Заявка на вступление в команду',
+      message: 'Пользователь хочет присоединиться к команде.',
+      link: `/dashboard/projects/${params.projectId}/referral/hierarchy`,
+      metadata: {
+        requestId: request.id,
+        userId: params.userId,
+        referrerId: params.referrerId
+      }
+    }).catch((err) =>
+      logger.error('Failed to create admin notification (referral_join_request)', {
+        projectId: params.projectId,
+        requestId: request.id,
+        error: err instanceof Error ? err.message : String(err)
+      })
     );
 
     return request;

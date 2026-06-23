@@ -15,6 +15,7 @@ import {
 } from './partner-team.service';
 import { PayoutService } from './payout.service';
 import { PartnerNotificationService } from './partner-notification.service';
+import { AdminNotificationService } from './admin-notification.service';
 
 function formatRub(amount: number): string {
   return new Intl.NumberFormat('ru-RU', {
@@ -337,6 +338,22 @@ export class PartnerCabinetService {
           payout.id,
           projectId
         );
+        // In-app уведомление владельцу проекта (колокольчик). Fire-and-forget:
+        // сбой уведомления не должен ломать создание заявки на вывод.
+        void AdminNotificationService.notifyProjectOwner(projectId, {
+          type: 'payout_requested',
+          severity: 'warning',
+          title: 'Новая заявка на вывод',
+          message: `Партнёр запросил вывод ${formatRub(Number(payout.amount))}`,
+          link: `/dashboard/projects/${projectId}/referral?tab=payouts`,
+          metadata: { payoutId: payout.id, userId }
+        }).catch((err) =>
+          logger.error('Failed to create admin notification (payout_requested)', {
+            projectId,
+            payoutId: payout.id,
+            error: err instanceof Error ? err.message : String(err)
+          })
+        );
         return {
           toast: 'Заявка создана',
           text: `✅ Заявка на вывод ${formatRub(Number(payout.amount))} создана.\n\nОжидайте подтверждения администратора.`,
@@ -363,6 +380,21 @@ export class PartnerCabinetService {
       const payoutId = data.split(':')[1];
       try {
         await PayoutService.cancelPayout(payoutId, userId);
+        // In-app уведомление владельцу проекта (колокольчик). Fire-and-forget.
+        void AdminNotificationService.notifyProjectOwner(projectId, {
+          type: 'payout_cancelled',
+          severity: 'info',
+          title: 'Заявка на вывод отозвана',
+          message: 'Партнёр отозвал заявку на вывод средств.',
+          link: `/dashboard/projects/${projectId}/referral?tab=payouts`,
+          metadata: { payoutId, userId }
+        }).catch((err) =>
+          logger.error('Failed to create admin notification (payout_cancelled)', {
+            projectId,
+            payoutId,
+            error: err instanceof Error ? err.message : String(err)
+          })
+        );
         return {
           toast: 'Заявка отозвана',
           text: '↩️ Заявка на вывод отозвана, бонусы возвращены.'

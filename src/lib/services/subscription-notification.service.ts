@@ -10,6 +10,7 @@
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { Resend } from 'resend';
+import { AdminNotificationService } from '@/lib/services/admin-notification.service';
 
 interface SubscriptionExpirationResult {
   processed: number;
@@ -101,6 +102,27 @@ export class SubscriptionNotificationService {
           try {
             await this.sendExpirationWarning(subscription, days);
             result.notificationsSent++;
+
+            // In-app уведомление админу-владельцу подписки (колокольчик).
+            // Fire-and-forget: сбой не должен ломать обработку рассылки.
+            // dedupeKey глушит повторы при ежедневном прогоне.
+            void AdminNotificationService.create({
+              adminAccountId: subscription.adminAccountId,
+              type: 'subscription',
+              severity: 'warning',
+              title: 'Подписка скоро истекает',
+              message: `Ваша подписка истекает через ${days} ${this.getDaysWord(days)}`,
+              link: '/dashboard/billing',
+              dedupeKey: `subscription_expiring:${subscription.id}`
+            }).catch((notifyError) =>
+              logger.error('Failed to create admin notification (subscription)', {
+                subscriptionId: subscription.id,
+                error:
+                  notifyError instanceof Error
+                    ? notifyError.message
+                    : String(notifyError)
+              })
+            );
           } catch (error) {
             const errorMsg =
               error instanceof Error ? error.message : 'Unknown error';
