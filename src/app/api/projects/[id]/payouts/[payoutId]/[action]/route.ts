@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { ProjectService } from '@/lib/services/project.service';
 import { PayoutService } from '@/lib/services/payout.service';
+import { PartnerNotificationService } from '@/lib/services/partner-notification.service';
 
 const ACTIONS = ['approve', 'reject', 'paid', 'fail'] as const;
 type Action = (typeof ACTIONS)[number];
@@ -74,6 +75,13 @@ export async function POST(
         result = await PayoutService.failPayout(payoutId, admin.sub, reason);
         break;
     }
+
+    // Уведомить партнёра о смене статуса (неблокирующе — метод глотает ошибки).
+    await PartnerNotificationService.notifyPartnerPayoutStatus(
+      payoutId,
+      projectId
+    );
+
     return NextResponse.json({ ok: true, payout: result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

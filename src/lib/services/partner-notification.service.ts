@@ -305,6 +305,121 @@ export class PartnerNotificationService {
       });
     }
   }
+
+  /**
+   * Уведомить партнёра о смене статуса его заявки на вывод (план 007):
+   * одобрена / выплачена / отклонена / сбой. Неблокирующе.
+   */
+  static async notifyPartnerPayoutStatus(
+    payoutId: string,
+    projectId: string
+  ): Promise<void> {
+    try {
+      const payout = await db.payout.findFirst({
+        where: { id: payoutId, projectId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              telegramId: true,
+              maxId: true,
+              partnerRole: true,
+              metadata: true
+            }
+          }
+        }
+      });
+      if (!payout) return;
+      if (isOptedOut(payout.user.metadata)) return;
+      if (!payout.user.telegramId && !payout.user.maxId) return;
+
+      const amount = formatAmount(Number(payout.amount));
+      let message: string | null = null;
+      switch (payout.status) {
+        case 'APPROVED':
+          message = `✅ Заявка на вывод ${amount} одобрена. Ожидайте выплату.`;
+          break;
+        case 'PAID':
+          message = `💰 Выплата ${amount} произведена.${payout.externalRef ? ` Реф.: ${payout.externalRef}` : ''}`;
+          break;
+        case 'REJECTED':
+          message = `❌ Заявка на вывод ${amount} отклонена.${payout.rejectReason ? ` Причина: ${payout.rejectReason}.` : ''} Бонусы возвращены.`;
+          break;
+        case 'FAILED':
+          message = `⚠️ Выплата ${amount} не прошла.${payout.failReason ? ` ${payout.failReason}.` : ''} Бонусы возвращены.`;
+          break;
+        default:
+          return; // REQUESTED/CANCELLED — партнёр и так инициатор
+      }
+
+      await this.dispatchPartnerNotification(projectId, payout.user, message);
+    } catch (error) {
+      logger.error('notifyPartnerPayoutStatus failed', {
+        payoutId,
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+        component: COMPONENT
+      });
+    }
+  }
+
+  /**
+   * Уведомить директора организации о новой заявке на вывод от партнёра
+   * (план 007). Если директора нет или он сам заявитель — тихо пропускаем.
+   */
+  static async notifyDirectorAboutPayoutRequest(
+    payoutId: string,
+    projectId: string
+  ): Promise<void> {
+    try {
+      const payout = await db.payout.findFirst({
+        where: { id: payoutId, projectId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+              organizationId: true
+            }
+          }
+        }
+      });
+      if (!payout?.user.organizationId) return;
+
+      const org = await db.partnerOrganization.findFirst({
+        where: { id: payout.user.organizationId, projectId },
+        select: { directorUserId: true }
+      });
+      if (!org?.directorUserId || org.directorUserId === payout.userId) return;
+
+      const director = await db.user.findFirst({
+        where: { id: org.directorUserId, projectId },
+        select: {
+          id: true,
+          telegramId: true,
+          maxId: true,
+          partnerRole: true,
+          metadata: true
+        }
+      });
+      if (!director || isOptedOut(director.metadata)) return;
+      if (!director.telegramId && !director.maxId) return;
+
+      const amount = formatAmount(Number(payout.amount));
+      const message = `📤 <b>Запрос на вывод</b>\n${formatName(payout.user)} запросил вывод ${amount}.`;
+
+      await this.dispatchPartnerNotification(projectId, director, message);
+    } catch (error) {
+      logger.error('notifyDirectorAboutPayoutRequest failed', {
+        payoutId,
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+        component: COMPONENT
+      });
+    }
+  }
 }
 
 /**
@@ -338,6 +453,15 @@ function formatName(u: {
   if (full) return full;
   if (u.phone) return u.phone;
   return 'новый партнёр';
+}
+
+/** Сумма в рублях для текста уведомления о выплате. */
+function formatAmount(amount: number): string {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0
+  }).format(amount);
 }
 
 /**

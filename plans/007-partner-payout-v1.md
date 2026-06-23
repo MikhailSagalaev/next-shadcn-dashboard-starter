@@ -86,12 +86,22 @@ runtime-verified end-to-end (dev DB was down):
   `enablePartnerRoles` — table with Approve/Reject (REQUESTED) and
   Выплачено/Сбой (APPROVED) actions + status filter.
 
+### Also DONE (2026-06-23, branch `advisor/007-payout-csv-notify`)
+
+- **CSV accounting export**: `GET /api/projects/[id]/payouts/export?status=&from=&to=`
+  → `text/csv` (UTF-8 BOM for Excel; `payoutDetails` NOT exported). "CSV" button
+  in the admin panel respects the active status filter.
+- **Notifications**: partner notified on every status change (approve/reject/
+  paid/fail) via `PartnerNotificationService.notifyPartnerPayoutStatus`; org
+  director notified on a new request via `notifyDirectorAboutPayoutRequest`.
+  Both fire-and-forget (swallow errors), wired at call sites (admin action route
+  + bot handler) to keep `PayoutService` pure. Both build clean.
+
 ### Still TODO
 
-- **CSV accounting export** (`GET /api/projects/[id]/payouts/export`).
-- **Settings UI** for `payoutMinAmount` / `payoutHoldDays`.
+- **Settings UI** for `payoutMinAmount` / `payoutHoldDays` (currently editable
+  only via Prisma/DB).
 - **Partial-amount** bot conversation (currently full-balance only).
-- **Notifications** to admin on new request / to partner on status change.
 - **E2E verification** against a live DB once migrations are applied.
 
 ## Original integration notes (reference)

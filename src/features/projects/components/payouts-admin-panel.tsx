@@ -9,7 +9,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Wallet, RefreshCw } from 'lucide-react';
+import { Wallet, RefreshCw, Download } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -185,6 +185,22 @@ export function PayoutsAdminPanel({ projectId }: PayoutsAdminPanelProps) {
             </Select>
             <Button variant='outline' size='icon' onClick={load}>
               <RefreshCw className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='outline'
+              onClick={() => {
+                const qs =
+                  statusFilter && statusFilter !== 'ALL'
+                    ? `?status=${statusFilter}`
+                    : '';
+                window.open(
+                  `/api/projects/${projectId}/payouts/export${qs}`,
+                  '_blank'
+                );
+              }}
+            >
+              <Download className='mr-2 h-4 w-4' />
+              CSV
             </Button>
           </div>
         </div>

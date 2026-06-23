@@ -14,6 +14,7 @@ import {
   type TeamListFilter
 } from './partner-team.service';
 import { PayoutService } from './payout.service';
+import { PartnerNotificationService } from './partner-notification.service';
 
 function formatRub(amount: number): string {
   return new Intl.NumberFormat('ru-RU', {
@@ -320,6 +321,12 @@ export class PartnerCabinetService {
         requestTelegramId: ctx.from?.id,
         externalId
       });
+      // Уведомить директора организации (неблокирующе).
+      await PartnerNotificationService.notifyDirectorAboutPayoutRequest(
+        payout.id,
+        projectId
+      );
+
       await ctx.answerCallbackQuery({ text: 'Заявка создана' });
       await ctx.reply(
         `✅ Заявка на вывод ${formatRub(Number(payout.amount))} создана.\n\nОжидайте подтверждения администратора.`,
