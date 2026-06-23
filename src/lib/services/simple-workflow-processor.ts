@@ -684,8 +684,68 @@ export class SimpleWorkflowProcessor {
       });
     }
 
+    // Для switch-нод выбираем connection по sourceHandle case_<index> / default
+    if (currentNode?.type === 'flow.switch') {
+      const matchedCaseIndex = await this.getSwitchResultFromContext();
+
+      // Кандидаты sourceHandle в порядке приоритета:
+      // 1) точный case_<index> (если индекс >= 0)
+      // 2) default
+      const candidateHandles: string[] = [];
+      if (matchedCaseIndex >= 0) {
+        candidateHandles.push(`case_${matchedCaseIndex}`);
+      }
+      candidateHandles.push('default');
+
+      for (const expectedHandle of candidateHandles) {
+        const matchingConnection = relevantConnections.find(
+          (conn) => (conn as any).sourceHandle === expectedHandle
+        );
+        if (matchingConnection) {
+          logger.debug('Switch matched connection', {
+            nodeId: currentNodeId,
+            matchedCaseIndex,
+            expectedHandle,
+            target: matchingConnection.target
+          });
+          return matchingConnection.target;
+        }
+      }
+
+      logger.warn('No matching connection found for switch', {
+        nodeId: currentNodeId,
+        matchedCaseIndex
+      });
+      return null;
+    }
+
     // Для остальных случаев возвращаем первый target (для обратной совместимости)
     return relevantConnections[0].target;
+  }
+
+  /**
+   * Получает индекс выбранного case из текущего контекста выполнения
+   * (устанавливается в SwitchFlowHandler через переменную switch_result).
+   * Возвращает -1, если совпадений нет или контекст недоступен.
+   */
+  private async getSwitchResultFromContext(): Promise<number> {
+    if (!this.currentContext) {
+      return -1;
+    }
+
+    try {
+      const result = await this.currentContext.variables.get(
+        'switch_result',
+        'session'
+      );
+      const index = Number(result);
+      return Number.isFinite(index) ? index : -1;
+    } catch (error) {
+      logger.debug('getSwitchResultFromContext: error getting switch_result', {
+        error: String(error)
+      });
+      return -1;
+    }
   }
 
   /**

@@ -389,6 +389,7 @@ export interface ApiRequestActionConfig {
   headers?: Record<string, string>;
   body?: any;
   responseMapping?: Record<string, string>; // Маппинг ответа в переменные
+  assignTo?: string; // Сохранить весь ответ в указанную переменную
   timeout?: number;
 }
 

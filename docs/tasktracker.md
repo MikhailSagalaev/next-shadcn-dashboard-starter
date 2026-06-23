@@ -4,6 +4,22 @@
 
 ---
 
+## 📋 Задача: Workflow — фикс flow.switch и UI-редакторы нод
+- **Статус**: ✅ Завершена
+- **Приоритет**: 🔴 Высокий
+- **Описание**: Исправлена сломанная маршрутизация ноды `flow.switch` (уходила в первую связь, игнорируя кейсы) и добавлены отсутствующие панели свойств для ряда нод конструктора.
+- **Техническая сложность**: 3
+- **Шаги выполнения**:
+  - [x] Ветка маршрутизации `flow.switch` в `getNextNodeId` (чтение `switch_result`, выбор по `case_<index>`/`default`)
+  - [x] 6 unit-тестов маршрутизации switch
+  - [x] UI-редакторы: flow.switch, flow.jump, action.get_variable, action.api_request, media-ноды
+  - [x] Поле `assignTo` в `ApiRequestActionConfig`
+  - [x] Changelog
+- **Тестирование**: `yarn jest __tests__/services/workflow-switch-routing.test.ts` — 6/6 зелёные; диагностика изменённых файлов чистая.
+- **Осталось (следующие шаги)**: реальная реализация `flow.loop` (сейчас заглушка), retry для api_request, единый async-резолвер переменных, энфорс `workflowTimeoutMs`, UI для keyboard/partner/integration нод.
+
+---
+
 ## 📋 Задача: Уборка репозитория, UX/UI фиксы и актуализация документации
 - **Статус**: ✅ Завершена
 - **Приоритет**: 🟡 Средний

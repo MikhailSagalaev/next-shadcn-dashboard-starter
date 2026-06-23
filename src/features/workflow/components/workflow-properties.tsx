@@ -367,6 +367,251 @@ export function WorkflowProperties({
             Для настройки sub-workflow необходим ID проекта.
           </p>
         );
+      case 'flow.switch': {
+        const sw = (nodeConfig['flow.switch'] as any) || {
+          variable: '',
+          cases: [],
+          hasDefault: false
+        };
+        const cases: Array<{ value: any; label?: string }> = sw.cases || [];
+        const updateCase = (i: number, value: string) =>
+          handleConfigChange(
+            'cases',
+            cases.map((c, idx) => (idx === i ? { ...c, value } : c))
+          );
+        const addCase = () =>
+          handleConfigChange('cases', [...cases, { value: '' }]);
+        const removeCase = (i: number) =>
+          handleConfigChange(
+            'cases',
+            cases.filter((_, idx) => idx !== i)
+          );
+        return (
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='switchVariable'>Переменная</Label>
+              <Input
+                id='switchVariable'
+                value={sw.variable || ''}
+                onChange={(e) => handleConfigChange('variable', e.target.value)}
+                placeholder='choice'
+              />
+              <p className='text-muted-foreground text-xs'>
+                Значение этой переменной сравнивается с кейсами по очереди.
+              </p>
+            </div>
+
+            <div className='space-y-2'>
+              <Label>Кейсы (ветки case_0, case_1, …)</Label>
+              {cases.length === 0 && (
+                <p className='text-muted-foreground text-xs'>
+                  Пока нет кейсов. Добавьте хотя бы один.
+                </p>
+              )}
+              {cases.map((c, i) => (
+                <div key={i} className='flex items-center gap-2'>
+                  <span className='text-muted-foreground w-16 text-xs'>
+                    case_{i}
+                  </span>
+                  <Input
+                    value={c.value ?? ''}
+                    onChange={(e) => updateCase(i, e.target.value)}
+                    placeholder={`Значение для case_${i}`}
+                  />
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    aria-label={`Удалить case_${i}`}
+                    onClick={() => removeCase(i)}
+                  >
+                    <X className='h-4 w-4' />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={addCase}
+              >
+                + Добавить кейс
+              </Button>
+            </div>
+
+            <label className='flex items-center gap-2 text-sm'>
+              <input
+                type='checkbox'
+                checked={!!sw.hasDefault}
+                onChange={(e) =>
+                  handleConfigChange('hasDefault', e.target.checked)
+                }
+              />
+              Ветка по умолчанию (default), если ни один кейс не совпал
+            </label>
+            <p className='text-muted-foreground text-xs'>
+              На холсте соедините выходы ноды: case_0, case_1, … и default.
+            </p>
+          </div>
+        );
+      }
+      case 'flow.jump': {
+        const jump = (nodeConfig['flow.jump'] as any) || {};
+        const targets = allNodes.filter((n) => n.id !== node.id);
+        return (
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='jumpTarget'>Целевая нода</Label>
+              <select
+                id='jumpTarget'
+                value={jump.targetNodeId || ''}
+                onChange={(e) =>
+                  handleConfigChange('targetNodeId', e.target.value)
+                }
+                className='border-input bg-background w-full rounded-md border px-3 py-2 text-sm'
+              >
+                <option value=''>Выберите ноду</option>
+                {targets.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.data?.label || n.id} ({n.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='jumpCondition'>
+                Условие перехода (опционально)
+              </Label>
+              <Input
+                id='jumpCondition'
+                value={jump.condition || ''}
+                onChange={(e) =>
+                  handleConfigChange('condition', e.target.value)
+                }
+                placeholder='get("balance") > 0'
+              />
+            </div>
+          </div>
+        );
+      }
+      case 'action.get_variable':
+        return (
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='getVarName'>Имя переменной</Label>
+              <Input
+                id='getVarName'
+                value={nodeConfig['action.get_variable']?.variableName || ''}
+                onChange={(e) =>
+                  handleConfigChange('variableName', e.target.value)
+                }
+                placeholder='myVar'
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='getVarDefault'>Значение по умолчанию</Label>
+              <Input
+                id='getVarDefault'
+                value={nodeConfig['action.get_variable']?.defaultValue ?? ''}
+                onChange={(e) =>
+                  handleConfigChange('defaultValue', e.target.value)
+                }
+                placeholder='—'
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='getVarAssign'>Сохранить в переменную</Label>
+              <Input
+                id='getVarAssign'
+                value={nodeConfig['action.get_variable']?.assignTo || ''}
+                onChange={(e) => handleConfigChange('assignTo', e.target.value)}
+                placeholder='result'
+              />
+            </div>
+          </div>
+        );
+      case 'action.api_request':
+        return (
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='apiUrl'>URL</Label>
+              <Input
+                id='apiUrl'
+                value={nodeConfig['action.api_request']?.url || ''}
+                onChange={(e) => handleConfigChange('url', e.target.value)}
+                placeholder='https://api.example.com/endpoint'
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='apiMethod'>Метод</Label>
+              <select
+                id='apiMethod'
+                value={nodeConfig['action.api_request']?.method || 'GET'}
+                onChange={(e) => handleConfigChange('method', e.target.value)}
+                className='border-input bg-background w-full rounded-md border px-3 py-2 text-sm'
+              >
+                {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='apiTimeout'>Таймаут (мс)</Label>
+              <Input
+                id='apiTimeout'
+                type='number'
+                value={nodeConfig['action.api_request']?.timeout ?? 10000}
+                onChange={(e) =>
+                  handleConfigChange('timeout', parseInt(e.target.value) || 0)
+                }
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='apiAssign'>Сохранить ответ в переменную</Label>
+              <Input
+                id='apiAssign'
+                value={nodeConfig['action.api_request']?.assignTo || ''}
+                onChange={(e) => handleConfigChange('assignTo', e.target.value)}
+                placeholder='apiResponse'
+              />
+            </div>
+          </div>
+        );
+      case 'message.photo':
+      case 'message.video':
+      case 'message.document': {
+        const mediaKind =
+          node.type === 'message.photo'
+            ? 'photo'
+            : node.type === 'message.video'
+              ? 'video'
+              : 'document';
+        const mediaCfg = (nodeConfig[node.type] as any) || {};
+        return (
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label htmlFor='mediaUrl'>URL или file_id ({mediaKind})</Label>
+              <Input
+                id='mediaUrl'
+                value={mediaCfg[mediaKind] || ''}
+                onChange={(e) => handleConfigChange(mediaKind, e.target.value)}
+                placeholder='https://… или file_id'
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='mediaCaption'>Подпись (caption)</Label>
+              <Textarea
+                id='mediaCaption'
+                value={mediaCfg.caption || ''}
+                onChange={(e) => handleConfigChange('caption', e.target.value)}
+                placeholder='Текст под медиа (опционально)'
+              />
+            </div>
+          </div>
+        );
+      }
       case 'flow.end':
         return (
           <p className='text-muted-foreground text-sm'>
@@ -380,7 +625,15 @@ export function WorkflowProperties({
           </p>
         );
     }
-  }, [node.type, nodeConfig, handleConfigChange, projectId, workflowId]);
+  }, [
+    node.type,
+    node.id,
+    nodeConfig,
+    handleConfigChange,
+    projectId,
+    workflowId,
+    allNodes
+  ]);
 
   return (
     <div className='absolute top-4 right-4 z-20'>

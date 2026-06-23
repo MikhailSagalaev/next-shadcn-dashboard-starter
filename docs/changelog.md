@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-06-14] - Workflow: фикс маршрутизации flow.switch + UI-редакторы нод
+
+### 🐛 Исправлено
+- **`flow.switch` маршрутизация** — критический баг: `getNextNodeId` в `simple-workflow-processor.ts` обрабатывал ветвление только для `condition`, а `switch_result` нигде не читался, из-за чего switch всегда уходил в первую связь. Добавлена ветка чтения `switch_result` и выбор connection по `sourceHandle` `case_<index>`/`default`. 6 unit-тестов.
+
+### 🎯 Добавлено
+- UI-редакторы свойств для ранее ненастраиваемых нод в `workflow-properties.tsx`: `flow.switch` (переменная + кейсы + default), `flow.jump` (выбор целевой ноды + условие), `action.get_variable`, `action.api_request` (URL/метод/таймаут/assignTo), медиа-ноды `message.photo/video/document` (URL/file_id + caption).
+- Поле `assignTo` добавлено в тип `ApiRequestActionConfig` (хендлер уже его читал).
+- Тест `__tests__/services/workflow-switch-routing.test.ts`.
+
+---
+
 ## [2026-06-14] - UX/UI фиксы и уборка репозитория
 
 ### 🎯 Добавлено
