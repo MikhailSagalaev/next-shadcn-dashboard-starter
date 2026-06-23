@@ -18,6 +18,15 @@ import { PartnerTeamService } from './partner-team.service';
 const MAX_TREE_DEPTH = 10;
 const DEFAULT_TREE_DEPTH = 3;
 
+/**
+ * Максимум комиссионных уровней, которые план может определить и выплатить
+ * (тренер → менеджер → директор). Единый источник правды: держать в синхроне
+ * клампы plan-level, maxPayoutDepth и слайдер в админке. Глубже 3 — зона
+ * MLM-регулирования (см. docs/b2b-referral-hierarchy-guide.md). НЕ путать с
+ * MAX_TREE_DEPTH, который governs обход для access-control, а не выплаты.
+ */
+const MAX_COMMISSION_LEVELS = 3;
+
 function clampDepth(depth: number): number {
   if (!Number.isFinite(depth)) return DEFAULT_TREE_DEPTH;
   return Math.min(Math.max(Math.trunc(depth), 1), MAX_TREE_DEPTH);
@@ -150,10 +159,10 @@ export class ReferralCommissionService {
     projectId: string,
     name: string,
     levels: PlanLevelInput[],
-    maxPayoutDepth = 3
+    maxPayoutDepth = MAX_COMMISSION_LEVELS
   ) {
     const prepared = this.normalizeLevels(levels);
-    const depth = Math.min(Math.max(1, maxPayoutDepth), 10);
+    const depth = Math.min(Math.max(1, maxPayoutDepth), MAX_COMMISSION_LEVELS);
 
     return db.$transaction(async (tx) => {
       const plan = await tx.referralCommissionPlan.create({
@@ -206,7 +215,10 @@ export class ReferralCommissionService {
         data: {
           ...(data.name !== undefined && { name: data.name.trim() }),
           ...(data.maxPayoutDepth !== undefined && {
-            maxPayoutDepth: Math.min(Math.max(1, data.maxPayoutDepth), 10)
+            maxPayoutDepth: Math.min(
+              Math.max(1, data.maxPayoutDepth),
+              MAX_COMMISSION_LEVELS
+            )
           })
         }
       });
@@ -706,7 +718,10 @@ export class ReferralCommissionService {
   private static normalizeLevels(levels: PlanLevelInput[]): PlanLevelInput[] {
     const by = new Map<number, PlanLevelInput>();
     for (const l of levels) {
-      const level = Math.min(Math.max(Math.trunc(l.level), 1), 3);
+      const level = Math.min(
+        Math.max(Math.trunc(l.level), 1),
+        MAX_COMMISSION_LEVELS
+      );
       by.set(level, {
         level,
         percent: Math.max(0, Math.min(100, Number(l.percent))),
