@@ -117,8 +117,12 @@ Note: the broader cabinet callbacks (approve/reject team) are still Telegram-onl
 
 ### Still TODO
 
-- **Settings UI** for `payoutMinAmount` / `payoutHoldDays` (currently editable
-  only via Prisma/DB).
+- ~~**Settings UI** for `payoutMinAmount` / `payoutHoldDays`~~ ✅ DONE
+  (2026-06-23, branch `advisor/008-payout-settings-ui`): two fields added to the
+  referral settings form (`referral-settings-form.tsx`), persisted via the
+  `referral-program` PUT → `createOrUpdateReferralProgram` (`buildProgramData` +
+  `mapReferralProgram`), Zod-validated (amount ≥ 0; hold days int 0..365). 3 unit
+  tests; zero new tsc errors; zero test regressions.
 - **Partial-amount** bot conversation (currently full-balance only).
 - **E2E verification** against a live DB once migrations are applied.
 
