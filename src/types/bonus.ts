@@ -76,6 +76,8 @@ export interface ReferralProgram {
   welcomeBonus: number; // фиксированный бонус при регистрации
   welcomeRewardType: WelcomeRewardType; // тип приветственного вознаграждения
   firstPurchaseDiscountPercent: number; // % скидки на первую покупку (если тип DISCOUNT)
+  payoutMinAmount: number; // минимальная сумма для вывода средств (₽); 0 — без ограничения
+  payoutHoldDays: number; // период удержания перед выводом, дней; 0 — без удержания
   description?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -326,6 +328,8 @@ export interface CreateReferralProgramInput {
   welcomeBonus?: number;
   welcomeRewardType?: WelcomeRewardType;
   firstPurchaseDiscountPercent?: number;
+  payoutMinAmount?: number;
+  payoutHoldDays?: number;
   description?: string;
   levels?: ReferralLevelInput[];
 }
@@ -339,6 +343,8 @@ export interface UpdateReferralProgramInput {
   welcomeBonus?: number;
   welcomeRewardType?: WelcomeRewardType;
   firstPurchaseDiscountPercent?: number;
+  payoutMinAmount?: number;
+  payoutHoldDays?: number;
   description?: string;
   levels?: ReferralLevelInput[];
 }

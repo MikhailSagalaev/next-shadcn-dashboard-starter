@@ -41,6 +41,8 @@ const ReferralProgramPayloadSchema = z.object({
   minPurchaseAmount: z.number().min(0).optional(),
   cookieLifetime: z.number().int().min(1).max(365).optional(),
   welcomeBonus: z.number().min(0).optional(),
+  payoutMinAmount: z.number().min(0).optional(),
+  payoutHoldDays: z.number().int().min(0).max(365).optional(),
   description: z.string().max(500).optional(),
   levels: z
     .array(ReferralLevelSchema)
@@ -150,6 +152,8 @@ export async function PUT(
       minPurchaseAmount: payload.minPurchaseAmount ?? 0,
       cookieLifetime: payload.cookieLifetime ?? 30,
       welcomeBonus: payload.welcomeBonus ?? 0,
+      payoutMinAmount: payload.payoutMinAmount ?? 0,
+      payoutHoldDays: payload.payoutHoldDays ?? 0,
       description: payload.description ?? null,
       levels: payload.levels?.map((level) => ({
         level: level.level,

@@ -1190,6 +1190,15 @@ export class ReferralService {
         input.firstPurchaseDiscountPercent ??
         existing?.firstPurchaseDiscountPercent ??
         0,
+      payoutMinAmount: toDecimal(
+        input.payoutMinAmount,
+        existing?.payoutMinAmount,
+        0
+      ),
+      payoutHoldDays:
+        input.payoutHoldDays !== undefined
+          ? input.payoutHoldDays
+          : (existing?.payoutHoldDays ?? 0),
       description:
         input.description !== undefined
           ? input.description
@@ -1304,6 +1313,8 @@ export class ReferralService {
       welcomeBonus: Number(program.welcomeBonus),
       welcomeRewardType: program.welcomeRewardType as 'BONUS' | 'DISCOUNT',
       firstPurchaseDiscountPercent: program.firstPurchaseDiscountPercent,
+      payoutMinAmount: Number(program.payoutMinAmount),
+      payoutHoldDays: program.payoutHoldDays,
       description: program.description,
       createdAt: program.createdAt,
       updatedAt: program.updatedAt,

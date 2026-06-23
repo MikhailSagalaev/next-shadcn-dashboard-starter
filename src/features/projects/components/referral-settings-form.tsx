@@ -80,6 +80,16 @@ const referralProgramSchema = z.object({
     .min(1, 'Время жизни cookie должно быть больше 0')
     .max(365, 'Время жизни cookie не может быть больше года')
     .max(365, 'Время жизни cookie не может быть больше года'),
+  payoutMinAmount: z
+    .number()
+    .min(0, 'Минимальная сумма вывода не может быть отрицательной')
+    .default(0),
+  payoutHoldDays: z
+    .number()
+    .int()
+    .min(0, 'Период удержания не может быть отрицательным')
+    .max(365, 'Период удержания не может быть больше года')
+    .default(0),
   levels: z
     .array(referralLevelSchema)
     .length(3, 'Нужно задать параметры для трёх уровней')
@@ -147,6 +157,8 @@ export function ReferralSettingsForm({
         referralProgram?.firstPurchaseDiscountPercent ?? 10,
       minPurchaseAmount: referralProgram?.minPurchaseAmount ?? 0,
       cookieLifetime: referralProgram?.cookieLifetime ?? 30,
+      payoutMinAmount: referralProgram?.payoutMinAmount ?? 0,
+      payoutHoldDays: referralProgram?.payoutHoldDays ?? 0,
       levels: initialLevels
     }
   });
@@ -433,6 +445,61 @@ export function ReferralSettingsForm({
                     Сколько дней после перехода по реферальной ссылке
                     засчитывается реферал
                   </p>
+                </div>
+              </div>
+
+              {/* Payout Settings */}
+              <div className='space-y-4 rounded-lg border p-4'>
+                <div>
+                  <Label className='flex items-center space-x-2 text-base'>
+                    <DollarSign className='h-4 w-4 text-blue-600' />
+                    <span>Вывод средств</span>
+                  </Label>
+                  <p className='mt-1 text-sm text-gray-600'>
+                    Условия вывода накопленных реферальных средств
+                  </p>
+                </div>
+                <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+                  <div className='space-y-2'>
+                    <Label htmlFor='payoutMinAmount'>
+                      Минимальная сумма вывода, ₽
+                    </Label>
+                    <Input
+                      id='payoutMinAmount'
+                      type='number'
+                      step='100'
+                      min='0'
+                      placeholder='0'
+                      {...register('payoutMinAmount', { valueAsNumber: true })}
+                    />
+                    {errors.payoutMinAmount && (
+                      <p className='text-sm text-red-600'>
+                        {errors.payoutMinAmount.message}
+                      </p>
+                    )}
+                    <p className='text-xs text-gray-600'>0 — без ограничения</p>
+                  </div>
+
+                  <div className='space-y-2'>
+                    <Label htmlFor='payoutHoldDays'>
+                      Период удержания перед выводом, дней
+                    </Label>
+                    <Input
+                      id='payoutHoldDays'
+                      type='number'
+                      step='1'
+                      min='0'
+                      max='365'
+                      placeholder='0'
+                      {...register('payoutHoldDays', { valueAsNumber: true })}
+                    />
+                    {errors.payoutHoldDays && (
+                      <p className='text-sm text-red-600'>
+                        {errors.payoutHoldDays.message}
+                      </p>
+                    )}
+                    <p className='text-xs text-gray-600'>0 — без удержания</p>
+                  </div>
                 </div>
               </div>
 
