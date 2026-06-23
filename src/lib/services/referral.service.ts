@@ -346,7 +346,15 @@ export class ReferralService {
     bonusAwarded: boolean;
     totalBonus?: number;
     payouts?: ReferralBonusPayout[];
+    partialFailure?: {
+      paidLevels: number[];
+      failedAtLevel: number;
+      reason: string;
+    };
   }> {
+    // Уровни, успешно выплаченные до возможного сбоя в середине цепочки.
+    // Объявлены вне try, чтобы внешний catch мог сообщить о частичной выплате.
+    const paidPayouts: ReferralBonusPayout[] = [];
     try {
       // Получаем пользователя и проект
       const user = await db.user.findUnique({
@@ -460,8 +468,6 @@ export class ReferralService {
         return { bonusAwarded: false };
       }
 
-      const payouts: ReferralBonusPayout[] = [];
-
       for (let index = 0; index < chain.length; index++) {
         const referrer = chain[index];
         const level = index + 1;
@@ -526,12 +532,16 @@ export class ReferralService {
             );
             continue;
           }
+          // Не-P2002 сбой: прерываем оставшиеся уровни. Помечаем ошибку уровнем,
+          // на котором она произошла, чтобы внешний catch мог сообщить о
+          // частичной выплате (paidPayouts уже содержит выплаченные уровни).
+          (error as { failedAtLevel?: number }).failedAtLevel = level;
           throw error;
         }
 
         const { referredBy, ...referrerDetails } = referrer;
 
-        payouts.push({
+        paidPayouts.push({
           level,
           amount: bonusAmount,
           referrerId: referrer.id,
@@ -540,17 +550,20 @@ export class ReferralService {
         });
       }
 
-      if (!payouts.length) {
+      if (!paidPayouts.length) {
         return { bonusAwarded: false };
       }
 
-      const totalBonus = payouts.reduce((sum, entry) => sum + entry.amount, 0);
+      const totalBonus = paidPayouts.reduce(
+        (sum, entry) => sum + entry.amount,
+        0
+      );
 
       logger.info('Начислены многоуровневые реферальные бонусы', {
         userId,
         purchaseAmount,
         totalBonus,
-        payouts: payouts.map((p) => ({
+        payouts: paidPayouts.map((p) => ({
           level: p.level,
           amount: p.amount,
           referrerId: p.referrerId
@@ -561,13 +574,52 @@ export class ReferralService {
       return {
         bonusAwarded: true,
         totalBonus,
-        payouts
+        payouts: paidPayouts
       };
     } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : 'Неизвестная ошибка';
+      const failedAtLevel = (error as { failedAtLevel?: number }).failedAtLevel;
+
+      // Частичная выплата: хотя бы один предок уже получил бонус до сбоя.
+      // Это денежно-несогласованное состояние — логируем громко и структурно,
+      // чтобы его можно было сверить и доплатить вручную.
+      if (paidPayouts.length > 0) {
+        const paidLevels = paidPayouts.map((p) => p.level);
+        logger.error(
+          'Частичная выплата реферальной цепочки: часть предков получила бонус, последующий уровень упал',
+          {
+            userId,
+            purchaseAmount,
+            paidLevels,
+            failedAtLevel,
+            paidPayouts: paidPayouts.map((p) => ({
+              level: p.level,
+              amount: p.amount,
+              referrerId: p.referrerId,
+              bonusId: p.bonusId
+            })),
+            error: reason,
+            component: 'referral-service'
+          }
+        );
+
+        // Не выбрасываем ошибку, чтобы не сломать основную покупку,
+        // но сигнализируем о частичном сбое через возвращаемое значение.
+        return {
+          bonusAwarded: false,
+          partialFailure: {
+            paidLevels,
+            failedAtLevel: failedAtLevel ?? paidLevels.length + 1,
+            reason
+          }
+        };
+      }
+
       logger.error('Ошибка обработки реферального бонуса', {
         userId,
         purchaseAmount,
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        error: reason,
         component: 'referral-service'
       });
       // Не выбрасываем ошибку, чтобы не сломать основную покупку
