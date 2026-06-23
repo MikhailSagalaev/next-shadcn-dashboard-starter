@@ -49,6 +49,8 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { CopyButton } from '@/components/ui/copy-button';
+import { buildReferralLink } from '@/lib/utils/referral-link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -1349,10 +1351,45 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                       ? `${profileUser.firstName} ${profileUser.lastName}`.trim()
                       : profileUser.email || 'Без имени'}
                   </h3>
-                  <p className='text-muted-foreground'>
-                    ID: {profileUser.id.slice(0, 8)}...
-                  </p>
+                  <div className='text-muted-foreground flex items-center gap-1 text-sm'>
+                    <span className='font-mono break-all'>
+                      ID: {profileUser.id}
+                    </span>
+                    <CopyButton
+                      value={profileUser.id}
+                      label='Скопировать ID'
+                      toastTitle='ID скопирован'
+                    />
+                  </div>
                 </div>
+              </div>
+
+              {/* Реферальная ссылка — готова к копированию и отправке */}
+              <div className='bg-muted/30 space-y-2 rounded-md border p-4'>
+                <Label className='text-sm font-medium'>
+                  Реферальная ссылка
+                </Label>
+                <div className='flex items-center gap-2'>
+                  <code className='bg-background flex-1 overflow-x-auto rounded border px-2 py-1.5 font-mono text-xs break-all'>
+                    {buildReferralLink(
+                      (project as any)?.domain,
+                      profileUser.id
+                    )}
+                  </code>
+                  <CopyButton
+                    value={buildReferralLink(
+                      (project as any)?.domain,
+                      profileUser.id
+                    )}
+                    label='Скопировать ссылку'
+                    toastTitle='Ссылка скопирована'
+                  />
+                </div>
+                <p className='text-muted-foreground text-xs'>
+                  Отправьте эту ссылку — приглашённый пользователь будет
+                  привязан к этому профилю по параметру{' '}
+                  <code className='font-mono'>utm_ref</code>.
+                </p>
               </div>
 
               <div className='grid grid-cols-2 gap-4'>

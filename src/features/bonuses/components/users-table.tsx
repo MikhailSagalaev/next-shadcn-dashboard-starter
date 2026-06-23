@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { CopyButton } from '@/components/ui/copy-button';
 import { PartnerRoleBadge } from './partner-role-badge';
 import { DataTablePagination } from '@/components/ui/table/data-table-pagination';
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar';
@@ -270,8 +271,16 @@ export function UsersTable({
             </Avatar>
             <div>
               <div className='font-medium'>{user.name}</div>
-              <div className='text-muted-foreground text-sm'>
-                ID: {user.id.slice(0, 8)}...
+              <div className='text-muted-foreground flex items-center gap-1 text-sm'>
+                <span title={user.id} className='font-mono'>
+                  ID: {user.id.slice(0, 8)}…
+                </span>
+                <CopyButton
+                  value={user.id}
+                  size='sm'
+                  label='Скопировать ID'
+                  toastTitle='ID скопирован'
+                />
               </div>
             </div>
           </div>

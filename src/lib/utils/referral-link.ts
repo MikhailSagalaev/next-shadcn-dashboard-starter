@@ -31,4 +31,18 @@ export function getReferralLinkExample(domain?: string | null): string {
   return `${normalizeProjectDomain(domain)}/?utm_ref=<userId>`;
 }
 
+/**
+ * Формирует реферальную ссылку конкретного пользователя для UI
+ * (админка). Совпадает по схеме с ReferralService.generateReferralLink:
+ * базовый домен проекта + `utm_ref=<userId>`. Для мульти-сетей сервер
+ * дополнительно добавляет `utm_org`, но для админ-ссылки достаточно
+ * `utm_ref` — именно по нему система атрибутирует реферала.
+ */
+export function buildReferralLink(
+  domain: string | null | undefined,
+  userId: string
+): string {
+  return `${normalizeProjectDomain(domain)}/?utm_ref=${userId}`;
+}
+
 
