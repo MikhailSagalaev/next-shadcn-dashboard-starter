@@ -21,6 +21,7 @@ import {
   Target,
   Network,
   Bot,
+  Wallet,
   AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ReferralSettingsForm } from './referral-settings-form';
 import { ReferralStatsView } from './referral-stats-view';
 import { ReferralCommissionPlansPanel } from './referral-commission-plans-panel';
+import { PayoutsAdminPanel } from './payouts-admin-panel';
 import { ReferralProgramGuide } from './referral-program-guide';
 import { ReferralProgramSidebar } from './referral-program-sidebar';
 import type { Project, ReferralProgram } from '@/types/bonus';
@@ -261,7 +263,11 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
             onValueChange={setActiveTab}
             className='space-y-6'
           >
-            <TabsList className='grid w-full grid-cols-3'>
+            <TabsList
+              className={`grid w-full ${
+                project?.enablePartnerRoles ? 'grid-cols-4' : 'grid-cols-3'
+              }`}
+            >
               <TabsTrigger value='settings' className='flex items-center'>
                 <Settings className='mr-2 h-4 w-4' />
                 Настройки
@@ -274,6 +280,12 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                 <Target className='mr-2 h-4 w-4' />
                 {project?.enablePartnerRoles ? 'Планы партнёров' : 'Планы %'}
               </TabsTrigger>
+              {project?.enablePartnerRoles && (
+                <TabsTrigger value='payouts' className='flex items-center'>
+                  <Wallet className='mr-2 h-4 w-4' />
+                  Выплаты
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value='settings' className='space-y-6'>
@@ -295,6 +307,12 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                 enablePartnerRoles={Boolean(project?.enablePartnerRoles)}
               />
             </TabsContent>
+
+            {project?.enablePartnerRoles && (
+              <TabsContent value='payouts' className='space-y-6'>
+                <PayoutsAdminPanel projectId={projectId} />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
 

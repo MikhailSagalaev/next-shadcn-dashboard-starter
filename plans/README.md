@@ -16,7 +16,7 @@ row when done.
 | 004  | Reconcile commission depth (levels vs maxPayoutDepth vs UI) | P2 | S | — | DONE (branch `advisor/004-commission-depth-consistency`) |
 | 005  | Replace payout-chain heuristic with explicit parent links | P2 | L | 004 | CODE DONE — migration not applied (no DB); branch `advisor/005-explicit-payout-parent` |
 | 006  | Spike — real partner payout / withdrawal flow | P3 | L (spike) | — | DONE (design doc `docs/partner-payout-flow-design.md`; owner decisions captured; → plan 007) |
-| 007  | Build — partner payout v1 (manual cashout) | P2 | L | 006 | ENGINE DONE — schema+PayoutService+tests; UI/bot/admin TODO; migration not applied (no DB); branch `advisor/007-partner-payout-v1` |
+| 007  | Build — partner payout v1 (manual cashout) | P2 | L | 006 | ENGINE + UI DONE — schema+PayoutService+tests+bot+admin (builds); CSV/notifications TODO; migration not applied (no DB); branches `advisor/007-partner-payout-v1` + `advisor/007-payout-ui` |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (rationale)
 

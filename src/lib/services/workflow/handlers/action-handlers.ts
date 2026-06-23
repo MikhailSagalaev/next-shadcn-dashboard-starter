@@ -2204,6 +2204,22 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
       }
 
       const db: PrismaClient = context.services.db as PrismaClient;
+
+      // Доступно к выводу = активные (непотраченные, неистёкшие) бонусы.
+      const balanceAgg = await db.bonus.aggregate({
+        where: {
+          userId,
+          isUsed: false,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+        },
+        _sum: { amount: true }
+      });
+      const available = Number(balanceAgg._sum.amount ?? 0);
+      const withdrawButton =
+        available > 0
+          ? [{ text: '💸 Вывести деньги', callback_data: 'payout_request' }]
+          : null;
+
       const txs = await db.transaction.findMany({
         where: { userId, type: 'EARN', isReferralBonus: true },
         orderBy: { createdAt: 'desc' },
@@ -2219,16 +2235,16 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
       });
 
       if (txs.length === 0) {
+        const emptyKeyboard = [
+          ...(withdrawButton ? [withdrawButton] : []),
+          [{ text: '⬅️ В меню', callback_data: 'back_to_menu' }]
+        ];
         await sendPlatformMessage(
           context,
-          '💵 <b>Мои выплаты</b>\n\nПока пусто. Комиссии появятся, когда подопечные начнут делать покупки.',
-          {
-            replyMarkup: {
-              inline_keyboard: [
-                [{ text: '⬅️ В меню', callback_data: 'back_to_menu' }]
-              ]
-            }
-          }
+          available > 0
+            ? `💵 <b>Мои выплаты</b>\n\nДоступно к выводу: <b>${formatRub(available)}</b>\nИстория выплат пока пуста.`
+            : '💵 <b>Мои выплаты</b>\n\nПока пусто. Комиссии появятся, когда подопечные начнут делать покупки.',
+          { replyMarkup: { inline_keyboard: emptyKeyboard } }
         );
         return null;
       }
@@ -2271,10 +2287,14 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
       }
       lines.push('');
       lines.push(`Итого по этим ${txs.length}: <b>${formatRub(total)}</b>`);
+      if (available > 0) {
+        lines.push(`Доступно к выводу: <b>${formatRub(available)}</b>`);
+      }
 
       await sendPlatformMessage(context, lines.join('\n'), {
         replyMarkup: {
           inline_keyboard: [
+            ...(withdrawButton ? [withdrawButton] : []),
             [{ text: '⬅️ В меню', callback_data: 'back_to_menu' }]
           ]
         }

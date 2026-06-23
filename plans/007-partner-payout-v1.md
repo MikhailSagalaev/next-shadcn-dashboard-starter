@@ -66,7 +66,35 @@ The schema change has no migration file yet (Prisma needs a DB to author it). Do
 not deploy the Payout code without the migration — it references tables/columns
 that don't exist until then.
 
-## TODO — UI / bot / admin surfaces (not built; need running app + DB to verify)
+## UI / bot / admin surfaces — BUILT (2026-06-23, branch `advisor/007-payout-ui`)
+
+Implemented and compiling (`yarn build` exit 0; zero new tsc errors). Not yet
+runtime-verified end-to-end (dev DB was down):
+
+- **Bot request**: `PartnerPayoutsHandler` (`action-handlers.ts`) now shows
+  "Доступно к выводу" + a "💸 Вывести деньги" button when balance > 0;
+  `payout_request` / `payout_cancel:<id>` handled in
+  `partner-cabinet.service.ts` (`handlePayoutRequest` requests the full available
+  balance, idempotent by per-minute `externalId`; cancel returns the reserve).
+  v1 simplification: requests the **full** available balance (partial-amount
+  conversation is a follow-up).
+- **Admin API**: `GET /api/projects/[id]/payouts` (queue, status filter) and
+  `POST /api/projects/[id]/payouts/[payoutId]/{approve|reject|paid|fail}` —
+  auth via `getCurrentAdmin` + `verifyProjectAccess`; delegates to PayoutService.
+- **Admin UI**: `PayoutsAdminPanel` rendered as a **"Выплаты" tab** in the
+  referral program view (`referral-program-view.tsx`), shown only when
+  `enablePartnerRoles` — table with Approve/Reject (REQUESTED) and
+  Выплачено/Сбой (APPROVED) actions + status filter.
+
+### Still TODO
+
+- **CSV accounting export** (`GET /api/projects/[id]/payouts/export`).
+- **Settings UI** for `payoutMinAmount` / `payoutHoldDays`.
+- **Partial-amount** bot conversation (currently full-balance only).
+- **Notifications** to admin on new request / to partner on status change.
+- **E2E verification** against a live DB once migrations are applied.
+
+## Original integration notes (reference)
 
 Grounded file paths from `docs/partner-payout-flow-design.md` §10:
 
