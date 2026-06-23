@@ -417,11 +417,21 @@ model User {
   organizationId         String?                 @map("organization_id")
   organization           PartnerOrganization?    @relation("UserOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
+  /// Явный платёжный родитель в b2b-иерархии (тренер → менеджер → директор).
+  /// Authoritative для resolvePayoutChain (план 005): кому уходит комиссия на
+  /// уровень выше. Отдельно от `referredBy` ("кто пригласил"), потому что
+  /// пригласивший не всегда совпадает с тем, кто получает выплату выше.
+  /// SetNull при удалении родителя — цепочка прерывается, а не падает.
+  partnerParentId        String?                 @map("partner_parent_id")
+  partnerParent          User?                   @relation("PartnerParent", fields: [partnerParentId], references: [id], onDelete: SetNull)
+  partnerChildren        User[]                  @relation("PartnerParent")
+
   @@unique([projectId, email])
   @@unique([projectId, phone])
   @@unique([projectId, telegramId])
   @@index([projectId, partnerRole])
   @@index([projectId, organizationId])
+  @@index([projectId, partnerParentId])
   @@map("users")
 }
 

@@ -687,6 +687,7 @@ export class PartnerTeamService {
           email: true,
           phone: true,
           referredBy: true,
+          partnerParentId: true,
           partnerRole: true,
           organizationId: true
         }
@@ -695,49 +696,32 @@ export class PartnerTeamService {
 
       chain.push(node);
 
-      if (node.referredBy && !visited.has(node.referredBy)) {
-        currentId = node.referredBy;
+      // Детерминированный обход явной платёжной ссылки (план 005).
+      // `partnerParentId` — authoritative; `referredBy` — graceful fallback для
+      // данных, ещё не прошедших backfill. НИКАКОГО угадывания менеджера по дате
+      // регистрации: тот эвристический путь отправлял деньги не тому человеку в
+      // организациях с несколькими менеджерами.
+      const explicitParentId = node.partnerParentId ?? node.referredBy;
+      if (explicitParentId && !visited.has(explicitParentId)) {
+        currentId = explicitParentId;
         continue;
       }
 
-      if (!project?.enablePartnerRoles || !node.organizationId) break;
-
-      const org = await db.partnerOrganization.findFirst({
-        where: { id: node.organizationId, projectId },
-        select: { directorUserId: true }
-      });
-
-      if (level === 0 && node.partnerRole === 'TRAINER') {
-        const manager = await db.user.findFirst({
-          where: {
-            projectId,
-            organizationId: node.organizationId,
-            partnerRole: 'MANAGER',
-            ...(org?.directorUserId ? { referredBy: org.directorUserId } : {})
-          },
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            referredBy: true
-          },
-          orderBy: { registeredAt: 'asc' }
-        });
-        if (manager && !visited.has(manager.id)) {
-          currentId = manager.id;
-          continue;
-        }
-      }
-
+      // Явной ссылки наверх нет. Если это партнёр, у которого родитель ОЖИДАЕТСЯ
+      // (тренер/менеджер в организации), цепочка оборвана — делаем это видимым
+      // (структурный warn), а не платим угаданному человеку.
       if (
-        org?.directorUserId &&
-        !visited.has(org.directorUserId) &&
-        level >= 1
+        project?.enablePartnerRoles &&
+        node.organizationId &&
+        (node.partnerRole === 'TRAINER' || node.partnerRole === 'MANAGER')
       ) {
-        currentId = org.directorUserId;
-        continue;
+        logger.warn('payout chain broken: missing parent link', {
+          projectId,
+          userId: node.id,
+          partnerRole: node.partnerRole,
+          level,
+          component: 'partner-team-service'
+        });
       }
 
       break;
