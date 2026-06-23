@@ -64,6 +64,7 @@ model Project {
   ChatChannel          ChatChannel[]
   Chat                 Chat[]
   payouts              Payout[]
+  adminNotifications   AdminNotification[]
 
   /// Персональные планы % по уровням (блогеры / инфлюенсеры)
   referralPlansEnabled            Boolean                  @default(false) @map("referral_plans_enabled")
@@ -583,6 +584,7 @@ model AdminAccount {
   projects                 Project[]
   subscriptions            Subscription[]
   payments                 Payment[]
+  adminNotifications       AdminNotification[]
 
   @@map("admin_accounts")
 }
@@ -601,6 +603,48 @@ model Notification {
   user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
+}
+
+enum AdminNotificationType {
+  payout_requested
+  payout_cancelled
+  referral_join_request
+  new_partner
+  integration_error
+  subscription
+  billing
+  limit_reached
+  new_user
+  large_purchase
+  system
+}
+
+enum AdminNotificationSeverity {
+  info
+  success
+  warning
+  error
+}
+
+model AdminNotification {
+  id             String                    @id @default(cuid())
+  adminAccountId String                    @map("admin_account_id")
+  projectId      String?                   @map("project_id")
+  type           AdminNotificationType
+  severity       AdminNotificationSeverity @default(info)
+  title          String
+  message        String
+  link           String?
+  metadata       Json?
+  dedupeKey      String?                   @map("dedupe_key")
+  readAt         DateTime?                 @map("read_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  adminAccount   AdminAccount              @relation(fields: [adminAccountId], references: [id], onDelete: Cascade)
+  project        Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([adminAccountId, readAt])
+  @@index([adminAccountId, createdAt])
+  @@map("admin_notifications")
 }
 
 model AlphaTesterApplication {
