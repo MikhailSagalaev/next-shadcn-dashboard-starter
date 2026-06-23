@@ -869,8 +869,13 @@ export class UserService {
 export class BonusService {
   // Начисление бонусов пользователю с учётом уровня
   static async awardBonus(data: CreateBonusInput): Promise<Bonus> {
-    const { isReferralBonus, referralUserId, referralLevel, ...bonusData } =
-      data;
+    const {
+      isReferralBonus,
+      referralUserId,
+      referralLevel,
+      externalId: explicitExternalId,
+      ...bonusData
+    } = data as CreateBonusInput & { externalId?: string };
     const user = await db.user.findUnique({
       where: { id: bonusData.userId },
       include: { project: true }
@@ -880,6 +885,23 @@ export class BonusService {
       throw new Error('Пользователь не найден');
     }
 
+    // Идемпотентность: вычисляем детерминированный externalId для транзакции
+    // начисления. Уникальный индекс на Transaction.externalId отклонит повторный
+    // (ретраенный/дублирующий) вебхук, даже если ранний guard был обойдён гонкой.
+    // Используем отдельный префикс `tilda_order_`, чтобы не пересекаться с
+    // пространством имён InSales (`insales_order_*`).
+    const metadataSource = bonusData.metadata?.source as string | undefined;
+    const metadataOrderId = bonusData.metadata?.orderId as string | undefined;
+    const isTildaOrder =
+      metadataSource === 'tilda' ||
+      metadataSource === 'tilda_order' ||
+      metadataSource === 'webhook';
+    const externalId =
+      explicitExternalId ||
+      (isTildaOrder && metadataOrderId
+        ? `tilda_order_${metadataOrderId}`
+        : undefined);
+
     // Если дата истечения не указана, рассчитываем по настройкам проекта
     let expiresAt = data.expiresAt;
     if (!expiresAt && user.project) {
@@ -887,31 +909,75 @@ export class BonusService {
       expiresAt = new Date(Date.now() + expireDays * 24 * 60 * 60 * 1000);
     }
 
-    const bonus = await db.bonus.create({
-      data: {
-        ...bonusData,
-        referralLevel: referralLevel ?? null,
-        expiresAt
-      },
-      include: {
-        user: true,
-        transactions: true
+    let bonus;
+    try {
+      bonus = await db.bonus.create({
+        data: {
+          ...bonusData,
+          referralLevel: referralLevel ?? null,
+          expiresAt,
+          ...(externalId ? { externalId } : {})
+        },
+        include: {
+          user: true,
+          transactions: true
+        }
+      });
+    } catch (error) {
+      // P2002: уникальное ограничение на externalId — заказ уже обработан.
+      // Не выбрасываем ошибку, чтобы не сломать оформление заказа клиента.
+      if (
+        externalId &&
+        error instanceof Object &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        logger.info('Бонус с таким externalId уже начислен, пропускаем', {
+          userId: bonusData.userId,
+          externalId,
+          component: 'bonus-service'
+        });
+        const existing = await db.bonus.findUnique({
+          where: { externalId },
+          include: { user: true, transactions: true }
+        });
+        if (existing) {
+          return existing as any;
+        }
       }
-    });
+      throw error;
+    }
 
     // Создаем транзакцию начисления с метаданными из data.metadata
-    await this.createTransaction({
-      userId: bonusData.userId,
-      bonusId: bonus.id,
-      amount: bonusData.amount,
-      type: 'EARN',
-      description:
-        bonusData.description || `Начисление бонусов: ${bonusData.type}`,
-      metadata: bonusData.metadata || undefined,
-      isReferralBonus,
-      referralUserId,
-      referralLevel
-    });
+    try {
+      await this.createTransaction({
+        userId: bonusData.userId,
+        bonusId: bonus.id,
+        amount: bonusData.amount,
+        type: 'EARN',
+        description:
+          bonusData.description || `Начисление бонусов: ${bonusData.type}`,
+        metadata: bonusData.metadata || undefined,
+        isReferralBonus,
+        referralUserId,
+        referralLevel,
+        ...(externalId ? { externalId } : {})
+      } as CreateTransactionInput);
+    } catch (error) {
+      // P2002: транзакция с таким externalId уже создана — идемпотентный повтор.
+      if (
+        externalId &&
+        error instanceof Object &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        logger.info('Транзакция с таким externalId уже создана, пропускаем', {
+          userId: bonusData.userId,
+          externalId,
+          component: 'bonus-service'
+        });
+      } else {
+        throw error;
+      }
+    }
 
     // Отправляем уведомление в Telegram (неблокирующе)
     try {
@@ -1208,7 +1274,8 @@ export class BonusService {
     // Обрабатываем реферальную систему
     const referralInfo = await ReferralService.processReferralBonus(
       userId,
-      purchaseAmount
+      purchaseAmount,
+      orderId
     );
 
     logger.info('Начислен бонус за покупку', {

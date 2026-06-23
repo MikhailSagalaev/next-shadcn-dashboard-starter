@@ -22,6 +22,34 @@ export class OrderProcessingService {
     const project = await db.project.findUnique({ where: { id: projectId } });
     if (!project) throw new Error('Project not found');
 
+    // Idempotency guard: a duplicate/retried webhook must not re-award bonuses.
+    if (order.orderId) {
+      const existingOrder = await db.order.findFirst({
+        where: { projectId, orderNumber: order.orderId },
+        select: { id: true }
+      });
+      if (existingOrder) {
+        logger.info('Order already processed, skipping', {
+          projectId,
+          orderId: order.orderId,
+          existingOrderId: existingOrder.id,
+          component: 'order-processing'
+        });
+        return {
+          success: true,
+          message: 'Order already processed',
+          data: {
+            spent: 0,
+            earned: 0,
+            userId: null,
+            orderId: existingOrder.id,
+            userCreated: false,
+            signupForm: false
+          }
+        };
+      }
+    }
+
     // 2. Save Order to Database
     const savedOrder = await this.saveOrder(projectId, order);
 

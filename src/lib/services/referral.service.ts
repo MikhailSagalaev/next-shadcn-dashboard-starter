@@ -18,7 +18,8 @@ import type {
   User,
   ReferralStats,
   ReferralLevel,
-  ReferralLevelInput
+  ReferralLevelInput,
+  CreateBonusInput
 } from '@/types/bonus';
 import { BonusService } from './user.service';
 import { PartnerTeamService } from './partner-team.service';
@@ -339,7 +340,8 @@ export class ReferralService {
    */
   static async processReferralBonus(
     userId: string,
-    purchaseAmount: number
+    purchaseAmount: number,
+    orderId?: string
   ): Promise<{
     bonusAwarded: boolean;
     totalBonus?: number;
@@ -473,29 +475,59 @@ export class ReferralService {
 
         if (bonusAmount <= 0) continue;
 
-        const bonus = await BonusService.awardBonus({
-          userId: referrer.id,
-          amount: bonusAmount,
-          type: 'REFERRAL',
-          description: `Реферальный бонус ${level}-го уровня за покупку пользователя ${
-            user.firstName || user.lastName
-              ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-              : user.email || user.phone || user.id
-          }`,
-          metadata: {
-            source: 'referral_bonus',
-            referredUserId: userId,
+        // Идемпотентность: детерминированный externalId на каждую выплату по
+        // цепочке, чтобы ретрай вебхука не выплатил повторно ни одному предку.
+        const referralExternalId = orderId
+          ? `referral_${orderId}_${referrer.id}_L${level}`
+          : undefined;
+
+        let bonus;
+        try {
+          bonus = await BonusService.awardBonus({
+            userId: referrer.id,
+            amount: bonusAmount,
+            type: 'REFERRAL',
+            description: `Реферальный бонус ${level}-го уровня за покупку пользователя ${
+              user.firstName || user.lastName
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : user.email || user.phone || user.id
+            }`,
+            metadata: {
+              source: 'referral_bonus',
+              referredUserId: userId,
+              referralLevel: level,
+              purchaseAmount,
+              ...(orderId ? { orderId } : {}),
+              ...(user.referralAttribution?.commissionPlanId && {
+                referralCommissionPlanId:
+                  user.referralAttribution.commissionPlanId
+              })
+            },
             referralLevel: level,
-            purchaseAmount,
-            ...(user.referralAttribution?.commissionPlanId && {
-              referralCommissionPlanId:
-                user.referralAttribution.commissionPlanId
-            })
-          },
-          referralLevel: level,
-          isReferralBonus: true,
-          referralUserId: userId
-        });
+            isReferralBonus: true,
+            referralUserId: userId,
+            ...(referralExternalId ? { externalId: referralExternalId } : {})
+          } as CreateBonusInput & { externalId?: string });
+        } catch (error) {
+          // P2002: этот предок уже получил выплату по данному заказу — пропускаем.
+          if (
+            referralExternalId &&
+            error instanceof Object &&
+            (error as { code?: string }).code === 'P2002'
+          ) {
+            logger.info(
+              'Реферальная выплата по этому заказу уже произведена, пропускаем',
+              {
+                referrerId: referrer.id,
+                level,
+                externalId: referralExternalId,
+                component: 'referral-service'
+              }
+            );
+            continue;
+          }
+          throw error;
+        }
 
         const { referredBy, ...referrerDetails } = referrer;
 
