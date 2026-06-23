@@ -628,6 +628,200 @@ export class ReferralService {
   }
 
   /**
+   * Откат реферальных выплат при отмене/возврате заказа.
+   *
+   * Находит все REFERRAL-транзакции этого заказа (externalId начинается с
+   * `referral_<orderId>_`, см. план 001) и пишет компенсирующую REFUND-
+   * транзакцию на каждую, помечая связанный бонус использованным, чтобы убрать
+   * его из баланса предка.
+   *
+   * Идемпотентность: компенсирующая транзакция имеет externalId
+   * `reversal_<исходный externalId>`; повторный вызов не дублирует откат.
+   *
+   * Учёт «уже потраченного»: откатываем не более остатка на бонусе предка;
+   * недостачу логируем, баланс в минус не уводим.
+   *
+   * Не выбрасывает ошибку наверх (дух плана 002): сбой отдельного отката
+   * логируется громко, но не ломает изменение статуса заказа администратором.
+   */
+  static async reverseReferralBonus(
+    orderId: string,
+    projectId?: string
+  ): Promise<{
+    reversedCount: number;
+    reversedAmount: number;
+    failures: number;
+  }> {
+    let reversedCount = 0;
+    let reversedAmount = 0;
+    let failures = 0;
+
+    try {
+      // Основной путь: транзакции с детерминированным externalId плана 001.
+      const referralTransactions = await db.transaction.findMany({
+        where: {
+          type: 'EARN',
+          isReferralBonus: true,
+          externalId: { startsWith: `referral_${orderId}_` }
+        },
+        include: { bonus: true }
+      });
+
+      // Legacy-строки без externalId сматчить по externalId нельзя.
+      // Пытаемся найти их по metadata.orderId для информирования.
+      const legacyCandidates = await db.transaction.count({
+        where: {
+          type: 'EARN',
+          isReferralBonus: true,
+          externalId: null,
+          metadata: { path: ['orderId'], equals: orderId }
+        }
+      });
+      if (legacyCandidates > 0) {
+        logger.warn(
+          'Найдены legacy реферальные транзакции без externalId — откат по ним не выполняется автоматически',
+          {
+            orderId,
+            legacyCandidates,
+            component: 'referral-service'
+          }
+        );
+      }
+
+      if (referralTransactions.length === 0) {
+        logger.info(
+          'Реферальные выплаты по заказу не найдены, откат не нужен',
+          {
+            orderId,
+            component: 'referral-service'
+          }
+        );
+        return { reversedCount: 0, reversedAmount: 0, failures: 0 };
+      }
+
+      for (const referralTx of referralTransactions) {
+        const reversalExternalId = `reversal_${referralTx.externalId}`;
+
+        try {
+          // Идемпотентность: уже откатано?
+          const existingReversal = await db.transaction.findUnique({
+            where: { externalId: reversalExternalId }
+          });
+          if (existingReversal) {
+            logger.info('Откат реферальной выплаты уже выполнен, пропускаем', {
+              orderId,
+              reversalExternalId,
+              component: 'referral-service'
+            });
+            continue;
+          }
+
+          const awardedAmount = Number(referralTx.amount);
+          const bonus = referralTx.bonus;
+          const remainingOnBonus = bonus
+            ? bonus.isUsed
+              ? 0
+              : Number(bonus.amount)
+            : 0;
+          const reversibleAmount = Math.min(awardedAmount, remainingOnBonus);
+          const shortfall = awardedAmount - reversibleAmount;
+
+          if (shortfall > 0) {
+            logger.warn(
+              'Откат реферальной выплаты: часть бонуса предка уже потрачена, баланс не уводим в минус',
+              {
+                orderId,
+                referrerId: referralTx.userId,
+                awardedAmount,
+                reversibleAmount,
+                shortfall,
+                component: 'referral-service'
+              }
+            );
+          }
+
+          await db.$transaction(async (tx) => {
+            if (bonus && !bonus.isUsed) {
+              await tx.bonus.update({
+                where: { id: bonus.id },
+                data: { isUsed: true }
+              });
+            }
+
+            await tx.transaction.create({
+              data: {
+                userId: referralTx.userId,
+                bonusId: bonus?.id ?? null,
+                amount: reversibleAmount,
+                type: 'REFUND',
+                isReferralBonus: true,
+                referralUserId: referralTx.referralUserId,
+                referralLevel: referralTx.referralLevel,
+                description: `Откат реферальной выплаты (заказ ${orderId})`,
+                externalId: reversalExternalId,
+                metadata: {
+                  source: 'order_reversal',
+                  reversalOf: referralTx.externalId,
+                  orderId,
+                  awardedAmount,
+                  reversibleAmount,
+                  shortfall,
+                  ...(projectId ? { projectId } : {})
+                }
+              }
+            });
+          });
+
+          reversedCount += 1;
+          reversedAmount += reversibleAmount;
+        } catch (error) {
+          // P2002: компенсирующая транзакция уже создана гонкой — идемпотентно ок.
+          if (
+            error instanceof Object &&
+            (error as { code?: string }).code === 'P2002'
+          ) {
+            logger.info(
+              'Компенсирующая реферальная транзакция уже создана (гонка), пропускаем',
+              {
+                orderId,
+                reversalExternalId,
+                component: 'referral-service'
+              }
+            );
+            continue;
+          }
+          failures += 1;
+          logger.error('Сбой отката отдельной реферальной выплаты', {
+            orderId,
+            referrerId: referralTx.userId,
+            externalId: referralTx.externalId,
+            error:
+              error instanceof Error ? error.message : 'Неизвестная ошибка',
+            component: 'referral-service'
+          });
+        }
+      }
+
+      logger.info('Откат реферальных выплат завершён', {
+        orderId,
+        reversedCount,
+        reversedAmount,
+        failures,
+        component: 'referral-service'
+      });
+    } catch (error) {
+      // Верхнеуровневый сбой не должен ломать смену статуса заказа.
+      logger.error('Ошибка отката реферальных выплат', {
+        orderId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'referral-service'
+      });
+    }
+
+    return { reversedCount, reversedAmount, failures };
+  }
+
+  /**
    * Получить реферальную статистику конкретного пользователя
    * ✅ НОВОЕ: Возвращает статистику пользователя, а не всего проекта
    */

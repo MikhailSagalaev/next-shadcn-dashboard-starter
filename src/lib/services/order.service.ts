@@ -20,15 +20,18 @@ import type {
   CreateProductInput,
   UpdateProductInput,
   CreateProductCategoryInput,
-  UpdateProductCategoryInput,
+  UpdateProductCategoryInput
 } from '@/types/orders';
-import { UserService } from './user.service';
+import { UserService, BonusService } from './user.service';
+import { ReferralService } from './referral.service';
 
 export class OrderService {
   /**
    * Создание нового заказа
    */
-  static async createOrder(data: CreateOrderInput): Promise<OrderWithRelations> {
+  static async createOrder(
+    data: CreateOrderInput
+  ): Promise<OrderWithRelations> {
     try {
       // Генерируем номер заказа, если не указан
       let orderNumber = data.orderNumber;
@@ -38,7 +41,7 @@ export class OrderService {
 
       // Проверяем, что номер заказа уникален
       const existingOrder = await db.order.findUnique({
-        where: { orderNumber },
+        where: { orderNumber }
       });
 
       if (existingOrder) {
@@ -66,9 +69,9 @@ export class OrderService {
               quantity: item.quantity,
               price: item.price,
               total: item.total,
-              metadata: item.metadata,
-            })),
-          },
+              metadata: item.metadata
+            }))
+          }
         },
         include: {
           user: {
@@ -77,26 +80,26 @@ export class OrderService {
               email: true,
               phone: true,
               firstName: true,
-              lastName: true,
-            },
+              lastName: true
+            }
           },
           items: {
             include: {
-              product: true,
-            },
+              product: true
+            }
           },
           history: {
             orderBy: {
-              createdAt: 'desc',
-            },
+              createdAt: 'desc'
+            }
           },
           project: {
             select: {
               id: true,
-              name: true,
-            },
-          },
-        },
+              name: true
+            }
+          }
+        }
       });
 
       // Создаем первую запись в истории
@@ -105,8 +108,8 @@ export class OrderService {
           orderId: order.id,
           status: order.status,
           comment: 'Заказ создан',
-          metadata: { source: 'system' },
-        },
+          metadata: { source: 'system' }
+        }
       });
 
       // Обновляем статистику пользователя, если заказ связан с пользователем
@@ -115,9 +118,9 @@ export class OrderService {
           where: { id: data.userId },
           data: {
             totalPurchases: {
-              increment: data.totalAmount,
-            },
-          },
+              increment: data.totalAmount
+            }
+          }
         });
       }
 
@@ -127,7 +130,7 @@ export class OrderService {
         projectId: data.projectId,
         userId: data.userId,
         totalAmount: data.totalAmount,
-        component: 'order-service',
+        component: 'order-service'
       });
 
       return order as OrderWithRelations;
@@ -135,7 +138,7 @@ export class OrderService {
       logger.error('Ошибка создания заказа', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -162,7 +165,7 @@ export class OrderService {
       const order = await db.order.findFirst({
         where: {
           id: orderId,
-          projectId,
+          projectId
         },
         include: {
           user: {
@@ -171,26 +174,26 @@ export class OrderService {
               email: true,
               phone: true,
               firstName: true,
-              lastName: true,
-            },
+              lastName: true
+            }
           },
           items: {
             include: {
-              product: true,
-            },
+              product: true
+            }
           },
           history: {
             orderBy: {
-              createdAt: 'desc',
-            },
+              createdAt: 'desc'
+            }
           },
           project: {
             select: {
               id: true,
-              name: true,
-            },
-          },
-        },
+              name: true
+            }
+          }
+        }
       });
 
       return order as OrderWithRelations | null;
@@ -199,7 +202,7 @@ export class OrderService {
         orderId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -216,7 +219,7 @@ export class OrderService {
       const order = await db.order.findFirst({
         where: {
           orderNumber,
-          projectId,
+          projectId
         },
         include: {
           user: {
@@ -225,26 +228,26 @@ export class OrderService {
               email: true,
               phone: true,
               firstName: true,
-              lastName: true,
-            },
+              lastName: true
+            }
           },
           items: {
             include: {
-              product: true,
-            },
+              product: true
+            }
           },
           history: {
             orderBy: {
-              createdAt: 'desc',
-            },
+              createdAt: 'desc'
+            }
           },
           project: {
             select: {
               id: true,
-              name: true,
-            },
-          },
-        },
+              name: true
+            }
+          }
+        }
       });
 
       return order as OrderWithRelations | null;
@@ -253,7 +256,7 @@ export class OrderService {
         orderNumber,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -274,11 +277,11 @@ export class OrderService {
         page = 1,
         pageSize = 20,
         sortBy = 'createdAt',
-        sortOrder = 'desc',
+        sortOrder = 'desc'
       } = filters;
 
       const where: any = {
-        projectId,
+        projectId
       };
 
       if (userId) {
@@ -313,10 +316,10 @@ export class OrderService {
                 { email: { contains: search, mode: 'insensitive' } },
                 { phone: { contains: search, mode: 'insensitive' } },
                 { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-              ],
-            },
-          },
+                { lastName: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          }
         ];
       }
 
@@ -330,34 +333,34 @@ export class OrderService {
                 email: true,
                 phone: true,
                 firstName: true,
-                lastName: true,
-              },
+                lastName: true
+              }
             },
             items: {
               include: {
-                product: true,
-              },
+                product: true
+              }
             },
             history: {
               take: 1,
               orderBy: {
-                createdAt: 'desc',
-              },
+                createdAt: 'desc'
+              }
             },
             project: {
               select: {
                 id: true,
-                name: true,
-              },
-            },
+                name: true
+              }
+            }
           },
           orderBy: {
-            [sortBy]: sortOrder,
+            [sortBy]: sortOrder
           },
           skip: (page - 1) * pageSize,
-          take: pageSize,
+          take: pageSize
         }),
-        db.order.count({ where }),
+        db.order.count({ where })
       ]);
 
       return {
@@ -365,13 +368,13 @@ export class OrderService {
         total,
         page,
         pageSize,
-        totalPages: Math.ceil(total / pageSize),
+        totalPages: Math.ceil(total / pageSize)
       };
     } catch (error) {
       logger.error('Ошибка получения списка заказов', {
         filters,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -390,8 +393,8 @@ export class OrderService {
       const existingOrder = await db.order.findFirst({
         where: {
           id: orderId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!existingOrder) {
@@ -408,33 +411,33 @@ export class OrderService {
               email: true,
               phone: true,
               firstName: true,
-              lastName: true,
-            },
+              lastName: true
+            }
           },
           items: {
             include: {
-              product: true,
-            },
+              product: true
+            }
           },
           history: {
             orderBy: {
-              createdAt: 'desc',
-            },
+              createdAt: 'desc'
+            }
           },
           project: {
             select: {
               id: true,
-              name: true,
-            },
-          },
-        },
+              name: true
+            }
+          }
+        }
       });
 
       logger.info('Заказ обновлен', {
         orderId: order.id,
         projectId,
         changes: Object.keys(data),
-        component: 'order-service',
+        component: 'order-service'
       });
 
       return order as OrderWithRelations;
@@ -444,7 +447,7 @@ export class OrderService {
         projectId,
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -463,8 +466,8 @@ export class OrderService {
       const existingOrder = await db.order.findFirst({
         where: {
           id: orderId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!existingOrder) {
@@ -475,7 +478,7 @@ export class OrderService {
       const order = await db.order.update({
         where: { id: orderId },
         data: {
-          status: data.status,
+          status: data.status
         },
         include: {
           user: {
@@ -484,26 +487,26 @@ export class OrderService {
               email: true,
               phone: true,
               firstName: true,
-              lastName: true,
-            },
+              lastName: true
+            }
           },
           items: {
             include: {
-              product: true,
-            },
+              product: true
+            }
           },
           history: {
             orderBy: {
-              createdAt: 'desc',
-            },
+              createdAt: 'desc'
+            }
           },
           project: {
             select: {
               id: true,
-              name: true,
-            },
-          },
-        },
+              name: true
+            }
+          }
+        }
       });
 
       // Создаем запись в истории
@@ -513,8 +516,8 @@ export class OrderService {
           status: data.status,
           comment: data.comment,
           changedBy: data.changedBy,
-          metadata: data.metadata,
-        },
+          metadata: data.metadata
+        }
       });
 
       logger.info('Статус заказа изменен', {
@@ -522,8 +525,49 @@ export class OrderService {
         projectId,
         oldStatus: existingOrder.status,
         newStatus: data.status,
-        component: 'order-service',
+        component: 'order-service'
       });
+
+      // Откат бонусов и реферальных выплат при отмене/возврате заказа.
+      // Триггерим только при переходе В состояние отмены/возврата из НЕ-отменённого,
+      // чтобы повторные вызовы (повторный вебхук) не запускали откат заново.
+      const clawbackStatuses: OrderStatus[] = ['CANCELLED', 'REFUNDED'];
+      const isEnteringClawback =
+        clawbackStatuses.includes(data.status) &&
+        !clawbackStatuses.includes(existingOrder.status as OrderStatus);
+
+      if (isEnteringClawback) {
+        // externalId выплат закодирован через Order.orderNumber (см. план 001).
+        const reversalOrderId = order.orderNumber;
+        try {
+          await BonusService.reversePurchaseBonus(reversalOrderId, projectId);
+        } catch (error) {
+          // Сбой отката не должен ломать смену статуса заказа.
+          logger.error('Ошибка отката бонуса за покупку при смене статуса', {
+            orderId: order.id,
+            orderNumber: reversalOrderId,
+            projectId,
+            error:
+              error instanceof Error ? error.message : 'Неизвестная ошибка',
+            component: 'order-service'
+          });
+        }
+        try {
+          await ReferralService.reverseReferralBonus(
+            reversalOrderId,
+            projectId
+          );
+        } catch (error) {
+          logger.error('Ошибка отката реферальных выплат при смене статуса', {
+            orderId: order.id,
+            orderNumber: reversalOrderId,
+            projectId,
+            error:
+              error instanceof Error ? error.message : 'Неизвестная ошибка',
+            component: 'order-service'
+          });
+        }
+      }
 
       return order as OrderWithRelations;
     } catch (error) {
@@ -532,7 +576,7 @@ export class OrderService {
         projectId,
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -546,8 +590,8 @@ export class OrderService {
       const history = await db.orderHistory.findMany({
         where: { orderId },
         orderBy: {
-          createdAt: 'desc',
-        },
+          createdAt: 'desc'
+        }
       });
 
       return history;
@@ -555,7 +599,7 @@ export class OrderService {
       logger.error('Ошибка получения истории заказа', {
         orderId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -570,8 +614,8 @@ export class OrderService {
       const existingOrder = await db.order.findFirst({
         where: {
           id: orderId,
-          projectId,
-        },
+          projectId
+        }
       });
 
       if (!existingOrder) {
@@ -582,20 +626,20 @@ export class OrderService {
       await this.changeOrderStatus(projectId, orderId, {
         status: 'CANCELLED',
         comment: 'Заказ удален',
-        changedBy: 'system',
+        changedBy: 'system'
       });
 
       logger.info('Заказ удален', {
         orderId,
         projectId,
-        component: 'order-service',
+        component: 'order-service'
       });
     } catch (error) {
       logger.error('Ошибка удаления заказа', {
         orderId,
         projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -615,18 +659,18 @@ export class OrderService {
           categoryId: data.categoryId,
           description: data.description,
           isActive: data.isActive ?? true,
-          metadata: data.metadata,
+          metadata: data.metadata
         },
         include: {
           category: true,
-          project: true,
-        },
+          project: true
+        }
       });
 
       logger.info('Товар создан', {
         productId: product.id,
         projectId: data.projectId,
-        component: 'order-service',
+        component: 'order-service'
       });
 
       return product;
@@ -634,7 +678,7 @@ export class OrderService {
       logger.error('Ошибка создания товара', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -654,14 +698,14 @@ export class OrderService {
         data,
         include: {
           category: true,
-          project: true,
-        },
+          project: true
+        }
       });
 
       logger.info('Товар обновлен', {
         productId: product.id,
         projectId,
-        component: 'order-service',
+        component: 'order-service'
       });
 
       return product;
@@ -671,7 +715,7 @@ export class OrderService {
         projectId,
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -690,19 +734,19 @@ export class OrderService {
           parentId: data.parentId,
           sortOrder: data.sortOrder ?? 0,
           isActive: data.isActive ?? true,
-          metadata: data.metadata,
+          metadata: data.metadata
         },
         include: {
           parent: true,
           children: true,
-          project: true,
-        },
+          project: true
+        }
       });
 
       logger.info('Категория товаров создана', {
         categoryId: category.id,
         projectId: data.projectId,
-        component: 'order-service',
+        component: 'order-service'
       });
 
       return category;
@@ -710,7 +754,7 @@ export class OrderService {
       logger.error('Ошибка создания категории товаров', {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
@@ -731,14 +775,14 @@ export class OrderService {
         include: {
           parent: true,
           children: true,
-          project: true,
-        },
+          project: true
+        }
       });
 
       logger.info('Категория товаров обновлена', {
         categoryId: category.id,
         projectId,
-        component: 'order-service',
+        component: 'order-service'
       });
 
       return category;
@@ -748,10 +792,9 @@ export class OrderService {
         projectId,
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'order-service',
+        component: 'order-service'
       });
       throw error;
     }
   }
 }
-

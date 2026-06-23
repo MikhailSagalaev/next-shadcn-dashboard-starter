@@ -1018,6 +1018,148 @@ export class BonusService {
     return bonus as any;
   }
 
+  /**
+   * Откат бонуса за покупку при отмене/возврате заказа.
+   *
+   * Находит исходную транзакцию начисления по externalId `tilda_order_<orderId>`
+   * (см. awardBonus / план 001), помечает связанный Bonus использованным, чтобы
+   * он перестал учитываться в балансе, и пишет компенсирующую REFUND-транзакцию.
+   *
+   * Идемпотентность: компенсирующая транзакция имеет детерминированный
+   * externalId `reversal_tilda_order_<orderId>`. Повторный вызов (повторный
+   * вебхук отмены) не создаёт второй откат — P2002 на уникальном индексе ловится.
+   *
+   * Учёт «уже потраченного»: баланс = сумма Bonus.amount неиспользованных
+   * бонусов (см. getUserBalance/spendBonuses). При откате уменьшаем баланс не
+   * более чем на остаток исходного бонуса — если клиент уже потратил часть,
+   * логируем недостачу и не уводим баланс в минус.
+   */
+  static async reversePurchaseBonus(
+    orderId: string,
+    projectId?: string
+  ): Promise<{ reversed: boolean; amount: number; shortfall: number }> {
+    const externalId = `tilda_order_${orderId}`;
+    const reversalExternalId = `reversal_tilda_order_${orderId}`;
+
+    // Идемпотентность: если откат уже выполнен — выходим.
+    const existingReversal = await db.transaction.findUnique({
+      where: { externalId: reversalExternalId }
+    });
+    if (existingReversal) {
+      logger.info('Откат бонуса за покупку уже выполнен, пропускаем', {
+        orderId,
+        reversalExternalId,
+        component: 'bonus-service'
+      });
+      return { reversed: false, amount: 0, shortfall: 0 };
+    }
+
+    // Находим исходную транзакцию начисления.
+    const earnTransaction = await db.transaction.findUnique({
+      where: { externalId },
+      include: { bonus: true }
+    });
+
+    if (!earnTransaction) {
+      logger.info(
+        'Транзакция начисления за покупку не найдена, откат не нужен',
+        {
+          orderId,
+          externalId,
+          component: 'bonus-service'
+        }
+      );
+      return { reversed: false, amount: 0, shortfall: 0 };
+    }
+
+    const awardedAmount = Number(earnTransaction.amount);
+    const bonus = earnTransaction.bonus;
+
+    // Остаток на исходном бонусе: то, что ещё не потрачено.
+    // Если бонус помечен использованным или уменьшен — отражает уже потраченное.
+    const remainingOnBonus = bonus
+      ? bonus.isUsed
+        ? 0
+        : Number(bonus.amount)
+      : 0;
+    const reversibleAmount = Math.min(awardedAmount, remainingOnBonus);
+    const shortfall = awardedAmount - reversibleAmount;
+
+    if (shortfall > 0) {
+      logger.warn(
+        'Откат бонуса за покупку: часть бонуса уже потрачена, баланс не уводим в минус',
+        {
+          orderId,
+          userId: earnTransaction.userId,
+          awardedAmount,
+          reversibleAmount,
+          shortfall,
+          component: 'bonus-service'
+        }
+      );
+    }
+
+    try {
+      await db.$transaction(async (tx) => {
+        // Помечаем исходный бонус использованным, чтобы убрать его из баланса.
+        if (bonus && !bonus.isUsed) {
+          await tx.bonus.update({
+            where: { id: bonus.id },
+            data: { isUsed: true }
+          });
+        }
+
+        // Пишем компенсирующую REFUND-транзакцию.
+        await tx.transaction.create({
+          data: {
+            userId: earnTransaction.userId,
+            bonusId: bonus?.id ?? null,
+            amount: reversibleAmount,
+            type: 'REFUND',
+            description: `Откат бонуса за покупку (заказ ${orderId})`,
+            externalId: reversalExternalId,
+            metadata: {
+              source: 'order_reversal',
+              reversalOf: externalId,
+              orderId,
+              awardedAmount,
+              reversibleAmount,
+              shortfall,
+              ...(projectId ? { projectId } : {})
+            }
+          }
+        });
+      });
+    } catch (error) {
+      // P2002: компенсирующая транзакция уже создана гонкой — идемпотентно ок.
+      if (
+        error instanceof Object &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        logger.info(
+          'Компенсирующая транзакция уже создана (гонка), пропускаем',
+          {
+            orderId,
+            reversalExternalId,
+            component: 'bonus-service'
+          }
+        );
+        return { reversed: false, amount: 0, shortfall };
+      }
+      throw error;
+    }
+
+    logger.info('Откат бонуса за покупку выполнен', {
+      orderId,
+      userId: earnTransaction.userId,
+      reversedAmount: reversibleAmount,
+      shortfall,
+      component: 'bonus-service'
+    });
+
+    return { reversed: true, amount: reversibleAmount, shortfall };
+  }
+
   // Списание бонусов пользователя
   static async spendBonuses(
     userId: string,
