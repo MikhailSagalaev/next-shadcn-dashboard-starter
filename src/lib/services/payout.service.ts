@@ -5,7 +5,7 @@
  *   списание на PAID, возврат резерва на REJECTED/CANCELLED/FAILED. Машина
  *   состояний с атомарными guard-переходами.
  * @project: SaaS Bonus System
- * @dependencies: Prisma, UserService.spendBonuses/awardBonus
+ * @dependencies: Prisma, BonusService.spendBonuses/awardBonus
  * @see: docs/partner-payout-flow-design.md
  */
 
@@ -161,16 +161,25 @@ export class PayoutService {
     payoutId: string,
     byUserId?: string
   ): Promise<Payout> {
+    // Защита владельца ДО перехода: иначе чужой вызов успел бы флипнуть статус
+    // в CANCELLED ещё до выброса ошибки.
+    if (byUserId) {
+      const existing = await db.payout.findUnique({
+        where: { id: payoutId },
+        select: { userId: true }
+      });
+      if (!existing) throw new Error(`Заявка на вывод ${payoutId} не найдена`);
+      if (existing.userId !== byUserId) {
+        throw new Error('Нельзя отозвать чужую заявку на вывод');
+      }
+    }
+
     const payout = await PayoutService.transition(
       payoutId,
       ['REQUESTED'],
       'CANCELLED',
       { cancelledAt: new Date() }
     );
-    // Защита: отзывать может только сам владелец заявки.
-    if (byUserId && payout.userId !== byUserId) {
-      throw new Error('Нельзя отозвать чужую заявку на вывод');
-    }
     await PayoutService.refundReserve(payout);
     return payout;
   }

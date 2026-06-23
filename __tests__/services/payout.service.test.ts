@@ -185,6 +185,7 @@ describe('PayoutService переходы состояний', () => {
   });
 
   it('REQUESTED → CANCELLED возвращает резерв', async () => {
+    (mockDb as any).payout.findUnique = jest.fn().mockResolvedValue({ userId });
     (mockDb as any).payout.updateMany = jest
       .fn()
       .mockResolvedValue({ count: 1 });
@@ -197,5 +198,18 @@ describe('PayoutService переходы состояний', () => {
     expect(mockUser.awardBonus).toHaveBeenCalledWith(
       expect.objectContaining({ externalId: 'payout_refund_payout-1' })
     );
+  });
+
+  it('чужой пользователь не может отозвать заявку (статус не меняется)', async () => {
+    (mockDb as any).payout.findUnique = jest
+      .fn()
+      .mockResolvedValue({ userId: 'owner' });
+    (mockDb as any).payout.updateMany = jest.fn();
+
+    await expect(
+      PayoutService.cancelPayout('payout-1', 'intruder')
+    ).rejects.toThrow('чужую заявку');
+    expect((mockDb as any).payout.updateMany).not.toHaveBeenCalled();
+    expect(mockUser.awardBonus).not.toHaveBeenCalled();
   });
 });
