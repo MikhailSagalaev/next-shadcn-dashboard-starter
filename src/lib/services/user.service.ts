@@ -575,29 +575,109 @@ export class UserService {
     projectId: string,
     page = 1,
     limit = 10,
-    where?: any
+    where?: any,
+    options?: {
+      /** Prisma orderBy для сортировки по хранимым колонкам БД. */
+      orderBy?: any;
+      /**
+       * Сортировка по вычисляемым колонкам (агрегаты транзакций). Когда
+       * задана, страница формируется по отсортированному по метрике набору
+       * id, а не по orderBy. `bonusBalance` = earned − spent,
+       * `totalEarned` = сумма EARN.
+       */
+      computedSort?: {
+        field: 'bonusBalance' | 'totalEarned';
+        order: 'asc' | 'desc';
+      };
+    }
   ): Promise<{ users: UserWithBonuses[]; total: number }> {
     const skip = (page - 1) * limit;
 
     // Используем переданное where условие или создаем базовое
     const queryWhere = where || { projectId };
+    const userInclude = {
+      project: true,
+      // Убираем загрузку бонусов/транзакций для предотвращения N+1
+      referrer: true,
+      referrals: true,
+      // Организация партнёра (b2b) — для колонки/фильтра «Организация».
+      organization: { select: { id: true, name: true, slug: true } }
+    } as const;
 
-    // Загружаем пользователей страницы и общее количество
-    const [users, total] = await Promise.all([
-      db.user.findMany({
+    let users: any[];
+    let total: number;
+
+    if (options?.computedSort) {
+      // --- Ветка сортировки по вычисляемой метрике (по всему набору) ---
+      // 1) Берём все id под фильтром (без агрегатов) + дату для стабильного
+      //    вторичного порядка.
+      const allRows = await db.user.findMany({
         where: queryWhere,
-        skip,
-        take: limit,
-        include: {
-          project: true,
-          // Убираем загрузку бонусов/транзакций для предотвращения N+1
-          referrer: true,
-          referrals: true
-        },
-        orderBy: { registeredAt: 'desc' }
-      }),
-      db.user.count({ where: queryWhere })
-    ]);
+        select: { id: true, registeredAt: true }
+      });
+      total = allRows.length;
+
+      if (allRows.length === 0) {
+        return { users: [], total };
+      }
+
+      const allIds = allRows.map((r) => r.id);
+
+      // 2) Агрегаты транзакций по всему набору одним запросом.
+      const txAll = await db.transaction.groupBy({
+        by: ['userId', 'type'],
+        where: { userId: { in: allIds } },
+        _sum: { amount: true }
+      });
+      const earnedAll = new Map<string, number>();
+      const spentAll = new Map<string, number>();
+      for (const row of txAll) {
+        const sum = Number(row._sum?.amount || 0);
+        if (row.type === 'EARN') earnedAll.set(row.userId, sum);
+        else if (row.type === 'SPEND') spentAll.set(row.userId, sum);
+      }
+
+      const metric = (id: string) => {
+        const earned = earnedAll.get(id) ?? 0;
+        const spent = spentAll.get(id) ?? 0;
+        return options.computedSort!.field === 'totalEarned'
+          ? earned
+          : earned - spent;
+      };
+
+      // 3) Сортируем id по метрике (стабильно: вторично по дате убыв.).
+      const dir = options.computedSort.order === 'asc' ? 1 : -1;
+      const sortedIds = [...allRows]
+        .sort((a, b) => {
+          const diff = metric(a.id) - metric(b.id);
+          if (diff !== 0) return diff * dir;
+          return b.registeredAt.getTime() - a.registeredAt.getTime();
+        })
+        .map((r) => r.id);
+
+      // 4) Страница id и подгрузка их данных, сохраняя порядок.
+      const pageIds = sortedIds.slice(skip, skip + limit);
+      const pageUsers = await db.user.findMany({
+        where: { id: { in: pageIds } },
+        include: userInclude
+      });
+      const byId = new Map(pageUsers.map((u) => [u.id, u]));
+      users = pageIds.map((id) => byId.get(id)).filter(Boolean) as any[];
+    } else {
+      // --- Обычная ветка: сортировка по хранимой колонке ---
+      const [pageUsers, count] = await Promise.all([
+        db.user.findMany({
+          where: queryWhere,
+          skip,
+          take: limit,
+          include: userInclude,
+          orderBy: options?.orderBy || { registeredAt: 'desc' }
+        }),
+        db.user.count({ where: queryWhere })
+      ]);
+      users = pageUsers;
+      total = count;
+    }
 
     if (users.length === 0) {
       return { users: [], total };

@@ -40,9 +40,12 @@ export function getReferralLinkExample(domain?: string | null): string {
  */
 export function buildReferralLink(
   domain: string | null | undefined,
-  userId: string
+  userId: string,
+  orgSlug?: string | null
 ): string {
-  return `${normalizeProjectDomain(domain)}/?utm_ref=${userId}`;
+  let link = `${normalizeProjectDomain(domain)}/?utm_ref=${userId}`;
+  if (orgSlug) {
+    link += `&utm_org=${orgSlug}`;
+  }
+  return link;
 }
-
-

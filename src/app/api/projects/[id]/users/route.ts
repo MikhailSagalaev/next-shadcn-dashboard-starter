@@ -64,6 +64,46 @@ async function getHandler(
           .filter((r) => VALID_PARTNER_ROLES.has(r))
       : [];
 
+    // Фильтр по организации (b2b): ?organizationId=<id>
+    const organizationId = url.searchParams.get('organizationId') || undefined;
+
+    // Сортировка: ?sort=<поле>&order=asc|desc
+    const sortParam = (url.searchParams.get('sort') || '').trim();
+    const orderParam =
+      url.searchParams.get('order')?.toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    // Карта хранимых колонок → Prisma orderBy. Вычисляемые колонки (баланс,
+    // заработано) обрабатываются через computedSort в сервисе.
+    const STORED_SORT: Record<string, (o: 'asc' | 'desc') => any> = {
+      name: (o) => [{ firstName: o }, { lastName: o }],
+      email: (o) => ({ email: o }),
+      phone: (o) => ({ phone: o }),
+      registeredAt: (o) => ({ registeredAt: o }),
+      createdAt: (o) => ({ registeredAt: o }),
+      currentLevel: (o) => ({ currentLevel: o }),
+      isActive: (o) => ({ isActive: o }),
+      totalPurchases: (o) => ({ totalPurchases: o }),
+      partnerRole: (o) => ({ partnerRole: o }),
+      organization: (o) => ({ organization: { name: o } })
+    };
+    const COMPUTED_SORT = new Set(['bonusBalance', 'totalEarned']);
+
+    const options: {
+      orderBy?: any;
+      computedSort?: {
+        field: 'bonusBalance' | 'totalEarned';
+        order: 'asc' | 'desc';
+      };
+    } = {};
+    if (sortParam && COMPUTED_SORT.has(sortParam)) {
+      options.computedSort = {
+        field: sortParam as 'bonusBalance' | 'totalEarned',
+        order: orderParam
+      };
+    } else if (sortParam && STORED_SORT[sortParam]) {
+      options.orderBy = STORED_SORT[sortParam](orderParam);
+    }
+
     // Базовый фильтр с поиском
     const where: any = { projectId: id };
     if (search && search.trim().length > 0) {
@@ -78,12 +118,16 @@ async function getHandler(
     if (roles.length > 0) {
       where.partnerRole = { in: roles };
     }
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
 
     const { users: enrichedUsers, total } = await UserService.getProjectUsers(
       id,
       page,
       limit,
-      where
+      where,
+      options
     );
 
     // Форматируем под ожидаемый UI
@@ -138,7 +182,11 @@ async function getHandler(
         telegramUsername: user.telegramUsername || null,
         // Партнёрская иерархия (Phase 2 b2b-referral-hierarchy)
         partnerRole: (user as any).partnerRole || 'CLIENT',
-        outboundReferralPlanId: (user as any).outboundReferralPlanId ?? null
+        outboundReferralPlanId: (user as any).outboundReferralPlanId ?? null,
+        // Организация (b2b) — для колонки/фильтра «Организация»
+        organizationId: (user as any).organizationId ?? null,
+        organizationName: (user as any).organization?.name ?? null,
+        organizationSlug: (user as any).organization?.slug ?? null
       };
     });
 

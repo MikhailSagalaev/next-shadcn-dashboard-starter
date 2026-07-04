@@ -24,6 +24,10 @@ export interface DisplayUser {
   partnerRole?: 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR';
   /** Outbound-план комиссий, который применяется к приглашённым этим партнёром. */
   outboundReferralPlanId?: string | null;
+  /** Организация партнёра (b2b). */
+  organizationId?: string | null;
+  organizationName?: string | null;
+  organizationSlug?: string | null;
 }
 
 export interface BonusTransaction {

@@ -161,6 +161,14 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     Array<'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'>
   >([]);
 
+  // Фильтр по организации (b2b) и серверная сортировка таблицы.
+  const [orgFilter, setOrgFilter] = useState<string | null>(null);
+  const [organizations, setOrganizations] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   // Phase 2: локальные значения селекторов в диалоге профиля
   // (роль и outbound-план) и состояние сохранения.
   const [profileRole, setProfileRole] = useState<
@@ -170,6 +178,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     string | null
   >(null);
   const [isSavingPartner, setIsSavingPartner] = useState(false);
+  // Slug организации текущего профиля — для utm_org в реферальной ссылке.
+  const [profileOrgSlug, setProfileOrgSlug] = useState<string | null>(null);
   const [referralPlans, setReferralPlans] = useState<
     Array<{ id: string; name: string }>
   >([]);
@@ -190,8 +200,22 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     projectId,
     pageSize,
     searchTerm: debouncedSearchTerm,
-    roles: roleFilter
+    roles: roleFilter,
+    organizationId: orgFilter,
+    sort: sortField,
+    order: sortOrder
   });
+
+  // Серверная сортировка по клику на заголовок колонки. Перезагрузку первой
+  // страницы запускает эффект внутри useProjectUsers (loadUsers меняется при
+  // смене sort/order), поэтому здесь только обновляем состояние.
+  const handleServerSort = useCallback(
+    (field: string, order: 'asc' | 'desc') => {
+      setSortField(field);
+      setSortOrder(order);
+    },
+    []
+  );
 
   // Debounced обработчик поиска (согласно документации Next.js)
   // Определяем после получения loadUsers из хука
@@ -237,6 +261,10 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       setProfileOutboundPlanId(
         ((user as any).outboundReferralPlanId as string | null | undefined) ??
           null
+      );
+      // Сбрасываем slug организации от предыдущего профиля; подтянем ниже.
+      setProfileOrgSlug(
+        ((user as any).organizationSlug as string | null | undefined) ?? null
       );
 
       // Загружаем свежий баланс из транзакций для унификации с ботом
@@ -289,6 +317,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               }
               if ('outboundReferralPlanId' in fresh) {
                 setProfileOutboundPlanId(fresh.outboundReferralPlanId ?? null);
+              }
+              if ('organizationSlug' in fresh) {
+                setProfileOrgSlug(fresh.organizationSlug ?? null);
               }
             }
           }
@@ -549,6 +580,38 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         setReferralPlans(list);
       } catch (error) {
         console.error('Не удалось загрузить планы реферальных %', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, partnerRolesEnabled]);
+
+  // Список организаций проекта для фильтра «Организация» (только b2b).
+  useEffect(() => {
+    if (!projectId || !partnerRolesEnabled) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/organizations`, {
+          cache: 'no-store'
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const list: Array<{ id: string; name: string }> = Array.isArray(
+          data?.organizations
+        )
+          ? data.organizations.map((o: any) => ({
+              id: String(o.id),
+              name: String(o.name)
+            }))
+          : [];
+        setOrganizations(list);
+      } catch (error) {
+        console.error('Не удалось загрузить организации', error);
       }
     })();
 
@@ -1164,6 +1227,60 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+              {/* Фильтр по организации — только при включённой b2b-иерархии
+                  и если в проекте есть организации. */}
+              {(project as any)?.enablePartnerRoles &&
+                organizations.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant='outline' size='sm'>
+                        <Users className='mr-2 h-4 w-4' />
+                        {orgFilter
+                          ? organizations.find((o) => o.id === orgFilter)
+                              ?.name || 'Организация'
+                          : 'Организация'}
+                        {orgFilter && (
+                          <Badge
+                            variant='secondary'
+                            className='ml-2 px-1.5 text-xs'
+                          >
+                            1
+                          </Badge>
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align='end' className='w-56'>
+                      <DropdownMenuLabel>
+                        Фильтр по организации
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {organizations.map((org) => (
+                        <DropdownMenuCheckboxItem
+                          key={org.id}
+                          checked={orgFilter === org.id}
+                          onCheckedChange={(checked) =>
+                            setOrgFilter(checked ? org.id : null)
+                          }
+                          onSelect={(e) => e.preventDefault()}
+                        >
+                          {org.name}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      {orgFilter && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuCheckboxItem
+                            checked={false}
+                            onCheckedChange={() => setOrgFilter(null)}
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            Сбросить
+                          </DropdownMenuCheckboxItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               <Button
                 variant='default'
                 size='sm'
@@ -1224,6 +1341,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               onProfileClick={handleUserProfile}
               onDeleteUser={handleDeleteUser}
               onUserUpdated={() => loadUsers(currentPage)}
+              onServerSort={handleServerSort}
+              sortField={sortField}
+              sortOrder={sortOrder}
               onExportCSV={handleExportCSV}
               onExportExcel={handleExportExcel}
               loading={usersLoading}
@@ -1373,13 +1493,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                   <code className='bg-background flex-1 overflow-x-auto rounded border px-2 py-1.5 font-mono text-xs break-all'>
                     {buildReferralLink(
                       (project as any)?.domain,
-                      profileUser.id
+                      profileUser.id,
+                      profileOrgSlug
                     )}
                   </code>
                   <CopyButton
                     value={buildReferralLink(
                       (project as any)?.domain,
-                      profileUser.id
+                      profileUser.id,
+                      profileOrgSlug
                     )}
                     label='Скопировать ссылку'
                     toastTitle='Ссылка скопирована'

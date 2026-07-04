@@ -45,7 +45,10 @@ export async function GET(
 
   try {
     const user = await db.user.findFirst({
-      where: { id: userId, projectId }
+      where: { id: userId, projectId },
+      include: {
+        organization: { select: { slug: true, isActive: true } }
+      }
     });
 
     if (!user) {
@@ -93,6 +96,12 @@ export async function GET(
       referralCode: user.referralCode,
       partnerRole: user.partnerRole,
       organizationId: user.organizationId ?? null,
+      // Slug организации для utm_org в реферальной ссылке (только если активна),
+      // как в ReferralService.generateReferralLink.
+      organizationSlug:
+        user.organization?.isActive && user.organization.slug
+          ? user.organization.slug
+          : null,
       referredBy: user.referredBy ?? null,
       outboundReferralPlanId: (user as any).outboundReferralPlanId ?? null,
       currentLevel: user.currentLevel || null,

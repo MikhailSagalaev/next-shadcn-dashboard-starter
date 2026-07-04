@@ -24,6 +24,8 @@ import {
 } from '@tanstack/react-table';
 import {
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   ChevronDown,
   MoreHorizontal,
   History,
@@ -72,6 +74,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import type { DisplayUser as User } from '../types';
 
 interface UsersTableProps {
@@ -93,6 +96,15 @@ interface UsersTableProps {
   onBonusDeductClick?: (user: User) => void;
   onDeleteUser?: (user: User) => void;
   onUserUpdated?: () => void;
+  /**
+   * Серверная сортировка: вызывается при клике на заголовок колонки.
+   * Когда не передан, заголовки не кликабельны (сортировки нет).
+   */
+  onServerSort?: (field: string, order: 'asc' | 'desc') => void;
+  /** Текущее поле серверной сортировки (для индикатора в заголовке). */
+  sortField?: string | null;
+  /** Текущее направление серверной сортировки. */
+  sortOrder?: 'asc' | 'desc';
   loading?: boolean;
   totalCount?: number;
   onPageChange?: (page: number) => void;
@@ -115,6 +127,9 @@ export function UsersTable({
   onBonusDeductClick,
   onDeleteUser,
   onUserUpdated,
+  onServerSort,
+  sortField,
+  sortOrder = 'desc',
   loading = false,
   totalCount = data.length,
   onPageChange,
@@ -129,9 +144,10 @@ export function UsersTable({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     () => ({
-      // По умолчанию колонка «Роль» скрыта; раскроется через эффект ниже,
-      // если у проекта включён b2b-флаг.
-      partnerRole: false
+      // По умолчанию b2b-колонки «Роль»/«Организация» скрыты; раскроются через
+      // эффект ниже, если у проекта включён b2b-флаг.
+      partnerRole: false,
+      organizationName: false
     })
   );
   const [rowSelection, setRowSelection] = useState({});
@@ -218,6 +234,38 @@ export function UsersTable({
     onPageSizeChange?.(newPageSize);
   };
 
+  /**
+   * Кликабельный заголовок колонки с серверной сортировкой. Клик переключает
+   * направление (asc/desc) и зовёт onServerSort. Стрелка показывает активное
+   * поле и направление. Если onServerSort не передан — обычный текст.
+   */
+  const sortHeader = (field: string, label: string) => {
+    if (!onServerSort) {
+      return <span className='px-3'>{label}</span>;
+    }
+    const active = sortField === field;
+    const nextOrder: 'asc' | 'desc' =
+      active && sortOrder === 'asc' ? 'desc' : 'asc';
+    return (
+      <Button
+        variant='ghost'
+        onClick={() => onServerSort(field, nextOrder)}
+        className={cn(active && 'text-foreground font-semibold')}
+      >
+        {label}
+        {active ? (
+          sortOrder === 'asc' ? (
+            <ArrowUp className='ml-2 h-4 w-4' />
+          ) : (
+            <ArrowDown className='ml-2 h-4 w-4' />
+          )
+        ) : (
+          <ArrowUpDown className='ml-2 h-4 w-4 opacity-40' />
+        )}
+      </Button>
+    );
+  };
+
   const columns: ColumnDef<User>[] = [
     {
       id: 'select',
@@ -247,17 +295,7 @@ export function UsersTable({
     },
     {
       accessorKey: 'name',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Пользователь
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
+      header: () => sortHeader('name', 'Пользователь'),
       cell: ({ row }) => {
         const user = row.original;
         const initials =
@@ -289,17 +327,7 @@ export function UsersTable({
     },
     {
       accessorKey: 'isActive',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Статус
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
+      header: () => sortHeader('isActive', 'Статус'),
       cell: ({ row }) => {
         const isActive = row.getValue('isActive') as boolean;
         return (
@@ -311,17 +339,7 @@ export function UsersTable({
     },
     {
       accessorKey: 'partnerRole',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Роль
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
+      header: () => sortHeader('partnerRole', 'Роль'),
       cell: ({ row }) => {
         const role = row.getValue('partnerRole') as string | undefined;
         return <PartnerRoleBadge role={role} />;
@@ -330,18 +348,22 @@ export function UsersTable({
       enableHiding: true
     },
     {
-      accessorKey: 'email',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Email
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
+      accessorKey: 'organizationName',
+      header: () => sortHeader('organization', 'Организация'),
+      cell: ({ row }) => {
+        const org = row.getValue('organizationName') as string | undefined;
+        return org ? (
+          <Badge variant='outline'>{org}</Badge>
+        ) : (
+          <span className='text-muted-foreground text-sm'>—</span>
         );
       },
+      // Видимость управляется columnVisibility (только при enablePartnerRoles)
+      enableHiding: true
+    },
+    {
+      accessorKey: 'email',
+      header: () => sortHeader('email', 'Email'),
       cell: ({ row }) => (
         <div className='font-mono text-sm'>{row.getValue('email') || '-'}</div>
       )
@@ -363,17 +385,7 @@ export function UsersTable({
     },
     {
       accessorKey: 'bonusBalance',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Активные бонусы
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
+      header: () => sortHeader('bonusBalance', 'Активные бонусы'),
       cell: ({ row }) => {
         const balance = row.getValue('bonusBalance') as number;
         return (
@@ -389,17 +401,7 @@ export function UsersTable({
     },
     {
       accessorKey: 'currentLevel',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Уровень
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
+      header: () => sortHeader('currentLevel', 'Уровень'),
       cell: ({ row }) => {
         const level = row.getValue('currentLevel') as string | undefined;
         return (
@@ -411,17 +413,7 @@ export function UsersTable({
     },
     {
       accessorKey: 'createdAt',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Регистрация
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
+      header: () => sortHeader('createdAt', 'Регистрация'),
       cell: ({ row }) => {
         const date = row.getValue('createdAt') as Date;
         return (
@@ -508,6 +500,9 @@ export function UsersTable({
       pagination
     },
     manualPagination: true,
+    // Сортировка выполняется на сервере (onServerSort), TanStack не
+    // переупорядочивает строки локально.
+    manualSorting: true,
     pageCount: Math.ceil(totalCount / pageSize)
   });
 
@@ -530,7 +525,8 @@ export function UsersTable({
   useEffect(() => {
     setColumnVisibility((prev) => ({
       ...prev,
-      partnerRole: Boolean(enablePartnerRoles)
+      partnerRole: Boolean(enablePartnerRoles),
+      organizationName: Boolean(enablePartnerRoles)
     }));
   }, [enablePartnerRoles]);
 

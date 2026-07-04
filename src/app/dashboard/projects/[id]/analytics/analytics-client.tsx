@@ -47,6 +47,7 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
   const [ordersData, setOrdersData] = useState<any>(null);
   const [productsData, setProductsData] = useState<any>(null);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [orgData, setOrgData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,19 +57,22 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ordersRes, productsRes, analyticsRes] = await Promise.all([
+      const [ordersRes, productsRes, analyticsRes, orgRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/analytics/orders?period=${period}`),
         fetch(`/api/projects/${projectId}/analytics/products?period=${period}`),
-        fetch(`/api/projects/${projectId}/analytics`)
+        fetch(`/api/projects/${projectId}/analytics`),
+        fetch(`/api/projects/${projectId}/analytics/organizations`)
       ]);
 
       const orders = await ordersRes.json();
       const products = await productsRes.json();
       const analytics = await analyticsRes.json();
+      const orgs = await orgRes.json();
 
       setOrdersData(orders);
       setProductsData(products);
       setAnalyticsData(analytics);
+      setOrgData(orgs);
     } catch (error) {
       console.error('Failed to load analytics:', error);
     } finally {
@@ -187,6 +191,9 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
           <TabsTrigger value='top'>Топ товаров</TabsTrigger>
           <TabsTrigger value='cohorts'>Когорты</TabsTrigger>
           <TabsTrigger value='referrals'>Рефералы</TabsTrigger>
+          {orgData?.enabled && orgData?.organizations?.length > 0 && (
+            <TabsTrigger value='organizations'>Организации</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Orders Tab */}
@@ -476,6 +483,76 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Organizations Tab (b2b) */}
+        {orgData?.enabled && orgData?.organizations?.length > 0 && (
+          <TabsContent value='organizations' className='space-y-4'>
+            <Card className='glass-card border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
+              <CardHeader>
+                <CardTitle>Аналитика по организациям</CardTitle>
+                <CardDescription>
+                  Пользователи и бонусы в разрезе b2b-организаций
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className='overflow-x-auto'>
+                  <table className='w-full text-sm'>
+                    <thead>
+                      <tr className='border-b dark:border-zinc-800'>
+                        <th className='p-2 text-left font-medium'>
+                          Организация
+                        </th>
+                        <th className='p-2 text-right font-medium'>
+                          Пользователей
+                        </th>
+                        <th className='p-2 text-right font-medium'>
+                          Активные бонусы
+                        </th>
+                        <th className='p-2 text-right font-medium'>
+                          Всего начислено
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...orgData.organizations]
+                        .sort(
+                          (a: any, b: any) =>
+                            (b.usersCount || 0) - (a.usersCount || 0)
+                        )
+                        .map((org: any) => (
+                          <tr
+                            key={org.id}
+                            className='border-b dark:border-zinc-800'
+                          >
+                            <td className='p-2 font-medium'>
+                              <span className='flex items-center gap-2'>
+                                {org.name}
+                                {!org.isActive && (
+                                  <Badge
+                                    variant='secondary'
+                                    className='text-xs'
+                                  >
+                                    неактивна
+                                  </Badge>
+                                )}
+                              </span>
+                            </td>
+                            <td className='p-2 text-right'>{org.usersCount}</td>
+                            <td className='p-2 text-right'>
+                              {org.activeBonuses.toLocaleString('ru-RU')}
+                            </td>
+                            <td className='p-2 text-right'>
+                              {org.totalEarned.toLocaleString('ru-RU')}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

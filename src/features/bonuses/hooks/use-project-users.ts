@@ -24,6 +24,12 @@ interface UseProjectUsersOptions {
    * фильтр не применяется (возвращаются все роли, включая CLIENT).
    */
   roles?: Array<'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'>;
+  /** Фильтр по организации (b2b). Передаётся как `?organizationId=<id>`. */
+  organizationId?: string | null;
+  /** Поле сортировки (серверная). Например `name`, `registeredAt`, `bonusBalance`. */
+  sort?: string | null;
+  /** Направление сортировки. */
+  order?: 'asc' | 'desc';
 }
 
 interface UseProjectUsersReturn {
@@ -53,7 +59,10 @@ export function useProjectUsers({
   initialUsers = [],
   pageSize = 50,
   searchTerm = '',
-  roles
+  roles,
+  organizationId,
+  sort,
+  order = 'desc'
 }: UseProjectUsersOptions = {}): UseProjectUsersReturn {
   // Защита от ошибок инициализации - проверяем базовые типы
   if (typeof pageSize !== 'number' || pageSize <= 0) {
@@ -135,6 +144,15 @@ export function useProjectUsers({
           params.set('role', roles.join(','));
         }
 
+        if (organizationId) {
+          params.set('organizationId', organizationId);
+        }
+
+        if (sort) {
+          params.set('sort', sort);
+          params.set('order', order);
+        }
+
         const response = await fetch(
           `/api/projects/${projectId}/users?${params}`,
           {
@@ -196,7 +214,10 @@ export function useProjectUsers({
             referralCode: user.referralCode,
             totalPurchases: user.totalPurchases,
             partnerRole: user.partnerRole || 'CLIENT',
-            outboundReferralPlanId: user.outboundReferralPlanId ?? null
+            outboundReferralPlanId: user.outboundReferralPlanId ?? null,
+            organizationId: user.organizationId ?? null,
+            organizationName: user.organizationName ?? null,
+            organizationSlug: user.organizationSlug ?? null
           })
         );
 
@@ -253,7 +274,15 @@ export function useProjectUsers({
         setIsLoading(false);
       }
     },
-    [projectId, pageSize, currentSearchTerm, roles?.join(',') ?? '']
+    [
+      projectId,
+      pageSize,
+      currentSearchTerm,
+      roles?.join(',') ?? '',
+      organizationId ?? '',
+      sort ?? '',
+      order
+    ]
   );
 
   /**
