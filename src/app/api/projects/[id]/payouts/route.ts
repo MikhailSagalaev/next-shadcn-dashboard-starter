@@ -84,6 +84,7 @@ export async function GET(
       currency: p.currency,
       status: p.status,
       payoutMethod: p.payoutMethod,
+      payoutDetails: p.payoutDetails,
       requestedAt: p.requestedAt.toISOString(),
       reviewedAt: p.reviewedAt?.toISOString() ?? null,
       paidAt: p.paidAt?.toISOString() ?? null,

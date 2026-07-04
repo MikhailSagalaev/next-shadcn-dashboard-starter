@@ -514,11 +514,17 @@ export class WorkflowRuntimeService {
         }
 
         if (!waitingExecution && waitType === 'contact') {
-          logger.warn(
-            'Contact received without waiting workflow — ignoring to avoid restart loop',
+          // ✅ ФИКС: раньше здесь был безусловный return true без ответа боту —
+          // если trigger.contact-нода есть в сценарии (например b2b-partner-cabinet),
+          // это делало её мёртвой: контакт тихо проглатывался без единого ответа.
+          // Теперь просто идём дальше по общему пути ниже — он создаёт новый
+          // execution и вызывает processor.process(), который сам находит
+          // подходящую trigger.contact-ноду через findTriggerNode() (приоритет 1),
+          // точно так же, как это уже работает для остальных типов сообщений.
+          logger.info(
+            'Contact получен без waiting execution — пробуем найти trigger.contact в активном сценарии',
             { projectId, chatId }
           );
-          return true;
         }
 
         console.log('🔧 Waiting execution search result', {

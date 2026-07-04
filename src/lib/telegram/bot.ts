@@ -176,7 +176,9 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
           data.startsWith('partner_team_page:') ||
           data === 'partner_requests' ||
           data === 'payout_request' ||
-          data.startsWith('payout_cancel:');
+          data.startsWith('payout_cancel:') ||
+          data.startsWith('payout_method:') ||
+          data === 'payout_method_cancel';
 
         if (isPartnerCabinet) {
           const handled = await PartnerCabinetService.tryHandleTelegramCallback(
@@ -185,6 +187,17 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
           );
           if (handled) return;
         }
+      }
+
+      // Партнёрский кабинет: реквизиты вывода, введённые после выбора способа
+      // (payout_method:*) — обычным текстовым сообщением, до workflow.
+      if (trigger !== 'callback' && ctx.message?.text) {
+        const handledPayoutDetails =
+          await PartnerCabinetService.tryHandlePayoutDetailsMessage(
+            projectId,
+            ctx
+          );
+        if (handledPayoutDetails) return;
       }
 
       // Проверяем наличие активного workflow ДО выполнения

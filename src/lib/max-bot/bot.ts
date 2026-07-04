@@ -52,9 +52,26 @@ export function createMaxBot(token: string, projectId: string) {
         const data = (ctx as any).callback?.payload as string | undefined;
         if (
           data === 'payout_request' ||
-          (typeof data === 'string' && data.startsWith('payout_cancel:'))
+          data === 'payout_method_cancel' ||
+          (typeof data === 'string' &&
+            (data.startsWith('payout_cancel:') ||
+              data.startsWith('payout_method:')))
         ) {
           const handled = await handleMaxPayoutCallback(projectId, ctx, data);
+          if (handled) return;
+        }
+      }
+
+      // Партнёрский кабинет: реквизиты вывода, введённые после выбора способа
+      // (payout_method:*) — обычным текстовым сообщением, до workflow.
+      if (ctx.updateType === 'message_created') {
+        const text = ctx.message?.body?.text;
+        if (text) {
+          const handled = await handleMaxPayoutDetailsMessage(
+            projectId,
+            ctx,
+            text
+          );
           if (handled) return;
         }
       }
@@ -168,7 +185,7 @@ async function handleMaxPayoutCallback(
     projectId,
     user.id,
     data,
-    { source: 'max_bot' }
+    { source: 'max_bot', externalUserId: String(maxUserId), platform: 'max' }
   );
   if (!result) return false;
 
@@ -177,6 +194,38 @@ async function handleMaxPayoutCallback(
   } catch {
     /* answer мог устареть — не критично */
   }
+
+  const extra: Record<string, unknown> = { format: 'html' };
+  if (result.replyMarkup) {
+    const kb = convertTelegramKeyboardToMax(result.replyMarkup);
+    if (kb) extra.attachments = [kb];
+  }
+  await ctx.reply(result.text, extra as any);
+  return true;
+}
+
+/**
+ * Обрабатывает текстовое сообщение с реквизитами вывода — второй шаг после
+ * выбора способа (payout_method:*) на MAX. Если для пользователя нет
+ * ожидающего выбора способа, возвращает false — сообщение не про вывод денег.
+ *
+ * @returns true, если сообщение обработано (workflow дальше не запускаем).
+ */
+async function handleMaxPayoutDetailsMessage(
+  projectId: string,
+  ctx: Context,
+  text: string
+): Promise<boolean> {
+  const maxUserId = ctx.user?.user_id;
+  if (!maxUserId) return false;
+
+  const result = await PartnerCabinetService.resolvePayoutDetailsCapture(
+    projectId,
+    'max',
+    String(maxUserId),
+    text
+  );
+  if (!result) return false;
 
   const extra: Record<string, unknown> = { format: 'html' };
   if (result.replyMarkup) {

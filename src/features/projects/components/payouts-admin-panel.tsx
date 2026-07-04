@@ -55,6 +55,7 @@ interface PayoutItem {
   currency: string;
   status: PayoutStatus;
   payoutMethod: string | null;
+  payoutDetails: { raw?: string } | null;
   requestedAt: string;
   paidAt: string | null;
   rejectReason: string | null;
@@ -83,6 +84,23 @@ const STATUS_VARIANT: Record<
   CANCELLED: 'outline',
   FAILED: 'destructive'
 };
+
+const PAYOUT_METHOD_LABEL: Record<string, string> = {
+  card: 'Карта',
+  sbp: 'Телефон (СБП)',
+  wallet: 'Кошелёк'
+};
+
+function formatPayoutRequisites(item: PayoutItem): string {
+  const methodLabel = item.payoutMethod
+    ? (PAYOUT_METHOD_LABEL[item.payoutMethod] ?? item.payoutMethod)
+    : null;
+  const raw = item.payoutDetails?.raw;
+  if (methodLabel && raw) return `${methodLabel}: ${raw}`;
+  if (raw) return raw;
+  if (methodLabel) return methodLabel;
+  return '—';
+}
 
 export function PayoutsAdminPanel({ projectId }: PayoutsAdminPanelProps) {
   const { toast } = useToast();
@@ -220,6 +238,7 @@ export function PayoutsAdminPanel({ projectId }: PayoutsAdminPanelProps) {
               <TableRow>
                 <TableHead>Партнёр</TableHead>
                 <TableHead>Сумма</TableHead>
+                <TableHead>Реквизиты</TableHead>
                 <TableHead>Статус</TableHead>
                 <TableHead>Подана</TableHead>
                 <TableHead className='text-right'>Действия</TableHead>
@@ -233,6 +252,9 @@ export function PayoutsAdminPanel({ projectId }: PayoutsAdminPanelProps) {
                   </TableCell>
                   <TableCell>
                     {p.amount.toLocaleString('ru-RU')} {p.currency}
+                  </TableCell>
+                  <TableCell className='max-w-[220px] truncate text-sm'>
+                    {formatPayoutRequisites(p)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[p.status]}>
