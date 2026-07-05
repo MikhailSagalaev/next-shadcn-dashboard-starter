@@ -185,46 +185,58 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [memberReferrerId, setMemberReferrerId] = useState('');
   const [memberPlanId, setMemberPlanId] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [orgRes, membersRes, plansRes] = await Promise.all([
-        fetch(`/api/projects/${projectId}/organizations/${organizationId}`),
-        fetch(
-          `/api/projects/${projectId}/organizations/${organizationId}/members`
-        ),
-        fetch(`/api/projects/${projectId}/referral-commission-plans`)
-      ]);
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      // silent — фоновое обновление после сохранения: не показываем полноэкранный
+      // спиннер (иначе вьюха схлопывается и кажется, будто изменения не приняты).
+      if (!opts?.silent) setLoading(true);
+      try {
+        // cache: 'no-store' — иначе браузер отдаёт закэшированный ответ и свежие
+        // данные видны только после полной перезагрузки страницы.
+        const [orgRes, membersRes, plansRes] = await Promise.all([
+          fetch(`/api/projects/${projectId}/organizations/${organizationId}`, {
+            cache: 'no-store'
+          }),
+          fetch(
+            `/api/projects/${projectId}/organizations/${organizationId}/members`,
+            { cache: 'no-store' }
+          ),
+          fetch(`/api/projects/${projectId}/referral-commission-plans`, {
+            cache: 'no-store'
+          })
+        ]);
 
-      if (orgRes.ok) {
-        const data = await orgRes.json();
-        setOrganization(data.organization);
-        setStats(data.stats);
-        setHierarchyWarnings(data.hierarchyWarnings ?? []);
+        if (orgRes.ok) {
+          const data = await orgRes.json();
+          setOrganization(data.organization);
+          setStats(data.stats);
+          setHierarchyWarnings(data.hierarchyWarnings ?? []);
+        }
+        if (membersRes.ok) {
+          const data = await membersRes.json();
+          setMembers(data.members ?? []);
+        }
+        if (plansRes.ok) {
+          const data = await plansRes.json();
+          setPlans(
+            (data.plans ?? []).map((p: { id: string; name: string }) => ({
+              id: p.id,
+              name: p.name
+            }))
+          );
+        }
+      } catch {
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось загрузить организацию',
+          variant: 'destructive'
+        });
+      } finally {
+        if (!opts?.silent) setLoading(false);
       }
-      if (membersRes.ok) {
-        const data = await membersRes.json();
-        setMembers(data.members ?? []);
-      }
-      if (plansRes.ok) {
-        const data = await plansRes.json();
-        setPlans(
-          (data.plans ?? []).map((p: { id: string; name: string }) => ({
-            id: p.id,
-            name: p.name
-          }))
-        );
-      }
-    } catch {
-      toast({
-        title: 'Ошибка',
-        description: 'Не удалось загрузить организацию',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, organizationId, toast]);
+    },
+    [projectId, organizationId, toast]
+  );
 
   useEffect(() => {
     load();
@@ -263,7 +275,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       if (!res.ok) throw new Error(data.error || 'Не удалось сохранить');
       toast({ title: 'Сохранено' });
       setEditOpen(false);
-      await load();
+      await load({ silent: true });
     } catch (e) {
       toast({
         title: 'Ошибка',
@@ -302,7 +314,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       setNewUserId('');
       setNewReferrerId('');
       setNewPlanId('');
-      await load();
+      await load({ silent: true });
     } catch (e) {
       toast({
         title: 'Ошибка',
@@ -343,7 +355,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       if (!res.ok) throw new Error(data.error || 'Не удалось сохранить');
       toast({ title: 'Участник обновлён' });
       setEditMember(null);
-      await load();
+      await load({ silent: true });
     } catch (e) {
       toast({
         title: 'Ошибка',
@@ -367,7 +379,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       if (!res.ok) throw new Error(data.error || 'Не удалось удалить');
       toast({ title: 'Участник убран из организации' });
       setRemoveMemberTarget(null);
-      await load();
+      await load({ silent: true });
     } catch (e) {
       toast({
         title: 'Ошибка',
