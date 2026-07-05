@@ -1640,7 +1640,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     </Button>
                   </div>
                   <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
-                    <div className='space-y-1.5'>
+                    <div className='min-w-0 space-y-1.5'>
                       <Label
                         htmlFor='partner-role-select'
                         className='text-xs font-medium'
@@ -1663,7 +1663,10 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                           }
                         }}
                       >
-                        <SelectTrigger id='partner-role-select'>
+                        <SelectTrigger
+                          id='partner-role-select'
+                          className='w-full'
+                        >
                           <SelectValue placeholder='Выберите роль' />
                         </SelectTrigger>
                         <SelectContent>
@@ -1677,7 +1680,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     </div>
                     {/* Outbound-план виден только для партнёров */}
                     {profileRole !== 'CLIENT' && (
-                      <div className='space-y-1.5'>
+                      <div className='min-w-0 space-y-1.5'>
                         <Label
                           htmlFor='outbound-plan-select'
                           className='text-xs font-medium'
@@ -1693,7 +1696,10 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                           }
                           disabled={referralPlans.length === 0}
                         >
-                          <SelectTrigger id='outbound-plan-select'>
+                          <SelectTrigger
+                            id='outbound-plan-select'
+                            className='w-full'
+                          >
                             <SelectValue
                               placeholder={
                                 referralPlans.length === 0

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { CopyButton } from '@/components/ui/copy-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -521,15 +522,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         </div>
       )}
 
-      <Alert>
-        <Building2 className='h-4 w-4' />
-        <AlertTitle>Реферальная ссылка сети</AlertTitle>
-        <AlertDescription className='text-sm'>
-          Партнёры этой организации делят ссылки с{' '}
-          <code className='text-xs'>utm_org={organization.slug}</code>. Клиенты
-          автоматически попадают в эту сеть при регистрации по такой ссылке.
-        </AlertDescription>
-      </Alert>
+      {/* Компактная метка сети вместо крупного баннера-объяснения.
+          Подробности вынесены во вкладку «О сети». */}
+      <div className='text-muted-foreground flex flex-wrap items-center gap-2 text-sm'>
+        <Building2 className='h-4 w-4 shrink-0' />
+        <span>Метка сети:</span>
+        <code className='bg-muted rounded px-1.5 py-0.5 text-xs'>
+          utm_org={organization.slug}
+        </code>
+        <CopyButton
+          value={`utm_org=${organization.slug}`}
+          label='Скопировать метку'
+        />
+      </div>
 
       <Tabs defaultValue='members'>
         <TabsList>
@@ -614,13 +619,31 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           </Card>
         </TabsContent>
 
-        <TabsContent value='about' className='mt-4'>
+        <TabsContent value='about' className='mt-4 space-y-4'>
           <Card>
             <CardHeader>
               <CardTitle>Описание</CardTitle>
             </CardHeader>
             <CardContent className='text-muted-foreground text-sm'>
               {organization.description || 'Описание не задано.'}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Как работает реферальная ссылка сети</CardTitle>
+            </CardHeader>
+            <CardContent className='text-muted-foreground space-y-2 text-sm'>
+              <p>
+                Партнёры этой организации делятся ссылками с меткой{' '}
+                <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                  utm_org={organization.slug}
+                </code>
+                .
+              </p>
+              <p>
+                Клиент, зарегистрировавшийся по такой ссылке, автоматически
+                попадает в эту сеть, а комиссии распределяются по её иерархии.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -664,7 +687,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 value={editPlanId || '__none__'}
                 onValueChange={(v) => setEditPlanId(v === '__none__' ? '' : v)}
               >
-                <SelectTrigger>
+                <SelectTrigger className='w-full'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -746,7 +769,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                   );
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className='w-full'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -821,7 +844,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 value={memberRole}
                 onValueChange={(v) => setMemberRole(v as typeof memberRole)}
               >
-                <SelectTrigger>
+                <SelectTrigger className='w-full'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -853,7 +876,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                   setMemberPlanId(v === '__none__' ? '' : v)
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className='w-full'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
