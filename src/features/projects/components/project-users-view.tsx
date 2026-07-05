@@ -99,6 +99,7 @@ import { UserImportDialog } from './user-import-dialog';
 import { UsersTable } from '../../bonuses/components/users-table';
 import { UserMetadataSection } from '../../bonuses/components/user-metadata-section';
 import { UserReferralsSection } from '../../bonuses/components/user-referrals-section';
+import { ReferrerAssignField } from '../../bonuses/components/referrer-assign-field';
 import {
   PARTNER_ROLE_OPTIONS,
   PartnerRoleBadge,
@@ -1567,12 +1568,19 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                       : 'Не указана'}
                   </p>
                 </div>
-                <div>
-                  <Label className='text-sm font-medium'>Приведён</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {(profileUser as any).referrerName || 'Не указан'}
-                  </p>
-                </div>
+                <ReferrerAssignField
+                  projectId={projectId}
+                  userId={profileUser.id}
+                  currentReferrerName={(profileUser as any).referrerName}
+                  onAssigned={(referrerName) => {
+                    setProfileUser((prev) =>
+                      prev
+                        ? ({ ...prev, referrerName } as UserWithBonuses)
+                        : prev
+                    );
+                    loadUsers(currentPage);
+                  }}
+                />
                 {(project as any)?.operationMode === 'WITHOUT_BOT' && (
                   <div className='rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200'>
                     Режим без Telegram бота: поля Telegram скрыты, пользователи

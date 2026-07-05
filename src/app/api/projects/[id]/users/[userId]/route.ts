@@ -47,7 +47,10 @@ export async function GET(
     const user = await db.user.findFirst({
       where: { id: userId, projectId },
       include: {
-        organization: { select: { slug: true, isActive: true } }
+        organization: { select: { slug: true, isActive: true } },
+        referrer: {
+          select: { firstName: true, lastName: true, phone: true, email: true }
+        }
       }
     });
 
@@ -103,6 +106,12 @@ export async function GET(
           ? user.organization.slug
           : null,
       referredBy: user.referredBy ?? null,
+      referrerName: (user as any).referrer
+        ? `${(user as any).referrer.firstName || ''} ${(user as any).referrer.lastName || ''}`.trim() ||
+          (user as any).referrer.phone ||
+          (user as any).referrer.email ||
+          null
+        : null,
       outboundReferralPlanId: (user as any).outboundReferralPlanId ?? null,
       currentLevel: user.currentLevel || null,
       bonusBalance,
