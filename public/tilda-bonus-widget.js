@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.15
+ * @version: 2.9.16
  * @author: AI Assistant + User
  * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
@@ -4282,6 +4282,26 @@
     loadUserBalance: async function (contact) {
       if (!contact || (!contact.email && !contact.phone)) return;
 
+      // ✅ Не отправляем НЕВАЛИДНЫЙ email. Иначе при вводе email посимвольно
+      // (onUserInputChange) промежуточные значения вроде "rest@mail." улетают
+      // на сервер и дают 404 — засоряют лог запросов и тратят обращения.
+      // Телефон намеренно НЕ валидируем строго (форматированные номера с
+      // скобками/дефисами длиннее лимита валидатора — нормализуются на сервере).
+      const validEmail = this.validateEmail(contact.email)
+        ? contact.email
+        : null;
+      const phone = contact.phone || null;
+      if (!validEmail && !phone) {
+        this.log(
+          '⏭️ Пропускаем загрузку баланса: email ещё не введён полностью',
+          {
+            emailProvided: !!contact.email,
+            phoneProvided: !!contact.phone
+          }
+        );
+        return;
+      }
+
       try {
         this.showLoading(true);
         // Отменяем предыдущий запрос, если он ещё активен
@@ -4294,8 +4314,8 @@
         this.state.activeFetchController = controller;
 
         const params = new URLSearchParams();
-        if (contact.email) params.append('email', contact.email);
-        if (contact.phone) params.append('phone', contact.phone);
+        if (validEmail) params.append('email', validEmail);
+        if (phone) params.append('phone', phone);
 
         const data = await this.makeApiRequest(
           `${this.config.apiUrl}/api/projects/${this.config.projectId}/users/balance?${params}`
