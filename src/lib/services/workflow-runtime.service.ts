@@ -1247,6 +1247,49 @@ export class WorkflowRuntimeService {
                       : null
                   });
 
+                  // ✅ ФИКС: некоторые сценарии (b2b-partner-cabinet) вешают
+                  // на ноду, которая запрашивает контакт, только "тупиковое"
+                  // продолжение (сразу flow.end) — реальная обработка контакта
+                  // (поиск по телефону, привязка Telegram и т.п.) живёт в
+                  // отдельной stand-alone trigger.contact-ноде, которая не
+                  // связана инкаминг-connection'ами и обычно находится через
+                  // findTriggerNode(). Раньше в этом случае execution просто
+                  // доходил до flow.end и завершался без единого ответа
+                  // пользователю. Если следующая по графу нода — тупик, а в
+                  // сценарии есть отдельная trigger.contact-нода — выполняем
+                  // именно её (аналогично тому, как это уже сделано выше для
+                  // trigger.callback).
+                  if (
+                    contactPhone &&
+                    nextNodeId &&
+                    versionToUse.nodes[nextNodeId]?.type === 'flow.end'
+                  ) {
+                    const contactTriggerNode = Object.values(
+                      versionToUse.nodes
+                    ).find((n: any) => n.type === 'trigger.contact') as
+                      | WorkflowNode
+                      | undefined;
+
+                    if (contactTriggerNode) {
+                      console.log(
+                        '🔧 Next node after contact is a dead-end flow.end — routing to standalone trigger.contact node instead',
+                        {
+                          currentNodeId,
+                          deadEndNodeId: nextNodeId,
+                          contactTriggerNodeId: contactTriggerNode.id
+                        }
+                      );
+                      await (processor as any).executeWorkflow(
+                        resumedContext,
+                        contactTriggerNode.id
+                      );
+                      console.log(
+                        '🔧 Workflow resumed via standalone trigger.contact node'
+                      );
+                      return true;
+                    }
+                  }
+
                   if (nextNodeId) {
                     console.log(
                       '🔧 Resuming workflow from next node after contact/input',

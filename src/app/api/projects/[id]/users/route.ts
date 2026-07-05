@@ -186,7 +186,15 @@ async function getHandler(
         // Организация (b2b) — для колонки/фильтра «Организация»
         organizationId: (user as any).organizationId ?? null,
         organizationName: (user as any).organization?.name ?? null,
-        organizationSlug: (user as any).organization?.slug ?? null
+        organizationSlug: (user as any).organization?.slug ?? null,
+        // Кто пригласил (реферер) — для карточки профиля
+        referredBy: (user as any).referredBy ?? null,
+        referrerName: (user as any).referrer
+          ? `${(user as any).referrer.firstName || ''} ${(user as any).referrer.lastName || ''}`.trim() ||
+            (user as any).referrer.phone ||
+            (user as any).referrer.email ||
+            null
+          : null
       };
     });
 

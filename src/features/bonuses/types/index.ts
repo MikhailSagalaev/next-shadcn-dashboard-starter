@@ -16,6 +16,8 @@ export interface DisplayUser {
   currentLevel?: string;
   referralCode?: string;
   referredBy?: string;
+  /** Отображаемое имя пригласившего (реферера), если есть. */
+  referrerName?: string | null;
   totalPurchases?: number;
   projectId?: string;
   birthDate?: Date | null;
