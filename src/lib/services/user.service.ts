@@ -22,6 +22,7 @@ import { ReferralCommissionService } from './referral-commission.service';
 import { PartnerNotificationService } from './partner-notification.service';
 import { PartnerOrganizationService } from './partner-organization.service';
 import { PartnerTeamService } from './partner-team.service';
+import { ReferrerAssignmentService } from './referrer-assignment.service';
 import {
   sendBonusNotification,
   sendBonusSpentNotification
@@ -330,111 +331,41 @@ export class UserService {
   /**
    * Ручная привязка реферера админом из карточки профиля. В отличие от
    * linkReferralWithPolicy, НЕ создаёт заявку на одобрение (это явное действие
-   * администратора — оверрайд), а сразу проставляет referredBy, синхронизирует
-   * b2b-attribution комиссий и уведомляет вышестоящих. Защищено от цикла:
-   * нельзя назначить реферером того, кто уже (пра)приглашён этим пользователем.
+   * администратора — оверрайд). Делегирует запись в ReferrerAssignmentService —
+   * единственную точку, которая также используется при назначении реферера
+   * из карточки b2b-организации, чтобы обе формы одинаково проверяли цикл,
+   * синхронизировали attribution комиссий и уведомляли вышестоящих.
    */
   static async assignReferrerManually(params: {
     projectId: string;
     userId: string;
     referrerId: string;
-  }): Promise<{ referrerId: string; referrerName: string | null }> {
+  }): Promise<{
+    referrerId: string;
+    referrerName: string | null;
+    attributionLocked: boolean;
+  }> {
     const { projectId, userId, referrerId } = params;
 
-    if (referrerId === userId) {
-      throw new Error('Пользователь не может быть реферером сам себе');
-    }
-
-    const [user, referrer] = await Promise.all([
-      db.user.findFirst({
-        where: { id: userId, projectId },
-        select: { id: true, organizationId: true }
-      }),
-      db.user.findFirst({
-        where: { id: referrerId, projectId },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          phone: true,
-          email: true,
-          organizationId: true
-        }
-      })
-    ]);
-
-    if (!user) throw new Error('Пользователь не найден');
-    if (!referrer) throw new Error('Реферер не найден');
-
-    // Защита от цикла: поднимаемся по цепочке referredBy реферера — если
-    // встретим userId, значит назначение замкнёт петлю.
-    let cursor: string | null = referrerId;
-    const visited = new Set<string>();
-    while (cursor) {
-      if (cursor === userId) {
-        throw new Error(
-          'Нельзя назначить реферером того, кто уже приглашён этим пользователем'
-        );
-      }
-      if (visited.has(cursor)) break; // страховка от уже существующей петли
-      visited.add(cursor);
-      const parent: { referredBy: string | null } | null =
-        await db.user.findFirst({
-          where: { id: cursor, projectId },
-          select: { referredBy: true }
-        });
-      cursor = parent?.referredBy ?? null;
-    }
-
-    const organizationId = user.organizationId ?? referrer.organizationId;
-
-    await db.user.update({
-      where: { id: userId },
-      data: {
-        referredBy: referrerId,
-        ...(user.organizationId ? {} : organizationId ? { organizationId } : {})
-      }
-    });
-
-    // Синхронизация комиссионной attribution (идемпотентна — если уже была,
-    // не перезапишется, чтобы не ломать историю начислений).
-    try {
-      await ReferralCommissionService.syncAttributionForInvitedUser({
-        invitedUserId: userId,
-        projectId,
-        referrerId,
-        organizationId: organizationId ?? null
-      });
-    } catch (attrError) {
-      logger.error('Ошибка синхронизации attribution при ручной привязке', {
-        userId,
-        projectId,
-        referrerId,
-        error:
-          attrError instanceof Error ? attrError.message : 'Неизвестная ошибка',
-        component: 'user-service'
-      });
-    }
-
-    void PartnerNotificationService.notifyAncestorsAboutNewMember(
+    const result = await ReferrerAssignmentService.setReferrer({
+      projectId,
       userId,
-      projectId
-    );
+      referrerId
+    });
 
     logger.info('Реферер привязан вручную', {
       userId,
       projectId,
       referrerId,
+      attributionLocked: result.attributionLocked,
       component: 'user-service'
     });
 
-    const referrerName =
-      `${referrer.firstName ?? ''} ${referrer.lastName ?? ''}`.trim() ||
-      referrer.phone ||
-      referrer.email ||
-      null;
-
-    return { referrerId, referrerName };
+    return {
+      referrerId,
+      referrerName: result.referrerName,
+      attributionLocked: result.attributionLocked
+    };
   }
 
   // Поиск пользователя по email или телефону в рамках проекта

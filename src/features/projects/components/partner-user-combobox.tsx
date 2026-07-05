@@ -2,7 +2,7 @@
  * @file: partner-user-combobox.tsx
  * @description: Searchable combobox для выбора пользователя-партнёра проекта.
  *               Используется в `referral-commission-plans-panel` для назначения
- *               outbound-плана конкретному тренеру/менеджеру/директору.
+ *               outbound-плана конкретному тренеру/менеджеру/руководителю.
  *               Поиск debounced 300ms через
  *               GET /api/projects/{id}/users?search={q}&role=TRAINER,MANAGER,DIRECTOR.
  *               (b2b-referral-hierarchy Phase 6.1–6.3)

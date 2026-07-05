@@ -26,6 +26,7 @@ import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { EmptyState } from '@/components/composite';
 import { HierarchyTree } from '@/features/projects/components/hierarchy-tree';
+import { JoinRequestsPanel } from '@/features/projects/components/join-requests-panel';
 import { getHierarchyTreeSafe, type HierarchyPeriod } from './data-access';
 
 export const metadata: Metadata = {
@@ -120,6 +121,8 @@ export default async function HierarchyPage({
         />
       ) : (
         <>
+          <JoinRequestsPanel projectId={id} />
+
           {/* Stats summary */}
           <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-5'>
             <SummaryCard

@@ -59,13 +59,13 @@ const loyaltySystemTemplate: BotTemplate = {
   isPublic: true
 };
 
-// ✨ Phase 4: Шаблон «B2B Партнёр» — личный кабинет тренера / менеджера / директора
+// ✨ Phase 4: Шаблон «B2B Партнёр» — личный кабинет тренера / менеджера / руководителя
 // в b2b-иерархии. Меню адаптируется под `user.partnerRole`.
 const b2bPartnerCabinetTemplate: BotTemplate = {
   id: 'b2b-partner-cabinet',
   name: 'B2B Партнёр',
   description:
-    'Кабинет партнёра в b2b-иерархии: меню адаптируется под роль (тренер / менеджер / директор), показывает команду, выплаты, реферальную ссылку и сводку. Требует включённого `enablePartnerRoles` у проекта.',
+    'Кабинет партнёра в b2b-иерархии: меню адаптируется под роль (тренер / менеджер / руководитель), показывает команду, выплаты, реферальную ссылку и сводку. Требует включённого `enablePartnerRoles` у проекта.',
   category: 'loyalty',
   difficulty: 'advanced',
   tags: [
@@ -96,7 +96,7 @@ const b2bPartnerCabinetTemplate: BotTemplate = {
     'Меню по роли (CLIENT / TRAINER / MANAGER / DIRECTOR)',
     'Реферальная ссылка только для партнёров',
     'Просмотр команды и истории выплат',
-    'Сводка по организации для директоров'
+    'Сводка по организации для руководителей'
   ],
   integrations: [],
   useCases: [

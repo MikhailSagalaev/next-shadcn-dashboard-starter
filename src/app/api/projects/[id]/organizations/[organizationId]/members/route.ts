@@ -57,17 +57,14 @@ export const POST = withProjectAccess<OrgParams>(
     }
 
     try {
-      const user = await PartnerOrganizationService.addMember(
-        projectId,
-        organizationId,
-        {
+      const { user, attributionLocked } =
+        await PartnerOrganizationService.addMember(projectId, organizationId, {
           userId: parsed.data.userId,
           partnerRole: parsed.data.partnerRole,
           referredBy: parsed.data.referredBy,
           outboundReferralPlanId: parsed.data.outboundReferralPlanId
-        }
-      );
-      return NextResponse.json({ user }, { status: 201 });
+        });
+      return NextResponse.json({ user, attributionLocked }, { status: 201 });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Server error';
       return NextResponse.json({ error: msg }, { status: 400 });

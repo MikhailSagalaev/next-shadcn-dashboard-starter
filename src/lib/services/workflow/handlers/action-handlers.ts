@@ -1647,6 +1647,14 @@ ${userVariables['user.progressBar']} (${userVariables['user.progressPercent']}%)
           break;
 
         case 'menu_referrals':
+          // b2b-режим: рефералку могут выдавать только партнёры (см. тот же
+          // гейт в PartnerLinkHandler) — этот легаси-пункт меню его раньше
+          // не проверял и показывал рабочую ссылку любому CLIENT.
+          if (userVariables['user.canRefer'] === false) {
+            messageText =
+              '🔒 Реферальная ссылка доступна только партнёрам (тренерам / менеджерам / руководителям). Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
+            break;
+          }
           messageText = `<b>👥 Реферальная программа</b>
 
 <b>📊 Статистика по проекту:</b>
@@ -1662,6 +1670,11 @@ ${userVariables['user.referralLink']}
           break;
 
         case 'menu_invite':
+          if (userVariables['user.canRefer'] === false) {
+            messageText =
+              '🔒 Реферальная ссылка доступна только партнёрам (тренерам / менеджерам / руководителям). Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
+            break;
+          }
           messageText = `<b>🔗 Пригласить друга</b>
 
 🎁 Приглашайте друзей и получайте бонусы за их покупки!
@@ -1839,7 +1852,7 @@ function formatName(u: {
 function partnerRoleLabel(role: string | null | undefined): string {
   switch (role) {
     case 'DIRECTOR':
-      return 'Директор';
+      return 'Руководитель';
     case 'MANAGER':
       return 'Менеджер';
     case 'TRAINER':
@@ -2370,7 +2383,7 @@ export class PartnerLinkHandler extends BaseNodeHandler {
       if (!canRefer) {
         await sendPlatformMessage(
           context,
-          '🔒 Реферальная ссылка доступна только партнёрам (тренерам / менеджерам / директорам). Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.',
+          '🔒 Реферальная ссылка доступна только партнёрам (тренерам / менеджерам / руководителям). Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.',
           {
             replyMarkup: {
               inline_keyboard: [
@@ -2483,7 +2496,7 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
       if (me.partnerRole !== 'DIRECTOR') {
         await sendPlatformMessage(
           context,
-          '🔒 Сводка по организации доступна только директору.',
+          '🔒 Сводка по организации доступна только руководителю.',
           {
             replyMarkup: {
               inline_keyboard: [

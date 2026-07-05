@@ -434,11 +434,14 @@ export class PartnerTeamService {
         referrerId: params.referrerId
       }
     }).catch((err) =>
-      logger.error('Failed to create admin notification (referral_join_request)', {
-        projectId: params.projectId,
-        requestId: request.id,
-        error: err instanceof Error ? err.message : String(err)
-      })
+      logger.error(
+        'Failed to create admin notification (referral_join_request)',
+        {
+          projectId: params.projectId,
+          requestId: request.id,
+          error: err instanceof Error ? err.message : String(err)
+        }
+      )
     );
 
     return request;
@@ -489,6 +492,66 @@ export class PartnerTeamService {
     }));
   }
 
+  /**
+   * Все заявки проекта для админ-дашборда — без фильтра `canReviewJoinRequest`,
+   * потому что доступ уже проверен на уровне API роута (админ проекта видит
+   * всё, в отличие от партнёра, который видит только "свои" заявки).
+   */
+  static async listJoinRequestsForAdmin(
+    projectId: string,
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' = 'PENDING'
+  ) {
+    const requests = await db.partnerJoinRequest.findMany({
+      where: { projectId, status },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+    if (requests.length === 0) return [];
+
+    const userIds = [
+      ...new Set(requests.flatMap((r) => [r.userId, r.referrerId]))
+    ];
+    const [users, orgs] = await Promise.all([
+      db.user.findMany({
+        where: { id: { in: userIds }, projectId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          partnerRole: true
+        }
+      }),
+      db.partnerOrganization.findMany({
+        where: {
+          projectId,
+          id: {
+            in: [
+              ...new Set(
+                requests
+                  .map((r) => r.organizationId)
+                  .filter((id): id is string => Boolean(id))
+              )
+            ]
+          }
+        },
+        select: { id: true, name: true }
+      })
+    ]);
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const orgById = new Map(orgs.map((o) => [o.id, o]));
+
+    return requests.map((r) => ({
+      ...r,
+      user: userById.get(r.userId) ?? null,
+      referrer: userById.get(r.referrerId) ?? null,
+      organization: r.organizationId
+        ? (orgById.get(r.organizationId) ?? null)
+        : null
+    }));
+  }
+
   static resolveRoleOnJoinApproval(referrerRole: PartnerRole): PartnerRole {
     switch (referrerRole) {
       case 'DIRECTOR':
@@ -501,10 +564,18 @@ export class PartnerTeamService {
     }
   }
 
+  /**
+   * @param params.adminOverride — одобрение из дашборда админом, а не самим
+   *   партнёром через бота. Админ — не `User` в этом проекте (живёт в
+   *   отдельной таблице), поэтому для него `canReviewJoinRequest` не
+   *   применяется — доступ уже проверен на уровне API роута
+   *   (`getCurrentAdmin` + `verifyProjectAccess`).
+   */
   static async approveJoinRequest(params: {
     projectId: string;
     requestId: string;
     reviewerUserId: string;
+    adminOverride?: boolean;
   }) {
     const request = await db.partnerJoinRequest.findFirst({
       where: { id: params.requestId, projectId: params.projectId }
@@ -513,13 +584,15 @@ export class PartnerTeamService {
       throw new Error('Заявка не найдена или уже обработана');
     }
 
-    const canReview = await this.canReviewJoinRequest(
-      params.projectId,
-      params.reviewerUserId,
-      request.referrerId,
-      request.organizationId
-    );
-    if (!canReview) throw new Error('Нет прав одобрить эту заявку');
+    if (!params.adminOverride) {
+      const canReview = await this.canReviewJoinRequest(
+        params.projectId,
+        params.reviewerUserId,
+        request.referrerId,
+        request.organizationId
+      );
+      if (!canReview) throw new Error('Нет прав одобрить эту заявку');
+    }
 
     const [referrer, applicant] = await Promise.all([
       db.user.findFirst({
@@ -572,6 +645,12 @@ export class PartnerTeamService {
       request.userId,
       params.projectId
     );
+    void PartnerNotificationService.notifyApplicantAboutJoinDecision({
+      userId: request.userId,
+      projectId: params.projectId,
+      approved: true,
+      newRole: partnerRole
+    });
 
     return { request, partnerRole };
   }
@@ -581,6 +660,7 @@ export class PartnerTeamService {
     requestId: string;
     reviewerUserId: string;
     reason?: string;
+    adminOverride?: boolean;
   }) {
     const request = await db.partnerJoinRequest.findFirst({
       where: { id: params.requestId, projectId: params.projectId }
@@ -589,15 +669,17 @@ export class PartnerTeamService {
       throw new Error('Заявка не найдена или уже обработана');
     }
 
-    const canReview = await this.canReviewJoinRequest(
-      params.projectId,
-      params.reviewerUserId,
-      request.referrerId,
-      request.organizationId
-    );
-    if (!canReview) throw new Error('Нет прав отклонить эту заявку');
+    if (!params.adminOverride) {
+      const canReview = await this.canReviewJoinRequest(
+        params.projectId,
+        params.reviewerUserId,
+        request.referrerId,
+        request.organizationId
+      );
+      if (!canReview) throw new Error('Нет прав отклонить эту заявку');
+    }
 
-    return db.partnerJoinRequest.update({
+    const updated = await db.partnerJoinRequest.update({
       where: { id: request.id },
       data: {
         status: 'REJECTED',
@@ -606,6 +688,15 @@ export class PartnerTeamService {
         rejectReason: params.reason ?? null
       }
     });
+
+    void PartnerNotificationService.notifyApplicantAboutJoinDecision({
+      userId: request.userId,
+      projectId: params.projectId,
+      approved: false,
+      rejectReason: params.reason ?? null
+    });
+
+    return updated;
   }
 
   static resolveDefaultReferrerForOrgMember(params: {
@@ -618,7 +709,10 @@ export class PartnerTeamService {
     if (partnerRole === 'DIRECTOR') return null;
     if (partnerRole === 'MANAGER' && directorUserId) return directorUserId;
 
-    if (partnerRole === 'TRAINER') {
+    // TRAINER и CLIENT, добавленные напрямую в сеть, без реферера остаются
+    // "ничьими" — их покупки не генерируют комиссию никому в организации.
+    // Поэтому обоим применяем тот же fallback: менеджер сети, иначе директор.
+    if (partnerRole === 'TRAINER' || partnerRole === 'CLIENT') {
       const manager = members.find((m) => m.partnerRole === 'MANAGER');
       if (manager) return manager.id;
       if (directorUserId) return directorUserId;
@@ -646,7 +740,7 @@ export class PartnerTeamService {
     if (!org.directorUserId) {
       warnings.push({
         code: 'NO_DIRECTOR',
-        message: 'Не назначен директор сети — L3 может не начисляться'
+        message: 'Не назначен руководитель сети — L3 может не начисляться'
       });
     }
 

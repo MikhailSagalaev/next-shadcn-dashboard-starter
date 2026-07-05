@@ -62,6 +62,13 @@ interface Props {
   initialJoinApproval?: boolean;
   /** Sub текущего админа (для install-шаблона). */
   adminSub?: string;
+  /**
+   * Режим работы проекта. Весь кабинет партнёра (ссылка, команда, заявки,
+   * выплаты) живёт только в Telegram/MAX-боте — при `WITHOUT_BOT` включать
+   * b2b-иерархию бессмысленно: роли назначить можно, а пользоваться ими
+   * партнёру негде. Поэтому переключатель здесь блокируется.
+   */
+  operationMode?: string;
   /** Колбэк после успешного toggle — родитель может перечитать проект. */
   onToggled?: (value: boolean) => void;
 }
@@ -74,11 +81,13 @@ export function B2bHierarchySettings({
   initialTeamManagement = true,
   initialJoinApproval = false,
   adminSub,
+  operationMode,
   onToggled
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const [enabled, setEnabled] = useState(Boolean(initialValue));
+  const withoutBot = operationMode === 'WITHOUT_BOT';
   const [teamManagement, setTeamManagement] = useState(
     Boolean(initialTeamManagement)
   );
@@ -146,6 +155,15 @@ export function B2bHierarchySettings({
   };
 
   const toggle = async (next: boolean) => {
+    if (next && withoutBot) {
+      toast({
+        title: 'Нужен бот',
+        description:
+          'B2B-иерархия требует Telegram/MAX-бота — переключите режим работы на «С ботом» в этих же настройках, чтобы включить.',
+        variant: 'destructive'
+      });
+      return;
+    }
     setEnabled(next);
     await patchProject({ enablePartnerRoles: next }, () => setEnabled(!next));
     if (next) {
@@ -256,6 +274,13 @@ export function B2bHierarchySettings({
               </a>
               .
             </p>
+            {withoutBot && (
+              <p className='text-xs text-amber-700 dark:text-amber-400'>
+                Требует Telegram/MAX-бота — кабинет партнёра (ссылка, команда,
+                выплаты) живёт только там. Переключите режим работы на «С
+                ботом», чтобы включить.
+              </p>
+            )}
           </div>
           <div className='flex items-center gap-2'>
             {saving && <Loader2 className='h-4 w-4 animate-spin' />}
@@ -263,10 +288,18 @@ export function B2bHierarchySettings({
               id='enable-partner-roles'
               checked={enabled}
               onCheckedChange={toggle}
-              disabled={saving}
+              disabled={saving || (withoutBot && !enabled)}
             />
           </div>
         </div>
+
+        {enabled && withoutBot && (
+          <div className='border-destructive bg-destructive/10 text-destructive rounded-md border-l-2 p-3 text-sm'>
+            B2B включён, но проект работает без бота — ни одна роль
+            (тренер/менеджер/руководитель) не может получить свою ссылку,
+            увидеть команду или запросить выплату, пока бот не подключён.
+          </div>
+        )}
 
         {enabled && (
           <>
@@ -279,8 +312,8 @@ export function B2bHierarchySettings({
                   Управление командой в боте
                 </Label>
                 <p className='text-muted-foreground text-sm'>
-                  Менеджеры и директора видят команду, могут одобрять заявки и
-                  убирать подопечных из своей ветки.
+                  Менеджеры и руководители видят команду, могут одобрять заявки
+                  и убирать подопечных из своей ветки.
                 </p>
               </div>
               <Switch

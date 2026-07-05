@@ -521,10 +521,14 @@ export class UserVariablesService {
       const enabled = !!user.project?.enablePartnerRoles;
 
       // Когда фича выключена — возвращаем минимальный набор без тяжёлых запросов.
+      // canRefer=true здесь намеренно: это c2c-режим, где рефералкой может
+      // пользоваться любой клиент — ограничение «только партнёры» существует
+      // только внутри b2b (см. ту же логику в PartnerLinkHandler).
       if (!enabled) {
         return {
           ...defaults,
-          'user.partnerRole': '' // без режима ролей семантика «не партнёр»
+          'user.partnerRole': '', // без режима ролей семантика «не партнёр»
+          'user.canRefer': true
         };
       }
 

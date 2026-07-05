@@ -97,10 +97,19 @@ export function ReferrerAssignField({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Не удалось привязать');
       onAssigned(data.referrerName ?? referrer.name ?? null);
-      toast({
-        title: 'Реферер привязан',
-        description: `Приведён: ${data.referrerName ?? referrer.name}`
-      });
+      if (data.attributionLocked) {
+        toast({
+          title: 'Приведён обновлён, но выплата — нет',
+          description:
+            'У пользователя уже зафиксирована комиссия за предыдущего реферера — она не переедет на нового. Это только меняет отображаемую связь.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({
+          title: 'Реферер привязан',
+          description: `Приведён: ${data.referrerName ?? referrer.name}`
+        });
+      }
       setOpen(false);
       setQuery('');
       setResults([]);

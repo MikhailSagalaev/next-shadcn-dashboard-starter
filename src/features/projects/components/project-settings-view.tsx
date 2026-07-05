@@ -687,6 +687,7 @@ export function ProjectSettingsView({
               (project as any)?.referralJoinRequiresApproval
             )}
             adminSub={adminSub}
+            operationMode={formData.operationMode}
           />
 
           {/* Предупреждение о несохраненных изменениях */}

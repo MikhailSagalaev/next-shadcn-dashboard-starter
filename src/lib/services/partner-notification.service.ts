@@ -307,6 +307,49 @@ export class PartnerNotificationService {
   }
 
   /**
+   * Уведомить самого заявителя о решении по его заявке на вступление —
+   * в отличие от `notifyAncestorsAboutNewMember` (уходит тем, кто ВЫШЕ
+   * заявителя), это уведомление получает автор заявки. Раньше при одобрении
+   * молчали для заявителя, а при отклонении — вообще для всех.
+   */
+  static async notifyApplicantAboutJoinDecision(params: {
+    userId: string;
+    projectId: string;
+    approved: boolean;
+    newRole?: string | null;
+    rejectReason?: string | null;
+  }): Promise<void> {
+    try {
+      const { userId, projectId, approved, newRole, rejectReason } = params;
+      const user = await db.user.findFirst({
+        where: { id: userId, projectId },
+        select: {
+          id: true,
+          telegramId: true,
+          maxId: true,
+          partnerRole: true,
+          metadata: true
+        }
+      });
+      if (!user || isOptedOut(user.metadata)) return;
+      if (!user.telegramId && !user.maxId) return;
+
+      const message = approved
+        ? `✅ <b>Заявка одобрена</b>\nВы теперь ${roleLabel(newRole)} в команде. Откройте /start, чтобы увидеть новый кабинет.`
+        : `❌ <b>Заявка отклонена</b>${rejectReason ? `\nПричина: ${rejectReason}` : ''}`;
+
+      await this.dispatchPartnerNotification(projectId, user, message);
+    } catch (error) {
+      logger.error('notifyApplicantAboutJoinDecision failed', {
+        userId: params.userId,
+        projectId: params.projectId,
+        error: error instanceof Error ? error.message : String(error),
+        component: COMPONENT
+      });
+    }
+  }
+
+  /**
    * Уведомить партнёра о смене статуса его заявки на вывод (план 007):
    * одобрена / выплачена / отклонена / сбой. Неблокирующе.
    */
@@ -364,8 +407,8 @@ export class PartnerNotificationService {
   }
 
   /**
-   * Уведомить директора организации о новой заявке на вывод от партнёра
-   * (план 007). Если директора нет или он сам заявитель — тихо пропускаем.
+   * Уведомить руководителя организации о новой заявке на вывод от партнёра
+   * (план 007). Если руководителя нет или он сам заявитель — тихо пропускаем.
    */
   static async notifyDirectorAboutPayoutRequest(
     payoutId: string,
@@ -424,7 +467,7 @@ export class PartnerNotificationService {
 
 /**
  * Шаблон сообщения зависит от уровня в цепочке предков.
- * L1 — прямой рекрутер, L2 — менеджер, L3+ — директор.
+ * L1 — прямой рекрутер, L2 — менеджер, L3+ — руководитель.
  *
  * @see Requirement 7.2
  */
@@ -453,6 +496,20 @@ function formatName(u: {
   if (full) return full;
   if (u.phone) return u.phone;
   return 'новый партнёр';
+}
+
+/** Локализованное название партнёрской роли для текста уведомления. */
+function roleLabel(role?: string | null): string {
+  switch (role) {
+    case 'DIRECTOR':
+      return 'Руководитель';
+    case 'MANAGER':
+      return 'Менеджер';
+    case 'TRAINER':
+      return 'Тренер';
+    default:
+      return 'партнёр';
+  }
 }
 
 /** Сумма в рублях для текста уведомления о выплате. */

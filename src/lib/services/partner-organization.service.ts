@@ -8,6 +8,7 @@
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { PartnerTeamService } from './partner-team.service';
+import { ReferrerAssignmentService } from './referrer-assignment.service';
 
 export interface CreateOrganizationInput {
   projectId: string;
@@ -189,14 +190,15 @@ export class PartnerOrganizationService {
     });
     if (!user) throw new Error('Пользователь не найден');
 
-    if (input.referredBy) {
-      if (input.referredBy === input.userId) {
-        throw new Error('Пользователь не может быть реферером сам себе');
-      }
-      const referrer = await db.user.findFirst({
-        where: { id: input.referredBy, projectId }
-      });
-      if (!referrer) throw new Error('Реферер не найден');
+    // Пользователь уже состоит в другой сети — раньше `addMember` тихо
+    // перевешивал organizationId, из-за чего человек незаметно "переезжал"
+    // между организациями. Теперь это требует явного шага: сначала убрать
+    // из старой сети (removeMember), потом добавить в новую.
+    if (user.organizationId && user.organizationId !== organizationId) {
+      const previousOrg = await this.getById(projectId, user.organizationId);
+      throw new Error(
+        `Пользователь уже состоит в организации «${previousOrg?.name ?? user.organizationId}» — сначала уберите его оттуда`
+      );
     }
 
     let referredBy = input.referredBy;
@@ -212,12 +214,25 @@ export class PartnerOrganizationService {
       });
     }
 
+    // Привязка реферера — через общий сервис (см. ReferrerAssignmentService):
+    // проверяет цикл и синхронизирует attribution комиссий, как и при ручной
+    // привязке из карточки профиля.
+    let attributionLocked = false;
+    if (referredBy) {
+      const result = await ReferrerAssignmentService.setReferrer({
+        projectId,
+        userId: input.userId,
+        referrerId: referredBy,
+        organizationId
+      });
+      attributionLocked = result.attributionLocked;
+    }
+
     const updated = await db.user.update({
       where: { id: input.userId },
       data: {
         organizationId,
         ...(input.partnerRole ? { partnerRole: input.partnerRole } : {}),
-        ...(referredBy !== undefined ? { referredBy } : {}),
         ...(input.outboundReferralPlanId !== undefined
           ? { outboundReferralPlanId: input.outboundReferralPlanId }
           : {})
@@ -234,7 +249,7 @@ export class PartnerOrganizationService {
       });
     }
 
-    return updated;
+    return { user: updated, attributionLocked };
   }
 
   static async removeMember(
@@ -276,14 +291,18 @@ export class PartnerOrganizationService {
     });
     if (!user) throw new Error('Участник не найден в этой организации');
 
-    if (input.referredBy) {
-      if (input.referredBy === userId) {
-        throw new Error('Пользователь не может быть реферером сам себе');
-      }
-      const referrer = await db.user.findFirst({
-        where: { id: input.referredBy, projectId }
+    // Привязка/снятие реферера — через общий сервис (см.
+    // ReferrerAssignmentService), тот же путь, что и в карточке профиля:
+    // проверяет цикл и синхронизирует attribution комиссий.
+    let attributionLocked = false;
+    if (input.referredBy !== undefined) {
+      const result = await ReferrerAssignmentService.setReferrer({
+        projectId,
+        userId,
+        referrerId: input.referredBy,
+        organizationId
       });
-      if (!referrer) throw new Error('Реферер не найден');
+      attributionLocked = result.attributionLocked;
     }
 
     const updated = await db.user.update({
@@ -291,9 +310,6 @@ export class PartnerOrganizationService {
       data: {
         ...(input.partnerRole !== undefined
           ? { partnerRole: input.partnerRole }
-          : {}),
-        ...(input.referredBy !== undefined
-          ? { referredBy: input.referredBy }
           : {}),
         ...(input.outboundReferralPlanId !== undefined
           ? { outboundReferralPlanId: input.outboundReferralPlanId }
@@ -315,7 +331,7 @@ export class PartnerOrganizationService {
       });
     }
 
-    return updated;
+    return { user: updated, attributionLocked };
   }
 
   static async resolveBySlug(

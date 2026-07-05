@@ -310,7 +310,16 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось добавить');
-      toast({ title: 'Участник добавлен' });
+      if (data.attributionLocked) {
+        toast({
+          title: 'Участник добавлен, но комиссия — нет',
+          description:
+            'У пользователя уже зафиксирована выплата другому рефереру — новая связь только отображается, начисления по ней не идут.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({ title: 'Участник добавлен' });
+      }
       setAddMemberOpen(false);
       setNewUserId('');
       setNewReferrerId('');
@@ -354,7 +363,16 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось сохранить');
-      toast({ title: 'Участник обновлён' });
+      if (data.attributionLocked) {
+        toast({
+          title: 'Приведён обновлён, но выплата — нет',
+          description:
+            'У пользователя уже зафиксирована комиссия за предыдущего реферера — она не переедет на нового. Это только меняет отображаемую связь.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({ title: 'Участник обновлён' });
+      }
       setEditMember(null);
       await load({ silent: true });
     } catch (e) {
@@ -451,7 +469,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         <div>
           <Button variant='ghost' size='sm' className='mb-2 -ml-2' asChild>
             <Link
-              href={`/dashboard/projects/${projectId}/referral/organizations`}
+              href={`/dashboard/projects/${projectId}/referral?tab=organizations`}
             >
               <ArrowLeft className='mr-2 h-4 w-4' />
               Все организации
@@ -474,7 +492,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             {directorName && (
               <>
                 {' · '}
-                директор: {directorName}
+                руководитель: {directorName}
               </>
             )}
           </p>
@@ -501,7 +519,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             { label: 'Участников', value: stats.members },
             { label: 'Тренеры', value: stats.trainers },
             { label: 'Менеджеры', value: stats.managers },
-            { label: 'Директора', value: stats.directors },
+            { label: 'Руководители', value: stats.directors },
             { label: 'Клиенты', value: stats.clients },
             {
               label: 'Покупки',
@@ -545,7 +563,11 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         </TabsList>
 
         <TabsContent value='members' className='mt-4 space-y-4'>
-          <div className='flex justify-end'>
+          <div className='flex items-center justify-between gap-4'>
+            <p className='text-muted-foreground text-xs'>
+              В «Иерархию партнёров» попадают только Тренеры, Менеджеры и
+              Руководители — Клиенты видны только здесь, в списке сети.
+            </p>
             <Button onClick={() => setAddMemberOpen(true)}>
               <Plus className='mr-2 h-4 w-4' />
               Добавить участника
@@ -565,7 +587,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                     <TableRow>
                       <TableHead>Имя</TableHead>
                       <TableHead>Роль</TableHead>
-                      <TableHead>Реферер</TableHead>
+                      <TableHead>Приведён</TableHead>
                       <TableHead>План</TableHead>
                       <TableHead className='text-right'>Покупки</TableHead>
                       <TableHead className='w-[100px]' />
@@ -701,14 +723,14 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Select>
             </div>
             <div className='space-y-2'>
-              <Label>Директор сети</Label>
+              <Label>Руководитель сети</Label>
               <PartnerUserCombobox
                 projectId={projectId}
                 value={editDirectorId}
                 initialUser={directorInitialUser}
                 onChange={(u) => setEditDirectorId(u?.id ?? '')}
                 partnerRolesOnly
-                placeholder='Выберите директора…'
+                placeholder='Выберите руководителя…'
                 className='w-full max-w-none'
               />
             </div>
@@ -784,7 +806,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Select>
             </div>
             <div className='space-y-2'>
-              <Label>Реферер (кто пригласил)</Label>
+              <Label>Приведён (кто пригласил)</Label>
               <PartnerUserCombobox
                 projectId={projectId}
                 value={newReferrerId}
@@ -859,7 +881,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Select>
             </div>
             <div className='space-y-2'>
-              <Label>Реферер</Label>
+              <Label>Приведён</Label>
               <PartnerUserCombobox
                 projectId={projectId}
                 value={memberReferrerId}

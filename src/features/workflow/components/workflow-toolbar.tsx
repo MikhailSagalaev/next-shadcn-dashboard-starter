@@ -400,7 +400,7 @@ const CATEGORY_METADATA: Record<
   actions: { label: 'Действия', description: 'Работа с данными и сервисами' },
   partners: {
     label: 'B2B партнёры',
-    description: 'Кабинет тренера / менеджера / директора'
+    description: 'Кабинет тренера / менеджера / руководителя'
   },
   logic: { label: 'Логика', description: 'Ветвления и switch-case' },
   flow: {

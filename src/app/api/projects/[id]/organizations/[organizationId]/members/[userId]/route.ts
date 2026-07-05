@@ -39,13 +39,14 @@ export const PATCH = withProjectAccess<MemberParams>(
     }
 
     try {
-      const user = await PartnerOrganizationService.updateMember(
-        projectId,
-        organizationId,
-        userId,
-        parsed.data
-      );
-      return NextResponse.json({ user });
+      const { user, attributionLocked } =
+        await PartnerOrganizationService.updateMember(
+          projectId,
+          organizationId,
+          userId,
+          parsed.data
+        );
+      return NextResponse.json({ user, attributionLocked });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Server error';
       return NextResponse.json({ error: msg }, { status: 400 });

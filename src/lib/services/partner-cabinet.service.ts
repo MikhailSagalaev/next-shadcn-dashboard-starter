@@ -394,7 +394,7 @@ export class PartnerCabinetService {
         payoutMethod: opts.payoutMethod,
         payoutDetails: opts.payoutDetails
       });
-      // Уведомить директора организации (неблокирующе, обе платформы).
+      // Уведомить руководителя организации (неблокирующе, обе платформы).
       await PartnerNotificationService.notifyDirectorAboutPayoutRequest(
         payout.id,
         projectId

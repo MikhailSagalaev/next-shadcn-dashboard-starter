@@ -49,7 +49,7 @@ export function ReferralProgramGuide({
               </div>
               <p className='font-medium'>Вознаграждения партнёрам</p>
               <p className='text-muted-foreground mt-1 text-xs'>
-                L1 тренер → L2 менеджер → L3 директор. Проценты задаются
+                L1 тренер → L2 менеджер → L3 руководитель. Проценты задаются
                 партнёрскими планами, а не клиентскими бонусами
               </p>
             </div>
@@ -60,8 +60,8 @@ export function ReferralProgramGuide({
               </div>
               <p className='font-medium'>Сети партнёров</p>
               <p className='text-muted-foreground mt-1 text-xs'>
-                Группировка клубов/филиалов: общий директор, план по умолчанию,
-                utm_org в ссылках
+                Группировка клубов/филиалов: общий руководитель, план по
+                умолчанию, utm_org в ссылках
               </p>
             </div>
           </div>

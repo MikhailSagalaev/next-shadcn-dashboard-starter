@@ -252,10 +252,10 @@
       "type": "message",
       "position": { "x": 760, "y": 80 },
       "data": {
-        "label": "Меню директора",
+        "label": "Меню руководителя",
         "config": {
           "message": {
-            "text": "🏆 <b>Кабинет директора</b>\n\nПривет, {user.firstName}!\n\n👥 В команде: <b>{user.teamSize}</b>\n💼 Комиссия в этом месяце: <b>{user.commissionThisMonthFormatted}</b>\n💰 Всего заработано: <b>{user.totalCommissionEarnedFormatted}</b>\n\nВыберите действие:",
+            "text": "🏆 <b>Кабинет руководителя</b>\n\nПривет, {user.firstName}!\n\n👥 В команде: <b>{user.teamSize}</b>\n💼 Комиссия в этом месяце: <b>{user.commissionThisMonthFormatted}</b>\n💰 Всего заработано: <b>{user.totalCommissionEarnedFormatted}</b>\n\nВыберите действие:",
             "parseMode": "HTML",
             "keyboard": {
               "type": "inline",
@@ -615,7 +615,7 @@
         "label": "Показать рефералы",
         "config": {
           "message": {
-            "text": "<b>👥 Реферальная программа</b>\n\n👤 <b>Приглашено:</b> {user.referralCount}\n💰 <b>Бонусов от рефералов:</b> {user.referralBonusTotalFormatted}\n\nℹ️ В B2B-режиме реф-ссылку выдают партнёры (тренер / менеджер / директор).",
+            "text": "<b>👥 Реферальная программа</b>\n\n👤 <b>Приглашено:</b> {user.referralCount}\n💰 <b>Бонусов от рефералов:</b> {user.referralBonusTotalFormatted}\n\nℹ️ В B2B-режиме реф-ссылку выдают партнёры (тренер / менеджер / руководитель).",
             "parseMode": "HTML",
             "keyboard": {
               "type": "inline",
@@ -646,7 +646,7 @@
         "label": "Показать помощь",
         "config": {
           "message": {
-            "text": "<b>❓ Помощь</b>\n\n/start — главное меню\n💰 Баланс · 📜 История · 🏆 Уровень\n\nПартнёрам: 🔗 ссылка · 👥 команда · 💵 выплаты\nДиректору: 📊 сводка по организации",
+            "text": "<b>❓ Помощь</b>\n\n/start — главное меню\n💰 Баланс · 📜 История · 🏆 Уровень\n\nПартнёрам: 🔗 ссылка · 👥 команда · 💵 выплаты\nРуководителю: 📊 сводка по организации",
             "parseMode": "HTML",
             "keyboard": {
               "type": "inline",

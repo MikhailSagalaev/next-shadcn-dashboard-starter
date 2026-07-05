@@ -97,7 +97,7 @@ const SLIDER_MAX = 3;
 const LEVEL_ROLE_LABELS = [
   'Тренер (L1)',
   'Менеджер (L2)',
-  'Директор (L3)'
+  'Руководитель (L3)'
 ] as const;
 
 function formatPlanLevels(
@@ -487,9 +487,9 @@ export function ReferralCommissionPlansPanel({
           <AlertTitle>Партнёрские планы ≠ бонусы клиентам</AlertTitle>
           <AlertDescription className='text-sm'>
             Здесь задаётся, сколько % от покупки получают тренер (L1), менеджер
-            (L2) и директор (L3). Бонусы для клиентов — во вкладке «Настройки».
-            Приоритет плана: персональный outbound → план организации → план по
-            умолчанию.
+            (L2) и руководитель (L3). Бонусы для клиентов — во вкладке
+            «Настройки». Приоритет плана: персональный outbound → план
+            организации → план по умолчанию.
           </AlertDescription>
         </Alert>
       )}

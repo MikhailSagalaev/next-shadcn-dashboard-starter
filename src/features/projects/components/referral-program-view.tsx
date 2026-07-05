@@ -11,13 +11,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Users,
   Settings,
   BarChart3,
-  Share2,
+  Building2,
   Target,
   Network,
   Bot,
@@ -43,6 +43,7 @@ import { ReferralCommissionPlansPanel } from './referral-commission-plans-panel'
 import { PayoutsAdminPanel } from './payouts-admin-panel';
 import { ReferralProgramGuide } from './referral-program-guide';
 import { ReferralProgramSidebar } from './referral-program-sidebar';
+import { PartnerOrganizationsPanel } from './partner-organizations-panel';
 import type { Project, ReferralProgram } from '@/types/bonus';
 
 interface ReferralProgramViewProps {
@@ -51,6 +52,7 @@ interface ReferralProgramViewProps {
 
 export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   // State
@@ -58,7 +60,16 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
   const [referralProgram, setReferralProgram] =
     useState<ReferralProgram | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('settings');
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get('tab') || 'settings'
+  );
+
+  // Поддержка глубоких ссылок вида `?tab=organizations` (например, из
+  // редиректа со старой страницы /referral/organizations или из сайдбара).
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
 
   const loadData = async () => {
     try {
@@ -221,14 +232,6 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
             <>
               <Button variant='outline' size='sm' asChild>
                 <Link
-                  href={`/dashboard/projects/${projectId}/referral/organizations`}
-                >
-                  <Share2 className='mr-2 h-4 w-4' />
-                  Организации
-                </Link>
-              </Button>
-              <Button variant='outline' size='sm' asChild>
-                <Link
                   href={`/dashboard/projects/${projectId}/referral/hierarchy`}
                 >
                   <Network className='mr-2 h-4 w-4' />
@@ -265,7 +268,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
           >
             <TabsList
               className={`grid w-full ${
-                project?.enablePartnerRoles ? 'grid-cols-4' : 'grid-cols-3'
+                project?.enablePartnerRoles ? 'grid-cols-5' : 'grid-cols-3'
               }`}
             >
               <TabsTrigger value='settings' className='flex items-center'>
@@ -284,6 +287,15 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                 <TabsTrigger value='payouts' className='flex items-center'>
                   <Wallet className='mr-2 h-4 w-4' />
                   Выплаты
+                </TabsTrigger>
+              )}
+              {project?.enablePartnerRoles && (
+                <TabsTrigger
+                  value='organizations'
+                  className='flex items-center'
+                >
+                  <Building2 className='mr-2 h-4 w-4' />
+                  Организации
                 </TabsTrigger>
               )}
             </TabsList>
@@ -311,6 +323,12 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
             {project?.enablePartnerRoles && (
               <TabsContent value='payouts' className='space-y-6'>
                 <PayoutsAdminPanel projectId={projectId} />
+              </TabsContent>
+            )}
+
+            {project?.enablePartnerRoles && (
+              <TabsContent value='organizations' className='space-y-6'>
+                <PartnerOrganizationsPanel projectId={projectId} />
               </TabsContent>
             )}
           </Tabs>

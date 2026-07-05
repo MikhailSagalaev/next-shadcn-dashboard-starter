@@ -190,7 +190,7 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
     <div className='space-y-4'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <p className='text-muted-foreground max-w-2xl text-sm'>
-          Отдельные партнёрские сети внутри проекта — свой директор, план
+          Отдельные партнёрские сети внутри проекта — свой руководитель, план
           партнёрских планов и изолированная иерархия. Ссылки партнёров
           добавляют <code className='text-xs'>utm_org=slug</code>.
         </p>
@@ -255,13 +255,13 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
                 </Select>
               </div>
               <div className='space-y-2'>
-                <Label>Директор</Label>
+                <Label>Руководитель</Label>
                 <PartnerUserCombobox
                   projectId={projectId}
                   value={directorUserId}
                   onChange={(u) => setDirectorUserId(u?.id ?? '')}
                   partnerRolesOnly
-                  placeholder='Выберите директора…'
+                  placeholder='Выберите руководителя…'
                 />
               </div>
             </div>

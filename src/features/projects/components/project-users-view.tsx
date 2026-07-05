@@ -79,6 +79,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -1485,261 +1486,293 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 </div>
               </div>
 
-              {/* Реферальная ссылка — готова к копированию и отправке */}
-              <div className='bg-muted/30 space-y-2 rounded-md border p-4'>
-                <Label className='text-sm font-medium'>
-                  Реферальная ссылка
-                </Label>
-                <div className='flex items-center gap-2'>
-                  <code className='bg-background flex-1 overflow-x-auto rounded border px-2 py-1.5 font-mono text-xs break-all'>
-                    {buildReferralLink(
-                      (project as any)?.domain,
-                      profileUser.id,
-                      profileOrgSlug
-                    )}
-                  </code>
-                  <CopyButton
-                    value={buildReferralLink(
-                      (project as any)?.domain,
-                      profileUser.id,
-                      profileOrgSlug
-                    )}
-                    label='Скопировать ссылку'
-                    toastTitle='Ссылка скопирована'
-                  />
-                </div>
-                <p className='text-muted-foreground text-xs'>
-                  Отправьте эту ссылку — приглашённый пользователь будет
-                  привязан к этому профилю по параметру{' '}
-                  <code className='font-mono'>utm_ref</code>.
-                </p>
-              </div>
+              <Tabs defaultValue='profile' className='w-full'>
+                <TabsList className='grid w-full grid-cols-3'>
+                  <TabsTrigger value='profile'>Профиль</TabsTrigger>
+                  <TabsTrigger value='partnership'>Партнёрство</TabsTrigger>
+                  <TabsTrigger value='referrals'>Рефералы</TabsTrigger>
+                </TabsList>
 
-              <div className='grid grid-cols-2 gap-4'>
-                <div>
-                  <Label className='text-sm font-medium'>Email</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.email || 'Не указан'}
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>Телефон</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.phone || 'Не указан'}
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>Активные бонусы</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.bonusBalance || 0} бонусов
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>
-                    Всего заработано
-                  </Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.totalEarned || 0} бонусов
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>
-                    Дата регистрации
-                  </Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {new Date(profileUser.registeredAt).toLocaleDateString(
-                      'ru-RU'
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>Статус</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {profileUser.isActive ? 'Активный' : 'Неактивный'}
-                  </p>
-                </div>
-                <div>
-                  <Label className='text-sm font-medium'>Дата рождения</Label>
-                  <p className='text-muted-foreground text-sm'>
-                    {(profileUser as any).birthDate
-                      ? new Date(
-                          (profileUser as any).birthDate
-                        ).toLocaleDateString('ru-RU')
-                      : 'Не указана'}
-                  </p>
-                </div>
-                <ReferrerAssignField
-                  projectId={projectId}
-                  userId={profileUser.id}
-                  currentReferrerName={(profileUser as any).referrerName}
-                  onAssigned={(referrerName) => {
-                    setProfileUser((prev) =>
-                      prev
-                        ? ({ ...prev, referrerName } as UserWithBonuses)
-                        : prev
-                    );
-                    loadUsers(currentPage);
-                  }}
-                />
-                {(project as any)?.operationMode === 'WITHOUT_BOT' && (
-                  <div className='rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200'>
-                    Режим без Telegram бота: поля Telegram скрыты, пользователи
-                    активируются автоматически и могут тратить бонусы сразу.
-                  </div>
-                )}
-                {/* Telegram поля показываем только в режиме WITH_BOT */}
-                {(project as any)?.operationMode !== 'WITHOUT_BOT' && (
-                  <>
+                <TabsContent value='profile' className='space-y-6 pt-4'>
+                  <div className='grid grid-cols-2 gap-4'>
+                    <div>
+                      <Label className='text-sm font-medium'>Email</Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.email || 'Не указан'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className='text-sm font-medium'>Телефон</Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.phone || 'Не указан'}
+                      </p>
+                    </div>
                     <div>
                       <Label className='text-sm font-medium'>
-                        Telegram Username
+                        Активные бонусы
                       </Label>
                       <p className='text-muted-foreground text-sm'>
-                        {profileUser.telegramUsername
-                          ? `@${profileUser.telegramUsername}`
-                          : 'Не указан'}
+                        {profileUser.bonusBalance || 0} бонусов
                       </p>
                     </div>
-                    <div>
-                      <Label className='text-sm font-medium'>Telegram ID</Label>
-                      <p className='text-muted-foreground text-sm'>
-                        {profileUser.telegramId
-                          ? typeof profileUser.telegramId === 'bigint'
-                            ? profileUser.telegramId.toString()
-                            : String(profileUser.telegramId)
-                          : 'Не указан'}
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Phase 2 b2b-referral-hierarchy (tasks 2.4, 2.6, 2.7, 2.8):
-                  селекторы партнёрской роли и outbound-плана. Показываются
-                  только когда у проекта включён `enablePartnerRoles`. */}
-              {(project as any)?.enablePartnerRoles && (
-                <div className='bg-muted/30 space-y-4 rounded-md border p-4'>
-                  <div className='flex items-center justify-between'>
                     <div>
                       <Label className='text-sm font-medium'>
-                        Партнёрская иерархия
+                        Всего заработано
                       </Label>
-                      <p className='text-muted-foreground text-xs'>
-                        Текущая роль: <PartnerRoleBadge role={profileRole} />
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.totalEarned || 0} бонусов
                       </p>
                     </div>
-                    <Button
-                      size='sm'
-                      onClick={handleSavePartnerSettings}
-                      disabled={isSavingPartner}
-                    >
-                      {isSavingPartner && (
-                        <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                      )}
-                      Сохранить
-                    </Button>
-                  </div>
-                  <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
-                    <div className='min-w-0 space-y-1.5'>
-                      <Label
-                        htmlFor='partner-role-select'
-                        className='text-xs font-medium'
-                      >
-                        Роль
+                    <div>
+                      <Label className='text-sm font-medium'>
+                        Дата регистрации
                       </Label>
-                      <Select
-                        value={profileRole}
-                        onValueChange={(value) => {
-                          const next = value as
-                            | 'CLIENT'
-                            | 'TRAINER'
-                            | 'MANAGER'
-                            | 'DIRECTOR';
-                          setProfileRole(next);
-                          // Если переключаемся на CLIENT — сбрасываем outbound-план,
-                          // т.к. он будет очищен при сохранении.
-                          if (next === 'CLIENT') {
-                            setProfileOutboundPlanId(null);
-                          }
-                        }}
-                      >
-                        <SelectTrigger
-                          id='partner-role-select'
-                          className='w-full'
-                        >
-                          <SelectValue placeholder='Выберите роль' />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PARTNER_ROLE_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <p className='text-muted-foreground text-sm'>
+                        {new Date(profileUser.registeredAt).toLocaleDateString(
+                          'ru-RU'
+                        )}
+                      </p>
                     </div>
-                    {/* Outbound-план виден только для партнёров */}
-                    {profileRole !== 'CLIENT' && (
-                      <div className='min-w-0 space-y-1.5'>
-                        <Label
-                          htmlFor='outbound-plan-select'
-                          className='text-xs font-medium'
-                        >
-                          Партнёрский план (outbound)
-                        </Label>
-                        <Select
-                          value={profileOutboundPlanId ?? '__none__'}
-                          onValueChange={(value) =>
-                            setProfileOutboundPlanId(
-                              value === '__none__' ? null : value
-                            )
-                          }
-                          disabled={referralPlans.length === 0}
-                        >
-                          <SelectTrigger
-                            id='outbound-plan-select'
-                            className='w-full'
-                          >
-                            <SelectValue
-                              placeholder={
-                                referralPlans.length === 0
-                                  ? 'Нет планов в проекте'
-                                  : 'Не назначен'
-                              }
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value='__none__'>
-                              — не назначен —
-                            </SelectItem>
-                            {referralPlans.map((plan) => (
-                              <SelectItem key={plan.id} value={plan.id}>
-                                {plan.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className='text-muted-foreground text-xs'>
-                          План применяется к тем, кого пригласит этот партнёр.
-                        </p>
+                    <div>
+                      <Label className='text-sm font-medium'>Статус</Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {profileUser.isActive ? 'Активный' : 'Неактивный'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className='text-sm font-medium'>
+                        Дата рождения
+                      </Label>
+                      <p className='text-muted-foreground text-sm'>
+                        {(profileUser as any).birthDate
+                          ? new Date(
+                              (profileUser as any).birthDate
+                            ).toLocaleDateString('ru-RU')
+                          : 'Не указана'}
+                      </p>
+                    </div>
+                    {(project as any)?.operationMode === 'WITHOUT_BOT' && (
+                      <div className='col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200'>
+                        Режим без Telegram бота: поля Telegram скрыты,
+                        пользователи активируются автоматически и могут тратить
+                        бонусы сразу.
                       </div>
                     )}
+                    {/* Telegram поля показываем только в режиме WITH_BOT */}
+                    {(project as any)?.operationMode !== 'WITHOUT_BOT' && (
+                      <>
+                        <div>
+                          <Label className='text-sm font-medium'>
+                            Telegram Username
+                          </Label>
+                          <p className='text-muted-foreground text-sm'>
+                            {profileUser.telegramUsername
+                              ? `@${profileUser.telegramUsername}`
+                              : 'Не указан'}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className='text-sm font-medium'>
+                            Telegram ID
+                          </Label>
+                          <p className='text-muted-foreground text-sm'>
+                            {profileUser.telegramId
+                              ? typeof profileUser.telegramId === 'bigint'
+                                ? profileUser.telegramId.toString()
+                                : String(profileUser.telegramId)
+                              : 'Не указан'}
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
-                </div>
-              )}
 
-              {/* Metadata Section */}
-              <UserMetadataSection
-                userId={profileUser.id}
-                projectId={projectId}
-                readOnly={false}
-              />
+                  {/* Metadata Section */}
+                  <UserMetadataSection
+                    userId={profileUser.id}
+                    projectId={projectId}
+                    readOnly={false}
+                  />
+                </TabsContent>
 
-              {/* Referrals Section */}
-              <UserReferralsSection
-                userId={profileUser.id}
-                projectId={projectId}
-              />
+                <TabsContent value='partnership' className='space-y-4 pt-4'>
+                  {/* Реферальная ссылка — готова к копированию и отправке */}
+                  <div className='bg-muted/30 space-y-2 rounded-md border p-4'>
+                    <Label className='text-sm font-medium'>
+                      Реферальная ссылка
+                    </Label>
+                    <div className='flex items-center gap-2'>
+                      <code className='bg-background flex-1 overflow-x-auto rounded border px-2 py-1.5 font-mono text-xs break-all'>
+                        {buildReferralLink(
+                          (project as any)?.domain,
+                          profileUser.id,
+                          profileOrgSlug
+                        )}
+                      </code>
+                      <CopyButton
+                        value={buildReferralLink(
+                          (project as any)?.domain,
+                          profileUser.id,
+                          profileOrgSlug
+                        )}
+                        label='Скопировать ссылку'
+                        toastTitle='Ссылка скопирована'
+                      />
+                    </div>
+                    <p className='text-muted-foreground text-xs'>
+                      Отправьте эту ссылку — приглашённый пользователь будет
+                      привязан к этому профилю по параметру{' '}
+                      <code className='font-mono'>utm_ref</code>.
+                    </p>
+                  </div>
+
+                  <div className='bg-muted/30 rounded-md border p-4'>
+                    <ReferrerAssignField
+                      projectId={projectId}
+                      userId={profileUser.id}
+                      currentReferrerName={(profileUser as any).referrerName}
+                      onAssigned={(referrerName) => {
+                        setProfileUser((prev) =>
+                          prev
+                            ? ({ ...prev, referrerName } as UserWithBonuses)
+                            : prev
+                        );
+                        loadUsers(currentPage);
+                      }}
+                    />
+                  </div>
+
+                  {/* Phase 2 b2b-referral-hierarchy (tasks 2.4, 2.6, 2.7, 2.8):
+                      селекторы партнёрской роли и outbound-плана. Показываются
+                      только когда у проекта включён `enablePartnerRoles`. */}
+                  {(project as any)?.enablePartnerRoles && (
+                    <div className='bg-muted/30 space-y-4 rounded-md border p-4'>
+                      {(project as any)?.operationMode === 'WITHOUT_BOT' && (
+                        <p className='border-destructive bg-destructive/10 text-destructive rounded-md border-l-2 p-2 text-xs'>
+                          Проект работает без бота — партнёр с этой ролью не
+                          сможет получить ссылку, увидеть команду или запросить
+                          выплату, пока бот не подключён.
+                        </p>
+                      )}
+                      <div className='flex items-center justify-between'>
+                        <div>
+                          <Label className='text-sm font-medium'>
+                            Партнёрская иерархия
+                          </Label>
+                          <p className='text-muted-foreground text-xs'>
+                            Текущая роль:{' '}
+                            <PartnerRoleBadge role={profileRole} />
+                          </p>
+                        </div>
+                        <Button
+                          size='sm'
+                          onClick={handleSavePartnerSettings}
+                          disabled={isSavingPartner}
+                        >
+                          {isSavingPartner && (
+                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                          )}
+                          Сохранить
+                        </Button>
+                      </div>
+                      <div className='grid grid-cols-1 gap-3 md:grid-cols-2'>
+                        <div className='min-w-0 space-y-1.5'>
+                          <Label
+                            htmlFor='partner-role-select'
+                            className='text-xs font-medium'
+                          >
+                            Роль
+                          </Label>
+                          <Select
+                            value={profileRole}
+                            onValueChange={(value) => {
+                              const next = value as
+                                | 'CLIENT'
+                                | 'TRAINER'
+                                | 'MANAGER'
+                                | 'DIRECTOR';
+                              setProfileRole(next);
+                              // Если переключаемся на CLIENT — сбрасываем outbound-план,
+                              // т.к. он будет очищен при сохранении.
+                              if (next === 'CLIENT') {
+                                setProfileOutboundPlanId(null);
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              id='partner-role-select'
+                              className='w-full'
+                            >
+                              <SelectValue placeholder='Выберите роль' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PARTNER_ROLE_OPTIONS.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Outbound-план виден только для партнёров */}
+                        {profileRole !== 'CLIENT' && (
+                          <div className='min-w-0 space-y-1.5'>
+                            <Label
+                              htmlFor='outbound-plan-select'
+                              className='text-xs font-medium'
+                            >
+                              Партнёрский план (outbound)
+                            </Label>
+                            <Select
+                              value={profileOutboundPlanId ?? '__none__'}
+                              onValueChange={(value) =>
+                                setProfileOutboundPlanId(
+                                  value === '__none__' ? null : value
+                                )
+                              }
+                              disabled={referralPlans.length === 0}
+                            >
+                              <SelectTrigger
+                                id='outbound-plan-select'
+                                className='w-full'
+                              >
+                                <SelectValue
+                                  placeholder={
+                                    referralPlans.length === 0
+                                      ? 'Нет планов в проекте'
+                                      : 'Не назначен'
+                                  }
+                                />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value='__none__'>
+                                  — не назначен —
+                                </SelectItem>
+                                {referralPlans.map((plan) => (
+                                  <SelectItem key={plan.id} value={plan.id}>
+                                    {plan.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className='text-muted-foreground text-xs'>
+                              План применяется к тем, кого пригласит этот
+                              партнёр.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value='referrals' className='pt-4'>
+                  <UserReferralsSection
+                    userId={profileUser.id}
+                    projectId={projectId}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </DialogContent>
