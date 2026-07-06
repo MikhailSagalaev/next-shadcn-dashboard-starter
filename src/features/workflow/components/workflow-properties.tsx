@@ -23,6 +23,7 @@ import { DatabaseQueryEditor } from '@/features/bot-constructor/components/edito
 import { MessageNodeEditor } from './message-node-editor';
 import { SubWorkflowConfig } from './node-config-panels/sub-workflow-config';
 import { ScheduleTriggerConfigPanel } from './node-config-panels/schedule-trigger-config';
+import { CONDITION_OPERATOR_SELECT_OPTIONS } from '@/features/workflow/lib/condition-operator-labels';
 import type {
   WorkflowNode,
   WorkflowNodeData,
@@ -205,14 +206,11 @@ export function WorkflowProperties({
                     className='border-input bg-background w-full rounded-md border px-3 py-2 text-sm'
                   >
                     <option value=''>Выберите оператор</option>
-                    <option value='equals'>Равно (===)</option>
-                    <option value='not_equals'>Не равно (!==)</option>
-                    <option value='contains'>Содержит</option>
-                    <option value='not_contains'>Не содержит</option>
-                    <option value='greater'>Больше (&gt;)</option>
-                    <option value='less'>Меньше (&lt;)</option>
-                    <option value='is_empty'>Пустое</option>
-                    <option value='is_not_empty'>Не пустое</option>
+                    {CONDITION_OPERATOR_SELECT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
