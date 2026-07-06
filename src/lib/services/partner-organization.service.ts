@@ -328,14 +328,19 @@ export class PartnerOrganizationService {
       }
     });
 
+    // Один запрос организации переиспользуется и для director-переключения,
+    // и для имени в уведомлении — раньше это были два отдельных getById().
+    let orgForBookkeeping =
+      input.partnerRole !== 'DIRECTOR'
+        ? await this.getById(projectId, organizationId)
+        : null;
+
     if (input.partnerRole === 'DIRECTOR') {
       await db.partnerOrganization.update({
         where: { id: organizationId },
         data: { directorUserId: userId }
       });
-    } else if (
-      (await this.getById(projectId, organizationId))?.directorUserId === userId
-    ) {
+    } else if (orgForBookkeeping?.directorUserId === userId) {
       await db.partnerOrganization.update({
         where: { id: organizationId },
         data: { directorUserId: null }
@@ -349,12 +354,14 @@ export class PartnerOrganizationService {
       input.partnerRole !== undefined &&
       input.partnerRole !== user.partnerRole
     ) {
-      const org = await this.getById(projectId, organizationId);
+      if (!orgForBookkeeping) {
+        orgForBookkeeping = await this.getById(projectId, organizationId);
+      }
       void PartnerNotificationService.notifyRoleOrOrgChanged({
         userId,
         projectId,
         newRole: input.partnerRole,
-        organizationName: org?.name
+        organizationName: orgForBookkeeping?.name
       });
     }
 

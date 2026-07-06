@@ -326,3 +326,113 @@ describe('PartnerNotificationService.notifyAncestorsAboutNewMember (Phase 5)', (
     ).resolves.toBeUndefined();
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// notifyRoleOrOrgChanged — прямые пути изменения роли/организации (PATCH
+// пользователя, addMember/updateMember организации), в обход
+// approveJoinRequest. Regression-тест на баг: roleLabel() трактует CLIENT
+// как "роль неизвестна" (falls into default 'партнёр') — approveJoinRequest
+// никогда не передавал CLIENT, а эти пути передают легко, и до фикса
+// сообщение утверждало "Вы теперь партнёр" ровно когда партнёрский статус
+// СНИМАЛИ.
+// ──────────────────────────────────────────────────────────────────────────────
+describe('PartnerNotificationService.notifyRoleOrOrgChanged', () => {
+  const mockDb = db as jest.Mocked<typeof db>;
+  const projectId = 'project-b2b';
+  const userId = 'user-1';
+
+  function mockUser(overrides?: Partial<AncestorRow>) {
+    mockDb.user.findFirst = jest.fn().mockResolvedValue({
+      id: userId,
+      telegramId: BigInt(1001),
+      maxId: null,
+      partnerRole: 'CLIENT',
+      metadata: null,
+      ...overrides
+    }) as any;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it.each(['DIRECTOR', 'MANAGER', 'TRAINER'])(
+    'называет партнёрскую роль %s по имени и не искажает факт назначения',
+    async (role) => {
+      mockUser();
+      const sendMessage = setupBotMock();
+
+      await PartnerNotificationService.notifyRoleOrOrgChanged({
+        userId,
+        projectId,
+        newRole: role,
+        organizationName: 'Клуб Восток'
+      });
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      const message = sendMessage.mock.calls[0][1] as string;
+      expect(message).toContain('Вы теперь');
+      expect(message).toContain('в «Клуб Восток»');
+      expect(message).not.toContain('партнёр»');
+    }
+  );
+
+  it('CLIENT (понижение/снятие партнёрского статуса) — не утверждает "Вы теперь партнёр"', async () => {
+    mockUser();
+    const sendMessage = setupBotMock();
+
+    await PartnerNotificationService.notifyRoleOrOrgChanged({
+      userId,
+      projectId,
+      newRole: 'CLIENT',
+      organizationName: null
+    });
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const message = sendMessage.mock.calls[0][1] as string;
+    // Регрессия: раньше здесь было "Вы теперь партнёр" — при снятии роли.
+    expect(message).not.toContain('Вы теперь');
+    expect(message).toContain('Ваш статус в команде обновлён');
+  });
+
+  it('уважает opt-out (metadata.notifications.referralEvents === false)', async () => {
+    mockUser({ metadata: { notifications: { referralEvents: false } } });
+    const sendMessage = setupBotMock();
+
+    await PartnerNotificationService.notifyRoleOrOrgChanged({
+      userId,
+      projectId,
+      newRole: 'TRAINER'
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('без telegramId и maxId — не отправляет и не падает', async () => {
+    mockUser({ telegramId: null, maxId: null });
+    const sendMessage = setupBotMock();
+
+    await expect(
+      PartnerNotificationService.notifyRoleOrOrgChanged({
+        userId,
+        projectId,
+        newRole: 'TRAINER'
+      })
+    ).resolves.toBeUndefined();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('пользователь не найден — не падает, ничего не шлёт', async () => {
+    mockDb.user.findFirst = jest.fn().mockResolvedValue(null) as any;
+    const sendMessage = setupBotMock();
+
+    await expect(
+      PartnerNotificationService.notifyRoleOrOrgChanged({
+        userId,
+        projectId,
+        newRole: 'TRAINER'
+      })
+    ).resolves.toBeUndefined();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+});

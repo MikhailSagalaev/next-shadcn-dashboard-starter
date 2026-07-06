@@ -493,11 +493,21 @@ export class PartnerNotificationService {
       if (!user || isOptedOut(user.metadata)) return;
       if (!user.telegramId && !user.maxId) return;
 
-      const roleText = newRole
+      // roleLabel() не различает CLIENT от «роль неизвестна» — оба падают в
+      // default 'партнёр'. Раньше это было безопасно, потому что
+      // approveJoinRequest никогда не передавал сюда CLIENT (резолвил в
+      // не-CLIENT заранее). Прямые пути (PATCH пользователя,
+      // addMember/updateMember) передают CLIENT легко — при понижении
+      // партнёра обратно в клиента текст не должен утверждать обратное.
+      const isPartnerRole =
+        newRole === 'DIRECTOR' ||
+        newRole === 'MANAGER' ||
+        newRole === 'TRAINER';
+      const roleText = isPartnerRole
         ? `Вы теперь ${roleLabel(newRole)}`
-        : 'Ваша роль в команде изменена';
+        : 'Ваш статус в команде обновлён';
       const orgText = organizationName ? ` в «${organizationName}»` : '';
-      const message = `🔄 <b>Обновление доступа</b>\n${roleText}${orgText}. Откройте /start, чтобы увидеть новый кабинет.`;
+      const message = `🔄 <b>Обновление доступа</b>\n${roleText}${orgText}. Откройте /start, чтобы обновить меню.`;
 
       await this.dispatchPartnerNotification(projectId, user, message);
     } catch (error) {
