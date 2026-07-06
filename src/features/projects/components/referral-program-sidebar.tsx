@@ -164,37 +164,28 @@ export function ReferralProgramSidebar({
 
           <Card>
             <CardHeader>
-              <CardTitle className='text-lg'>Организации и ссылки</CardTitle>
+              <CardTitle className='text-lg'>Быстрые ссылки</CardTitle>
               <CardDescription>
-                Организация — это не отдельная программа, а группа партнёров с
-                общим планом
+                Организации и полное дерево — на соседних вкладках
               </CardDescription>
             </CardHeader>
-            <CardContent className='space-y-3 text-sm'>
-              <p className='text-muted-foreground'>
-                В одной ссылке могут быть оба параметра:{' '}
-                <code className='text-xs'>utm_ref</code> (кто пригласил) и{' '}
-                <code className='text-xs'>utm_org</code> (какая сеть). Они
-                работают вместе.
-              </p>
-              <div className='flex flex-col gap-2'>
-                <Button variant='outline' size='sm' asChild>
-                  <Link
-                    href={`/dashboard/projects/${projectId}/referral?tab=organizations`}
-                  >
-                    <Building2 className='mr-2 h-4 w-4' />
-                    Управление организациями
-                  </Link>
-                </Button>
-                <Button variant='outline' size='sm' asChild>
-                  <Link
-                    href={`/dashboard/projects/${projectId}/referral?tab=hierarchy`}
-                  >
-                    <Network className='mr-2 h-4 w-4' />
-                    Иерархия партнёров
-                  </Link>
-                </Button>
-              </div>
+            <CardContent className='flex flex-col gap-2'>
+              <Button variant='outline' size='sm' asChild>
+                <Link
+                  href={`/dashboard/projects/${projectId}/referral?tab=organizations`}
+                >
+                  <Building2 className='mr-2 h-4 w-4' />
+                  Управление организациями
+                </Link>
+              </Button>
+              <Button variant='outline' size='sm' asChild>
+                <Link
+                  href={`/dashboard/projects/${projectId}/referral?tab=hierarchy`}
+                >
+                  <Network className='mr-2 h-4 w-4' />
+                  Иерархия партнёров
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 

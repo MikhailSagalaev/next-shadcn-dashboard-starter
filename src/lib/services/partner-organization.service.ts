@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { PartnerTeamService } from './partner-team.service';
 import { ReferrerAssignmentService } from './referrer-assignment.service';
+import { PartnerNotificationService } from './partner-notification.service';
 
 export interface CreateOrganizationInput {
   projectId: string;
@@ -249,6 +250,16 @@ export class PartnerOrganizationService {
       });
     }
 
+    // Пользователь молча остаётся с устаревшим меню бота, пока не увидит
+    // подсказку — уведомляем так же, как approveJoinRequest делает для
+    // заявок на вступление (см. PartnerNotificationService.notifyRoleOrOrgChanged).
+    void PartnerNotificationService.notifyRoleOrOrgChanged({
+      userId: input.userId,
+      projectId,
+      newRole: input.partnerRole ?? updated.partnerRole,
+      organizationName: org.name
+    });
+
     return { user: updated, attributionLocked };
   }
 
@@ -328,6 +339,22 @@ export class PartnerOrganizationService {
       await db.partnerOrganization.update({
         where: { id: organizationId },
         data: { directorUserId: null }
+      });
+    }
+
+    // Уведомляем только если роль реально изменилась — не спамить на каждое
+    // редактирование (referredBy/outboundReferralPlanId тоже идут через этот
+    // метод и не требуют "откройте /start заново").
+    if (
+      input.partnerRole !== undefined &&
+      input.partnerRole !== user.partnerRole
+    ) {
+      const org = await this.getById(projectId, organizationId);
+      void PartnerNotificationService.notifyRoleOrOrgChanged({
+        userId,
+        projectId,
+        newRole: input.partnerRole,
+        organizationName: org?.name
       });
     }
 

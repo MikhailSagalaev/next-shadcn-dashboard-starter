@@ -5,6 +5,9 @@
  *   `/referral/hierarchy`, на которую раньше вела кнопка). Сама грузит
  *   данные через `/api/projects/[id]/hierarchy` — смена периода больше не
  *   уводит со страницы полной навигацией, а просто перезапрашивает данные.
+ *   Также сама грузит список организаций для фильтра — раньше выбор сети
+ *   был доступен только переходом со страницы «Организации» по ссылке с
+ *   query-параметрами.
  * @project: SaaS Bonus System
  * @created: 2026-07-05
  */
@@ -17,6 +20,13 @@ import { useSearchParams } from 'next/navigation';
 import { Loader2, Users, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { EmptyState } from '@/components/composite';
 import { HierarchyTree } from './hierarchy-tree';
 import { JoinRequestsPanel } from './join-requests-panel';
@@ -24,6 +34,8 @@ import type {
   HierarchyNode,
   HierarchyPeriod
 } from '@/app/dashboard/projects/[id]/referral/hierarchy/data-access';
+
+const ALL_ORGS_VALUE = '__all__';
 
 const formatRub = (n: number) =>
   new Intl.NumberFormat('ru-RU', {
@@ -49,14 +61,50 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
   const [organizationId, setOrganizationId] = useState<string | null>(
     searchParams.get('organizationId')
   );
-  const [organizationName] = useState<string | null>(
+  const [organizationNameParam] = useState<string | null>(
     searchParams.get('organizationName')
   );
+  const [organizations, setOrganizations] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [period, setPeriod] = useState<HierarchyPeriod>(
     (searchParams.get('period') as HierarchyPeriod) || '30d'
   );
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<TreeResponse | null>(null);
+
+  // Список организаций — только для селектора фильтра, не блокирует
+  // загрузку самого дерева.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/organizations`);
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const list = Array.isArray(json?.organizations)
+          ? json.organizations
+          : [];
+        if (!cancelled) {
+          setOrganizations(
+            list.map((o: { id: string; name: string }) => ({
+              id: o.id,
+              name: o.name
+            }))
+          );
+        }
+      } catch {
+        // ignore — фильтр просто не покажет варианты
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const organizationName =
+    organizations.find((o) => o.id === organizationId)?.name ??
+    organizationNameParam;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,20 +139,46 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className='space-y-4'>
+      {organizations.length > 0 && (
+        <div className='flex items-center gap-2'>
+          <span className='text-muted-foreground text-sm'>Сеть:</span>
+          <Select
+            value={organizationId ?? ALL_ORGS_VALUE}
+            onValueChange={(value) =>
+              setOrganizationId(value === ALL_ORGS_VALUE ? null : value)
+            }
+          >
+            <SelectTrigger className='w-[240px]'>
+              <SelectValue placeholder='Все организации' />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_ORGS_VALUE}>Все организации</SelectItem>
+              {organizations.map((org) => (
+                <SelectItem key={org.id} value={org.id}>
+                  {org.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {organizationId && (
+            <Button
+              variant='ghost'
+              size='sm'
+              onClick={() => setOrganizationId(null)}
+            >
+              <X className='mr-1 h-3.5 w-3.5' />
+              Сбросить
+            </Button>
+          )}
+        </div>
+      )}
+
       {organizationId && (
         <div className='bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2 text-sm'>
           <span>
             Показана только сеть{' '}
             <strong>{organizationName ?? organizationId}</strong>
           </span>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={() => setOrganizationId(null)}
-          >
-            <X className='mr-1 h-3.5 w-3.5' />
-            Сбросить фильтр
-          </Button>
         </div>
       )}
 

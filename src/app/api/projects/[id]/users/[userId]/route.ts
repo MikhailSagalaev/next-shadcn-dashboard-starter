@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { normalizePhone, isValidNormalizedPhone } from '@/lib/phone';
 import { requireProjectAccess } from '@/lib/with-project-access';
+import { PartnerNotificationService } from '@/lib/services/partner-notification.service';
 
 /**
  * Zod-схема для PATCH-полей пользователя.
@@ -291,6 +292,30 @@ export async function PATCH(
       userId,
       updatedFields: Object.keys(updateData)
     });
+
+    // Прямое изменение роли/организации админом (в обход заявки на
+    // вступление) молча оставляло пользователя с устаревшим меню бота —
+    // уведомляем так же, как approveJoinRequest делает для заявок.
+    const roleChanged =
+      parsed.data.partnerRole !== undefined &&
+      parsed.data.partnerRole !== user.partnerRole;
+    const orgChanged =
+      parsed.data.organizationId !== undefined &&
+      parsed.data.organizationId !== user.organizationId;
+    if (roleChanged || orgChanged) {
+      const org = updatedUser.organizationId
+        ? await db.partnerOrganization.findFirst({
+            where: { id: updatedUser.organizationId, projectId },
+            select: { name: true }
+          })
+        : null;
+      void PartnerNotificationService.notifyRoleOrOrgChanged({
+        userId,
+        projectId,
+        newRole: updatedUser.partnerRole,
+        organizationName: org?.name
+      });
+    }
 
     return NextResponse.json({
       success: true,

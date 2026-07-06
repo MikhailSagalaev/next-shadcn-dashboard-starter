@@ -463,6 +463,52 @@ export class PartnerNotificationService {
       });
     }
   }
+
+  /**
+   * Уведомить пользователя о прямом изменении его роли/организации
+   * администратором — в обход `approveJoinRequest` (PATCH пользователя,
+   * добавление/редактирование участника организации). Без этого человек
+   * молча остаётся с устаревшим меню бота и без ссылки на новый кабинет,
+   * ровно та же дыра, которую `notifyApplicantAboutJoinDecision` закрыла
+   * только для пути заявок на вступление.
+   */
+  static async notifyRoleOrOrgChanged(params: {
+    userId: string;
+    projectId: string;
+    newRole?: string | null;
+    organizationName?: string | null;
+  }): Promise<void> {
+    try {
+      const { userId, projectId, newRole, organizationName } = params;
+      const user = await db.user.findFirst({
+        where: { id: userId, projectId },
+        select: {
+          id: true,
+          telegramId: true,
+          maxId: true,
+          partnerRole: true,
+          metadata: true
+        }
+      });
+      if (!user || isOptedOut(user.metadata)) return;
+      if (!user.telegramId && !user.maxId) return;
+
+      const roleText = newRole
+        ? `Вы теперь ${roleLabel(newRole)}`
+        : 'Ваша роль в команде изменена';
+      const orgText = organizationName ? ` в «${organizationName}»` : '';
+      const message = `🔄 <b>Обновление доступа</b>\n${roleText}${orgText}. Откройте /start, чтобы увидеть новый кабинет.`;
+
+      await this.dispatchPartnerNotification(projectId, user, message);
+    } catch (error) {
+      logger.error('notifyRoleOrOrgChanged failed', {
+        userId: params.userId,
+        projectId: params.projectId,
+        error: error instanceof Error ? error.message : String(error),
+        component: COMPONENT
+      });
+    }
+  }
 }
 
 /**
