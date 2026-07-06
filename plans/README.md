@@ -22,6 +22,18 @@ each plan's "Current state" section for what was actually confirmed vs.
 assumed). Owner selected the top-5 by leverage; the remaining ~9 verified
 findings were not turned into plans this round.
 
+**016 (2026-07-06):** not from the audit batch — spun out of a live
+design-critique review of the visual workflow constructor
+(`/dashboard/projects/[id]/workflow`), done in conversation against commit
+`804ab84`. Two "🔴 Critical" usability findings: some canvas nodes are
+permanently dead (the bot dispatcher intercepts their callback before the
+workflow engine ever runs) with no indication of that on the canvas, and
+condition nodes render raw code (`user.partnerRole equals DIRECTOR`) instead
+of the human-readable labels the property editor already uses one file
+over. Single plan, independently verified against the live code (exact
+`file:line`, and the one real dead node in the shipped b2b template
+confirmed by running a small script — see the plan's "Current state" §3).
+
 ## Execution order & status
 
 | Plan | Title | Priority | Effort | Depends on | Status |
@@ -41,6 +53,7 @@ findings were not turned into plans this round.
 | 013  | Add a database index on `users.referred_by` | P2 | S | — | TODO |
 | 014  | Rate-limit the public balance-lookup endpoints | P2 | S-M | — | TODO |
 | 015  | Replace the dead pre-push gate with a scoped one, add AGENTS.md + .env.example | P2 | S-M | — | TODO |
+| 016  | Mark dead trigger.callback nodes and show human-readable conditions in the workflow constructor | P2 | S | — | DONE, reviewed (APPROVE), 2026-07-06 — 4 commits `f459332..ab41632` on branch `advisor/016-workflow-constructor-dead-nodes-and-readable-conditions`, worktree `.claude/worktrees/agent-ad0b918ec01ab7ff7` (not merged/pushed) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (rationale)
 
@@ -68,6 +81,41 @@ baseline" numbers reflect whatever state 011-014 left behind).
 - 005 requires 004 (consistent depth) before rewriting chain resolution.
 
 ## Execution log
+
+- **016 — DONE & reviewed (APPROVE), 2026-07-06.** Executor commits `f459332`
+  (shared intercept matcher), `df7efb3` (TriggerNode badge), `1b94b88`
+  (shared operator-label map), `ab41632` (ConditionNode + properties-panel
+  wiring) on branch `advisor/016-workflow-constructor-dead-nodes-and-readable-conditions`,
+  worktree `.claude/worktrees/agent-ad0b918ec01ab7ff7` (not merged/pushed —
+  merging is the user's call). Reviewer independently re-ran every done
+  criterion rather than trusting the executor's report: `tsc --noEmit` shows
+  zero errors in any of the 5 new/touched TS(X) files (the sole in-scope
+  file with a tsc hit, `bot.ts`, only shows its pre-existing unrelated
+  `https-proxy-agent` module-resolution error, confirmed untouched by the
+  diff); `eslint` on all 6 in-scope files is clean; scoped jest
+  (`__tests__/services/{telegram,workflow}/`) is 5 suites/37 tests green;
+  full-suite jest is 5 failed/29 passed suites, 18 failed/258 passed tests —
+  re-ran and listed the 5 failing suite names myself
+  (`widget-integration`, `referral.service`, `user.service`,
+  `universal-widget`, `tilda-adapter`) and confirmed they're the same
+  pre-existing failures from before this plan, with the +2 suites/+12 tests
+  delta landing exactly on the two new test files; `git diff --stat` shows
+  exactly the 8 files the plan authorized, nothing more. Read the full diff
+  against the plan: `isTelegramCallbackIntercepted`'s 9-line condition is a
+  byte-for-byte copy of the original `bot.ts` expression (no drift in
+  matching behavior), `TriggerNode`/`ConditionNode` changes match the
+  plan's sketched JSX. **Caveat (plan-sanctioned skip):** the manual
+  browser verification for Steps 3/5/6 was not performed — no
+  `.claude/launch.json` exists in the worktree, and this sandbox has no
+  reachable Postgres/Redis (a pre-existing, previously-confirmed
+  environment limitation this session, not specific to this plan), so a
+  dashboard screen wouldn't render past login anyway. The executor reported
+  this skip plainly instead of fabricating a result, matching the plan's
+  own fallback instruction. Static verification (types + lint + the pure
+  matcher/formatter unit tests, which cover 100% of the new logic) is
+  thorough enough that the remaining risk is purely visual/cosmetic
+  (badge placement, tooltip text wrapping) — reasonable to accept without
+  merging blind; worth a 30-second look in a real browser before deploying.
 
 - **001 — DONE & reviewed (APPROVE), 2026-06-23.** Executor commit `d04cabd` on branch `advisor/001-webhook-idempotency`, worktree `.claude/worktrees/agent-ac9f47be4059a2175` (not merged/pushed — merging is the user's call). Reviewer-verified: early existence guard in `processOrder` (gated on non-empty `orderId`), deterministic `externalId` (`tilda_order_*`) on the EARN bonus/transaction with P2002 tolerance, per-payout `externalId` (`referral_<order>_<referrer>_L<level>`) in `processReferralBonus(userId, amount, orderId?)`, 4 new passing tests. **Caveat:** the two absolute done-criteria (`tsc --noEmit` exit 0, full services suite green) are unreachable on this repo's **pre-existing red baseline** (72 tsc errors, 9 failing tests on `1830d2a` before any change) — independently confirmed the change adds **zero** new tsc errors and zero test regressions. Minor follow-up: idempotency was threaded via local `as CreateBonusInput & { externalId? }` / `as CreateTransactionInput` casts because `src/types/bonus.ts` was out of scope; a future cleanup should add `externalId?` to those input types and drop the casts.
 
