@@ -18,6 +18,7 @@ import {
 import { SimpleWorkflowProcessor } from '@/lib/services/simple-workflow-processor';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
 import { PartnerCabinetService } from '@/lib/services/partner-cabinet.service';
+import { isTelegramCallbackIntercepted } from '@/lib/telegram/partner-cabinet-intercepted-callbacks';
 
 // Интерфейс для сессии (расширен для конструктора)
 type MyContext = Context & SessionFlavor<BotConstructorSession>;
@@ -169,16 +170,7 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       // Партнёрский кабинет: approve/reject, фильтры команды, заявки — до workflow
       if (trigger === 'callback' && ctx.callbackQuery?.data) {
         const data = ctx.callbackQuery.data;
-        const isPartnerCabinet =
-          data.startsWith('partner_join_') ||
-          data.startsWith('partner_team_remove:') ||
-          data.startsWith('partner_team_tab:') ||
-          data.startsWith('partner_team_page:') ||
-          data === 'partner_requests' ||
-          data === 'payout_request' ||
-          data.startsWith('payout_cancel:') ||
-          data.startsWith('payout_method:') ||
-          data === 'payout_method_cancel';
+        const isPartnerCabinet = isTelegramCallbackIntercepted(data);
 
         if (isPartnerCabinet) {
           const handled = await PartnerCabinetService.tryHandleTelegramCallback(
