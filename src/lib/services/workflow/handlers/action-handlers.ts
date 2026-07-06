@@ -1191,6 +1191,20 @@ export class LinkTelegramAccountHandler extends BaseNodeHandler {
       'session'
     );
 
+    // Если реферер был отложен до подтверждения контакта (см.
+    // UserService.createUser/pendingReferralMetadata) — резолвим его
+    // сейчас, эта нода — ещё один путь линковки telegramId/maxId наравне
+    // с router-integration.ts и query-executor.ts's activate_user.
+    try {
+      const { UserService } = await import('@/lib/services/user.service');
+      await UserService.resolvePendingReferralOnActivation(updatedUser.id);
+    } catch (e) {
+      logger.warn('Failed to resolve pending referral on activation', {
+        userId: updatedUser.id,
+        error: e instanceof Error ? e.message : String(e)
+      });
+    }
+
     this.logStep(context, node, 'Telegram account linked', 'info', {
       userId: updatedUser.id,
       contactType: config.contactType

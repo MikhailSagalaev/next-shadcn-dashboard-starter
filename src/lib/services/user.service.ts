@@ -95,6 +95,21 @@ export class UserService {
         Boolean(partnerFlags?.referralJoinRequiresApproval) &&
         Boolean(partnerFlags?.enablePartnerTeamManagement);
 
+      // Если бот ещё не подтвердил контакт (WITH_BOT, isActive=false здесь),
+      // заявку на вступление создаём НЕ сейчас, а позже — из
+      // resolvePendingReferralOnActivation(), когда пользователь привяжет
+      // telegramId/maxId. Раньше заявка уходила рефереру сразу при веб-
+      // регистрации: менеджер мог одобрить её до того, как заявитель вообще
+      // открыл бота, а уведомление об одобрении тихо терялось —
+      // notifyApplicantAboutJoinDecision молча выходит, если у пользователя
+      // нет ни telegramId, ни maxId (partner-notification.service.ts).
+      // Для WITHOUT_BOT (isActive уже true, подтверждать нечего) поведение
+      // не меняется — заявка создаётся сразу, как и раньше.
+      const pendingReferralMetadata =
+        pendingReferral && !isActive && referrerId
+          ? { referrerId, organizationId: organizationId ?? null }
+          : null;
+
       const {
         utmOrg: _utmOrg,
         organizationId: _inputOrgId,
@@ -111,13 +126,16 @@ export class UserService {
           isActive,
           totalPurchases: 0,
           currentLevel: 'Базовый',
-          ...(data.utmOrg
+          ...(pendingReferralMetadata
             ? {
                 metadata: {
-                  utmOrg: data.utmOrg
+                  ...(data.utmOrg ? { utmOrg: data.utmOrg } : {}),
+                  pendingReferral: pendingReferralMetadata
                 }
               }
-            : {})
+            : data.utmOrg
+              ? { metadata: { utmOrg: data.utmOrg } }
+              : {})
         },
         include: {
           project: true,
@@ -141,12 +159,19 @@ export class UserService {
 
       if (referrerId) {
         if (pendingReferral) {
-          await PartnerTeamService.createJoinRequest({
-            projectId: data.projectId,
-            userId: user.id,
-            referrerId,
-            organizationId: organizationId ?? null
-          });
+          if (!pendingReferralMetadata) {
+            // isActive уже true (WITHOUT_BOT) — нет события "подтверждение
+            // контакта", на которое можно отложить; создаём заявку сразу,
+            // как и раньше.
+            await PartnerTeamService.createJoinRequest({
+              projectId: data.projectId,
+              userId: user.id,
+              referrerId,
+              organizationId: organizationId ?? null
+            });
+          }
+          // Иначе заявка будет создана позже, из
+          // resolvePendingReferralOnActivation() при подтверждении контакта.
         } else {
           try {
             await ReferralCommissionService.syncAttributionForInvitedUser({
@@ -260,6 +285,70 @@ export class UserService {
         component: 'user-service'
       });
       throw error;
+    }
+  }
+
+  /**
+   * Резолвит отложенную привязку реферера/организации после подтверждения
+   * контакта в боте (см. pendingReferralMetadata в createUser). На этот
+   * момент у пользователя гарантированно есть канал для уведомлений
+   * (telegramId/maxId), так что заявку на вступление — или прямую
+   * привязку, если флаг требования одобрения выключили, пока пользователь
+   * ждал, — можно безопасно создать. Переиспользует ту же логику "заявка
+   * vs прямая привязка", что и linkReferralWithPolicy (поздняя
+   * re-attribution по UTM с заказа) — единая точка принятия решения, не
+   * дублируем её здесь.
+   *
+   * Вызывается из ВСЕХ мест, где пользователь может привязать
+   * telegramId/maxId: router-integration.ts (contact-обработчик активного
+   * bot-flow), query-executor.ts (`activate_user`, дефолтный шаблон
+   * loyalty-system), и action-handlers.ts (`action.link_telegram_account`,
+   * нода, доступная в визуальном конструкторе воркфлоу для кастомных
+   * сценариев).
+   *
+   * Idempotent — если `pendingReferral` в metadata нет (обычная
+   * регистрация без реф. ссылки, WITHOUT_BOT, или уже резолвнуто раньше),
+   * тихо ничего не делает.
+   */
+  static async resolvePendingReferralOnActivation(
+    userId: string
+  ): Promise<void> {
+    try {
+      const user = await db.user.findUnique({
+        where: { id: userId },
+        select: { id: true, projectId: true, metadata: true }
+      });
+      if (!user) return;
+
+      const metadata = (user.metadata as Record<string, any> | null) ?? {};
+      const pending = metadata.pendingReferral as
+        | { referrerId: string; organizationId: string | null }
+        | undefined;
+      if (!pending) return;
+
+      // Убираем маркер сразу — независимо от исхода не пытаемся резолвить
+      // повторно (createJoinRequest сам по себе идемпотентен, но лишний
+      // повторный вызов линковки/уведомлений при повторной активации ни к
+      // чему).
+      const { pendingReferral: _pendingReferral, ...restMetadata } = metadata;
+
+      await PartnerTeamService.linkReferralWithPolicy({
+        userId: user.id,
+        projectId: user.projectId,
+        referrerId: pending.referrerId,
+        organizationId: pending.organizationId
+      });
+
+      await db.user.update({
+        where: { id: user.id },
+        data: { metadata: restMetadata }
+      });
+    } catch (error) {
+      logger.error('resolvePendingReferralOnActivation failed', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+        component: 'user-service'
+      });
     }
   }
 

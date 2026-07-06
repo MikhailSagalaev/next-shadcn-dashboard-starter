@@ -760,6 +760,10 @@ export class RouterIntegration {
               isActive: true
             }
           });
+          // Если реферер был отложен до подтверждения контакта (см.
+          // createUser/pendingReferralMetadata) — резолвим его сейчас,
+          // когда у пользователя уже точно есть telegramId для уведомлений.
+          await UserService.resolvePendingReferralOnActivation(existingUser.id);
           logger.info('✅ Matched and updated existing user', {
             userId: existingUser.id,
             phoneInDB: existingUser.phone,

@@ -1247,6 +1247,18 @@ export const SAFE_QUERIES = {
       // Не блокируем основную операцию
     }
 
+    // Если реферер был отложен до подтверждения контакта (см.
+    // UserService.createUser/pendingReferralMetadata) — резолвим его сейчас.
+    try {
+      const { UserService } = await import('@/lib/services/user.service');
+      await UserService.resolvePendingReferralOnActivation(params.userId);
+    } catch (e) {
+      logger.warn('Failed to resolve pending referral on activation', {
+        userId: params.userId,
+        error: e instanceof Error ? e.message : String(e)
+      });
+    }
+
     return user;
   },
 
