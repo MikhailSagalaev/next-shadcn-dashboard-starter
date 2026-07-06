@@ -10,20 +10,40 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Play } from 'lucide-react';
+import { Play, AlertTriangle } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
+import { getTriggerCallbackPattern } from '@/lib/services/workflow/callback-trigger-match';
+import { isTriggerNodePatternIntercepted } from '@/lib/telegram/partner-cabinet-intercepted-callbacks';
 import type { WorkflowNodeData } from '@/types/workflow';
 
 export const TriggerNode = memo(({ data }: NodeProps) => {
   const nodeData = data as WorkflowNodeData;
   const triggerType = nodeData.type;
   const config = nodeData.config || {};
+  const callbackPattern =
+    triggerType === 'trigger.callback'
+      ? getTriggerCallbackPattern({
+          id: '',
+          type: triggerType,
+          position: { x: 0, y: 0 },
+          data: nodeData
+        } as any)
+      : undefined;
   const triggerValue =
     config['trigger.command']?.command ||
     config['trigger.message']?.pattern ||
-    config['trigger.callback']?.callbackData ||
-    config['trigger.callback']?.data ||
+    callbackPattern ||
     config['trigger.schedule']?.cron ||
     'Нажмите для редактирования';
+
+  const isDead =
+    triggerType === 'trigger.callback' &&
+    !!callbackPattern &&
+    isTriggerNodePatternIntercepted(callbackPattern);
 
   const getTriggerDisplayText = () => {
     switch (triggerType) {
@@ -65,13 +85,32 @@ export const TriggerNode = memo(({ data }: NodeProps) => {
   };
 
   return (
-    <Card className='w-64 border-green-500 shadow-md'>
+    <Card
+      className={
+        isDead
+          ? 'w-64 border-amber-500 shadow-md'
+          : 'w-64 border-green-500 shadow-md'
+      }
+    >
       <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
         <CardTitle className='text-sm font-medium'>
           <Play className='mr-2 inline-block h-4 w-4 text-green-500' />
           {nodeData.label}
         </CardTitle>
-        <span className='text-muted-foreground text-xs'>Триггер</span>
+        <div className='flex items-center gap-1'>
+          {isDead && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertTriangle className='h-4 w-4 text-amber-500' />
+              </TooltipTrigger>
+              <TooltipContent>
+                Не исполняется — этот callback обрабатывается сервером напрямую,
+                до того как воркфлоу успевает его увидеть.
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <span className='text-muted-foreground text-xs'>Триггер</span>
+        </div>
       </CardHeader>
       <CardContent className='space-y-2'>
         <p className='text-muted-foreground line-clamp-2 text-sm'>
