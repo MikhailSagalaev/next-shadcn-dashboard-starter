@@ -49,6 +49,88 @@ function roleLabel(role: string): string {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Валидация реквизитов вывода. card/sbp/wallet остаются на минимальной
+// проверке длины (как было в v1) — эти способы не завязаны на реальный
+// денежный перевод по банковским реквизитам. self_employed (ИНН + ФИО +
+// номер карты) валидируется строже: это данные для настоящего банковского
+// перевода самозанятому, опечатка здесь — это не потерянное сообщение в
+// боте, а реальные деньги не туда.
+// ─────────────────────────────────────────────────────────────────────────
+
+function validateGenericPayoutText(value: string): string | null {
+  if (value.length < 4 || value.length > 200) {
+    return '⚠️ Реквизиты выглядят некорректно. Попробуйте ещё раз.';
+  }
+  return null;
+}
+
+function normalizeDigitsOnly(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function validateInn(value: string): string | null {
+  const digits = normalizeDigitsOnly(value);
+  if (digits.length !== 10 && digits.length !== 12) {
+    return '⚠️ ИНН должен содержать 10 цифр (юрлицо) или 12 цифр (физлицо/самозанятый). Попробуйте ещё раз.';
+  }
+  return null;
+}
+
+function validateFullName(value: string): string | null {
+  const trimmed = value.trim();
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (
+    parts.length < 2 ||
+    parts.length > 5 ||
+    !/^[а-яёА-ЯЁa-zA-Z\- ]+$/.test(trimmed)
+  ) {
+    return '⚠️ Введите ФИО полностью (фамилия и имя, при наличии — отчество), только буквами. Попробуйте ещё раз.';
+  }
+  return null;
+}
+
+function luhnCheck(digits: string): boolean {
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let d = parseInt(digits[i], 10);
+    if (shouldDouble) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+}
+
+function validateCardNumber(value: string): string | null {
+  const digits = normalizeDigitsOnly(value);
+  if (digits.length < 13 || digits.length > 19 || !luhnCheck(digits)) {
+    return '⚠️ Номер карты выглядит некорректно — проверьте цифры и попробуйте ещё раз.';
+  }
+  return null;
+}
+
+interface PayoutFieldSpec {
+  key: string;
+  prompt: string;
+  validate: (value: string) => string | null;
+  normalize?: (value: string) => string;
+}
+
+interface PendingPayoutCapture {
+  userId: string;
+  method: string;
+  /** Индекс текущего поля в PAYOUT_METHOD_FIELDS[method]. */
+  stepIndex: number;
+  /** Уже собранные и провалидированные поля (key → нормализованное значение). */
+  collected: Record<string, string>;
+  requestTelegramId?: number;
+  source?: string;
+}
+
 async function resolveUserId(
   projectId: string,
   ctx: Context
@@ -295,13 +377,64 @@ export class PartnerCabinetService {
   private static readonly PAYOUT_METHOD_LABELS: Record<string, string> = {
     card: '💳 Карта',
     sbp: '📱 Телефон (СБП)',
-    wallet: '👛 Электронный кошелёк'
+    wallet: '👛 Электронный кошелёк',
+    self_employed: '🧾 Самозанятый (ИНН + ФИО + карта)'
   };
 
-  private static readonly PAYOUT_METHOD_PROMPTS: Record<string, string> = {
-    card: 'Введите номер карты для зачисления.',
-    sbp: 'Введите номер телефона, привязанный к СБП (например, +79991234567).',
-    wallet: 'Введите номер или адрес электронного кошелька.'
+  /**
+   * Поля реквизитов на каждый способ вывода, в порядке пошагового сбора.
+   * card/sbp/wallet — одно свободнотекстовое поле `raw` (как было в v1,
+   * payoutDetails остаётся { raw } для этих методов — админка их уже так
+   * рендерит). self_employed — три поля по очереди: при ошибке валидации
+   * бот переспрашивает ТОЛЬКО текущий шаг, не сбрасывая уже введённые
+   * (см. resolvePayoutDetailsCapture).
+   */
+  private static readonly PAYOUT_METHOD_FIELDS: Record<
+    string,
+    PayoutFieldSpec[]
+  > = {
+    card: [
+      {
+        key: 'raw',
+        prompt: 'Введите номер карты для зачисления.',
+        validate: validateGenericPayoutText
+      }
+    ],
+    sbp: [
+      {
+        key: 'raw',
+        prompt:
+          'Введите номер телефона, привязанный к СБП (например, +79991234567).',
+        validate: validateGenericPayoutText
+      }
+    ],
+    wallet: [
+      {
+        key: 'raw',
+        prompt: 'Введите номер или адрес электронного кошелька.',
+        validate: validateGenericPayoutText
+      }
+    ],
+    self_employed: [
+      {
+        key: 'inn',
+        prompt:
+          'Шаг 1/3. Введите ваш ИНН (10 цифр — юрлицо, 12 — физлицо/самозанятый).',
+        validate: validateInn,
+        normalize: normalizeDigitsOnly
+      },
+      {
+        key: 'fullName',
+        prompt: 'Шаг 2/3. Введите ФИО полностью, как в паспорте.',
+        validate: validateFullName
+      },
+      {
+        key: 'cardNumber',
+        prompt: 'Шаг 3/3. Введите номер карты для перевода.',
+        validate: validateCardNumber,
+        normalize: normalizeDigitsOnly
+      }
+    ]
   };
 
   /** Сколько хранить в Redis выбор способа, пока партнёр не пришлёт реквизиты. */
@@ -319,12 +452,7 @@ export class PartnerCabinetService {
     projectId: string,
     platform: 'telegram' | 'max',
     externalUserId: string,
-    data: {
-      userId: string;
-      method: string;
-      requestTelegramId?: number;
-      source?: string;
-    }
+    data: PendingPayoutCapture
   ): Promise<void> {
     await CacheService.set(
       this.pendingPayoutCacheKey(projectId, platform, externalUserId),
@@ -337,12 +465,7 @@ export class PartnerCabinetService {
     projectId: string,
     platform: 'telegram' | 'max',
     externalUserId: string
-  ): Promise<{
-    userId: string;
-    method: string;
-    requestTelegramId?: number;
-    source?: string;
-  } | null> {
+  ): Promise<PendingPayoutCapture | null> {
     return CacheService.get(
       this.pendingPayoutCacheKey(projectId, platform, externalUserId)
     );
@@ -510,6 +633,12 @@ export class PartnerCabinetService {
                 text: this.PAYOUT_METHOD_LABELS.wallet,
                 callback_data: 'payout_method:wallet'
               }
+            ],
+            [
+              {
+                text: this.PAYOUT_METHOD_LABELS.self_employed,
+                callback_data: 'payout_method:self_employed'
+              }
             ]
           ]
         }
@@ -518,8 +647,8 @@ export class PartnerCabinetService {
 
     if (data.startsWith('payout_method:')) {
       const method = data.split(':')[1];
-      const prompt = this.PAYOUT_METHOD_PROMPTS[method];
-      if (!prompt || !externalUserId) {
+      const fields = this.PAYOUT_METHOD_FIELDS[method];
+      if (!fields || !externalUserId) {
         return {
           toast: 'Неизвестный способ',
           text: '⚠️ Неизвестный способ вывода. Нажмите «Вывести деньги» ещё раз.'
@@ -546,13 +675,15 @@ export class PartnerCabinetService {
       await this.setPendingPayoutCapture(projectId, platform, externalUserId, {
         userId,
         method,
+        stepIndex: 0,
+        collected: {},
         requestTelegramId: opts.requestTelegramId,
         source: opts.source
       });
 
       return {
         toast: 'Способ выбран',
-        text: `${this.PAYOUT_METHOD_LABELS[method]}\n\n${prompt}\n\nПросто пришлите реквизиты следующим сообщением.`,
+        text: `${this.PAYOUT_METHOD_LABELS[method]}\n\n${fields[0].prompt}`,
         replyMarkup: {
           inline_keyboard: [
             [{ text: '✖️ Отмена', callback_data: 'payout_method_cancel' }]
@@ -643,14 +774,55 @@ export class PartnerCabinetService {
     // активным, пусть команда обработается как обычно.
     if (trimmed.startsWith('/')) return null;
 
-    await this.clearPendingPayoutCapture(projectId, platform, externalUserId);
-
-    if (trimmed.length < 4 || trimmed.length > 200) {
+    const fields = this.PAYOUT_METHOD_FIELDS[pending.method];
+    const field = fields?.[pending.stepIndex];
+    if (!field) {
+      // Способ из старой/повреждённой записи в Redis — не подвисаем молча.
+      await this.clearPendingPayoutCapture(projectId, platform, externalUserId);
       return {
-        toast: 'Некорректные реквизиты',
-        text: '⚠️ Реквизиты выглядят некорректно. Нажмите «Вывести деньги» ещё раз и повторите ввод.'
+        toast: 'Ошибка',
+        text: '⚠️ Не удалось определить способ вывода. Нажмите «Вывести деньги» ещё раз.'
       };
     }
+
+    const validationError = field.validate(trimmed);
+    if (validationError) {
+      // НЕ сбрасываем pending — переспрашиваем именно этот шаг, а не всю
+      // цепочку заново (для self_employed это 3 шага, терять их из-за одной
+      // опечатки в номере карты — плохой UX).
+      await this.setPendingPayoutCapture(
+        projectId,
+        platform,
+        externalUserId,
+        pending
+      );
+      return { toast: 'Некорректные данные', text: validationError };
+    }
+
+    const value = field.normalize ? field.normalize(trimmed) : trimmed;
+    const collected = { ...pending.collected, [field.key]: value };
+    const nextStepIndex = pending.stepIndex + 1;
+    const nextField = fields[nextStepIndex];
+
+    if (nextField) {
+      await this.setPendingPayoutCapture(projectId, platform, externalUserId, {
+        ...pending,
+        stepIndex: nextStepIndex,
+        collected
+      });
+      return {
+        toast: 'Принято',
+        text: nextField.prompt,
+        replyMarkup: {
+          inline_keyboard: [
+            [{ text: '✖️ Отмена', callback_data: 'payout_method_cancel' }]
+          ]
+        }
+      };
+    }
+
+    // Последнее поле для этого способа — завершаем сбор и создаём заявку.
+    await this.clearPendingPayoutCapture(projectId, platform, externalUserId);
 
     const balanceAgg = await db.bonus.aggregate({
       where: {
@@ -673,7 +845,7 @@ export class PartnerCabinetService {
       requestTelegramId: pending.requestTelegramId,
       source: pending.source,
       payoutMethod: pending.method,
-      payoutDetails: { raw: trimmed }
+      payoutDetails: collected
     });
   }
 

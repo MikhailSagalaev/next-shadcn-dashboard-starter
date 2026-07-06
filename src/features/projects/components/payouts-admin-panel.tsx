@@ -55,7 +55,12 @@ interface PayoutItem {
   currency: string;
   status: PayoutStatus;
   payoutMethod: string | null;
-  payoutDetails: { raw?: string } | null;
+  payoutDetails: {
+    raw?: string;
+    inn?: string;
+    fullName?: string;
+    cardNumber?: string;
+  } | null;
   requestedAt: string;
   paidAt: string | null;
   rejectReason: string | null;
@@ -88,14 +93,29 @@ const STATUS_VARIANT: Record<
 const PAYOUT_METHOD_LABEL: Record<string, string> = {
   card: 'Карта',
   sbp: 'Телефон (СБП)',
-  wallet: 'Кошелёк'
+  wallet: 'Кошелёк',
+  self_employed: 'Самозанятый'
 };
 
 function formatPayoutRequisites(item: PayoutItem): string {
   const methodLabel = item.payoutMethod
     ? (PAYOUT_METHOD_LABEL[item.payoutMethod] ?? item.payoutMethod)
     : null;
-  const raw = item.payoutDetails?.raw;
+
+  const details = item.payoutDetails;
+  // self_employed хранит структурированные поля, а не одну строку raw —
+  // рендерим их явно (ИНН/ФИО/карта), а не как непонятный JSON.
+  if (details?.inn || details?.fullName || details?.cardNumber) {
+    const parts = [
+      details.fullName,
+      details.inn ? `ИНН ${details.inn}` : null,
+      details.cardNumber ? `карта ${details.cardNumber}` : null
+    ].filter(Boolean);
+    const body = parts.join(', ');
+    return methodLabel ? `${methodLabel}: ${body}` : body;
+  }
+
+  const raw = details?.raw;
   if (methodLabel && raw) return `${methodLabel}: ${raw}`;
   if (raw) return raw;
   if (methodLabel) return methodLabel;
