@@ -504,7 +504,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           </Button>
           <Button variant='outline' size='sm' asChild>
             <Link
-              href={`/dashboard/projects/${projectId}/referral/hierarchy?organizationId=${organizationId}`}
+              href={`/dashboard/projects/${projectId}/referral?tab=hierarchy&organizationId=${organizationId}&organizationName=${encodeURIComponent(organization.name)}`}
             >
               <Network className='mr-2 h-4 w-4' />
               Иерархия

@@ -188,7 +188,7 @@ export function ReferralProgramSidebar({
                 </Button>
                 <Button variant='outline' size='sm' asChild>
                   <Link
-                    href={`/dashboard/projects/${projectId}/referral/hierarchy`}
+                    href={`/dashboard/projects/${projectId}/referral?tab=hierarchy`}
                   >
                     <Network className='mr-2 h-4 w-4' />
                     Иерархия партнёров
@@ -253,10 +253,39 @@ export function ReferralProgramSidebar({
             </p>
             <Button variant='outline' size='sm' asChild>
               <Link
-                href={`/dashboard/projects/${projectId}/referral/hierarchy`}
+                href={`/dashboard/projects/${projectId}/referral?tab=hierarchy`}
               >
                 <Network className='mr-2 h-4 w-4' />
                 Иерархия партнёров
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (activeTab === 'hierarchy') {
+    return (
+      <div className='space-y-6'>
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-lg'>Дерево партнёров</CardTitle>
+            <CardDescription>
+              Агрегаты (команда, комиссия) считаются за выбранный период
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-3 text-sm'>
+            <p className='text-muted-foreground'>
+              Поиск подсвечивает совпадения и разворачивает цепочку до корня.
+              Экспорт CSV учитывает выбранный период.
+            </p>
+            <Button variant='outline' size='sm' asChild>
+              <Link
+                href={`/dashboard/projects/${projectId}/referral?tab=organizations`}
+              >
+                <Building2 className='mr-2 h-4 w-4' />
+                Управление организациями
               </Link>
             </Button>
           </CardContent>

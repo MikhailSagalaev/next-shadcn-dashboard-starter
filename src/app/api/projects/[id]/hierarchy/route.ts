@@ -49,9 +49,14 @@ export async function GET(
     ? periodParam
     : '30d';
   const search = url.searchParams.get('search') || undefined;
+  const organizationId = url.searchParams.get('organizationId') || undefined;
 
   try {
-    const data = await getHierarchyTree(projectId, { period, search });
+    const data = await getHierarchyTree(projectId, {
+      period,
+      search,
+      organizationId
+    });
     return NextResponse.json({
       ok: true,
       period,

@@ -44,6 +44,7 @@ import { PayoutsAdminPanel } from './payouts-admin-panel';
 import { ReferralProgramGuide } from './referral-program-guide';
 import { ReferralProgramSidebar } from './referral-program-sidebar';
 import { PartnerOrganizationsPanel } from './partner-organizations-panel';
+import { HierarchyTabPanel } from './hierarchy-tab-panel';
 import type { Project, ReferralProgram } from '@/types/bonus';
 
 interface ReferralProgramViewProps {
@@ -70,6 +71,20 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
     const tab = searchParams.get('tab');
     if (tab) setActiveTab(tab);
   }, [searchParams]);
+
+  // Если запрошена b2b-вкладка, а b2b выключен — откатываемся на «Настройки»,
+  // иначе Tabs останется без активного триггера (визуально пусто).
+  const B2B_ONLY_TABS = ['payouts', 'organizations', 'hierarchy'];
+  useEffect(() => {
+    if (
+      project &&
+      !project.enablePartnerRoles &&
+      B2B_ONLY_TABS.includes(activeTab)
+    ) {
+      setActiveTab('settings');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
 
   const loadData = async () => {
     try {
@@ -229,22 +244,12 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
         </div>
         <div className='flex flex-wrap items-center gap-2'>
           {project?.enablePartnerRoles && (
-            <>
-              <Button variant='outline' size='sm' asChild>
-                <Link
-                  href={`/dashboard/projects/${projectId}/referral/hierarchy`}
-                >
-                  <Network className='mr-2 h-4 w-4' />
-                  Иерархия
-                </Link>
-              </Button>
-              <Button variant='outline' size='sm' asChild>
-                <Link href={`/dashboard/projects/${projectId}/users`}>
-                  <Users className='mr-2 h-4 w-4' />
-                  Роли пользователей
-                </Link>
-              </Button>
-            </>
+            <Button variant='outline' size='sm' asChild>
+              <Link href={`/dashboard/projects/${projectId}/users`}>
+                <Users className='mr-2 h-4 w-4' />
+                Роли пользователей
+              </Link>
+            </Button>
           )}
           <Badge variant={referralProgram?.isActive ? 'default' : 'secondary'}>
             {referralProgram?.isActive ? 'Активна' : 'Неактивна'}
@@ -268,7 +273,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
           >
             <TabsList
               className={`grid w-full ${
-                project?.enablePartnerRoles ? 'grid-cols-5' : 'grid-cols-3'
+                project?.enablePartnerRoles ? 'grid-cols-6' : 'grid-cols-3'
               }`}
             >
               <TabsTrigger value='settings' className='flex items-center'>
@@ -296,6 +301,12 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
                 >
                   <Building2 className='mr-2 h-4 w-4' />
                   Организации
+                </TabsTrigger>
+              )}
+              {project?.enablePartnerRoles && (
+                <TabsTrigger value='hierarchy' className='flex items-center'>
+                  <Network className='mr-2 h-4 w-4' />
+                  Иерархия
                 </TabsTrigger>
               )}
             </TabsList>
@@ -329,6 +340,12 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
             {project?.enablePartnerRoles && (
               <TabsContent value='organizations' className='space-y-6'>
                 <PartnerOrganizationsPanel projectId={projectId} />
+              </TabsContent>
+            )}
+
+            {project?.enablePartnerRoles && (
+              <TabsContent value='hierarchy' className='space-y-6'>
+                <HierarchyTabPanel projectId={projectId} />
               </TabsContent>
             )}
           </Tabs>

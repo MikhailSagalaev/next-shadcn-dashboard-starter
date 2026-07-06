@@ -31,7 +31,6 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronDown,
   ChevronRight,
@@ -65,6 +64,7 @@ interface HierarchyTreeProps {
   nodes: HierarchyNode[];
   rootIds: string[];
   period: HierarchyPeriod;
+  onPeriodChange: (period: HierarchyPeriod) => void;
 }
 
 const PERIOD_LABEL: Record<HierarchyPeriod, string> = {
@@ -217,16 +217,11 @@ export function HierarchyTree({
   projectId,
   nodes,
   rootIds,
-  period
+  period,
+  onPeriodChange
 }: HierarchyTreeProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const initialSearch = searchParams.get('search') ?? '';
-
-  const [search, setSearch] = React.useState(initialSearch);
-  // Синхронизируем поле с URL только при первом монтировании.
-  // Дальше — локальный state, чтобы не дёргать SSR на каждое нажатие.
-  const [debouncedSearch, setDebouncedSearch] = React.useState(initialSearch);
+  const [search, setSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 200);
@@ -282,14 +277,6 @@ export function HierarchyTree({
 
   const isExpanded = (id: string) =>
     manualExpanded.has(id) || expandedAuto.has(id);
-
-  const handlePeriodChange = (next: HierarchyPeriod) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('period', next);
-    router.push(
-      `/dashboard/projects/${projectId}/referral/hierarchy?${params.toString()}`
-    );
-  };
 
   const handleExport = () => {
     const params = new URLSearchParams();
@@ -356,7 +343,7 @@ export function HierarchyTree({
         </div>
         <Select
           value={period}
-          onValueChange={(v) => handlePeriodChange(v as HierarchyPeriod)}
+          onValueChange={(v) => onPeriodChange(v as HierarchyPeriod)}
         >
           <SelectTrigger className='w-[200px]'>
             <SelectValue />

@@ -347,7 +347,7 @@ export function B2bHierarchySettings({
 
             <div className='grid gap-3 sm:grid-cols-2'>
               <Link
-                href={`/dashboard/projects/${projectId}/referral/hierarchy`}
+                href={`/dashboard/projects/${projectId}/referral?tab=hierarchy`}
               >
                 <Button
                   type='button'

@@ -427,7 +427,7 @@ export class PartnerTeamService {
       severity: 'warning',
       title: 'Заявка на вступление в команду',
       message: 'Пользователь хочет присоединиться к команде.',
-      link: `/dashboard/projects/${params.projectId}/referral/hierarchy`,
+      link: `/dashboard/projects/${params.projectId}/referral?tab=hierarchy`,
       metadata: {
         requestId: request.id,
         userId: params.userId,
