@@ -152,6 +152,9 @@ describe('UserService.resolvePendingReferralOnActivation', () => {
     mockDb.user.findUnique = jest.fn().mockResolvedValue({
       id: 'user-1',
       projectId,
+      referredBy: null,
+      organizationId: null,
+      partnerRole: 'CLIENT',
       metadata: {
         utmOrg: 'blog15',
         pendingReferral: { referrerId, organizationId: 'org-1' }
@@ -176,6 +179,9 @@ describe('UserService.resolvePendingReferralOnActivation', () => {
     mockDb.user.findUnique = jest.fn().mockResolvedValue({
       id: 'user-1',
       projectId,
+      referredBy: null,
+      organizationId: null,
+      partnerRole: 'CLIENT',
       metadata: { utmOrg: 'blog15' }
     });
     mockDb.user.update = jest.fn();
@@ -194,4 +200,36 @@ describe('UserService.resolvePendingReferralOnActivation', () => {
     ).resolves.toBeUndefined();
     expect(PartnerTeamService.linkReferralWithPolicy).not.toHaveBeenCalled();
   });
+
+  // Регрессия: пока пользователь ждал подтверждения контакта, админ вручную
+  // назначил ему referredBy/organizationId/роль — resolvePendingReferralOnActivation
+  // не должен затирать это старым намерением с реф. ссылки.
+  it.each([
+    ['referredBy уже проставлен', { referredBy: 'some-other-referrer' }],
+    ['organizationId уже проставлен', { organizationId: 'org-manual' }],
+    ['роль уже не CLIENT', { partnerRole: 'TRAINER' }]
+  ])(
+    'админ уже обработал вручную (%s) — пропускает linkReferralWithPolicy, только чистит metadata',
+    async (_label, overrides) => {
+      mockDb.user.findUnique = jest.fn().mockResolvedValue({
+        id: 'user-1',
+        projectId,
+        referredBy: null,
+        organizationId: null,
+        partnerRole: 'CLIENT',
+        ...overrides,
+        metadata: {
+          utmOrg: 'blog15',
+          pendingReferral: { referrerId, organizationId: 'org-1' }
+        }
+      });
+      mockDb.user.update = jest.fn().mockResolvedValue({});
+
+      await UserService.resolvePendingReferralOnActivation('user-1');
+
+      expect(PartnerTeamService.linkReferralWithPolicy).not.toHaveBeenCalled();
+      const updateCall = (mockDb.user.update as jest.Mock).mock.calls[0][0];
+      expect(updateCall.data.metadata).toEqual({ utmOrg: 'blog15' });
+    }
+  );
 });

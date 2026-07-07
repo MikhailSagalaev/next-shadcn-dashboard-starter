@@ -316,7 +316,14 @@ export class UserService {
     try {
       const user = await db.user.findUnique({
         where: { id: userId },
-        select: { id: true, projectId: true, metadata: true }
+        select: {
+          id: true,
+          projectId: true,
+          metadata: true,
+          referredBy: true,
+          organizationId: true,
+          partnerRole: true
+        }
       });
       if (!user) return;
 
@@ -331,6 +338,32 @@ export class UserService {
       // повторный вызов линковки/уведомлений при повторной активации ни к
       // чему).
       const { pendingReferral: _pendingReferral, ...restMetadata } = metadata;
+
+      // Пока пользователь ждал подтверждения контакта, админ мог уже вручную
+      // назначить ему referredBy/organizationId/роль (профиль, карточка
+      // организации) — linkReferralWithPolicy пишет эти поля безусловно, и
+      // без этой проверки мы бы молча затёрли явное решение админа старым
+      // намерением с реф. ссылки. Уважаем то, что уже проставлено, и просто
+      // снимаем маркер, не трогая привязку.
+      const alreadyHandledManually =
+        Boolean(user.referredBy) ||
+        Boolean(user.organizationId) ||
+        user.partnerRole !== 'CLIENT';
+      if (alreadyHandledManually) {
+        logger.info(
+          'resolvePendingReferralOnActivation: skipped — user already has referredBy/organizationId/role set (admin likely handled it manually while pending)',
+          {
+            userId: user.id,
+            projectId: user.projectId,
+            component: 'user-service'
+          }
+        );
+        await db.user.update({
+          where: { id: user.id },
+          data: { metadata: restMetadata }
+        });
+        return;
+      }
 
       await PartnerTeamService.linkReferralWithPolicy({
         userId: user.id,
