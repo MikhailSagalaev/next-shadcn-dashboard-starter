@@ -53,7 +53,7 @@ confirmed by running a small script — see the plan's "Current state" §3).
 | 013  | Add a database index on `users.referred_by` | P2 | S | — | TODO |
 | 014  | Rate-limit the public balance-lookup endpoints | P2 | S-M | — | TODO |
 | 015  | Replace the dead pre-push gate with a scoped one, add AGENTS.md + .env.example | P2 | S-M | — | TODO |
-| 016  | Mark dead trigger.callback nodes and show human-readable conditions in the workflow constructor | P2 | S | — | DONE, reviewed (APPROVE), 2026-07-06 — 4 commits `f459332..ab41632` on branch `advisor/016-workflow-constructor-dead-nodes-and-readable-conditions`, worktree `.claude/worktrees/agent-ad0b918ec01ab7ff7` (not merged/pushed) |
+| 016  | Mark dead trigger.callback nodes and show human-readable conditions in the workflow constructor | P2 | S | — | DONE, reviewed (APPROVE), merged & pushed to `main` (`5cfb5c4`), 2026-07-06 |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (rationale)
 
