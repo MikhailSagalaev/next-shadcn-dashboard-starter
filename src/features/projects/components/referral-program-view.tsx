@@ -333,7 +333,11 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
 
             {project?.enablePartnerRoles && (
               <TabsContent value='payouts' className='space-y-6'>
-                <PayoutsAdminPanel projectId={projectId} />
+                <PayoutsAdminPanel
+                  projectId={projectId}
+                  initialPayoutMinAmount={referralProgram?.payoutMinAmount}
+                  initialPayoutHoldDays={referralProgram?.payoutHoldDays}
+                />
               </TabsContent>
             )}
 

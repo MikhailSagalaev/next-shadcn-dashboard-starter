@@ -152,8 +152,13 @@ export async function PUT(
       minPurchaseAmount: payload.minPurchaseAmount ?? 0,
       cookieLifetime: payload.cookieLifetime ?? 30,
       welcomeBonus: payload.welcomeBonus ?? 0,
-      payoutMinAmount: payload.payoutMinAmount ?? 0,
-      payoutHoldDays: payload.payoutHoldDays ?? 0,
+      // НЕ коалесить в 0 — эти два поля больше не приходят с формы c2c
+      // настроек (переехали в b2b-вкладку «Выплаты»), а buildProgramData
+      // уже умеет сохранять текущее значение, если input === undefined.
+      // `?? 0` здесь означало бы обнулять порог выплат при каждом сохранении
+      // обычных настроек реферальной программы.
+      payoutMinAmount: payload.payoutMinAmount,
+      payoutHoldDays: payload.payoutHoldDays,
       description: payload.description ?? null,
       levels: payload.levels?.map((level) => ({
         level: level.level,
