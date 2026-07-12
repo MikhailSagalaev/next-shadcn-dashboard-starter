@@ -25,6 +25,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -84,7 +85,14 @@ export function WorkflowHeader({
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('');
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDeleteWorkflow = () => {
+    if (!currentWorkflow) return;
+    onWorkflowDelete(currentWorkflow.id);
+    setShowDeleteDialog(false);
+  };
 
   const handleCreateWorkflow = async () => {
     if (!newWorkflowName.trim()) {
@@ -201,7 +209,7 @@ export function WorkflowHeader({
             </Button>
             <Button
               variant='destructive'
-              onClick={() => onWorkflowDelete(currentWorkflow.id)}
+              onClick={() => setShowDeleteDialog(true)}
             >
               <Trash2 className='mr-2 h-4 w-4' /> Удалить
             </Button>
@@ -275,6 +283,30 @@ export function WorkflowHeader({
               onClick={() => setIsImportDialogOpen(false)}
             >
               Отмена
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Workflow Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Удалить workflow</DialogTitle>
+            <DialogDescription>
+              Вы уверены, что хотите удалить workflow "{currentWorkflow?.name}
+              "? Это действие нельзя отменить.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              Отмена
+            </Button>
+            <Button variant='destructive' onClick={handleDeleteWorkflow}>
+              Удалить
             </Button>
           </DialogFooter>
         </DialogContent>

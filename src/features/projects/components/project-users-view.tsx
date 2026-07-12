@@ -336,13 +336,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     [projectId, project]
   );
 
-  // Stats data
+  // Stats data. expiringSoonBonuses/monthlyGrowth опущены — реальных данных
+  // для них сейчас нет (раньше здесь были захардкоженные "demo" значения,
+  // которые показывались пользователю как настоящие); BonusStatsCards
+  // корректно скрывает соответствующий бейдж/показывает "0", когда поле не
+  // передано.
   const statsData = {
     totalUsers,
     activeUsers,
-    totalBonuses,
-    expiringSoonBonuses: Math.floor(totalBonuses * 0.15), // Mock для демо
-    monthlyGrowth: 12 // Mock для демо
+    totalBonuses
   };
 
   // Dialog states

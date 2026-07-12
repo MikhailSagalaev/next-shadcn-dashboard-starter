@@ -26,7 +26,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function SignInViewPage({ stars }: { stars: number }) {
+export default function SignInViewPage() {
   return (
     <div className='relative container grid h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-1 lg:px-0'>
       <div className='mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[400px]'>
@@ -79,7 +79,7 @@ function AuthForm() {
       if (!res.ok) {
         const apiError = (data?.error as string) || 'Ошибка входа';
         const apiMessage = data?.message as string;
-        
+
         // Если ошибка связана с неподтвержденным email, показываем опцию повторной отправки
         if (apiError === 'Email не подтвержден' || res.status === 403) {
           setShowResendOption(true);
@@ -118,7 +118,7 @@ function AuthForm() {
 
   async function handleResendVerification() {
     if (!userEmail) return;
-    
+
     try {
       const res = await fetch('/api/auth/resend-verification', {
         method: 'POST',
@@ -128,7 +128,10 @@ function AuthForm() {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || 'Ссылка для подтверждения была отправлена на ваш email.');
+        toast.success(
+          data.message ||
+            'Ссылка для подтверждения была отправлена на ваш email.'
+        );
       } else {
         toast.error(data.error || 'Не удалось отправить письмо повторно.');
       }
@@ -194,10 +197,10 @@ function AuthForm() {
           </Button>
         </form>
       </Form>
-      
+
       {showResendOption && (
         <div className='rounded-lg border border-yellow-200 bg-yellow-50 p-4'>
-          <p className='text-sm text-yellow-800 mb-2'>
+          <p className='mb-2 text-sm text-yellow-800'>
             Email не подтвержден. Нужна новая ссылка для подтверждения?
           </p>
           <Button

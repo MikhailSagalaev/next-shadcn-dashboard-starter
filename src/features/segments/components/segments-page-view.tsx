@@ -10,7 +10,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Users, Plus, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,7 +52,6 @@ interface Segment {
 }
 
 export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
-  const router = useRouter();
   const { toast } = useToast();
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,10 +142,6 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
         variant: 'destructive'
       });
     }
-  };
-
-  const handleSegmentClick = (segment: Segment) => {
-    router.push(`/dashboard/projects/${projectId}/segments/${segment.id}`);
   };
 
   const handleEdit = (segment: Segment) => {
@@ -244,7 +238,6 @@ export function SegmentsPageView({ projectId }: SegmentsPageViewProps) {
             pageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
-            onSegmentClick={handleSegmentClick}
             onEdit={handleEdit}
             onDelete={handleDelete}
           />

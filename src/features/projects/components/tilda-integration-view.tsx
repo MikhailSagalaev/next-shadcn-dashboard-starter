@@ -10,7 +10,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -63,7 +63,12 @@ export function ProjectIntegrationView({
   const [widgetUrl, setWidgetUrl] = useState('');
   const [recentLogs, setRecentLogs] = useState<WebhookLogEntry[]>([]);
   const [recentLogsLoading, setRecentLogsLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>('widget');
+  const searchParams = useSearchParams();
+  // Позволяет открывать конкретную вкладку по ссылке (?tab=logs), например
+  // из редиректа /dashboard/projects/[id]/logs
+  const [activeTab, setActiveTab] = useState<string>(
+    searchParams.get('tab') === 'logs' ? 'logs' : 'widget'
+  );
   const [widgetSettings, setWidgetSettings] = useState({
     // Текстовые настройки плашки регистрации
     registrationTitle: 'Зарегистрируйся и получи {bonusAmount} бонусов!',

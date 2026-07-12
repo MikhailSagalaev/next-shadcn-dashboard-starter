@@ -73,13 +73,19 @@ export function BonusManagementClient({
     searchTerm: ''
   });
 
-  // Stats data
+  // Stats data. activeBonuses/expiringSoon приходят из initialData.stats —
+  // это реальные агрегаты по всем проектам владельца (посчитаны на сервере
+  // при загрузке страницы), а не по выбранному в селекторе проекту, поэтому
+  // они не всегда будут 1:1 совпадать с totalUsers/totalBonuses ниже (те
+  // живые и относятся к текущему selectedProjectId). Это лучше, чем
+  // показывать выдуманное число, но точный расчёт по выбранному проекту
+  // потребует отдельного API-запроса.
   const statsData = {
     totalProjects: initialData.projects.length,
     totalUsers,
     totalBonuses,
-    activeBonuses: totalBonuses,
-    expiringSoon: Math.floor(totalBonuses * 0.15)
+    activeBonuses: initialData.stats.activeBonuses,
+    expiringSoon: initialData.stats.expiringSoon
   };
 
   const clearSelection = useCallback(() => {

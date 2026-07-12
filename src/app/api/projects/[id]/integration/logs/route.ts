@@ -53,5 +53,12 @@ export async function GET(
     }
   });
 
-  return NextResponse.json({ logs });
+  const safeLogs = logs.map((log) => ({
+    ...log,
+    headers: safeJson(log.headers),
+    body: safeJson(log.body),
+    response: safeJson(log.response)
+  }));
+
+  return NextResponse.json({ logs: safeLogs });
 }

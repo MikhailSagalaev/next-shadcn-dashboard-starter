@@ -15,7 +15,6 @@ import {
   type SortingState,
   flexRender,
   getCoreRowModel,
-  getSortedRowModel,
   useReactTable
 } from '@tanstack/react-table';
 import {
@@ -56,20 +55,24 @@ interface OrdersTableProps {
   totalCount?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
+  onSortChange?: (sortBy: string, sortOrder: 'asc' | 'desc') => void;
   onOrderClick?: (order: OrderWithRelations) => void;
   onStatusChange?: (orderId: string, status: string) => void;
   currentPage?: number;
   pageSize?: number;
 }
 
-const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const statusColors: Record<
+  string,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
   PENDING: 'secondary',
   CONFIRMED: 'default',
   PROCESSING: 'default',
   SHIPPED: 'default',
   DELIVERED: 'default',
   CANCELLED: 'destructive',
-  REFUNDED: 'outline',
+  REFUNDED: 'outline'
 };
 
 const statusIcons: Record<string, any> = {
@@ -79,7 +82,7 @@ const statusIcons: Record<string, any> = {
   SHIPPED: Truck,
   DELIVERED: CheckCircle2,
   CANCELLED: XCircle,
-  REFUNDED: Archive,
+  REFUNDED: Archive
 };
 
 const statusLabels: Record<string, string> = {
@@ -89,7 +92,7 @@ const statusLabels: Record<string, string> = {
   SHIPPED: 'Отправлен',
   DELIVERED: 'Доставлен',
   CANCELLED: 'Отменен',
-  REFUNDED: 'Возврат',
+  REFUNDED: 'Возврат'
 };
 
 export function OrdersTable({
@@ -98,6 +101,7 @@ export function OrdersTable({
   totalCount = data.length,
   onPageChange,
   onPageSizeChange,
+  onSortChange,
   onOrderClick,
   onStatusChange,
   currentPage = 1,
@@ -110,22 +114,13 @@ export function OrdersTable({
   const columns: ColumnDef<OrderWithRelations>[] = [
     {
       accessorKey: 'orderNumber',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Номер заказа
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
+      enableSorting: false,
+      // API (/api/projects/[id]/orders) не поддерживает sortBy=orderNumber —
+      // сортировка только по createdAt/totalAmount/status, см. getOrdersQuerySchema
+      header: 'Номер заказа',
       cell: ({ row }) => {
         const order = row.original;
-        return (
-          <div className='font-mono font-medium'>{order.orderNumber}</div>
-        );
+        return <div className='font-mono font-medium'>{order.orderNumber}</div>;
       }
     },
     {
@@ -283,18 +278,25 @@ export function OrdersTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSorting,
-    state: {
-      sorting
+    onSortingChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(sorting) : updater;
+      setSorting(next);
+      if (next[0]) {
+        onSortChange?.(next[0].id, next[0].desc ? 'desc' : 'asc');
+      }
     },
-    manualPagination: true,
-    pageCount: Math.ceil(totalCount / pageSize),
-    initialState: {
+    state: {
+      sorting,
       pagination: {
-        pageIndex: currentPage - 1,
+        pageIndex: Math.max(0, currentPage - 1),
         pageSize
       }
+    },
+    manualPagination: true,
+    manualSorting: true,
+    pageCount: Math.max(1, Math.ceil(totalCount / pageSize)),
+    onPaginationChange: () => {
+      // Пагинация управляется извне через onPageChange/onPageSizeChange
     }
   });
 
@@ -359,8 +361,12 @@ export function OrdersTable({
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      <DataTablePagination
+        table={table}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+        totalCount={totalCount}
+      />
     </div>
   );
 }
-

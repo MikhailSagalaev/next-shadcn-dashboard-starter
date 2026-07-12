@@ -35,7 +35,7 @@ export interface SystemStats {
 export async function getDashboardStats(): Promise<SystemStats> {
   const admin = await getCurrentAdmin();
   if (!admin) {
-    redirect('/auth/login');
+    redirect('/auth/sign-in');
   }
 
   // Фильтр по владельцу для всех запросов

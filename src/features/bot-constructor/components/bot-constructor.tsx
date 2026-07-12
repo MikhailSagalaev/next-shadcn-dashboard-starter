@@ -304,8 +304,9 @@ export function BotConstructor({ projectId }: BotConstructorProps) {
         isPreviewMode={isPreviewMode}
         onPreviewToggle={togglePreviewMode}
         onFlowPublish={() => {
-          // New prop implementation will be handled in next step or internal component update
-          // This is a placeholder for the concept
+          if (currentFlow) {
+            publishFlow(currentFlow.id);
+          }
         }}
         isSaving={isSaving}
       />

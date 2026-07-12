@@ -18,15 +18,7 @@ import {
   getSortedRowModel,
   useReactTable
 } from '@tanstack/react-table';
-import {
-  ArrowUpDown,
-  MoreHorizontal,
-  Eye,
-  Edit,
-  Trash2,
-  Users,
-  Filter
-} from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Edit, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -66,7 +58,6 @@ interface SegmentsTableProps {
   totalCount?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
-  onSegmentClick?: (segment: Segment) => void;
   onEdit?: (segment: Segment) => void;
   onDelete?: (segmentId: string) => void;
   currentPage?: number;
@@ -91,7 +82,6 @@ export function SegmentsTable({
   totalCount = data.length,
   onPageChange,
   onPageSizeChange,
-  onSegmentClick,
   onEdit,
   onDelete,
   currentPage = 1,
@@ -189,10 +179,6 @@ export function SegmentsTable({
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end'>
               <DropdownMenuLabel>Действия</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onSegmentClick?.(segment)}>
-                <Eye className='mr-2 h-4 w-4' />
-                Просмотр
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit?.(segment)}>
                 <Edit className='mr-2 h-4 w-4' />
                 Редактировать

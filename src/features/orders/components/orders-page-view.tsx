@@ -46,6 +46,8 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -53,11 +55,15 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
+        sortBy,
+        sortOrder,
         ...(search && { search }),
-        ...(statusFilter !== 'all' && { status: statusFilter }),
+        ...(statusFilter !== 'all' && { status: statusFilter })
       });
 
-      const response = await fetch(`/api/projects/${projectId}/orders?${params}`);
+      const response = await fetch(
+        `/api/projects/${projectId}/orders?${params}`
+      );
       if (!response.ok) {
         throw new Error('Ошибка загрузки заказов');
       }
@@ -68,13 +74,25 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
     } catch (error) {
       toast({
         title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Не удалось загрузить заказы',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Не удалось загрузить заказы',
         variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
-  }, [projectId, page, pageSize, search, statusFilter, toast]);
+  }, [
+    projectId,
+    page,
+    pageSize,
+    sortBy,
+    sortOrder,
+    search,
+    statusFilter,
+    toast
+  ]);
 
   useEffect(() => {
     fetchOrders();
@@ -86,16 +104,19 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
 
   const handleStatusChange = async (orderId: string, status: string) => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status,
-          comment: 'Изменение статуса из списка заказов',
-        }),
-      });
+      const response = await fetch(
+        `/api/projects/${projectId}/orders/${orderId}/status`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status,
+            comment: 'Изменение статуса из списка заказов'
+          })
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Ошибка изменения статуса');
@@ -103,14 +124,15 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
 
       toast({
         title: 'Успешно',
-        description: 'Статус заказа изменен',
+        description: 'Статус заказа изменен'
       });
 
       fetchOrders();
     } catch (error) {
       toast({
         title: 'Ошибка',
-        description: error instanceof Error ? error.message : 'Не удалось изменить статус',
+        description:
+          error instanceof Error ? error.message : 'Не удалось изменить статус',
         variant: 'destructive'
       });
     }
@@ -141,7 +163,7 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
         <CardContent>
           <div className='mb-4 flex items-center gap-4'>
             <div className='relative flex-1'>
-              <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+              <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
               <Input
                 placeholder='Поиск по номеру заказа, клиенту...'
                 value={search}
@@ -178,6 +200,11 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
             pageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
+            onSortChange={(newSortBy, newSortOrder) => {
+              setSortBy(newSortBy);
+              setSortOrder(newSortOrder);
+              setPage(1);
+            }}
             onOrderClick={handleOrderClick}
             onStatusChange={handleStatusChange}
           />
@@ -186,4 +213,3 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
     </div>
   );
 }
-

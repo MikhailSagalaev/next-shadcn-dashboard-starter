@@ -13,5 +13,7 @@ export default async function ProjectLogsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(`/dashboard/projects/${id}/integration#logs`);
+  // Query-параметр, а не #hash — вкладка внутри tilda-integration-view.tsx
+  // читает его через useSearchParams(), hash клиентский Tabs-компонент не видит
+  redirect(`/dashboard/projects/${id}/integration?tab=logs`);
 }

@@ -75,24 +75,39 @@ function AuthForm({ onSubmit }: { onSubmit: () => void }) {
 
   async function handleSubmit(values: FormValues) {
     try {
-      // TODO: Реализовать API endpoint для восстановления пароля
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values)
       });
 
-      if (!res.ok) {
+      if (res.status === 429) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || 'Ошибка отправки');
+        toast.error(
+          data?.message || 'Слишком много попыток. Попробуйте позже.'
+        );
+        return;
       }
 
-      toast.success('Инструкции отправлены на email');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(
+          data?.error || 'Не удалось отправить запрос. Попробуйте ещё раз.'
+        );
+        return;
+      }
+
+      // Сервер всегда возвращает success:true при res.ok (в том числе если
+      // аккаунт с таким email не существует) — это защита от перебора email,
+      // а не подтверждение, что письмо реально было отправлено.
+      toast.success(
+        'Если такой email существует, мы отправили инструкции для восстановления пароля'
+      );
       onSubmit();
     } catch (e: unknown) {
-      // Для демонстрации всегда показываем успех (из соображений безопасности)
-      toast.success('Если такой email существует, мы отправили инструкции');
-      onSubmit();
+      toast.error(
+        'Не удалось связаться с сервером. Проверьте соединение и попробуйте снова.'
+      );
     }
   }
 
