@@ -8,6 +8,7 @@
  */
 
 import type { RedisOptions } from 'ioredis';
+import { isProductionBuildPhase } from '@/lib/runtime-phase';
 
 export type BullMQConnectionPurpose = 'client' | 'queue' | 'worker';
 
@@ -84,6 +85,10 @@ function fromRedisUrl(
 export function createBullMQConnectionOptions(
   purpose: BullMQConnectionPurpose = 'queue'
 ): RedisOptions | null {
+  if (isProductionBuildPhase()) {
+    return null;
+  }
+
   const host = optionalValue(process.env.REDIS_HOST);
   if (host) {
     return {

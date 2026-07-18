@@ -4,6 +4,22 @@
 
 ---
 
+## 📋 Задача: Устранить зависание production build на Redis/BullMQ
+- **Статус**: ✅ Завершена
+- **Приоритет**: 🔴 Высокий
+- **Описание**: Исключён запуск Redis, BullMQ workers и Telegram-инициализации из instrumentation во время `next build`; штатный runtime-запуск после `next start` сохранён.
+- **Техническая сложность**: 3
+- **Затраченное время**: 0.5 часа
+- **Шаги выполнения**:
+  - [x] Найти import-time сетевые side effects
+  - [x] Добавить единый build-phase guard
+  - [x] Проверить production build с настроенным, но недоступным Redis
+  - [x] Подготовить hotfix и команды повторного deploy
+- **Зависимости**: Next.js instrumentation, BullMQ, ioredis, Telegram BotManager
+- **Тестирование**: `yarn build` — успешно; compile 33 секунды; Redis connection errors отсутствуют; targeted ESLint — 0 ошибок; diagnostics — чисто.
+
+---
+
 ## 📋 Задача: Массовая Telegram-рассылка и производительность таблицы пользователей
 - **Статус**: ✅ Завершена
 - **Приоритет**: 🔴 Высокий

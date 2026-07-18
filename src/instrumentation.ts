@@ -1,4 +1,12 @@
+import { isProductionBuildPhase } from '@/lib/runtime-phase';
+
 export async function register() {
+  // Во время `next build` instrumentation загружается для анализа routes.
+  // Runtime-инфраструктура в этой фазе не должна открывать сетевые соединения.
+  if (isProductionBuildPhase()) {
+    return;
+  }
+
   // Инициализация серверных компонентов Next.js
   if (process.env.NEXT_RUNTIME === 'nodejs' || !process.env.NEXT_RUNTIME) {
     // Инициализация DelayJobService для workflow delays через Bull queue

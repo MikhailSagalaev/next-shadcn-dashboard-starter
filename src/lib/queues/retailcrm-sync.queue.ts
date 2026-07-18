@@ -14,13 +14,18 @@ import { OrderService } from '@/lib/services/order.service';
 import { UserService } from '@/lib/services/user.service';
 import { db } from '@/lib/db';
 import { OrderStatus } from '@prisma/client';
+import { isProductionBuildPhase } from '@/lib/runtime-phase';
 
 // Конфигурация Redis для очереди синхронизации
 const getRedisConfig = () => {
+  if (isProductionBuildPhase()) {
+    return null;
+  }
+
   // Проверяем доступность Redis
   const hasRedisUrl = !!process.env.REDIS_URL;
   const hasRedisHost = !!process.env.REDIS_HOST;
-  
+
   if (!hasRedisUrl && !hasRedisHost) {
     return null; // Redis недоступен
   }
@@ -63,14 +68,14 @@ export interface RetailCrmSyncJobData {
 
 // Создаем очередь для синхронизации (только если Redis доступен)
 const redisConfig = getRedisConfig();
-export const retailCrmSyncQueue = redisConfig ? new Queue<RetailCrmSyncJobData>(
-  'retailcrm-sync',
-  {
-    connection: typeof redisConfig.redis === 'string' 
-      ? { host: 'localhost', port: 6379 }
-      : redisConfig.redis
-  }
-) : null;
+export const retailCrmSyncQueue = redisConfig
+  ? new Queue<RetailCrmSyncJobData>('retailcrm-sync', {
+      connection:
+        typeof redisConfig.redis === 'string'
+          ? { host: 'localhost', port: 6379 }
+          : redisConfig.redis
+    })
+  : null;
 
 // Worker создается в конце файла
 
@@ -283,7 +288,11 @@ export function getRetailCrmSyncWorker(): Worker<RetailCrmSyncJobData> | null {
 
             case 'sync_customer':
               if (retailCrmCustomerId) {
-                await syncSingleCustomer(client, projectId, retailCrmCustomerId);
+                await syncSingleCustomer(
+                  client,
+                  projectId,
+                  retailCrmCustomerId
+                );
               }
               break;
 
@@ -310,16 +319,18 @@ export function getRetailCrmSyncWorker(): Worker<RetailCrmSyncJobData> | null {
             jobId: job.id,
             type,
             projectId,
-            error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+            error:
+              error instanceof Error ? error.message : 'Неизвестная ошибка',
             component: 'retailcrm-sync-queue'
           });
           throw error;
         }
       },
       {
-        connection: typeof redisConfig.redis === 'string' 
-          ? { host: 'localhost', port: 6379 }
-          : redisConfig.redis
+        connection:
+          typeof redisConfig.redis === 'string'
+            ? { host: 'localhost', port: 6379 }
+            : redisConfig.redis
       }
     );
 

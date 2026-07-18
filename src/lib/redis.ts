@@ -9,13 +9,15 @@
 
 import Redis from 'ioredis';
 import { logger } from '@/lib/logger';
+import { isProductionBuildPhase } from '@/lib/runtime-phase';
 
 // Создаем Redis клиент с retry стратегией. В dev (без REDIS_URL) используем in-memory fallback
 const createRedisClient = () => {
   // Используем Redis если задан REDIS_URL ИЛИ есть REDIS_HOST (поддержка обоих форматов)
   const hasRedisUrl = !!process.env.REDIS_URL;
   const hasRedisHost = !!process.env.REDIS_HOST;
-  const useRealRedis = hasRedisUrl || hasRedisHost;
+  const isBuildPhase = isProductionBuildPhase();
+  const useRealRedis = !isBuildPhase && (hasRedisUrl || hasRedisHost);
 
   if (useRealRedis) {
     let client: Redis;
@@ -26,9 +28,13 @@ const createRedisClient = () => {
       const host = process.env.REDIS_HOST || 'localhost';
       const port = parseInt(process.env.REDIS_PORT || '6379');
       const password = process.env.REDIS_PASSWORD;
-      
-      logger.info('Redis: Using REDIS_HOST/PASSWORD configuration', { host, port, hasPassword: !!password });
-      
+
+      logger.info('Redis: Using REDIS_HOST/PASSWORD configuration', {
+        host,
+        port,
+        hasPassword: !!password
+      });
+
       client = new Redis({
         host,
         port,
@@ -49,8 +55,11 @@ const createRedisClient = () => {
     } else if (process.env.REDIS_URL) {
       // Используем REDIS_URL как fallback
       const redisUrl = process.env.REDIS_URL as string;
-      logger.info('Redis: Using REDIS_URL configuration', { hasUrl: true, urlLength: redisUrl.length });
-      
+      logger.info('Redis: Using REDIS_URL configuration', {
+        hasUrl: true,
+        urlLength: redisUrl.length
+      });
+
       client = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,
         retryStrategy: (times) => {
@@ -70,9 +79,9 @@ const createRedisClient = () => {
       // Fallback на REDIS_HOST без пароля
       const host = process.env.REDIS_HOST || 'localhost';
       const port = parseInt(process.env.REDIS_PORT || '6379');
-      
+
       logger.info('Redis: Using REDIS_HOST without password', { host, port });
-      
+
       client = new Redis({
         host,
         port,
@@ -111,7 +120,9 @@ const createRedisClient = () => {
     return client as unknown as Redis;
   }
 
-  logger.warn('Redis disabled: using in-memory fallback (development)');
+  if (!isBuildPhase) {
+    logger.warn('Redis disabled: using in-memory fallback (development)');
+  }
   const store = new Map<string, { value: string; expireAt?: number }>();
   const nowMs = () => Date.now();
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-07-18] - Production build без runtime Redis/BullMQ соединений
+
+### 🐛 Исправлено
+- `next build` больше не открывает Redis/BullMQ соединения и не запускает Telegram-инициализацию из `instrumentation.ts`.
+- Общий build-phase guard отключает сетевой Redis singleton и очереди mailing/workflow/delay/webhook/RetailCRM только на этапе production build; при `next start` runtime-инфраструктура запускается штатно.
+
+### ✅ Проверено
+- `yarn build` с настроенным, но недоступным локальным Redis — успешно; compile завершён за 33 секунды, Redis connection errors отсутствуют.
+- Targeted ESLint — 0 ошибок; IDE diagnostics — без ошибок.
+
+---
+
 ## [2026-07-18] - Массовая Telegram-рассылка, таблица пользователей и admin notifications
 
 ### 🎯 Добавлено
