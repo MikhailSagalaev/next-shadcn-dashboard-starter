@@ -4,6 +4,22 @@
 
 ---
 
+## 📋 Задача: Исключать недоступные Telegram chat ID после permanent 403
+- **Статус**: ✅ Завершена
+- **Приоритет**: 🔴 Высокий
+- **Описание**: После подтверждённых Telegram API ошибок `bot was blocked by the user` и `user is deactivated` Telegram-привязка помечается недоступной, чтобы будущие рассылки не обращались к заведомо нерабочему chat ID.
+- **Техническая сложность**: 2
+- **Затраченное время**: 0.25 часа
+- **Шаги выполнения**:
+  - [x] Подтвердить обработку всей очереди и классификацию ошибок в production-логах
+  - [x] Безопасно очистить только устаревший `telegramId`, не деактивируя бонусный аккаунт
+  - [x] Проверить TypeScript diagnostics и targeted ESLint
+  - [x] Обновить аудит и changelog
+- **Зависимости**: Telegram Bot API, grammY delivery adapter, Prisma User
+- **Тестирование**: IDE diagnostics — чисто; targeted ESLint — 0 ошибок; `yarn build` — exit code 0. Очистка ограничена реальными grammY `403` с описанием `bot was blocked by the user`/`user is deactivated` и выполняется только при совпадении `id + projectId + telegramId`; локальные 403 и transient-ошибки не изменяют привязку.
+
+---
+
 ## 📋 Задача: Устранить зависание production build на Redis/BullMQ
 - **Статус**: ✅ Завершена
 - **Приоритет**: 🔴 Высокий

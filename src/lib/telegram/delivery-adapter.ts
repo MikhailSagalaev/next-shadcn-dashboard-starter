@@ -9,6 +9,7 @@
 
 import { GrammyError, HttpError, type Api } from 'grammy';
 import { db } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import type { TelegramBotContext } from './bot';
 
 interface TelegramTargetByUser {
@@ -118,11 +119,65 @@ function failure(
   };
 }
 
-function normalizeError(
+const PERMANENT_RECIPIENT_ERRORS = [
+  'bot was blocked by the user',
+  'user is deactivated'
+] as const;
+
+function isPermanentRecipientError(error: GrammyError): boolean {
+  if (error.error_code !== 403) return false;
+  const description = error.description.toLowerCase();
+  return PERMANENT_RECIPIENT_ERRORS.some((message) =>
+    description.includes(message)
+  );
+}
+
+async function clearUnavailableTelegramLink(
   request: TelegramDeliveryRequest,
-  error: unknown
-): TelegramDeliveryFailure {
+  chatId: string,
+  error: GrammyError
+): Promise<void> {
+  if (!request.userId || !isPermanentRecipientError(error)) return;
+
+  try {
+    const result = await db.user.updateMany({
+      where: {
+        id: request.userId,
+        projectId: request.projectId,
+        telegramId: BigInt(chatId)
+      },
+      data: { telegramId: null }
+    });
+
+    if (result.count > 0) {
+      logger.info('Недоступная Telegram-привязка отключена', {
+        projectId: request.projectId,
+        userId: request.userId,
+        telegramError: error.description
+      });
+    }
+  } catch (persistenceError) {
+    logger.warn('Не удалось отключить недоступную Telegram-привязку', {
+      projectId: request.projectId,
+      userId: request.userId,
+      error:
+        persistenceError instanceof Error
+          ? persistenceError.message
+          : String(persistenceError)
+    });
+  }
+}
+
+async function normalizeError(
+  request: TelegramDeliveryRequest,
+  error: unknown,
+  chatId?: string
+): Promise<TelegramDeliveryFailure> {
   if (error instanceof GrammyError) {
+    if (chatId) {
+      await clearUnavailableTelegramLink(request, chatId, error);
+    }
+
     const retryAfter = error.parameters.retry_after;
     const transient = error.error_code === 429 || error.error_code >= 500;
     return failure(
@@ -331,7 +386,7 @@ export async function deliverTelegram(
       const hasParseMode =
         request.kind !== 'delete' && request.parseMode !== undefined;
       if (!hasParseMode || !isParseEntityError(error)) {
-        return normalizeError(request, error);
+        return normalizeError(request, error, chatId);
       }
 
       try {
@@ -346,7 +401,7 @@ export async function deliverTelegram(
           parseFallbackUsed: true
         };
       } catch (fallbackError) {
-        return normalizeError(request, fallbackError);
+        return normalizeError(request, fallbackError, chatId);
       }
     }
   } catch (error) {
