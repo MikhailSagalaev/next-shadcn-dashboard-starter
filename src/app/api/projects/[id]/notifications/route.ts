@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ProjectNotificationService } from '../../../../../lib/services/project-notification.service';
+import { MailingService } from '../../../../../lib/services/mailing.service';
 import { logger } from '../../../../../lib/logger';
 import { withApiRateLimit } from '../../../../../lib/with-rate-limit';
 import { requireProjectAccess } from '../../../../../lib/with-project-access';
@@ -79,19 +80,67 @@ async function handlePOST(
       );
     }
 
-    // Определяем пользователей для отправки
+    const isTelegramBroadcastToAll =
+      body.channel === 'telegram' &&
+      !body.userId &&
+      !Array.isArray(body.userIds);
+
+    // Полная рассылка выполняется фоново. На 10 000+ пользователей синхронный
+    // HTTP-запрос неизбежно упрётся в timeout и лимиты Telegram.
+    if (isTelegramBroadcastToAll) {
+      try {
+        const queued = await MailingService.queueTelegramBroadcast({
+          projectId,
+          title: body.title,
+          message: body.message,
+          imageUrl: body.metadata?.imageUrl || body.imageUrl,
+          buttons: body.metadata?.buttons || body.buttons,
+          parseMode: body.metadata?.parseMode || body.parseMode || 'HTML'
+        });
+
+        return NextResponse.json(
+          {
+            success: true,
+            data: {
+              queued: true,
+              mailingId: queued.mailingId,
+              total: queued.total,
+              eligible: queued.eligible,
+              skipped: queued.skipped,
+              sent: 0,
+              failed: 0,
+              results: []
+            }
+          },
+          { status: 202 }
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Очередь недоступна';
+        const status = message.includes('нет активных пользователей')
+          ? 400
+          : 503;
+        return NextResponse.json({ error: message }, { status });
+      }
+    }
+
+    // Определяем пользователей для точечной отправки
     let userIds: string[] = [];
 
-    if (body.userId) {
-      // Отправка конкретному пользователю
+    if (typeof body.userId === 'string' && body.userId.trim()) {
       userIds = [body.userId];
-    } else if (body.userIds && Array.isArray(body.userIds)) {
-      // Отправка списку пользователей
-      userIds = body.userIds;
+    } else if (Array.isArray(body.userIds)) {
+      userIds = Array.from(
+        new Set(
+          body.userIds.filter(
+            (userId: unknown): userId is string =>
+              typeof userId === 'string' && userId.trim().length > 0
+          )
+        )
+      );
     } else {
-      // Отправка всем пользователям проекта
       const users = await ProjectNotificationService.getProjectUsers(projectId);
-      userIds = users.map((user: any) => user.id);
+      userIds = users.map((user) => user.id);
     }
 
     if (userIds.length === 0) {
@@ -129,8 +178,14 @@ async function handlePOST(
       data: {
         sent: result.sent,
         failed: result.failed,
+        skipped: result.skipped,
+        eligible: result.total - result.skipped,
         total: result.total,
-        results: result.results.filter((r) => !r.success) // Возвращаем только ошибки
+        // Не возвращаем тысячи skipped-записей в браузер. Для диагностики
+        // достаточно реальных ошибок доставки (первые 100).
+        results: result.results
+          .filter((item) => !item.success && !item.skipped)
+          .slice(0, 100)
       }
     });
   } catch (error) {

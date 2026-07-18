@@ -590,18 +590,26 @@ model AdminAccount {
 }
 
 model Notification {
-  id        String    @id @default(cuid())
-  projectId String    @map("project_id")
-  userId    String?   @map("user_id")
-  channel   String
-  title     String
-  message   String
-  metadata  Json?
-  sentAt    DateTime? @map("sent_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String    @id @default(cuid())
+  projectId         String    @map("project_id")
+  userId            String?   @map("user_id")
+  channel           String
+  title             String
+  message           String
+  metadata          Json?
+  status            String    @default("PENDING")
+  error             String?   @db.Text
+  errorCode         Int?      @map("error_code")
+  attemptCount      Int       @default(0) @map("attempt_count")
+  providerMessageId String?   @map("provider_message_id")
+  lastAttemptAt     DateTime? @map("last_attempt_at")
+  sentAt            DateTime? @map("sent_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([projectId, status, createdAt])
+  @@index([userId, channel])
   @@map("notifications")
 }
 
@@ -1315,6 +1323,7 @@ model Mailing {
   links              MailingLink[]
 
   @@index([projectId, status])
+  @@index([status, scheduledAt])
   @@index([segmentId])
   @@index([clonedFromId])
   @@map("mailings")
@@ -1338,27 +1347,37 @@ model MailingTemplate {
 }
 
 model MailingRecipient {
-  id           String    @id @default(cuid())
-  mailingId    String    @map("mailing_id")
-  userId       String?   @map("user_id")
-  email        String?
-  phone        String?
-  telegramId   String?   @map("telegram_id")
-  status       String    @default("PENDING") // PENDING, SENT, FAILED, BOUNCED, DELIVERED
-  sentAt       DateTime? @map("sent_at")
-  deliveredAt  DateTime? @map("delivered_at")
-  openedAt     DateTime? @map("opened_at")
-  clickedAt    DateTime? @map("clicked_at")
-  openCount    Int       @default(0) @map("open_count")
-  clickCount   Int       @default(0) @map("click_count")
-  error        String?   @db.Text
-  metadata     Json?
-  mailing      Mailing   @relation(fields: [mailingId], references: [id], onDelete: Cascade)
-  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  linkClicks   MailingLinkClick[]
-  history      MailingHistory[]
+  id                  String    @id @default(cuid())
+  mailingId           String    @map("mailing_id")
+  userId               String?   @map("user_id")
+  email                String?
+  phone                String?
+  telegramId           String?   @map("telegram_id")
+  status               String    @default("PENDING") // PENDING, SENT, FAILED, BOUNCED, DELIVERED
+  sentAt               DateTime? @map("sent_at")
+  deliveredAt          DateTime? @map("delivered_at")
+  openedAt             DateTime? @map("opened_at")
+  clickedAt            DateTime? @map("clicked_at")
+  openCount            Int       @default(0) @map("open_count")
+  clickCount           Int       @default(0) @map("click_count")
+  error                String?   @db.Text
+  errorCode            Int?      @map("error_code")
+  errorDescription     String?   @map("error_description") @db.Text
+  retryAfter           Int?      @map("retry_after")
+  attemptCount         Int       @default(0) @map("attempt_count")
+  maxAttempts          Int       @default(3) @map("max_attempts")
+  jobId                String?   @map("job_id")
+  telegramMessageId    String?   @map("telegram_message_id")
+  lastAttemptAt        DateTime? @map("last_attempt_at")
+  metadata             Json?
+  mailing              Mailing   @relation(fields: [mailingId], references: [id], onDelete: Cascade)
+  user                 User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  linkClicks           MailingLinkClick[]
+  history              MailingHistory[]
 
+  @@unique([mailingId, userId])
   @@index([mailingId, status])
+  @@index([mailingId, status, lastAttemptAt])
   @@index([userId])
   @@index([telegramId])
   @@map("mailing_recipients")
@@ -1763,4 +1782,34 @@ model MoySkladDirectSyncLog {
   @@index([status])
   @@index([moySkladTransactionId])
   @@map("moysklad_direct_sync_logs")
+}
+
+/// Durable claim and execution ledger for per-user scheduled workflow runs.
+enum ScheduledWorkflowRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model ScheduledWorkflowRun {
+  id                String                     @id @default(cuid())
+  projectId         String                     @map("project_id")
+  workflowId        String                     @map("workflow_id")
+  workflowVersionId String                     @map("workflow_version_id")
+  userId            String                     @map("user_id")
+  bucket            String
+  status            ScheduledWorkflowRunStatus @default(QUEUED)
+  attempts          Int                        @default(0)
+  lastError         String?                    @map("last_error")
+  queuedAt          DateTime                   @default(now()) @map("queued_at")
+  startedAt         DateTime?                  @map("started_at")
+  completedAt       DateTime?                  @map("completed_at")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+
+  @@unique([workflowId, workflowVersionId, userId, bucket], map: "scheduled_run_workflow_version_user_bucket_key")
+  @@index([projectId, status, queuedAt])
+  @@index([status, updatedAt])
+  @@map("scheduled_workflow_runs")
 }

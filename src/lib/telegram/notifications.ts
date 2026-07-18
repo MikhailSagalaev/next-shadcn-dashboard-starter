@@ -7,10 +7,44 @@
  * @author: AI Assistant + User
  */
 
-import { botManager } from './bot-manager';
 import { maxBotManager } from '../max-bot/bot-manager';
 import type { User, Bonus, BonusType } from '@/types/bonus';
 import { logger } from '@/lib/logger';
+import {
+  deliverTelegram,
+  TelegramDeliveryError,
+  type TelegramDeliveryResult,
+  type TelegramMediaReplyMarkup,
+  type TelegramTextReplyMarkup
+} from './delivery-adapter';
+
+interface ReferralBonusDetails {
+  metadata?: unknown;
+  referralUserId?: string | null;
+  referralLevel?: number | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+async function sendTelegramNotification(
+  projectId: string,
+  userId: string,
+  text: string
+): Promise<number> {
+  const result = await deliverTelegram({
+    kind: 'text',
+    projectId,
+    userId,
+    text,
+    parseMode: 'Markdown'
+  });
+  if (result.success === false) {
+    throw new TelegramDeliveryError(result);
+  }
+  return result.messageId;
+}
 
 /**
  * Отправка уведомления о начислении бонусов
@@ -24,27 +58,7 @@ export async function sendBonusNotification(
     return; // Пользователь не связан ни с одной платформой
   }
 
-  let botInstance = botManager.getBot(projectId);
   try {
-    if (!botInstance || !botInstance.isActive) {
-      // пробуем автоинициализировать по настройкам проекта
-      try {
-        const { db } = await import('@/lib/db');
-        const settings = await db.botSettings.findUnique({
-          where: { projectId }
-        });
-        if (settings?.botToken && settings.isActive !== false) {
-          botInstance = await botManager.createBot(projectId, settings as any);
-        }
-      } catch (e) {
-        // ignore, отрепортим ниже
-      }
-      if (!botInstance || !botInstance.isActive) {
-        logger.warn(`Бот для проекта ${projectId} неактивен или не найден`);
-        return;
-      }
-    }
-
     const emoji = getBonusEmoji(bonus.type);
     const typeText = getBonusTypeText(bonus.type);
 
@@ -52,15 +66,18 @@ export async function sendBonusNotification(
     // и уровнем (если они есть в bonus.metadata / на самом бонусе).
     let message: string;
     if (bonus.type === 'REFERRAL') {
-      const meta =
-        ((bonus as any).metadata as Record<string, any> | null) || {};
-      const referredUserId: string | undefined =
-        meta.referredUserId ||
-        meta.sourceUserId ||
-        (bonus as any).referralUserId ||
-        undefined;
-      const level: number | undefined =
-        meta.level ?? (bonus as any).referralLevel ?? undefined;
+      const details = bonus as Bonus & ReferralBonusDetails;
+      const meta = isRecord(details.metadata) ? details.metadata : {};
+      const metaReferredUserId =
+        typeof meta.referredUserId === 'string'
+          ? meta.referredUserId
+          : typeof meta.sourceUserId === 'string'
+            ? meta.sourceUserId
+            : undefined;
+      const referredUserId =
+        metaReferredUserId ?? details.referralUserId ?? undefined;
+      const metaLevel = typeof meta.level === 'number' ? meta.level : undefined;
+      const level = metaLevel ?? details.referralLevel ?? undefined;
 
       let clientName = 'клиента';
       if (referredUserId) {
@@ -96,12 +113,15 @@ export async function sendBonusNotification(
     }
 
     // Отправляем в Telegram если есть ID
-    if (user.telegramId && botInstance && botInstance.isActive) {
-      await botInstance.bot.api.sendMessage(Number(user.telegramId), message, {
-        parse_mode: 'Markdown'
-      });
+    if (user.telegramId) {
+      const messageId = await sendTelegramNotification(
+        projectId,
+        user.id,
+        message
+      );
       logger.info(`Уведомление отправлено пользователю ${user.id} в Telegram`, {
         telegramId: user.telegramId,
+        messageId,
         projectId
       });
     }
@@ -122,8 +142,7 @@ export async function sendBonusNotification(
     logger.error(`Ошибка отправки уведомления пользователю ${user.id}`, {
       error: error instanceof Error ? error.message : 'Unknown error',
       projectId,
-      telegramId: user.telegramId,
-      botActive: botInstance?.isActive
+      telegramId: user.telegramId
     });
   }
 }
@@ -146,16 +165,7 @@ export async function sendBonusSpentNotification(
 
     // Telegram
     if (user.telegramId) {
-      const botInstance = botManager.getBot(projectId);
-      if (botInstance && botInstance.isActive) {
-        await botInstance.bot.api.sendMessage(
-          Number(user.telegramId),
-          message,
-          {
-            parse_mode: 'Markdown'
-          }
-        );
-      }
+      await sendTelegramNotification(projectId, user.id, message);
     }
 
     // MAX
@@ -200,16 +210,7 @@ export async function sendBonusExpiryWarning(
 
     // Telegram
     if (user.telegramId) {
-      const botInstance = botManager.getBot(projectId);
-      if (botInstance && botInstance.isActive) {
-        await botInstance.bot.api.sendMessage(
-          Number(user.telegramId),
-          message,
-          {
-            parse_mode: 'Markdown'
-          }
-        );
-      }
+      await sendTelegramNotification(projectId, user.id, message);
     }
 
     // MAX
@@ -245,107 +246,211 @@ export interface RichNotification {
   parseMode?: 'Markdown' | 'HTML';
 }
 
+export interface BroadcastRecipientResult {
+  userId: string;
+  success: boolean;
+  error?: string;
+  errorCode?: number | string;
+  retryAfter?: number;
+  transient?: boolean;
+  skipped?: boolean;
+}
+
+export interface BroadcastResult {
+  sent: number;
+  failed: number;
+  skipped: number;
+  total: number;
+  results: BroadcastRecipientResult[];
+}
+
 /**
- * Массовая отправка уведомлений всем пользователям проекта
+ * Массовая отправка Telegram-уведомлений пользователям проекта.
+ * Пользователи без активной Telegram-привязки не считаются ошибками доставки:
+ * они учитываются отдельно в `skipped`.
  */
 export async function sendBroadcastMessage(
   projectId: string,
   message: string,
   userIds?: string[]
-): Promise<{ sent: number; failed: number }> {
+): Promise<BroadcastResult> {
   return sendRichBroadcastMessage(projectId, { message }, userIds);
 }
 
 /**
- * Расширенная массовая рассылка с поддержкой медиа и кнопок
+ * Расширенная Telegram-рассылка с поддержкой медиа и кнопок.
+ * MAX намеренно не вызывается: канал выбирается вызывающим кодом, а прежняя
+ * отправка в оба мессенджера давала ложные ошибки для каждого получателя.
  */
 export async function sendRichBroadcastMessage(
   projectId: string,
   notification: RichNotification,
   userIds?: string[]
-): Promise<{ sent: number; failed: number }> {
+): Promise<BroadcastResult> {
   try {
     const { db } = await import('@/lib/db');
-
-    // Проверяем/создаём активного бота через BotManager
-    let instance = botManager.getBot(projectId);
-    if (!instance || !instance.isActive) {
-      const settings = (await db.botSettings.findUnique({
-        where: { projectId }
-      })) as any;
-      if (settings?.botToken && settings?.isActive !== false) {
-        try {
-          instance = await botManager.createBot(projectId, settings);
-        } catch (e) {
-          // ignore
-        }
-      }
-    }
-
-    // Выполняем рассылку Telegram
-    let telegramResult = { sentCount: 0, failedCount: 0 };
-    if (instance && instance.isActive) {
-      const telegramUserIds =
-        userIds && userIds.length > 0
-          ? userIds
-          : (
-              await db.user.findMany({
-                where: { projectId, telegramId: { not: null }, isActive: true },
-                select: { id: true }
-              })
-            ).map((u: { id: string }) => u.id);
-
-      if (telegramUserIds.length > 0) {
-        telegramResult = await botManager.sendRichBroadcastMessage(
-          projectId,
-          telegramUserIds,
-          notification.message,
-          {
-            imageUrl: notification.imageUrl,
-            buttons: notification.buttons,
-            parseMode: notification.parseMode || 'Markdown'
-          }
-        );
-      }
-    }
-
-    // Выполняем рассылку MAX
-    let maxResult = { sentCount: 0, failedCount: 0 };
-    const maxUserIds =
-      userIds && userIds.length > 0
-        ? userIds
-        : (
-            await db.user.findMany({
-              where: { projectId, maxId: { not: null }, isActive: true },
-              select: { id: true }
-            })
-          ).map((u: { id: string }) => u.id);
-
-    if (maxUserIds.length > 0) {
-      maxResult = await maxBotManager.sendRichBroadcastMessage(
+    const requestedIds = userIds ? Array.from(new Set(userIds)) : undefined;
+    const users = await db.user.findMany({
+      where: {
         projectId,
-        maxUserIds,
-        notification.message,
-        {
-          buttons: notification.buttons?.map((b) => ({
-            text: b.text,
-            url: b.url,
-            payload: b.callback_data
-          }))
+        ...(requestedIds ? { id: { in: requestedIds } } : {}),
+        telegramId: { not: null },
+        isActive: true
+      },
+      select: { id: true }
+    });
+    const telegramUserIds = users.map((user) => user.id);
+    const total = requestedIds
+      ? requestedIds.length
+      : await db.user.count({ where: { projectId } });
+    const skipped = Math.max(0, total - telegramUserIds.length);
+
+    type NotificationButton =
+      | { text: string; url: string }
+      | { text: string; callback_data: string };
+    const validButtons: NotificationButton[] = [];
+    for (const button of notification.buttons ?? []) {
+      if (button.url) {
+        validButtons.push({ text: button.text, url: button.url });
+      } else if (button.callback_data) {
+        validButtons.push({
+          text: button.text,
+          callback_data: button.callback_data
+        });
+      }
+    }
+    const rows: NotificationButton[][] = [];
+    for (let index = 0; index < validButtons.length; index += 2) {
+      rows.push(validButtons.slice(index, index + 2));
+    }
+    const replyMarkup =
+      rows.length > 0
+        ? ({ inline_keyboard: rows } as TelegramMediaReplyMarkup &
+            TelegramTextReplyMarkup)
+        : undefined;
+
+    const deliveryResults: BroadcastRecipientResult[] = [];
+    const concurrency = 20;
+    const sendToUser = async (
+      userId: string
+    ): Promise<TelegramDeliveryResult> => {
+      if (!notification.imageUrl) {
+        return deliverTelegram({
+          kind: 'text',
+          projectId,
+          userId,
+          text: notification.message,
+          parseMode: notification.parseMode ?? 'Markdown',
+          replyMarkup
+        });
+      }
+
+      // Telegram ограничивает подпись к изображению 1024 символами. Для
+      // длинного текста сначала отправляем изображение, затем обычное сообщение.
+      if (notification.message.length > 1024) {
+        const photoResult = await deliverTelegram({
+          kind: 'photo',
+          projectId,
+          userId,
+          media: notification.imageUrl
+        });
+        if (photoResult.success === false) return photoResult;
+        return deliverTelegram({
+          kind: 'text',
+          projectId,
+          userId,
+          text: notification.message,
+          parseMode: notification.parseMode ?? 'Markdown',
+          replyMarkup
+        });
+      }
+
+      return deliverTelegram({
+        kind: 'photo',
+        projectId,
+        userId,
+        media: notification.imageUrl,
+        caption: notification.message,
+        parseMode: notification.parseMode ?? 'Markdown',
+        replyMarkup
+      });
+    };
+
+    for (let index = 0; index < telegramUserIds.length; index += concurrency) {
+      const batch = telegramUserIds.slice(index, index + concurrency);
+      const results = await Promise.all(batch.map(sendToUser));
+      results.forEach((result, resultIndex) => {
+        const userId = batch[resultIndex];
+        if (result.success === true) {
+          deliveryResults.push({ userId, success: true });
+          return;
         }
-      );
+        deliveryResults.push({
+          userId,
+          success: false,
+          error: result.description,
+          errorCode: result.errorCode,
+          retryAfter: result.retryAfter,
+          transient: result.transient
+        });
+        logger.error('Ошибка Telegram-рассылки', {
+          projectId,
+          userId,
+          errorCode: result.errorCode,
+          error: result.description,
+          transient: result.transient,
+          retryAfter: result.retryAfter
+        });
+      });
     }
 
-    return {
-      sent: telegramResult.sentCount + maxResult.sentCount,
-      failed: telegramResult.failedCount + maxResult.failedCount
-    };
+    if (requestedIds && skipped > 0) {
+      const eligibleIds = new Set(telegramUserIds);
+      for (const userId of requestedIds) {
+        if (!eligibleIds.has(userId)) {
+          deliveryResults.push({
+            userId,
+            success: false,
+            skipped: true,
+            error: 'Пользователь неактивен или не привязан к Telegram'
+          });
+        }
+      }
+    }
+
+    const sent = deliveryResults.filter((result) => result.success).length;
+    const failed = deliveryResults.filter(
+      (result) => !result.success && !result.skipped
+    ).length;
+
+    logger.info('Telegram-рассылка завершена', {
+      projectId,
+      total,
+      eligible: telegramUserIds.length,
+      sent,
+      failed,
+      skipped
+    });
+
+    return { sent, failed, skipped, total, results: deliveryResults };
   } catch (error) {
-    logger.error('Ошибка массовой рассылки (Telegram + MAX)', {
+    logger.error('Ошибка массовой Telegram-рассылки', {
       error: error instanceof Error ? error.message : 'Unknown error',
       projectId
     });
-    return { sent: 0, failed: 1 };
+    return {
+      sent: 0,
+      failed: 1,
+      skipped: 0,
+      total: userIds?.length ?? 0,
+      results: [
+        {
+          userId: '',
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      ]
+    };
   }
 }
 

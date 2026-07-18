@@ -9,36 +9,58 @@
  */
 
 import { db } from '@/lib/db';
-import { logger } from '@/lib/logger';
 import type { AudienceConfig } from '@/types/workflow';
 
 export interface AudienceResolution {
   /** ID пользователей, попадающих под условие. */
   userIds: string[];
-  /** Общее количество (равно userIds.length, отдельное поле для совместимости с пагинацией в будущем). */
+  /** Общее количество пользователей во всех загруженных страницах. */
   total: number;
   /** Тип аудитории, который был резолвлен (для логов). */
   type: AudienceConfig['type'];
 }
 
-/**
- * Жёсткий лимит, чтобы случайно не запустить scheduled workflow на 100k юзеров.
- * При превышении эндпоинт логирует предупреждение и батчит — но в MVP просто отрезаем.
- */
-const MAX_AUDIENCE_SIZE = 5000;
+export interface AudiencePage {
+  userIds: string[];
+  type: AudienceConfig['type'];
+}
+
+/** Ограничивает размер каждого DB-запроса, но не общий размер аудитории. */
+const AUDIENCE_PAGE_SIZE = 1000;
 
 export class AudienceResolver {
   /**
-   * Возвращает userIds под фильтр для конкретного проекта.
-   * Не делает дедупликацию по предыдущим запускам — это задача runner-а.
+   * Совместимый с preview API метод: собирает все страницы в прежний результат.
+   * Scheduled runner использует resolvePages напрямую и не держит всю аудиторию в памяти.
    */
   static async resolve(
     projectId: string,
     audience: AudienceConfig
   ): Promise<AudienceResolution> {
+    const userIds: string[] = [];
+
+    for await (const page of this.resolvePages(projectId, audience)) {
+      userIds.push(...page.userIds);
+    }
+
+    return {
+      userIds,
+      total: userIds.length,
+      type: audience.type
+    };
+  }
+  /**
+   * Постранично возвращает всю аудиторию. Каждый запрос ограничен AUDIENCE_PAGE_SIZE,
+   * а keyset pagination исключает пропуски на аудиториях больше 5000 пользователей.
+   */
+  static async *resolvePages(
+    projectId: string,
+    audience: AudienceConfig
+  ): AsyncGenerator<AudiencePage> {
     switch (audience.type) {
       case 'birthday_today':
-        return this.byBirthdayOffset(projectId, 0);
+        yield* this.byBirthdayOffsetPages(projectId, 0, audience.type);
+        return;
       case 'birthday_in_days': {
         const days = Number(audience.params?.daysBefore);
         if (!Number.isFinite(days) || days < 1 || days > 365) {
@@ -46,7 +68,8 @@ export class AudienceResolver {
             `Audience "birthday_in_days" requires params.daysBefore (1-365), got ${audience.params?.daysBefore}`
           );
         }
-        return this.byBirthdayOffset(projectId, days);
+        yield* this.byBirthdayOffsetPages(projectId, days, audience.type);
+        return;
       }
       case 'birthday_after_days': {
         const days = Number(audience.params?.daysAfter);
@@ -55,10 +78,12 @@ export class AudienceResolver {
             `Audience "birthday_after_days" requires params.daysAfter (1-365), got ${audience.params?.daysAfter}`
           );
         }
-        return this.byBirthdayOffset(projectId, -days);
+        yield* this.byBirthdayOffsetPages(projectId, -days, audience.type);
+        return;
       }
       case 'all_active_users':
-        return this.allActiveUsers(projectId);
+        yield* this.allActiveUserPages(projectId);
+        return;
       default: {
         const exhaustive: never = audience.type;
         throw new Error(`Unknown audience type: ${exhaustive}`);
@@ -66,78 +91,73 @@ export class AudienceResolver {
     }
   }
 
-  /**
-   * Все активные пользователи (`isActive=true`) проекта.
-   */
-  private static async allActiveUsers(
+  private static async *allActiveUserPages(
     projectId: string
-  ): Promise<AudienceResolution> {
-    const users = await db.user.findMany({
-      where: { projectId, isActive: true },
-      select: { id: true },
-      take: MAX_AUDIENCE_SIZE
-    });
-    if (users.length >= MAX_AUDIENCE_SIZE) {
-      logger.warn(
-        `AudienceResolver: hit MAX_AUDIENCE_SIZE for "all_active_users"`,
-        { projectId, limit: MAX_AUDIENCE_SIZE }
-      );
+  ): AsyncGenerator<AudiencePage> {
+    let cursor = '';
+
+    while (true) {
+      const users = await db.user.findMany({
+        where: {
+          projectId,
+          isActive: true,
+          ...(cursor ? { id: { gt: cursor } } : {})
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: AUDIENCE_PAGE_SIZE
+      });
+
+      if (users.length === 0) return;
+
+      yield {
+        userIds: users.map((user) => user.id),
+        type: 'all_active_users'
+      };
+
+      if (users.length < AUDIENCE_PAGE_SIZE) return;
+      cursor = users[users.length - 1].id;
     }
-    return {
-      userIds: users.map((u) => u.id),
-      total: users.length,
-      type: 'all_active_users'
-    };
   }
 
   /**
-   * Пользователи, у которых день рождения совпадает с `сегодня + daysOffset` (по UTC дню/месяцу).
-   * Игнорирует год — матч по day+month.
-   *
-   * Реализация: берём целевую дату в UTC, через raw SQL фильтруем по `EXTRACT(MONTH/DAY)`
-   * — это работает для PostgreSQL и даёт точный матч 29 февраля → 28 февраля в обычные годы
-   *   за счёт того, что даты в БД хранятся как DateTime @db.Date (без времени).
+   * Матчит день и месяц в UTC. Keyset pagination по id обеспечивает bounded queries
+   * и продолжает выборку до полного исчерпания аудитории.
    */
-  private static async byBirthdayOffset(
+  private static async *byBirthdayOffsetPages(
     projectId: string,
-    daysOffset: number
-  ): Promise<AudienceResolution> {
+    daysOffset: number,
+    audienceType: AudienceConfig['type']
+  ): AsyncGenerator<AudiencePage> {
     const target = new Date();
     target.setUTCDate(target.getUTCDate() + daysOffset);
-    const targetMonth = target.getUTCMonth() + 1; // 1-12
+    const targetMonth = target.getUTCMonth() + 1;
     const targetDay = target.getUTCDate();
+    let cursor = '';
 
-    // ВАЖНО: birth_date — это `@db.Date` (без времени), без часовых поясов.
-    // EXTRACT(MONTH/DAY) даёт корректный результат напрямую.
-    const rows = await db.$queryRaw<Array<{ id: string }>>`
-      SELECT id
-      FROM users
-      WHERE project_id = ${projectId}
-        AND is_active = true
-        AND birth_date IS NOT NULL
-        AND EXTRACT(MONTH FROM birth_date) = ${targetMonth}
-        AND EXTRACT(DAY FROM birth_date) = ${targetDay}
-      LIMIT ${MAX_AUDIENCE_SIZE}
-    `;
+    while (true) {
+      const rows = await db.$queryRaw<Array<{ id: string }>>`
+        SELECT id
+        FROM users
+        WHERE project_id = ${projectId}
+          AND is_active = true
+          AND birth_date IS NOT NULL
+          AND EXTRACT(MONTH FROM birth_date) = ${targetMonth}
+          AND EXTRACT(DAY FROM birth_date) = ${targetDay}
+          AND id > ${cursor}
+        ORDER BY id ASC
+        LIMIT ${AUDIENCE_PAGE_SIZE}
+      `;
 
-    const audienceType: AudienceConfig['type'] =
-      daysOffset === 0
-        ? 'birthday_today'
-        : daysOffset > 0
-          ? 'birthday_in_days'
-          : 'birthday_after_days';
+      if (rows.length === 0) return;
 
-    if (rows.length >= MAX_AUDIENCE_SIZE) {
-      logger.warn(
-        `AudienceResolver: hit MAX_AUDIENCE_SIZE for "${audienceType}"`,
-        { projectId, daysOffset, limit: MAX_AUDIENCE_SIZE }
-      );
+      yield {
+        userIds: rows.map((row) => row.id),
+        type: audienceType
+      };
+
+      if (rows.length < AUDIENCE_PAGE_SIZE) return;
+      cursor = rows[rows.length - 1].id;
     }
-
-    return {
-      userIds: rows.map((r) => r.id),
-      total: rows.length,
-      type: audienceType
-    };
   }
 }

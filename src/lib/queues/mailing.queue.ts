@@ -11,42 +11,11 @@ import { Queue, Worker, Job } from 'bullmq';
 import { logger } from '@/lib/logger';
 import { db } from '@/lib/db';
 import type { MailingType } from '@prisma/client';
-import { botManager } from '@/lib/telegram/bot-manager';
+import { sendRichBroadcastMessage } from '@/lib/telegram/notifications';
+import { createBullMQConnectionOptions } from '@/lib/queues/bullmq-connection';
 
-// Конфигурация Redis для очереди рассылок
-const getRedisConfig = () => {
-  // Проверяем доступность Redis
-  const hasRedisUrl = !!process.env.REDIS_URL;
-  const hasRedisHost = !!process.env.REDIS_HOST;
-  
-  if (!hasRedisUrl && !hasRedisHost) {
-    return null; // Redis недоступен
-  }
-
-  if (process.env.REDIS_HOST) {
-    return {
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD
-      },
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times: number) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      }
-    };
-  }
-
-  return {
-    redis: process.env.REDIS_URL || 'redis://localhost:6379',
-    maxRetriesPerRequest: 3,
-    retryStrategy: (times: number) => {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
-    }
-  };
-};
+const queueConnection = createBullMQConnectionOptions('queue');
+const workerConnection = createBullMQConnectionOptions('worker');
 
 // Типы задач в очереди рассылок
 export interface MailingJobData {
@@ -60,25 +29,186 @@ export interface MailingJobData {
   };
   subject?: string;
   body: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Создаем очередь для рассылок (только если Redis доступен)
-const redisConfig = getRedisConfig();
-export const mailingQueue = redisConfig ? new Queue<MailingJobData>(
-  'mailing',
-  {
-    connection: typeof redisConfig.redis === 'string' 
-      ? { host: 'localhost', port: 6379 }
-      : redisConfig.redis
+export const mailingQueue = queueConnection
+  ? new Queue<MailingJobData>('mailing', { connection: queueConnection })
+  : null;
+
+interface MailingButton {
+  text: string;
+  url?: string;
+  callback_data?: string;
+}
+
+interface DeliveryOutcome {
+  success: boolean;
+  error?: string;
+  errorCode?: number | string;
+  retryAfter?: number;
+  transient?: boolean;
+  hasImage?: boolean;
+  buttonsCount?: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isMailingButton(value: unknown): value is MailingButton {
+  if (!isRecord(value) || typeof value.text !== 'string') return false;
+  return (
+    typeof value.url === 'string' || typeof value.callback_data === 'string'
+  );
+}
+
+function getMaxAttempts(job: Job<MailingJobData>): number {
+  const configured = job.opts.attempts;
+  return typeof configured === 'number' && configured > 0 ? configured : 1;
+}
+
+function hasRetryRemaining(job: Job<MailingJobData>): boolean {
+  return job.attemptsMade + 1 < getMaxAttempts(job);
+}
+
+function numericErrorCode(value: number | string | undefined): number | null {
+  return typeof value === 'number' ? value : null;
+}
+
+async function waitForRetryAfter(seconds: number | undefined): Promise<void> {
+  if (!seconds || seconds <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+}
+
+async function deliverMailingJob(
+  job: Job<MailingJobData>,
+  projectId: string
+): Promise<DeliveryOutcome> {
+  const { type, recipient, body, metadata } = job.data;
+
+  if (type === 'EMAIL') {
+    return recipient.email
+      ? { success: true }
+      : { success: false, error: 'Email не указан' };
   }
-) : null;
+
+  if (type === 'SMS') {
+    return recipient.phone
+      ? { success: true }
+      : { success: false, error: 'Телефон не указан' };
+  }
+
+  if (type === 'TELEGRAM') {
+    if (!recipient.userId) {
+      return { success: false, error: 'Пользователь не найден' };
+    }
+
+    const imageUrl =
+      typeof metadata?.imageUrl === 'string' ? metadata.imageUrl : undefined;
+    const buttons = Array.isArray(metadata?.buttons)
+      ? metadata.buttons.filter(isMailingButton)
+      : undefined;
+    const parseMode = metadata?.parseMode === 'Markdown' ? 'Markdown' : 'HTML';
+    const result = await sendRichBroadcastMessage(
+      projectId,
+      { message: body, imageUrl, buttons, parseMode },
+      [recipient.userId]
+    );
+
+    if (result.sent > 0) {
+      return {
+        success: true,
+        hasImage: Boolean(imageUrl),
+        buttonsCount: buttons?.length ?? 0
+      };
+    }
+
+    const recipientResult =
+      result.results.find((item) => item.userId === recipient.userId) ??
+      result.results[0];
+    return {
+      success: false,
+      error: recipientResult?.error ?? 'Ошибка отправки в Telegram',
+      errorCode: recipientResult?.errorCode,
+      retryAfter: recipientResult?.retryAfter,
+      transient: recipientResult?.transient ?? false
+    };
+  }
+
+  return {
+    success: false,
+    error: 'Интеграция с этим мессенджером еще не реализована'
+  };
+}
+
+async function completeMailingIfReady(mailingId: string): Promise<void> {
+  const pendingRecipients = await db.mailingRecipient.count({
+    where: { mailingId, status: 'PENDING' }
+  });
+  if (pendingRecipients !== 0) return;
+
+  await db.mailing.updateMany({
+    where: { id: mailingId, status: 'SENDING' },
+    data: { status: 'COMPLETED', completedAt: new Date() }
+  });
+}
+
+async function finalizeDelivery(
+  job: Job<MailingJobData>,
+  outcome: DeliveryOutcome
+): Promise<void> {
+  const { mailingId, recipientId, recipient } = job.data;
+  const completedAt = new Date();
+
+  await db.$transaction([
+    db.mailingRecipient.update({
+      where: { id: recipientId },
+      data: {
+        status: outcome.success ? 'SENT' : 'FAILED',
+        sentAt: outcome.success ? completedAt : null,
+        error: outcome.error ?? null,
+        errorCode: numericErrorCode(outcome.errorCode),
+        errorDescription: outcome.error ?? null,
+        retryAfter: outcome.retryAfter ?? null
+      }
+    }),
+    db.mailingHistory.create({
+      data: {
+        mailingId,
+        recipientId,
+        userId: recipient.userId,
+        type: outcome.success ? 'SENT' : 'FAILED',
+        metadata: outcome.success
+          ? {
+              sentAt: completedAt.toISOString(),
+              hasImage: outcome.hasImage ?? false,
+              buttonsCount: outcome.buttonsCount ?? 0
+            }
+          : {
+              error: outcome.error ?? 'Неизвестная ошибка',
+              errorCode: outcome.errorCode,
+              failedAt: completedAt.toISOString()
+            }
+      }
+    }),
+    db.mailing.update({
+      where: { id: mailingId },
+      data: outcome.success
+        ? { sentCount: { increment: 1 } }
+        : { failedCount: { increment: 1 } }
+    })
+  ]);
+
+  await completeMailingIfReady(mailingId);
+}
 
 // Ленивая инициализация Worker
 let mailingWorker: Worker<MailingJobData> | null = null;
 
 export function getMailingWorker(): Worker<MailingJobData> | null {
-  if (!redisConfig) {
+  if (!workerConnection) {
     logger.warn('Mailing queue disabled: Redis not available');
     return null;
   }
@@ -87,238 +217,102 @@ export function getMailingWorker(): Worker<MailingJobData> | null {
     mailingWorker = new Worker<MailingJobData>(
       'mailing',
       async (job: Job<MailingJobData>) => {
-  const { mailingId, recipientId, type, recipient, subject, body, metadata } =
-    job.data;
+        const { mailingId, recipientId, type } = job.data;
+        const [mailing, recipientRecord] = await Promise.all([
+          db.mailing.findUnique({
+            where: { id: mailingId },
+            select: { projectId: true, status: true }
+          }),
+          db.mailingRecipient.findUnique({
+            where: { id: recipientId },
+            select: { status: true }
+          })
+        ]);
 
-  try {
-    logger.info('Processing mailing job', {
-      jobId: job.id,
-      mailingId,
-      recipientId,
-      type,
-      component: 'mailing-queue'
-    });
-
-    let success = false;
-    let error: string | null = null;
-
-    // Отправка в зависимости от типа
-    switch (type) {
-      case 'EMAIL':
-        if (recipient.email) {
-          // TODO: Интеграция с email сервисом (SendGrid, Mailgun, etc.)
-          success = true;
-        } else {
-          error = 'Email не указан';
-        }
-        break;
-
-      case 'SMS':
-        if (recipient.phone) {
-          // TODO: Интеграция с SMS сервисом (Twilio, SMS.ru, etc.)
-          success = true;
-        } else {
-          error = 'Телефон не указан';
-        }
-        break;
-
-      case 'TELEGRAM':
-        if (recipient.userId) {
-          try {
-            // Получаем проект из рассылки
-            const mailing = await db.mailing.findUnique({
-              where: { id: mailingId },
-              select: { projectId: true }
-            });
-
-            if (!mailing) {
-              error = 'Рассылка не найдена';
-              break;
-            }
-
-            // Получаем пользователя для telegramId
-            const user = await db.user.findUnique({
-              where: { id: recipient.userId },
-              select: { telegramId: true }
-            });
-
-            if (!user || !user.telegramId) {
-              error = 'Пользователь не привязан к Telegram';
-              break;
-            }
-
-            // Парсим метаданные для изображения и кнопок
-            const imageUrl = metadata?.imageUrl as string | undefined;
-            const buttons = metadata?.buttons as
-              | Array<{
-                  text: string;
-                  url?: string;
-                  callback_data?: string;
-                }>
-              | undefined;
-            const parseMode =
-              (metadata?.parseMode as 'HTML' | 'Markdown') || 'HTML';
-
-            // Отправляем через BotManager
-            const result = await botManager.sendRichBroadcastMessage(
-              mailing.projectId,
-              [recipient.userId],
-              body,
-              {
-                imageUrl,
-                buttons,
-                parseMode
-              }
-            );
-
-            if (result.success && result.sentCount > 0) {
-              success = true;
-
-              // Создаем запись в истории
-              await db.mailingHistory.create({
-                data: {
-                  mailingId,
-                  recipientId,
-                  userId: recipient.userId || undefined,
-                  type: 'SENT',
-                  metadata: {
-                    sentAt: new Date().toISOString(),
-                    hasImage: !!imageUrl,
-                    buttonsCount: buttons?.length || 0
-                  }
-                }
-              });
-
-              // Обновляем счетчик отправленных
-              await db.mailing.update({
-                where: { id: mailingId },
-                data: {
-                  sentCount: { increment: 1 }
-                }
-              });
-            } else {
-              error = result.errors.join(', ') || 'Ошибка отправки';
-            }
-          } catch (telegramError) {
-            error =
-              telegramError instanceof Error
-                ? telegramError.message
-                : 'Ошибка отправки в Telegram';
-            logger.error('Telegram mailing error', {
-              mailingId,
-              recipientId,
-              error: error,
-              component: 'mailing-queue'
-            });
-          }
-        } else {
-          error = 'Пользователь не найден';
-        }
-        break;
-
-      case 'WHATSAPP':
-      case 'VIBER':
-        // TODO: Интеграция с мессенджерами
-        success = false;
-        error = 'Интеграция с этим мессенджером еще не реализована';
-        break;
-
-      default:
-        error = `Неизвестный тип рассылки: ${type}`;
-    }
-
-    // Обновляем статус получателя
-    await db.mailingRecipient.update({
-      where: { id: recipientId },
-      data: {
-        status: success ? 'SENT' : 'FAILED',
-        sentAt: success ? new Date() : null,
-        error: error || null
-      }
-    });
-
-    // Создаем запись в истории для ошибок
-    if (!success) {
-      try {
-        await db.mailingHistory.create({
-          data: {
+        if (!mailing) throw new Error('Рассылка не найдена');
+        if (!recipientRecord) throw new Error('Получатель рассылки не найден');
+        if (mailing.status === 'CANCELLED') {
+          logger.info('Mailing job skipped because mailing was cancelled', {
+            jobId: job.id,
             mailingId,
             recipientId,
-            userId: recipient.userId || undefined,
-            type: 'FAILED',
-            metadata: {
-              error: error,
-              failedAt: new Date().toISOString()
-            }
+            component: 'mailing-queue'
+          });
+          return;
+        }
+        if (recipientRecord.status === 'SENT') return;
+
+        await db.mailingRecipient.update({
+          where: { id: recipientId },
+          data: {
+            attemptCount: { increment: 1 },
+            maxAttempts: getMaxAttempts(job),
+            lastAttemptAt: new Date()
           }
         });
 
-        // Обновляем счетчик ошибок
-        await db.mailing.update({
-          where: { id: mailingId },
-          data: {
-            failedCount: { increment: 1 }
-          }
-        });
-      } catch (historyError) {
-        logger.error('Error creating mailing history', {
+        logger.info('Processing mailing job', {
+          jobId: job.id,
           mailingId,
           recipientId,
-          error:
-            historyError instanceof Error
-              ? historyError.message
-              : 'Unknown error',
+          type,
+          attempt: job.attemptsMade + 1,
+          maxAttempts: getMaxAttempts(job),
           component: 'mailing-queue'
         });
+
+        let outcome: DeliveryOutcome;
+        try {
+          outcome = await deliverMailingJob(job, mailing.projectId);
+        } catch (error) {
+          outcome = {
+            success: false,
+            error:
+              error instanceof Error ? error.message : 'Неизвестная ошибка',
+            transient: true
+          };
+        }
+
+        if (!outcome.success && outcome.transient && hasRetryRemaining(job)) {
+          await db.mailingRecipient.update({
+            where: { id: recipientId },
+            data: {
+              status: 'PENDING',
+              error: outcome.error ?? null,
+              errorCode: numericErrorCode(outcome.errorCode),
+              errorDescription: outcome.error ?? null,
+              retryAfter: outcome.retryAfter ?? null
+            }
+          });
+          await waitForRetryAfter(outcome.retryAfter);
+          throw new Error(outcome.error ?? 'Временная ошибка доставки');
+        }
+
+        await finalizeDelivery(job, outcome);
+
+        const logContext = {
+          jobId: job.id,
+          mailingId,
+          recipientId,
+          type,
+          error: outcome.error,
+          component: 'mailing-queue'
+        };
+        if (outcome.success) {
+          logger.info('Mailing sent successfully', logContext);
+        } else {
+          logger.error('Mailing failed permanently', logContext);
+        }
+      },
+      {
+        connection: workerConnection,
+        concurrency: 10,
+        // Один job с длинной подписью и изображением может вызвать два
+        // Telegram API-вызова, поэтому 15 jobs/sec оставляют запас до 30/sec.
+        limiter: { max: 15, duration: 1000 }
       }
-    }
-
-    if (success) {
-      logger.info('Mailing sent successfully', {
-        jobId: job.id,
-        mailingId,
-        recipientId,
-        type,
-        component: 'mailing-queue'
-      });
-    } else {
-      logger.error('Mailing failed', {
-        jobId: job.id,
-        mailingId,
-        recipientId,
-        type,
-        error,
-        component: 'mailing-queue'
-      });
-    }
-  } catch (error) {
-    logger.error('Error processing mailing job', {
-      jobId: job.id,
-      mailingId,
-      recipientId,
-      error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-      component: 'mailing-queue'
-    });
-
-    // Обновляем статус получателя
-    await db.mailingRecipient.update({
-      where: { id: recipientId },
-      data: {
-        status: 'FAILED',
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка'
-      }
-    });
-
-    throw error;
+    );
   }
-},
-{
-  connection: typeof redisConfig.redis === 'string' 
-    ? { host: 'localhost', port: 6379 }
-    : redisConfig.redis
-}
-);
-  }
-  
+
   return mailingWorker;
 }

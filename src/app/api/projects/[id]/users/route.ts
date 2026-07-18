@@ -20,7 +20,7 @@ import { ProjectService } from '@/lib/services/project.service';
 
 const getQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1).optional(),
-  limit: z.coerce.number().int().min(1).max(1000).default(20).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20).optional(),
   search: z.string().max(200).optional()
 });
 
@@ -44,7 +44,7 @@ async function getHandler(
     const page = parseInt(url.searchParams.get('page') || '1', 10);
     const limit = Math.min(
       Math.max(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 1),
-      1000
+      100
     );
     const search = url.searchParams.get('search') || undefined;
 
@@ -199,41 +199,44 @@ async function getHandler(
     });
 
     // Получаем статистику проекта
-    const stats = await db.$transaction(async (tx) => {
-      // Общее количество пользователей
-      const totalUsersCount = await tx.user.count({
-        where: { projectId: id }
-      });
+    const stats =
+      url.searchParams.get('includeStats') === 'false'
+        ? undefined
+        : await db.$transaction(async (tx) => {
+            // Общее количество пользователей
+            const totalUsersCount = await tx.user.count({
+              where: { projectId: id }
+            });
 
-      // Активные пользователи (с бонусами > 0)
-      const activeUsersCount = await tx.user.count({
-        where: {
-          projectId: id,
-          bonuses: {
-            some: {
-              isUsed: false,
-              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-            }
-          }
-        }
-      });
+            // Активные пользователи (с бонусами > 0)
+            const activeUsersCount = await tx.user.count({
+              where: {
+                projectId: id,
+                bonuses: {
+                  some: {
+                    isUsed: false,
+                    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+                  }
+                }
+              }
+            });
 
-      // Общий баланс бонусов
-      const totalBonusesResult = await tx.bonus.aggregate({
-        where: {
-          user: { projectId: id },
-          isUsed: false,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-        },
-        _sum: { amount: true }
-      });
+            // Общий баланс бонусов
+            const totalBonusesResult = await tx.bonus.aggregate({
+              where: {
+                user: { projectId: id },
+                isUsed: false,
+                OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+              },
+              _sum: { amount: true }
+            });
 
-      return {
-        totalUsers: totalUsersCount,
-        activeUsers: activeUsersCount,
-        totalBonuses: Number(totalBonusesResult._sum.amount || 0)
-      };
-    });
+            return {
+              totalUsers: totalUsersCount,
+              activeUsers: activeUsersCount,
+              totalBonuses: Number(totalBonusesResult._sum.amount || 0)
+            };
+          });
 
     return NextResponse.json({
       success: true,

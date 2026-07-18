@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProjectUsers } from '@/features/bonuses/hooks/use-project-users';
 import { BonusStatsCards } from '@/features/bonuses/components/bonus-stats-cards';
@@ -114,6 +114,20 @@ interface ProjectUsersViewProps {
   projectId: string;
 }
 
+interface ExportUser {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  telegramId?: string | null;
+  bonusBalance?: number;
+  totalEarned?: number;
+  registeredAt?: string;
+  isActive?: boolean;
+  currentLevel?: string | null;
+}
+
 interface UserWithBonuses extends User {
   totalBonuses: number;
   activeBonuses: number;
@@ -192,6 +206,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     isLoading: usersLoading,
     error: usersError,
     totalUsers,
+    totalCount: filteredUsersCount,
     activeUsers,
     totalBonuses,
     currentPage,
@@ -224,8 +239,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const handleDebouncedSearch = useDebouncedCallback((term: string) => {
     setDebouncedSearchTerm(term);
     setSearchTerm(term);
-    // Сбрасываем на первую страницу при новом поиске
-    loadUsers(1);
+    // useProjectUsers сам сбрасывает и загружает первую страницу при смене поиска.
   }, 400);
 
   // Обработчики пагинации
@@ -236,14 +250,24 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     [loadUsers]
   );
 
-  const handlePageSizeChange = useCallback(
-    (newPageSize: number) => {
-      setPageSize(newPageSize);
-      // При изменении размера страницы возвращаемся на первую страницу
-      loadUsers(1);
-    },
-    [loadUsers]
-  );
+  const handlePageSizeChange = useCallback((newPageSize: number) => {
+    // useProjectUsers перезагрузит первую страницу после изменения pageSize.
+    setPageSize(newPageSize);
+  }, []);
+
+  // Выбор действует только в пределах текущей серверной страницы. При смене
+  // страницы, поиска, фильтра или сортировки старые ID больше не сохраняются.
+  useEffect(() => {
+    setSelectedUsers([]);
+  }, [
+    currentPage,
+    pageSize,
+    debouncedSearchTerm,
+    roleFilter,
+    orgFilter,
+    sortField,
+    sortOrder
+  ]);
 
   const handleUserProfile = useCallback(
     async (user: DisplayUser) => {
@@ -502,7 +526,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     }
   };
 
-  // Select all users
+  // Выбор относится только к загруженной серверной странице. Для всех
+  // пользователей используется отдельная фоновая «Рассылка всем».
   const selectAllUsers = () => {
     setSelectedUsers(users.map((user) => user.id));
   };
@@ -624,18 +649,39 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     };
   }, [projectId, partnerRolesEnabled]);
 
-  const handleExportCSV = useCallback(async () => {
-    try {
-      // Получаем все данные без пагинации
+  const fetchAllUsersForExport = useCallback(async (): Promise<
+    ExportUser[]
+  > => {
+    const allUsers: ExportUser[] = [];
+    let page = 1;
+    let pages = 1;
+
+    do {
       const response = await fetch(
-        `/api/projects/${projectId}/users?limit=10000`
+        `/api/projects/${projectId}/users?page=${page}&limit=100&includeStats=false`
       );
       if (!response.ok) {
         throw new Error('Не удалось получить данные пользователей');
       }
+      const payload: unknown = await response.json();
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Некорректный ответ API пользователей');
+      }
+      const result = payload as {
+        users?: ExportUser[];
+        pagination?: { pages?: number };
+      };
+      allUsers.push(...(Array.isArray(result.users) ? result.users : []));
+      pages = Math.max(1, Number(result.pagination?.pages || 1));
+      page += 1;
+    } while (page <= pages);
 
-      const allUsers = await response.json();
-      const usersArray = Array.isArray(allUsers?.users) ? allUsers.users : [];
+    return allUsers;
+  }, [projectId]);
+
+  const handleExportCSV = useCallback(async () => {
+    try {
+      const usersArray = await fetchAllUsersForExport();
 
       // Создаем CSV
       const headers = [
@@ -651,7 +697,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         'Уровень'
       ];
 
-      const csvData = usersArray.map((user: any) => [
+      const csvData = usersArray.map((user) => [
         user.id || '',
         formatUserDisplayName({
           firstName: user.firstName,
@@ -708,22 +754,13 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         variant: 'destructive'
       });
     }
-  }, [projectId, toast]);
+  }, [fetchAllUsersForExport, projectId, toast]);
 
   const handleExportExcel = useCallback(async () => {
     try {
-      // Получаем все данные (пагинация отключена благодаря высокому лимиту)
-      const response = await fetch(
-        `/api/projects/${projectId}/users?limit=1000000`
-      );
-      if (!response.ok) {
-        throw new Error('Не удалось получить данные пользователей');
-      }
+      const usersArray = await fetchAllUsersForExport();
 
-      const allUsers = await response.json();
-      const usersArray = Array.isArray(allUsers?.users) ? allUsers.users : [];
-
-      const excelData = usersArray.map((user: any) => ({
+      const excelData = usersArray.map((user) => ({
         ID: user.id || '',
         Имя: formatUserDisplayName({
           firstName: user.firstName,
@@ -765,7 +802,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         variant: 'destructive'
       });
     }
-  }, [projectId, toast]);
+  }, [fetchAllUsersForExport, projectId, toast]);
 
   const handleCreateUser = (newUser: UserWithBonuses) => {
     console.log('Создан новый пользователь в проекте:', newUser); // Для отладки
@@ -1013,6 +1050,25 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   // Фильтрация пользователей
   // Фильтрация теперь происходит на стороне API
 
+  const tableUsers = useMemo<DisplayUser[]>(
+    () =>
+      users.map((user) => ({
+        ...user,
+        name: formatUserDisplayName({
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          fallback: 'Без имени'
+        }),
+        bonusBalance: user.bonusBalance || 0,
+        totalEarned: user.totalEarned || 0,
+        createdAt: new Date(user.createdAt),
+        updatedAt: new Date(user.updatedAt),
+        isActive: user.isActive ?? false
+      })),
+    [users]
+  );
+
   // Убрали проверку usersLoading для всего компонента - скелетон показывается только в таблице
 
   return (
@@ -1170,7 +1226,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                 onClick={selectAllUsers}
                 disabled={users.length === 0}
               >
-                Выбрать все
+                Выбрать страницу ({users.length})
               </Button>
               {/* Phase 2 b2b-referral-hierarchy (task 2.3): мульти-фильтр
                   по партнёрской роли. Показываем только если у проекта
@@ -1205,8 +1261,6 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                               : prev.filter((r) => r !== opt.value);
                             return next;
                           });
-                          // Сброс на первую страницу при смене фильтра
-                          loadUsers(1);
                         }}
                         onSelect={(e) => e.preventDefault()}
                       >
@@ -1218,10 +1272,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                         <DropdownMenuSeparator />
                         <DropdownMenuCheckboxItem
                           checked={false}
-                          onCheckedChange={() => {
-                            setRoleFilter([]);
-                            loadUsers(1);
-                          }}
+                          onCheckedChange={() => setRoleFilter([])}
                           onSelect={(e) => e.preventDefault()}
                         >
                           Сбросить
@@ -1319,21 +1370,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             </div>
           ) : (
             <UsersTable
-              data={users.map((user) => ({
-                ...user,
-                name: formatUserDisplayName({
-                  firstName: user.firstName,
-                  lastName: user.lastName,
-                  email: user.email,
-                  fallback: 'Без имени'
-                }),
-                bonusBalance: user.bonusBalance || 0,
-                activeBonuses: user.bonusBalance || 0,
-                totalEarned: user.totalEarned || 0,
-                createdAt: new Date(user.registeredAt),
-                updatedAt: new Date(user.registeredAt),
-                isActive: user.isActive !== undefined ? user.isActive : false
-              }))}
+              data={tableUsers}
               projectId={projectId}
               enablePartnerRoles={Boolean((project as any)?.enablePartnerRoles)}
               onSelectionChange={setSelectedUsers}
@@ -1351,7 +1388,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               onExportCSV={handleExportCSV}
               onExportExcel={handleExportExcel}
               loading={usersLoading}
-              totalCount={totalUsers}
+              totalCount={filteredUsersCount}
               currentPage={currentPage}
               pageSize={pageSize}
               onPageChange={handlePageChange}

@@ -9,55 +9,21 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { logger } from '@/lib/logger';
+import { createBullMQConnectionOptions } from '@/lib/queues/bullmq-connection';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
 
 // Максимальная задержка: 24 часа (в миллисекундах)
 const MAX_DELAY_MS = 24 * 60 * 60 * 1000; // 86400000 ms
 
-// Конфигурация Redis для очереди задержек
-const getRedisConfig = () => {
-  // Проверяем доступность Redis
-  const hasRedisUrl = !!process.env.REDIS_URL;
-  const hasRedisHost = !!process.env.REDIS_HOST;
-  
-  if (!hasRedisUrl && !hasRedisHost) {
-    return null; // Redis недоступен
-  }
-
-  // Если Redis клиент создан с host/port, используем их
-  if (process.env.REDIS_HOST) {
-    return {
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD
-      },
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times: number) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      }
-    };
-  }
-
-  // Иначе используем REDIS_URL
-  return {
-    redis: process.env.REDIS_URL || 'redis://localhost:6379',
-    maxRetriesPerRequest: 3,
-    retryStrategy: (times: number) => {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
-    }
-  };
-};
+const queueConnection = createBullMQConnectionOptions('queue');
+const workerConnection = createBullMQConnectionOptions('worker');
 
 // Создаем очередь для отложенных задач workflow (только если Redis доступен)
-const redisConfig = getRedisConfig();
-export const delayQueue = redisConfig ? new Queue('workflow-delays', {
-  connection: typeof redisConfig.redis === 'string' 
-    ? { host: 'localhost', port: 6379 }
-    : redisConfig.redis
-}) : null;
+export const delayQueue = queueConnection
+  ? new Queue<DelayJobData>('workflow-delays', {
+      connection: queueConnection
+    })
+  : null;
 
 // Интерфейс для данных задачи задержки
 export interface DelayJobData {
@@ -74,6 +40,8 @@ export interface DelayJobData {
  */
 export class DelayJobService {
   private static initialized = false;
+  private static delayWorker: Worker<DelayJobData> | null = null;
+  private static shutdownPromise: Promise<void> | null = null;
 
   /**
    * Инициализирует обработчик очереди задержек
@@ -83,7 +51,7 @@ export class DelayJobService {
       return;
     }
 
-    if (!redisConfig) {
+    if (!workerConnection) {
       logger.warn('Delay queue disabled: Redis not available');
       this.initialized = true;
       return;
@@ -127,11 +95,10 @@ export class DelayJobService {
         }
       },
       {
-        connection: typeof redisConfig.redis === 'string' 
-          ? { host: 'localhost', port: 6379 }
-          : redisConfig.redis
+        connection: workerConnection
       }
     );
+    this.delayWorker = delayWorker;
 
     // Обработчики событий Worker
     delayWorker.on('completed', (job: Job<DelayJobData>) => {
@@ -141,13 +108,16 @@ export class DelayJobService {
       });
     });
 
-    delayWorker.on('failed', (job: Job<DelayJobData> | undefined, error: Error) => {
-      logger.error('Delay job failed', {
-        jobId: job?.id,
-        executionId: job?.data.executionId,
-        error: error.message
-      });
-    });
+    delayWorker.on(
+      'failed',
+      (job: Job<DelayJobData> | undefined, error: Error) => {
+        logger.error('Delay job failed', {
+          jobId: job?.id,
+          executionId: job?.data.executionId,
+          error: error.message
+        });
+      }
+    );
 
     delayWorker.on('stalled', (jobId: string) => {
       logger.warn('Delay job stalled', {
@@ -187,7 +157,7 @@ export class DelayJobService {
     }
 
     // Если Redis недоступен, используем синхронное ожидание
-    if (!redisConfig || !delayQueue) {
+    if (!queueConnection || !delayQueue) {
       logger.warn('Redis unavailable, using synchronous delay', {
         executionId,
         delayMs
@@ -323,7 +293,7 @@ export class DelayJobService {
       logger.warn('Cannot cleanup: Redis queue not available');
       return;
     }
-    
+
     await delayQueue.clean(24 * 60 * 60 * 1000, 1000, 'completed'); // 24 часа
     await delayQueue.clean(7 * 24 * 60 * 60 * 1000, 100, 'failed'); // 7 дней
     logger.info('Delay queue cleaned');
@@ -369,15 +339,33 @@ export class DelayJobService {
   /**
    * Graceful shutdown очереди
    */
-  static async shutdown(): Promise<void> {
-    if (!delayQueue) {
-      logger.info('Delay queue already shutdown (Redis not available)');
-      return;
-    }
-    
-    logger.info('Shutting down delay queue...');
-    await delayQueue.close();
-    logger.info('Delay queue shutdown complete');
+  static shutdown(): Promise<void> {
+    if (this.shutdownPromise) return this.shutdownPromise;
+
+    const workerToClose = this.delayWorker;
+    this.delayWorker = null;
+
+    this.shutdownPromise = (async () => {
+      logger.info('Shutting down delay queue...');
+      const results = await Promise.allSettled([
+        workerToClose?.close() ?? Promise.resolve(),
+        delayQueue?.close() ?? Promise.resolve()
+      ]);
+
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          logger.error('Failed to close delay queue resource', {
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+          });
+        }
+      }
+      logger.info('Delay queue shutdown complete');
+    })();
+
+    return this.shutdownPromise;
   }
 }
 

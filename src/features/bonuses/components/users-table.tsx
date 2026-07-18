@@ -503,7 +503,10 @@ export function UsersTable({
     // Сортировка выполняется на сервере (onServerSort), TanStack не
     // переупорядочивает строки локально.
     manualSorting: true,
-    pageCount: Math.ceil(totalCount / pageSize)
+    pageCount: Math.ceil(totalCount / pageSize),
+    // Индекс строки меняется при серверной пагинации и приводил к неверному
+    // переносу selection между страницами. ID пользователя стабилен.
+    getRowId: (row) => row.id
   });
 
   // Синхронизируем пагинацию с внешними пропсами (только pageIndex, pageSize обновляется через handlePageSizeChange)
@@ -520,6 +523,12 @@ export function UsersTable({
       return prev;
     });
   }, [currentPage, pageSize]);
+
+  // Серверная пагинация заменяет весь набор строк. Старые ID не должны
+  // повторно выделяться при возврате на ранее открытую страницу.
+  useEffect(() => {
+    setRowSelection({});
+  }, [currentPage, data]);
 
   // Видимость колонки «Роль» зависит от `enablePartnerRoles` (b2b-фича-флаг проекта).
   useEffect(() => {
@@ -637,7 +646,7 @@ export function UsersTable({
         totalCount={totalCount}
         onPageChange={onPageChange}
         onPageSizeChange={handlePageSizeChange}
-        pageSizeOptions={[10, 20, 50, 100, 200, 500, 1000]}
+        pageSizeOptions={[10, 20, 50, 100]}
       />
 
       {/* Edit User Dialog */}

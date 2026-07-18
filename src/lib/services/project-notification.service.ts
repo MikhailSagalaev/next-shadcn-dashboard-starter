@@ -7,9 +7,14 @@
  * @author: AI Assistant + User
  */
 
+import type { Prisma } from '@prisma/client';
 import { db } from '../db';
 import { logger } from '../logger';
-import type { Notification, User } from '@prisma/client';
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue | undefined {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 export type NotificationChannel = 'telegram' | 'email' | 'sms' | 'push';
 
@@ -34,6 +39,18 @@ export interface NotificationLog {
   error?: string;
 }
 
+export interface NotificationMetadata {
+  imageUrl?: string;
+  buttons?: Array<{
+    text: string;
+    url?: string;
+    callback_data?: string;
+  }>;
+  parseMode?: 'Markdown' | 'HTML';
+  priority?: string;
+  [key: string]: unknown;
+}
+
 export interface SendNotificationRequest {
   userId: string;
   projectId: string;
@@ -41,17 +58,20 @@ export interface SendNotificationRequest {
   channel: string;
   title: string;
   message: string;
-  metadata?: any;
+  metadata?: NotificationMetadata;
 }
 
 export interface BulkNotificationResult {
   sent: number;
   failed: number;
+  skipped: number;
   total: number;
   results: Array<{
     userId: string;
     success: boolean;
+    skipped?: boolean;
     error?: string;
+    errorCode?: number | string;
   }>;
 }
 
@@ -60,7 +80,7 @@ export interface SendBulkNotificationRequest {
   channel: string;
   title: string;
   message: string;
-  metadata?: any;
+  metadata?: NotificationMetadata;
 }
 
 export class ProjectNotificationService {
@@ -194,7 +214,7 @@ export class ProjectNotificationService {
       firstName: string | null;
       lastName: string | null;
       currentLevel: string;
-      bonuses: Array<{ amount: any }>;
+      bonuses: Array<{ amount: unknown }>;
     }>
   > {
     try {
@@ -253,7 +273,7 @@ export class ProjectNotificationService {
           channel: request.channel,
           title: request.title,
           message: request.message,
-          metadata: request.metadata
+          metadata: toPrismaJson(request.metadata)
         }
       });
 
@@ -341,54 +361,84 @@ export class ProjectNotificationService {
     notificationData: SendBulkNotificationRequest
   ): Promise<BulkNotificationResult> {
     try {
-      const results: Array<{
-        userId: string;
-        success: boolean;
-        error?: string;
-      }> = [];
+      // Telegram обрабатывается одной батчевой операцией. Раньше на каждого
+      // пользователя запускалась отдельная мини-рассылка, причём ещё и в MAX.
+      if (notificationData.channel === 'telegram') {
+        const { sendRichBroadcastMessage } = await import(
+          '@/lib/telegram/notifications'
+        );
+        const broadcast = await sendRichBroadcastMessage(
+          projectId,
+          {
+            message: notificationData.message,
+            imageUrl: notificationData.metadata?.imageUrl,
+            buttons: notificationData.metadata?.buttons,
+            parseMode: notificationData.metadata?.parseMode ?? 'Markdown'
+          },
+          userIds
+        );
 
-      // Отправляем уведомления параллельно
-      const promises = userIds.map(async (userId) => {
-        try {
-          const result = await this.send({
-            userId,
-            projectId,
-            ...notificationData
+        if (broadcast.results.length > 0) {
+          await db.notification.createMany({
+            data: broadcast.results
+              .filter((result) => result.userId)
+              .map((result) => ({
+                projectId,
+                userId: result.userId,
+                channel: notificationData.channel,
+                title: notificationData.title,
+                message: notificationData.message,
+                metadata: toPrismaJson(notificationData.metadata),
+                status: result.skipped
+                  ? 'SKIPPED'
+                  : result.success
+                    ? 'SENT'
+                    : 'FAILED',
+                error: result.error,
+                errorCode:
+                  typeof result.errorCode === 'number'
+                    ? result.errorCode
+                    : undefined,
+                attemptCount: result.skipped ? 0 : 1,
+                lastAttemptAt: result.skipped ? undefined : new Date(),
+                sentAt: result.success ? new Date() : undefined
+              }))
           });
-          results.push({
-            userId,
-            success: result.success,
-            error: result.error
-          });
-          return result;
-        } catch (error) {
-          results.push({
-            userId,
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          });
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          };
         }
+
+        logger.info('Bulk Telegram notification completed', {
+          projectId,
+          total: broadcast.total,
+          sent: broadcast.sent,
+          failed: broadcast.failed,
+          skipped: broadcast.skipped
+        });
+
+        return broadcast;
+      }
+
+      const results: BulkNotificationResult['results'] = [];
+      const promises = userIds.map(async (userId) => {
+        const result = await this.send({
+          userId,
+          projectId,
+          ...notificationData
+        });
+        results.push({
+          userId,
+          success: result.success,
+          error: result.error
+        });
       });
 
       await Promise.allSettled(promises);
-
-      const sent = results.filter((r) => r.success).length;
-      const failed = results.filter((r) => !r.success).length;
-
-      logger.info('Bulk notification sent', {
-        projectId,
-        total: userIds.length,
-        sent,
-        failed
-      });
+      const sent = results.filter((result) => result.success).length;
+      const failed = results.length - sent;
 
       return {
         sent,
         failed,
+        skipped: 0,
         total: userIds.length,
         results
       };

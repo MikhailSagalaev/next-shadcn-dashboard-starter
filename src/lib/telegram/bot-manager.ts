@@ -9,19 +9,15 @@
 
 // Типизация восстановлена для обеспечения безопасности типов
 
-import {
-  Bot,
-  Context,
-  SessionFlavor,
-  webhookCallback,
-  GrammyError,
-  HttpError
-} from 'grammy';
+import { Bot, webhookCallback, GrammyError, HttpError } from 'grammy';
 import { run } from '@grammyjs/runner';
-import { createBot } from './bot';
+import {
+  createBot,
+  type TelegramBotConfiguration,
+  type TelegramBotContext
+} from './bot';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import type { BotSettings } from '@/types/api';
 import { setupGlobalErrorHandler } from './global-error-handler';
 
 /**
@@ -42,24 +38,15 @@ function resolvePublicBaseUrl(): { url: string; source: string } {
   if (https?.[1]) {
     return { url: https[1], source: https[0] };
   }
-  const any = normalized.find(([, v]) => v.length > 0);
-  if (any?.[1]) {
-    return { url: any[1], source: any[0] };
+  const fallback = normalized.find(([, value]) => value.length > 0);
+  if (fallback?.[1]) {
+    return { url: fallback[1], source: fallback[0] };
   }
   return { url: 'http://localhost:5006', source: 'default' };
 }
 
-// Типизация контекста (совпадает с bot.ts)
-interface SessionData {
-  step?: string;
-  projectId?: string;
-  awaitingContact?: boolean;
-}
-
-type MyContext = Context & SessionFlavor<SessionData>;
-
-interface BotInstance {
-  bot: Bot<MyContext>;
+export interface BotInstance {
+  bot: Bot<TelegramBotContext>;
   webhook: ReturnType<typeof webhookCallback> | null; // null в dev режиме (polling), webhookCallback в prod режиме
   runner: ReturnType<typeof run> | null; // Runner instance для polling режима
   isActive: boolean;
@@ -68,6 +55,10 @@ interface BotInstance {
   isPolling?: boolean; // Флаг для отслеживания состояния polling
 }
 
+type TelegramWebhookInfo = Awaited<
+  ReturnType<Bot<TelegramBotContext>['api']['getWebhookInfo']>
+>;
+
 /**
  * Менеджер для управления несколькими экземплярами ботов
  * Поддерживает создание, обновление и деактивацию ботов для разных проектов
@@ -75,7 +66,8 @@ interface BotInstance {
 class BotManager {
   private bots: Map<string, BotInstance> = new Map();
   private readonly WEBHOOK_BASE_URL: string;
-  private readonly operationLocks: Map<string, Promise<any>> = new Map();
+  private readonly operationLocks: Map<string, Promise<BotInstance>> =
+    new Map();
 
   constructor() {
     const { url: webhookBaseUrl, source: webhookBaseSource } =
@@ -172,184 +164,118 @@ class BotManager {
     failedCount: number;
     errors: string[];
   }> {
-    try {
-      const botInstance = this.bots.get(projectId);
-      if (!botInstance || !botInstance.isActive) {
-        throw new Error('Бот не активен для этого проекта');
-      }
-
-      const { imageUrl, buttons, parseMode = 'Markdown' } = options;
-      let sentCount = 0;
-      let failedCount = 0;
-      const errors: string[] = [];
-
-      // Создаем inline keyboard если есть кнопки
-      let replyMarkup = undefined;
-      if (buttons && buttons.length > 0) {
-        const { InlineKeyboard } = await import('grammy');
-        const keyboard = new InlineKeyboard();
-
-        buttons.forEach((button, index) => {
-          if (button.url) {
-            keyboard.url(button.text, button.url);
-          } else if (button.callback_data) {
-            keyboard.text(button.text, button.callback_data);
-          }
-
-          // Добавляем перенос строки каждые 2 кнопки
-          if ((index + 1) % 2 === 0 && index < buttons.length - 1) {
-            keyboard.row();
-          }
+    const { deliverTelegram } = await import('./delivery-adapter');
+    const { imageUrl, buttons, parseMode = 'Markdown' } = options;
+    type BroadcastButton =
+      | { text: string; url: string }
+      | { text: string; callback_data: string };
+    const validButtons: BroadcastButton[] = [];
+    for (const button of buttons ?? []) {
+      if (button.url) {
+        validButtons.push({ text: button.text, url: button.url });
+      } else if (button.callback_data) {
+        validButtons.push({
+          text: button.text,
+          callback_data: button.callback_data
         });
+      }
+    }
+    const rows: BroadcastButton[][] = [];
+    for (let index = 0; index < validButtons.length; index += 2) {
+      rows.push(validButtons.slice(index, index + 2));
+    }
+    const replyMarkup = rows.length > 0 ? { inline_keyboard: rows } : undefined;
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+    const concurrency = 20;
 
-        replyMarkup = keyboard;
+    logger.info(
+      'Начинаем рассылку',
+      {
+        projectId,
+        recipients: userIds.length,
+        hasImage: !!imageUrl,
+        buttons: validButtons.length,
+        parseMode
+      },
+      'bot-manager'
+    );
+
+    const sendToUser = async (userId: string): Promise<void> => {
+      const result = imageUrl
+        ? await deliverTelegram({
+            kind: 'photo',
+            projectId,
+            userId,
+            media: imageUrl,
+            caption: message,
+            parseMode,
+            replyMarkup
+          })
+        : await deliverTelegram({
+            kind: 'text',
+            projectId,
+            userId,
+            text: message,
+            parseMode,
+            replyMarkup
+          });
+
+      if (result.success === true) {
+        sentCount++;
+        logger.info(
+          `Расширенное уведомление отправлено пользователю ${userId}`,
+          {
+            projectId,
+            userId,
+            messageId: result.messageId,
+            parseFallbackUsed: result.parseFallbackUsed
+          },
+          'bot-manager'
+        );
+        return;
       }
 
-      // Отправляем сообщения пользователям с ограничением параллелизма
-      const CONCURRENCY = 20; // безопасно для Telegram (30 msg/sec)
-      logger.info(
-        'Начинаем рассылку',
+      failedCount++;
+      errors.push(`Пользователь ${userId}: ${result.description}`);
+      logger.error(
+        `Ошибка отправки расширенного уведомления пользователю ${userId}`,
         {
           projectId,
-          recipients: userIds.length,
-          hasImage: !!imageUrl,
-          buttons: buttons?.length || 0,
-          parseMode
+          userId,
+          errorCode: result.errorCode,
+          error: result.description,
+          transient: result.transient,
+          retryAfter: result.retryAfter
         },
         'bot-manager'
       );
+    };
 
-      const sendToUser = async (userId: string) => {
-        try {
-          const user = await db.user.findUnique({ where: { id: userId } });
-          if (!user || !user.telegramId) {
-            failedCount++;
-            errors.push(
-              `Пользователь ${userId}: не найден или не привязан к Telegram`
-            );
-            return;
-          }
+    for (let index = 0; index < userIds.length; index += concurrency) {
+      const batch = userIds.slice(index, index + concurrency);
+      await Promise.all(batch.map(sendToUser));
+    }
 
-          try {
-            if (imageUrl) {
-              await botInstance.bot.api.sendPhoto(
-                user.telegramId.toString(),
-                imageUrl,
-                {
-                  caption: message,
-                  parse_mode: parseMode,
-                  reply_markup: replyMarkup
-                }
-              );
-            } else {
-              await botInstance.bot.api.sendMessage(
-                user.telegramId.toString(),
-                message,
-                {
-                  parse_mode: parseMode,
-                  reply_markup: replyMarkup
-                }
-              );
-            }
-          } catch (primaryError) {
-            // fallback без parse_mode на случай ошибок парсинга разметки
-            const msg =
-              primaryError instanceof Error
-                ? primaryError.message
-                : String(primaryError);
-            if (
-              /parse/i.test(msg) ||
-              /can't parse/i.test(msg) ||
-              /entities/i.test(msg)
-            ) {
-              if (imageUrl) {
-                await botInstance.bot.api.sendPhoto(
-                  user.telegramId.toString(),
-                  imageUrl,
-                  {
-                    caption: message,
-                    reply_markup: replyMarkup
-                  }
-                );
-              } else {
-                await botInstance.bot.api.sendMessage(
-                  user.telegramId.toString(),
-                  message,
-                  {
-                    reply_markup: replyMarkup
-                  }
-                );
-              }
-            } else {
-              throw primaryError;
-            }
-          }
-
-          sentCount++;
-          logger.info(
-            `Расширенное уведомление отправлено пользователю ${userId}`,
-            {
-              projectId,
-              userId,
-              messageLength: message.length,
-              hasImage: !!imageUrl,
-              buttonsCount: buttons?.length || 0
-            },
-            'bot-manager'
-          );
-        } catch (error) {
-          failedCount++;
-          const errorMsg =
-            error instanceof Error ? error.message : 'Unknown error';
-          errors.push(`Пользователь ${userId}: ${errorMsg}`);
-          logger.error(
-            `Ошибка отправки расширенного уведомления пользователю ${userId}`,
-            { projectId, userId, error: errorMsg },
-            'bot-manager'
-          );
-        }
-      };
-
-      for (let i = 0; i < userIds.length; i += CONCURRENCY) {
-        const batch = userIds.slice(i, i + CONCURRENCY);
-        await Promise.allSettled(batch.map((id) => sendToUser(id)));
-      }
-
-      logger.info(
-        `Расширенные уведомления отправлены`,
-        {
-          projectId,
-          totalUsers: userIds.length,
-          sentCount,
-          failedCount,
-          errorsCount: errors.length
-        },
-        'bot-manager'
-      );
-
-      return {
-        success: sentCount > 0,
+    logger.info(
+      'Расширенные уведомления отправлены',
+      {
+        projectId,
+        totalUsers: userIds.length,
         sentCount,
         failedCount,
-        errors
-      };
-    } catch (error) {
-      logger.error(
-        `Ошибка отправки расширенных уведомлений`,
-        {
-          projectId,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        },
-        'bot-manager'
-      );
+        errorsCount: errors.length
+      },
+      'bot-manager'
+    );
 
-      return {
-        success: false,
-        sentCount: 0,
-        failedCount: userIds.length,
-        errors: [error instanceof Error ? error.message : 'Unknown error']
-      };
-    }
+    return {
+      success: sentCount > 0,
+      sentCount,
+      failedCount,
+      errors
+    };
   }
 
   /**
@@ -368,7 +294,7 @@ class BotManager {
     });
 
     const botsWithToken = Array.from(this.bots.entries()).filter(
-      ([_, botInstance]) => botInstance.bot.token === token
+      ([, botInstance]) => botInstance.bot.token === token
     );
 
     if (botsWithToken.length === 0) {
@@ -403,7 +329,7 @@ class BotManager {
         if (botInstance.runner && botInstance.runner.isRunning()) {
           try {
             await botInstance.runner.stop();
-          } catch (runnerError) {
+          } catch {
             // Игнорируем ошибки остановки runner
           }
         }
@@ -413,14 +339,14 @@ class BotManager {
           await botInstance.bot.api.deleteWebhook({
             drop_pending_updates: true
           });
-        } catch (webhookError) {
+        } catch {
           // Игнорируем ошибки webhook
         }
 
         // Останавливаем бота (для совместимости)
         try {
           await botInstance.bot.stop();
-        } catch (stopError) {
+        } catch {
           // Игнорируем ошибки остановки
         }
 
@@ -496,7 +422,7 @@ class BotManager {
    */
   async createBot(
     projectId: string,
-    botSettings: BotSettings
+    botSettings: TelegramBotConfiguration
   ): Promise<BotInstance> {
     // Проверяем, не выполняется ли уже операция для этого проекта
     const existingOperation = this.operationLocks.get(projectId);
@@ -529,7 +455,7 @@ class BotManager {
    */
   private async _createBotInternal(
     projectId: string,
-    botSettings: BotSettings
+    botSettings: TelegramBotConfiguration
   ): Promise<BotInstance> {
     try {
       logger.info(`🚀 СОЗДАНИЕ БОТА ${projectId}`, {
@@ -973,7 +899,7 @@ class BotManager {
       // Создаем и сохраняем BotInstance ПОСЛЕ настройки
       const botInstance: BotInstance = {
         bot,
-        webhook: webhook as any, // null в dev режиме, webhookCallback в prod режиме
+        webhook, // null в dev режиме, webhookCallback в prod режиме
         runner: runner, // Runner instance для polling режима
         isActive: true, // Всегда true, так как бот только что успешно запущен
         projectId,
@@ -1060,7 +986,7 @@ class BotManager {
    */
   async updateBot(
     projectId: string,
-    botSettings: BotSettings
+    botSettings: TelegramBotConfiguration
   ): Promise<BotInstance> {
     const existingBot = this.bots.get(projectId);
 
@@ -1312,17 +1238,7 @@ class BotManager {
         await Promise.allSettled(
           batch.map(async (botSettings) => {
             try {
-              const botSettingsForManager = {
-                ...botSettings,
-                welcomeMessage:
-                  typeof botSettings.welcomeMessage === 'string'
-                    ? botSettings.welcomeMessage
-                    : 'Добро пожаловать! 🎉\n\nЭто бот бонусной программы.'
-              };
-              await this.createBot(
-                botSettings.projectId,
-                botSettingsForManager as any
-              );
+              await this.createBot(botSettings.projectId, botSettings);
             } catch (error) {
               logger.error(`Ошибка загрузки бота ${botSettings.projectId}`, {
                 projectId: botSettings.projectId,
@@ -1405,7 +1321,7 @@ class BotManager {
             projectId,
             component: 'bot-manager'
           });
-          botInstance = await this.createBot(projectId, botSettings as any);
+          botInstance = await this.createBot(projectId, botSettings);
         }
       } catch (error) {
         logger.error(`❌ Ошибка lazy-loading бота`, {
@@ -1453,7 +1369,7 @@ class BotManager {
    */
   async checkBotHealth(projectId: string): Promise<{
     isRunning: boolean;
-    webhookInfo?: any;
+    webhookInfo?: TelegramWebhookInfo;
     error?: string;
   }> {
     const botInstance = this.bots.get(projectId);

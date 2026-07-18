@@ -9,8 +9,17 @@
 
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { mailingQueue, type MailingJobData } from '@/lib/queues/mailing.queue';
-import type { MailingType, MailingStatus } from '@prisma/client';
+import {
+  getMailingWorker,
+  mailingQueue,
+  type MailingJobData
+} from '@/lib/queues/mailing.queue';
+import type { MailingType, MailingStatus, Prisma } from '@prisma/client';
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue | undefined {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 export interface CreateMailingInput {
   projectId: string;
@@ -21,7 +30,27 @@ export interface CreateMailingInput {
   scheduledAt?: Date;
   messageText?: string;
   messageHtml?: string;
-  statistics?: Record<string, any>;
+  statistics?: Record<string, unknown>;
+}
+
+export interface QueueTelegramBroadcastInput {
+  projectId: string;
+  title: string;
+  message: string;
+  imageUrl?: string;
+  buttons?: Array<{
+    text: string;
+    url?: string;
+    callback_data?: string;
+  }>;
+  parseMode?: 'Markdown' | 'HTML';
+}
+
+export interface QueueTelegramBroadcastResult {
+  mailingId: string;
+  total: number;
+  eligible: number;
+  skipped: number;
 }
 
 export interface CreateMailingTemplateInput {
@@ -175,7 +204,7 @@ export class MailingService {
           scheduledAt: data.scheduledAt,
           messageText: data.messageText,
           messageHtml: data.messageHtml,
-          statistics: data.statistics
+          statistics: toPrismaJson(data.statistics)
         },
         include: {
           segment: {
@@ -204,6 +233,141 @@ export class MailingService {
         data,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
         component: 'mailing-service'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Создаёт фоновую Telegram-рассылку для всех активных привязанных
+   * пользователей. Получатели без telegramId учитываются как skipped, но не
+   * создают тысячи заведомо неуспешных jobs.
+   */
+  static async queueTelegramBroadcast(
+    data: QueueTelegramBroadcastInput
+  ): Promise<QueueTelegramBroadcastResult> {
+    if (!mailingQueue || !getMailingWorker()) {
+      throw new Error(
+        'Очередь рассылок недоступна. Настройте REDIS_URL или REDIS_HOST.'
+      );
+    }
+
+    const [total, eligibleUsers] = await Promise.all([
+      db.user.count({ where: { projectId: data.projectId } }),
+      db.user.findMany({
+        where: {
+          projectId: data.projectId,
+          isActive: true,
+          telegramId: { not: null }
+        },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          telegramId: true
+        }
+      })
+    ]);
+
+    if (eligibleUsers.length === 0) {
+      throw new Error(
+        'В проекте нет активных пользователей, привязанных к Telegram.'
+      );
+    }
+
+    const mailing = await db.mailing.create({
+      data: {
+        projectId: data.projectId,
+        name: data.title,
+        type: 'TELEGRAM',
+        status: 'SENDING',
+        sentAt: new Date(),
+        messageText: data.message,
+        statistics: toPrismaJson({
+          imageUrl: data.imageUrl,
+          buttons: data.buttons,
+          parseMode: data.parseMode ?? 'HTML',
+          audienceTotal: total,
+          audienceEligible: eligibleUsers.length,
+          audienceSkipped: total - eligibleUsers.length
+        })
+      }
+    });
+
+    try {
+      const chunkSize = 500;
+      for (let index = 0; index < eligibleUsers.length; index += chunkSize) {
+        const chunk = eligibleUsers.slice(index, index + chunkSize);
+        await db.mailingRecipient.createMany({
+          data: chunk.map((user) => ({
+            mailingId: mailing.id,
+            userId: user.id,
+            email: user.email ?? undefined,
+            phone: user.phone ?? undefined,
+            telegramId: user.telegramId?.toString(),
+            status: 'PENDING'
+          })),
+          skipDuplicates: true
+        });
+      }
+
+      const recipients = await db.mailingRecipient.findMany({
+        where: { mailingId: mailing.id, status: 'PENDING' },
+        select: { id: true, userId: true, email: true, phone: true }
+      });
+      const metadata = {
+        imageUrl: data.imageUrl,
+        buttons: data.buttons,
+        parseMode: data.parseMode ?? 'HTML'
+      };
+
+      for (let index = 0; index < recipients.length; index += chunkSize) {
+        const chunk = recipients.slice(index, index + chunkSize);
+        await mailingQueue.addBulk(
+          chunk.map((recipient) => ({
+            name: 'send-message',
+            data: {
+              mailingId: mailing.id,
+              recipientId: recipient.id,
+              type: 'TELEGRAM',
+              recipient: {
+                userId: recipient.userId ?? undefined,
+                email: recipient.email ?? undefined,
+                phone: recipient.phone ?? undefined
+              },
+              subject: data.title,
+              body: data.message,
+              metadata
+            } satisfies MailingJobData,
+            opts: {
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 2000 },
+              removeOnComplete: 1000,
+              removeOnFail: 5000
+            }
+          }))
+        );
+      }
+
+      logger.info('Telegram broadcast queued', {
+        mailingId: mailing.id,
+        projectId: data.projectId,
+        total,
+        eligible: eligibleUsers.length,
+        skipped: total - eligibleUsers.length,
+        component: 'mailing-service'
+      });
+
+      return {
+        mailingId: mailing.id,
+        total,
+        eligible: eligibleUsers.length,
+        skipped: total - eligibleUsers.length
+      };
+    } catch (error) {
+      await db.mailing.update({
+        where: { id: mailing.id },
+        data: { status: 'FAILED', completedAt: new Date() }
       });
       throw error;
     }
@@ -296,6 +460,7 @@ export class MailingService {
       });
 
       // Добавляем задачи в очередь
+      if (mailingQueue) getMailingWorker();
       const subject = mailing.template?.subject || '';
       const body =
         mailing.template?.body ||
@@ -354,12 +519,15 @@ export class MailingService {
               }
             );
           } else {
-            logger.warn('Mailing queue not available, marking recipient as failed', {
-              mailingId: mailing.id,
-              recipientId: recipient.id,
-              component: 'mailing-service'
-            });
-            
+            logger.warn(
+              'Mailing queue not available, marking recipient as failed',
+              {
+                mailingId: mailing.id,
+                recipientId: recipient.id,
+                component: 'mailing-service'
+              }
+            );
+
             // Помечаем получателя как неудачного
             await db.mailingRecipient.update({
               where: { id: recipient.id },

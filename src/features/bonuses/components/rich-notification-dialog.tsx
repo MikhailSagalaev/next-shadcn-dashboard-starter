@@ -122,7 +122,9 @@ export function RichNotificationDialog({
   const [sendResults, setSendResults] = useState<{
     sent: number;
     failed: number;
+    skipped: number;
     blocked: number;
+    queued?: boolean;
   } | null>(null);
   const [templates, setTemplates] = useState<
     Array<{
@@ -348,25 +350,34 @@ export function RichNotificationDialog({
         const total = Number(data.total || selectedUserIds.length || 1);
         const sent = Number(data.sent || 0);
         const failed = Number(data.failed || 0);
+        const skipped = Number(data.skipped || 0);
+        const queued = Boolean(data.queued);
+        const errors: Array<{ error?: string }> = Array.isArray(data.results)
+          ? data.results
+          : [];
+        const blocked = errors.filter(
+          (item) =>
+            item.error?.includes('blocked by the user') ||
+            item.error?.includes('403: Forbidden')
+        ).length;
 
-        // Подсчитываем заблокированных пользователей
-        const blocked =
-          result.results?.filter(
-            (r: any) =>
-              r.error?.includes('blocked by the user') ||
-              r.error?.includes('403: Forbidden')
-          ).length || 0;
-
-        setSendResults({ sent, failed, blocked });
-        const pct = Math.min(100, Math.round(((sent + failed) / total) * 100));
+        setSendResults({ sent, failed, skipped, blocked, queued });
+        const pct = queued
+          ? 100
+          : Math.min(
+              100,
+              Math.round(((sent + failed + skipped) / total) * 100)
+            );
         setProgress(pct);
 
-        const message =
-          `✅ Уведомления отправлены!\n\n` +
-          `📤 Отправлено: ${sent}\n` +
-          `❌ Ошибок: ${failed}\n` +
-          (blocked > 0 ? `🚫 Заблокировано ботов: ${blocked}\n` : '') +
-          `📊 Всего: ${total}`;
+        const message = queued
+          ? `✅ Рассылка поставлена в очередь!\n\n📨 Получателей с Telegram: ${Number(data.eligible || 0)}\n⏭️ Без Telegram/неактивны: ${skipped}\n📊 Всего в проекте: ${total}`
+          : `✅ Уведомления обработаны!\n\n` +
+            `📤 Отправлено: ${sent}\n` +
+            `❌ Ошибок доставки: ${failed}\n` +
+            `⏭️ Без Telegram/неактивны: ${skipped}\n` +
+            (blocked > 0 ? `🚫 Заблокировано ботов: ${blocked}\n` : '') +
+            `📊 Выбрано: ${total}`;
 
         toast.success(message);
 
@@ -464,9 +475,23 @@ export function RichNotificationDialog({
         {sendResults && (
           <Alert className='mb-4'>
             <AlertCircle className='h-4 w-4' />
-            <AlertTitle>Результаты отправки</AlertTitle>
+            <AlertTitle>
+              {sendResults.queued
+                ? 'Рассылка поставлена в очередь'
+                : 'Результаты отправки'}
+            </AlertTitle>
             <AlertDescription>
-              Отправлено: {sendResults.sent} | Ошибок: {sendResults.failed}
+              {sendResults.queued ? (
+                <>
+                  Фоновая отправка запущена | Без Telegram/неактивны:{' '}
+                  {sendResults.skipped}
+                </>
+              ) : (
+                <>
+                  Отправлено: {sendResults.sent} | Ошибок: {sendResults.failed}{' '}
+                  | Пропущено без Telegram: {sendResults.skipped}
+                </>
+              )}
               {sendResults.blocked > 0 && (
                 <> | Заблокировано ботов: {sendResults.blocked}</>
               )}

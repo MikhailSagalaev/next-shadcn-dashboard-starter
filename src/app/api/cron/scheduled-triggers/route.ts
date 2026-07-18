@@ -27,7 +27,20 @@ export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    logger.error(
+      'Scheduled-triggers cron is unavailable: CRON_SECRET is missing',
+      {
+        source: 'scheduled-triggers-cron'
+      }
+    );
+    return NextResponse.json(
+      { error: 'Scheduled trigger service is not configured' },
+      { status: 503 }
+    );
+  }
+
+  if (authHeader !== `Bearer ${cronSecret}`) {
     logger.warn('Unauthorized scheduled-triggers cron access attempt', {
       source: 'scheduled-triggers-cron'
     });

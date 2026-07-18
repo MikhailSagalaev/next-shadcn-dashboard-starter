@@ -29,6 +29,7 @@ graph TB
 - [🔧 Tilda Webhook Setup](./tilda-webhook-setup.md) - настройка webhook в Tilda (решение "Invalid JSON")
 - [🔧 Troubleshooting](./TROUBLESHOOTING.md) - решение частых проблем
 - [🤖 Telegram Bots](./telegram-bots.md) - настройка и работа с ботами
+- [📨 Аудит Telegram-рассылок](./telegram-mailing-delivery-audit.md) - доставка, очереди, ошибки, логи и соответствие Bot API 10.2
 - [📧 Resend Setup](./RESEND_SETUP.md) - настройка email через Resend
 - [🚀 VPS Deployment Guide](./VPS_DEPLOYMENT_GUIDE.md) - инструкция по деплою на сервер
 

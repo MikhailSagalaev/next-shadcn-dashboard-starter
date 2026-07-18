@@ -1,8 +1,6 @@
 /**
  * @file: src/lib/services/workflow/scheduled/scheduled-trigger-runner.ts
- * @description: Запускает workflow с trigger.schedule для конкретного пользователя.
- *               Используется cron-эндпоинтом `/api/cron/scheduled-triggers`.
- *               Делает дедупликацию через Redis (CacheService) — гарантия "не запустить дважды".
+ * @description: Claims and enqueues scheduled workflow runs, then executes queued runs.
  * @project: SaaS Bonus System
  * @created: 2026-05-27
  * @author: AI Assistant + User
@@ -10,7 +8,10 @@
 
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { CacheService } from '@/lib/redis';
+import {
+  addScheduledWorkflowExecutionJob,
+  type ScheduledWorkflowExecutionJobData
+} from '@/lib/queues/workflow.queue';
 import { ExecutionContextManager } from '../execution-context-manager';
 import { SimpleWorkflowProcessor } from '../../simple-workflow-processor';
 import { initializeNodeHandlers } from '../handlers';
@@ -21,24 +22,12 @@ import type {
   ScheduleTriggerConfig,
   WorkflowVersion,
   WorkflowNode,
-  WorkflowConnection
+  WorkflowConnection,
+  WorkflowConnectionType
 } from '@/types/workflow';
 
 const DEFAULT_TIMEZONE = 'UTC';
 
-/** TTL дедупликации в секундах. */
-const DEDUPE_TTL_SECONDS: Record<
-  NonNullable<ScheduleTriggerConfig['dedupeWindow']>,
-  number
-> = {
-  day: 26 * 60 * 60, // 26 часов — небольшой запас, чтобы пропустить ровно одно срабатывание
-  week: 7 * 24 * 60 * 60 + 3600,
-  month: 31 * 24 * 60 * 60,
-  year: 366 * 24 * 60 * 60,
-  none: 0
-};
-
-/** Дефолтное окно дедупликации для каждой аудитории. */
 function defaultDedupeWindow(
   audienceType: string
 ): NonNullable<ScheduleTriggerConfig['dedupeWindow']> {
@@ -46,15 +35,11 @@ function defaultDedupeWindow(
 }
 
 interface ScheduledRunStats {
-  /** Сколько активных workflow с trigger.schedule в системе. */
   workflowsScanned: number;
-  /** Сколько workflow подходят под cron-расписание прямо сейчас. */
   workflowsMatched: number;
-  /** Сколько уникальных запусков (один на пару workflow+user). */
+  /** Preserved public field; now counts successfully enqueued per-user runs. */
   executionsStarted: number;
-  /** Сколько пропусков из-за дедупликации. */
   dedupeSkipped: number;
-  /** Сколько failed запусков. */
   executionsFailed: number;
 }
 
@@ -69,16 +54,78 @@ interface ScheduledWorkflowEntry {
   connections: WorkflowConnection[];
 }
 
+interface ClaimedScheduledRun {
+  id: string;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'P2002'
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isConnectionType(value: unknown): value is WorkflowConnectionType {
+  return (
+    value === 'default' ||
+    value === 'true' ||
+    value === 'false' ||
+    value === 'timeout'
+  );
+}
+
+function normalizeConnections(value: unknown): WorkflowConnection[] {
+  let candidate = value;
+  if (typeof candidate === 'string') {
+    try {
+      candidate = JSON.parse(candidate) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(candidate)) return [];
+
+  const connections: WorkflowConnection[] = [];
+  candidate.forEach((item, index) => {
+    if (
+      !isRecord(item) ||
+      typeof item.source !== 'string' ||
+      typeof item.target !== 'string'
+    ) {
+      return;
+    }
+
+    connections.push({
+      id:
+        typeof item.id === 'string'
+          ? item.id
+          : `${item.source}-${item.target}-${index}`,
+      source: item.source,
+      target: item.target,
+      type: isConnectionType(item.type) ? item.type : 'default',
+      ...(typeof item.sourceHandle === 'string'
+        ? { sourceHandle: item.sourceHandle }
+        : {}),
+      ...(typeof item.targetHandle === 'string'
+        ? { targetHandle: item.targetHandle }
+        : {}),
+      ...(typeof item.animated === 'boolean' ? { animated: item.animated } : {})
+    });
+  });
+
+  return connections;
+}
+
 export class ScheduledTriggerRunner {
-  /**
-   * Главный метод: пройти по всем активным workflow с trigger.schedule и запустить
-   * те, чьё cron-выражение совпадает с `now`.
-   */
   static async runDueWorkflows(
     now: Date = new Date()
   ): Promise<ScheduledRunStats> {
-    initializeNodeHandlers();
-
     const stats: ScheduledRunStats = {
       workflowsScanned: 0,
       workflowsMatched: 0,
@@ -92,14 +139,12 @@ export class ScheduledTriggerRunner {
 
     for (const entry of candidates) {
       try {
-        const matches = this.cronMatchesNow(entry.triggerConfig, now);
-        if (!matches) continue;
+        if (!this.cronMatchesNow(entry.triggerConfig, now)) continue;
         stats.workflowsMatched++;
-
-        await this.runForWorkflow(entry, now, stats);
+        await this.enqueueForWorkflow(entry, now, stats);
       } catch (error) {
         stats.executionsFailed++;
-        logger.error('Scheduled trigger workflow failed', {
+        logger.error('Scheduled trigger workflow enqueue failed', {
           workflowId: entry.workflowId,
           projectId: entry.projectId,
           error: error instanceof Error ? error.message : String(error)
@@ -110,10 +155,62 @@ export class ScheduledTriggerRunner {
     return stats;
   }
 
-  /**
-   * Загружает все активные WorkflowVersion и фильтрует только те, у которых entry-нода
-   * имеет тип `trigger.schedule`.
-   */
+  /** Worker entry point: reconstructs the claimed version and executes one user run. */
+  static async executeQueuedExecution(
+    jobData: ScheduledWorkflowExecutionJobData
+  ): Promise<void> {
+    initializeNodeHandlers();
+
+    const version = await db.workflowVersion.findUnique({
+      where: { id: jobData.workflowVersionId },
+      include: {
+        workflow: {
+          select: {
+            id: true,
+            projectId: true,
+            connections: true
+          }
+        }
+      }
+    });
+
+    if (
+      !version ||
+      version.workflowId !== jobData.workflowId ||
+      version.workflow.id !== jobData.workflowId ||
+      version.workflow.projectId !== jobData.projectId
+    ) {
+      throw new Error(
+        `Scheduled workflow version ${jobData.workflowVersionId} is unavailable or does not match its claim`
+      );
+    }
+
+    const context = await ExecutionContextManager.createScheduledContext({
+      projectId: jobData.projectId,
+      workflowId: jobData.workflowId,
+      version: version.version,
+      userId: jobData.userId,
+      triggerNodeId: version.entryNodeId
+    });
+
+    const workflowVersion: WorkflowVersion = {
+      id: version.id,
+      workflowId: version.workflowId,
+      version: version.version,
+      nodes: normalizeNodes(version.nodes),
+      entryNodeId: version.entryNodeId,
+      connections: normalizeConnections(version.workflow.connections),
+      isActive: version.isActive,
+      createdAt: version.createdAt
+    };
+
+    const processor = new SimpleWorkflowProcessor(
+      workflowVersion,
+      jobData.projectId
+    );
+    await processor.resumeWorkflow(context, version.entryNodeId);
+  }
+
   private static async findScheduledWorkflows(): Promise<
     ScheduledWorkflowEntry[]
   > {
@@ -134,47 +231,45 @@ export class ScheduledTriggerRunner {
     });
 
     const entries: ScheduledWorkflowEntry[] = [];
-    for (const v of versions) {
-      const nodes = normalizeNodes(v.nodes);
-      const entryNode = nodes[v.entryNodeId];
+    for (const version of versions) {
+      const nodes = normalizeNodes(version.nodes);
+      const entryNode = nodes[version.entryNodeId];
       if (!entryNode || entryNode.type !== 'trigger.schedule') continue;
 
       const config = entryNode.data?.config?.['trigger.schedule'];
       if (!config) {
         logger.warn('Workflow has trigger.schedule entry node without config', {
-          workflowId: v.workflowId,
-          versionId: v.id
+          workflowId: version.workflowId,
+          versionId: version.id
         });
         continue;
       }
 
       entries.push({
-        workflowId: v.workflowId,
-        projectId: v.workflow.projectId,
-        versionId: v.id,
-        versionNumber: v.version,
-        triggerNodeId: v.entryNodeId,
+        workflowId: version.workflowId,
+        projectId: version.workflow.projectId,
+        versionId: version.id,
+        versionNumber: version.version,
+        triggerNodeId: version.entryNodeId,
         triggerConfig: config,
         nodes,
-        connections: (v.workflow.connections as any) || []
+        connections: normalizeConnections(version.workflow.connections)
       });
     }
 
     return entries;
   }
 
-  /**
-   * Проверяет cron + tz конфига против `now`.
-   * Возвращает false при ошибке парсинга (с логом).
-   */
   private static cronMatchesNow(
     config: ScheduleTriggerConfig,
     now: Date
   ): boolean {
     try {
-      const parsed = parseCron(config.cron);
-      const tz = config.timezone || DEFAULT_TIMEZONE;
-      return cronMatches(parsed, now, tz);
+      return cronMatches(
+        parseCron(config.cron),
+        now,
+        config.timezone || DEFAULT_TIMEZONE
+      );
     } catch (error) {
       logger.error('Invalid cron expression in scheduled trigger', {
         cron: config.cron,
@@ -184,135 +279,164 @@ export class ScheduledTriggerRunner {
     }
   }
 
-  /**
-   * Запускает workflow для всех пользователей под фильтр аудитории.
-   */
-  private static async runForWorkflow(
+  private static async enqueueForWorkflow(
     entry: ScheduledWorkflowEntry,
     now: Date,
     stats: ScheduledRunStats
   ): Promise<void> {
-    const audience = await AudienceResolver.resolve(
+    const dedupeWindow =
+      entry.triggerConfig.dedupeWindow ??
+      defaultDedupeWindow(entry.triggerConfig.audience.type);
+    const bucket = this.bucketLabel(dedupeWindow, now);
+    let audienceSize = 0;
+
+    for await (const page of AudienceResolver.resolvePages(
       entry.projectId,
       entry.triggerConfig.audience
-    );
+    )) {
+      audienceSize += page.userIds.length;
 
-    if (audience.userIds.length === 0) {
+      for (const userId of page.userIds) {
+        try {
+          const claim = await this.claimRun(entry, userId, bucket, now);
+          if (!claim) {
+            stats.dedupeSkipped++;
+            continue;
+          }
+
+          try {
+            await addScheduledWorkflowExecutionJob({
+              type: 'scheduled_workflow_execution',
+              ledgerRunId: claim.id,
+              projectId: entry.projectId,
+              workflowId: entry.workflowId,
+              workflowVersionId: entry.versionId,
+              userId,
+              timestamp: Date.now()
+            });
+            stats.executionsStarted++;
+          } catch (error) {
+            await this.markEnqueueFailed(claim.id, error);
+            throw error;
+          }
+        } catch (error) {
+          stats.executionsFailed++;
+          logger.error('Scheduled trigger user enqueue failed', {
+            workflowId: entry.workflowId,
+            versionId: entry.versionId,
+            userId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    }
+
+    if (audienceSize === 0) {
       logger.info('Scheduled trigger has empty audience', {
         workflowId: entry.workflowId,
-        audienceType: audience.type
+        audienceType: entry.triggerConfig.audience.type
       });
       return;
     }
 
-    logger.info('Scheduled trigger running', {
+    logger.info('Scheduled trigger audience enqueued', {
       workflowId: entry.workflowId,
       projectId: entry.projectId,
-      audienceType: audience.type,
-      audienceSize: audience.total,
+      audienceType: entry.triggerConfig.audience.type,
+      audienceSize,
       cron: entry.triggerConfig.cron
     });
+  }
 
-    const dedupeWindow =
-      entry.triggerConfig.dedupeWindow ?? defaultDedupeWindow(audience.type);
+  /**
+   * The unique database constraint is the atomic dedupe boundary. A FAILED row
+   * with zero worker attempts represents enqueue failure and may be reclaimed.
+   */
+  private static async claimRun(
+    entry: ScheduledWorkflowEntry,
+    userId: string,
+    bucket: string,
+    now: Date
+  ): Promise<ClaimedScheduledRun | null> {
+    const identity = {
+      workflowId: entry.workflowId,
+      workflowVersionId: entry.versionId,
+      userId,
+      bucket
+    };
 
-    for (const userId of audience.userIds) {
-      try {
-        const skip = await this.shouldSkipDueDedupe(
-          entry,
-          userId,
-          dedupeWindow,
-          now
-        );
-        if (skip) {
-          stats.dedupeSkipped++;
-          continue;
-        }
+    try {
+      return await db.scheduledWorkflowRun.create({
+        data: {
+          ...identity,
+          projectId: entry.projectId,
+          status: 'QUEUED',
+          queuedAt: now
+        },
+        select: { id: true }
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
 
-        await this.executeForUser(entry, userId);
-        stats.executionsStarted++;
+      const existing = await db.scheduledWorkflowRun.findFirst({
+        where: identity,
+        select: { id: true, status: true, attempts: true }
+      });
+      if (!existing) throw error;
 
-        await this.markRun(entry, userId, dedupeWindow, now);
-      } catch (error) {
-        stats.executionsFailed++;
-        logger.error('Scheduled trigger user execution failed', {
-          workflowId: entry.workflowId,
-          userId,
-          error: error instanceof Error ? error.message : String(error)
+      if (existing.status === 'FAILED' && existing.attempts === 0) {
+        const reclaimed = await db.scheduledWorkflowRun.updateMany({
+          where: {
+            id: existing.id,
+            status: 'FAILED',
+            attempts: 0
+          },
+          data: {
+            status: 'QUEUED',
+            queuedAt: now,
+            lastError: null
+          }
         });
+        if (reclaimed.count === 1) return { id: existing.id };
       }
+
+      return null;
     }
   }
 
-  /**
-   * Запуск workflow для одного пользователя.
-   * Создаёт scheduled-context, прогоняет начиная с триггер-ноды через resumeWorkflow.
-   */
-  private static async executeForUser(
-    entry: ScheduledWorkflowEntry,
-    userId: string
+  private static async markEnqueueFailed(
+    runId: string,
+    error: unknown
   ): Promise<void> {
-    const context = await ExecutionContextManager.createScheduledContext({
-      projectId: entry.projectId,
-      workflowId: entry.workflowId,
-      version: entry.versionNumber,
-      userId,
-      triggerNodeId: entry.triggerNodeId
+    const message = error instanceof Error ? error.message : String(error);
+    await db.scheduledWorkflowRun.updateMany({
+      where: { id: runId, status: 'QUEUED', attempts: 0 },
+      data: {
+        status: 'FAILED',
+        lastError: message.slice(0, 2000)
+      }
     });
-
-    const workflowVersion: WorkflowVersion = {
-      id: entry.versionId,
-      workflowId: entry.workflowId,
-      version: entry.versionNumber,
-      nodes: entry.nodes,
-      entryNodeId: entry.triggerNodeId,
-      connections: entry.connections,
-      isActive: true,
-      createdAt: new Date()
-    };
-
-    const processor = new SimpleWorkflowProcessor(
-      workflowVersion,
-      entry.projectId
-    );
-    await processor.resumeWorkflow(context, entry.triggerNodeId);
   }
 
-  /**
-   * Ключ дедупликации для пары workflow+user.
-   * Включает версию workflow — если опубликована новая версия, дедуп начинается с нуля.
-   */
-  private static dedupeKey(
-    entry: ScheduledWorkflowEntry,
-    userId: string,
-    bucket: string
-  ): string {
-    return `scheduled:${entry.workflowId}:v${entry.versionNumber}:${userId}:${bucket}`;
-  }
-
-  /**
-   * Bucket — текстовая метка временного окна, в рамках которого запуск считается одним и тем же.
-   * Для year — `2026`, для day — `2026-05-27` и т.д.
-   */
   private static bucketLabel(
     window: NonNullable<ScheduleTriggerConfig['dedupeWindow']>,
     now: Date
   ): string {
-    const y = now.getUTCFullYear();
-    const m = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(now.getUTCDate()).padStart(2, '0');
+    const year = now.getUTCFullYear();
+    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(now.getUTCDate()).padStart(2, '0');
+
     switch (window) {
       case 'year':
-        return `${y}`;
+        return `${year}`;
       case 'month':
-        return `${y}-${m}`;
+        return `${year}-${month}`;
       case 'week': {
-        // ISO week через простой подсчёт: четверг текущей недели → год + неделя
         const target = new Date(
-          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+          Date.UTC(year, now.getUTCMonth(), now.getUTCDate())
         );
-        const dayNum = (target.getUTCDay() + 6) % 7;
-        target.setUTCDate(target.getUTCDate() - dayNum + 3);
+        const dayNumber = (target.getUTCDay() + 6) % 7;
+        target.setUTCDate(target.getUTCDate() - dayNumber + 3);
         const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
         const week =
           1 +
@@ -324,35 +448,17 @@ export class ScheduledTriggerRunner {
           );
         return `${target.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
       }
+      case 'none': {
+        const hour = String(now.getUTCHours()).padStart(2, '0');
+        const minute = String(now.getUTCMinutes()).padStart(2, '0');
+        return `none-${year}-${month}-${day}T${hour}-${minute}Z`;
+      }
       case 'day':
-      default:
-        return `${y}-${m}-${d}`;
+        return `${year}-${month}-${day}`;
+      default: {
+        const exhaustive: never = window;
+        return exhaustive;
+      }
     }
-  }
-
-  private static async shouldSkipDueDedupe(
-    entry: ScheduledWorkflowEntry,
-    userId: string,
-    window: NonNullable<ScheduleTriggerConfig['dedupeWindow']>,
-    now: Date
-  ): Promise<boolean> {
-    if (window === 'none') return false;
-    const bucket = this.bucketLabel(window, now);
-    const key = this.dedupeKey(entry, userId, bucket);
-    const existing = await CacheService.get<{ at: string }>(key);
-    return existing !== null;
-  }
-
-  private static async markRun(
-    entry: ScheduledWorkflowEntry,
-    userId: string,
-    window: NonNullable<ScheduleTriggerConfig['dedupeWindow']>,
-    now: Date
-  ): Promise<void> {
-    if (window === 'none') return;
-    const bucket = this.bucketLabel(window, now);
-    const key = this.dedupeKey(entry, userId, bucket);
-    const ttl = DEDUPE_TTL_SECONDS[window];
-    await CacheService.set(key, { at: now.toISOString() }, ttl);
   }
 }

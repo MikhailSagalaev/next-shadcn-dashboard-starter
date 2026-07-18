@@ -8,6 +8,7 @@
  * @author: AI Assistant + User
  */
 
+import { autoRetry } from '@grammyjs/auto-retry';
 import { Bot, Context, SessionFlavor } from 'grammy';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { logger } from '@/lib/logger';
@@ -15,18 +16,28 @@ import {
   BotSessionService,
   BotConstructorSession
 } from '@/lib/services/bot-session.service';
-import { SimpleWorkflowProcessor } from '@/lib/services/simple-workflow-processor';
 import { WorkflowRuntimeService } from '@/lib/services/workflow-runtime.service';
 import { PartnerCabinetService } from '@/lib/services/partner-cabinet.service';
 import { isTelegramCallbackIntercepted } from '@/lib/telegram/partner-cabinet-intercepted-callbacks';
 
 // Интерфейс для сессии (расширен для конструктора)
-type MyContext = Context & SessionFlavor<BotConstructorSession>;
+export type TelegramBotContext = Context & SessionFlavor<BotConstructorSession>;
+
+export interface TelegramBotConfiguration {
+  botToken: string;
+  botUsername?: string | null;
+  isActive: boolean;
+  [key: string]: unknown;
+}
 
 /**
  * Создание экземпляра бота с поддержкой Workflow
  */
-export function createBot(token: string, projectId: string, botSettings?: any) {
+export function createBot(
+  token: string,
+  projectId: string,
+  botSettings?: TelegramBotConfiguration
+): Bot<TelegramBotContext> {
   logger.info(`🤖 СОЗДАНИЕ ЭКЗЕМПЛЯРА БОТА`, {
     projectId,
     token: '***' + token.slice(-4),
@@ -41,7 +52,7 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
 
   const proxyUrl = process.env.TELEGRAM_PROXY_URL;
   const apiRoot = process.env.TELEGRAM_API_ROOT;
-  let bot: Bot<MyContext>;
+  let bot: Bot<TelegramBotContext>;
 
   if (proxyUrl) {
     logger.info('Creating bot with proxy agent', {
@@ -49,7 +60,7 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       proxy: proxyUrl.replace(/:[^:]+@/, ':***@')
     });
     const agent = new HttpsProxyAgent(proxyUrl);
-    bot = new Bot<MyContext>(token, {
+    bot = new Bot<TelegramBotContext>(token, {
       client: {
         apiRoot, // use custom apiRoot if provided
         baseFetchConfig: {
@@ -62,14 +73,22 @@ export function createBot(token: string, projectId: string, botSettings?: any) {
       projectId,
       apiRoot
     });
-    bot = new Bot<MyContext>(token, {
+    bot = new Bot<TelegramBotContext>(token, {
       client: {
         apiRoot
       }
     });
   } else {
-    bot = new Bot<MyContext>(token);
+    bot = new Bot<TelegramBotContext>(token);
   }
+
+  // Must stay finite: plugin defaults are unbounded for both wait and attempts.
+  bot.api.config.use(
+    autoRetry({
+      maxRetryAttempts: 3,
+      maxDelaySeconds: 5
+    })
+  );
 
   // Настраиваем базовые middleware
   bot.use(BotSessionService.createSessionMiddleware(projectId));

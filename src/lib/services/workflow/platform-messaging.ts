@@ -18,6 +18,15 @@
 
 import type { ExecutionContext } from '@/types/workflow';
 import { logger } from '@/lib/logger';
+import {
+  deliverTelegram,
+  TelegramDeliveryError,
+  type TelegramDeliveryRequest,
+  type TelegramEditReplyMarkup,
+  type TelegramMediaReplyMarkup,
+  type TelegramParseMode,
+  type TelegramTextReplyMarkup
+} from '@/lib/telegram/delivery-adapter';
 
 // ========== ПУБЛИЧНЫЕ ХЕЛПЕРЫ ==========
 
@@ -30,7 +39,7 @@ export async function sendPlatformMessage(
   text: string,
   options: {
     parseMode?: 'HTML' | 'Markdown' | 'MarkdownV2';
-    replyMarkup?: any;
+    replyMarkup?: unknown;
   } = {}
 ): Promise<void> {
   const platform = context.platform || 'telegram';
@@ -52,7 +61,7 @@ export async function sendPlatformMedia(
   options: {
     caption?: string;
     parseMode?: string;
-    replyMarkup?: any;
+    replyMarkup?: unknown;
     hasSpoiler?: boolean;
   } = {}
 ): Promise<void> {
@@ -75,7 +84,7 @@ export async function sendPlatformAction(
     messageId: string | number;
     text?: string;
     parseMode?: string;
-    replyMarkup?: any;
+    replyMarkup?: unknown;
   }
 ): Promise<void> {
   const platform = context.platform || 'telegram';
@@ -89,78 +98,122 @@ export async function sendPlatformAction(
 
 // ========== TELEGRAM ==========
 
+function telegramTarget(context: ExecutionContext) {
+  return context.userId
+    ? {
+        projectId: context.projectId,
+        userId: context.userId,
+        chatId: context.telegram.chatId
+      }
+    : { projectId: context.projectId, chatId: context.telegram.chatId };
+}
+
+function normalizeTelegramParseMode(parseMode?: string): TelegramParseMode {
+  if (
+    parseMode === 'Markdown' ||
+    parseMode === 'MarkdownV2' ||
+    parseMode === 'HTML'
+  ) {
+    return parseMode;
+  }
+  return 'HTML';
+}
+
+function normalizeReplyMarkup<T>(replyMarkup: unknown): T | undefined {
+  return typeof replyMarkup === 'object' && replyMarkup !== null
+    ? (replyMarkup as T)
+    : undefined;
+}
+
+async function requireTelegramDelivery(
+  request: TelegramDeliveryRequest
+): Promise<void> {
+  const result = await deliverTelegram(request);
+  if (result.success === false) {
+    throw new TelegramDeliveryError(result);
+  }
+}
+
 async function sendTelegramMessage(
   context: ExecutionContext,
   text: string,
   options: {
     parseMode?: string;
-    replyMarkup?: any;
+    replyMarkup?: unknown;
   }
 ): Promise<void> {
-  const apiRoot = process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org';
-  const telegramApiUrl = `${apiRoot}/bot${context.telegram.botToken}/sendMessage`;
-
-  const payload: any = {
-    chat_id: context.telegram.chatId,
+  await requireTelegramDelivery({
+    ...telegramTarget(context),
+    kind: 'text',
     text,
-    parse_mode: options.parseMode || 'HTML'
-  };
-
-  if (options.replyMarkup) {
-    payload.reply_markup = options.replyMarkup;
-  }
-
-  await context.services.http.post(telegramApiUrl, payload);
+    parseMode: normalizeTelegramParseMode(options.parseMode),
+    replyMarkup: normalizeReplyMarkup<TelegramTextReplyMarkup>(
+      options.replyMarkup
+    )
+  });
 }
 
 async function sendTelegramMedia(
   context: ExecutionContext,
-  type: string,
+  type: 'photo' | 'video' | 'document',
   file: string,
-  options: any
+  options: {
+    caption?: string;
+    parseMode?: string;
+    replyMarkup?: unknown;
+    hasSpoiler?: boolean;
+  }
 ): Promise<void> {
-  const method =
-    type === 'photo'
-      ? 'sendPhoto'
-      : type === 'video'
-        ? 'sendVideo'
-        : 'sendDocument';
-  const apiRoot = process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org';
-  const telegramApiUrl = `${apiRoot}/bot${context.telegram.botToken}/${method}`;
-
-  const payload: any = {
-    chat_id: context.telegram.chatId,
-    [type]: file,
+  await requireTelegramDelivery({
+    ...telegramTarget(context),
+    kind: type,
+    media: file,
     caption: options.caption,
-    parse_mode: options.parseMode || 'HTML',
-    has_spoiler: options.hasSpoiler,
-    reply_markup: options.replyMarkup
-  };
-
-  await context.services.http.post(telegramApiUrl, payload);
+    parseMode: normalizeTelegramParseMode(options.parseMode),
+    replyMarkup: normalizeReplyMarkup<TelegramMediaReplyMarkup>(
+      options.replyMarkup
+    ),
+    hasSpoiler: options.hasSpoiler
+  });
 }
 
 async function sendTelegramAction(
   context: ExecutionContext,
-  action: string,
-  options: any
+  action: 'delete' | 'edit_text',
+  options: {
+    messageId: string | number;
+    text?: string;
+    parseMode?: string;
+    replyMarkup?: unknown;
+  }
 ): Promise<void> {
-  const method = action === 'delete' ? 'deleteMessage' : 'editMessageText';
-  const apiRoot = process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org';
-  const telegramApiUrl = `${apiRoot}/bot${context.telegram.botToken}/${method}`;
-
-  const payload: any = {
-    chat_id: context.telegram.chatId,
-    message_id: options.messageId
-  };
-
-  if (action === 'edit_text') {
-    payload.text = options.text;
-    payload.parse_mode = options.parseMode || 'HTML';
-    payload.reply_markup = options.replyMarkup;
+  const messageId = Number(options.messageId);
+  if (!Number.isSafeInteger(messageId)) {
+    throw new Error('Telegram messageId must be a safe integer');
   }
 
-  await context.services.http.post(telegramApiUrl, payload);
+  if (action === 'delete') {
+    await requireTelegramDelivery({
+      ...telegramTarget(context),
+      kind: 'delete',
+      messageId
+    });
+    return;
+  }
+
+  if (options.text === undefined) {
+    throw new Error('Telegram edit_text action requires text');
+  }
+  await requireTelegramDelivery({
+    ...telegramTarget(context),
+    kind: 'editText',
+    messageId,
+    text: options.text,
+    parseMode: normalizeTelegramParseMode(options.parseMode),
+    replyMarkup: normalizeReplyMarkup<TelegramEditReplyMarkup>(
+      options.replyMarkup
+    )
+  });
 }
 
 // ========== MAX ==========
@@ -180,6 +233,40 @@ function telegramParseModeToMaxFormat(
   return undefined;
 }
 
+interface MaxKeyboardFactory {
+  button: {
+    link: (text: string, url: string) => unknown;
+    callback: (text: string, payload: string) => unknown;
+    requestContact: (text: string) => unknown;
+    requestGeoLocation: (text: string) => unknown;
+  };
+  inlineKeyboard: (buttons: unknown[][]) => unknown;
+}
+
+interface MaxMessageExtra {
+  text?: string;
+  format?: 'html' | 'markdown';
+  attachments?: unknown[];
+}
+
+interface MaxContextLike {
+  reply: (text: string, extra: MaxMessageExtra) => Promise<unknown>;
+  deleteMessage: (messageId?: string) => Promise<unknown>;
+  editMessage: (extra: MaxMessageExtra) => Promise<unknown>;
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getMaxContext(context: ExecutionContext): MaxContextLike | undefined {
+  const candidate = (context as ExecutionContext & { _maxContext?: unknown })
+    ._maxContext;
+  return isObjectRecord(candidate)
+    ? (candidate as unknown as MaxContextLike)
+    : undefined;
+}
+
 /**
  * Конвертирует Telegram reply_markup (inline_keyboard / keyboard) в формат MAX.
  *
@@ -191,44 +278,55 @@ function telegramParseModeToMaxFormat(
  *   Keyboard.button.requestContact(text)
  *   Keyboard.button.requestGeoLocation(text, extra?)
  */
-export function convertTelegramKeyboardToMax(telegramReplyMarkup: any): any {
+export function convertTelegramKeyboardToMax(
+  telegramReplyMarkup: unknown
+): unknown {
   try {
-    const Keyboard = require('@maxhub/max-bot-api').Keyboard;
+    if (!isObjectRecord(telegramReplyMarkup)) return null;
+    const { Keyboard } = require('@maxhub/max-bot-api') as {
+      Keyboard: MaxKeyboardFactory;
+    };
 
-    if (telegramReplyMarkup?.inline_keyboard) {
-      // Telegram inline keyboard → MAX inline keyboard
-      const maxButtons = telegramReplyMarkup.inline_keyboard.map((row: any[]) =>
-        row.map((btn: any) => {
-          if (btn.url) {
-            return Keyboard.button.link(btn.text, btn.url);
-          }
-          if (btn.callback_data) {
-            // MAX callback требует payload (строка), используем callback_data
-            return Keyboard.button.callback(btn.text, btn.callback_data);
-          }
-          // Fallback: используем текст как payload
-          return Keyboard.button.callback(btn.text, btn.text);
-        })
+    if (Array.isArray(telegramReplyMarkup.inline_keyboard)) {
+      const maxButtons = telegramReplyMarkup.inline_keyboard.map((row) =>
+        Array.isArray(row)
+          ? row.map((button) => {
+              if (!isObjectRecord(button) || typeof button.text !== 'string') {
+                throw new Error('Invalid Telegram inline keyboard button');
+              }
+              if (typeof button.url === 'string') {
+                return Keyboard.button.link(button.text, button.url);
+              }
+              if (typeof button.callback_data === 'string') {
+                return Keyboard.button.callback(
+                  button.text,
+                  button.callback_data
+                );
+              }
+              return Keyboard.button.callback(button.text, button.text);
+            })
+          : []
       );
-
       return Keyboard.inlineKeyboard(maxButtons);
     }
 
-    // Telegram reply keyboard (request_contact и т.д.) → MAX inline keyboard
-    if (telegramReplyMarkup?.keyboard) {
-      const maxButtons = telegramReplyMarkup.keyboard.map((row: any[]) =>
-        row.map((btn: any) => {
-          if (btn.request_contact) {
-            return Keyboard.button.requestContact(btn.text);
-          }
-          if (btn.request_location) {
-            return Keyboard.button.requestGeoLocation(btn.text);
-          }
-          // Обычная текстовая кнопка → callback с текстом в payload
-          return Keyboard.button.callback(btn.text, btn.text);
-        })
+    if (Array.isArray(telegramReplyMarkup.keyboard)) {
+      const maxButtons = telegramReplyMarkup.keyboard.map((row) =>
+        Array.isArray(row)
+          ? row.map((button) => {
+              if (!isObjectRecord(button) || typeof button.text !== 'string') {
+                throw new Error('Invalid Telegram reply keyboard button');
+              }
+              if (button.request_contact) {
+                return Keyboard.button.requestContact(button.text);
+              }
+              if (button.request_location) {
+                return Keyboard.button.requestGeoLocation(button.text);
+              }
+              return Keyboard.button.callback(button.text, button.text);
+            })
+          : []
       );
-
       return Keyboard.inlineKeyboard(maxButtons);
     }
 
@@ -254,15 +352,15 @@ async function sendMaxMessage(
   text: string,
   options: {
     parseMode?: string;
-    replyMarkup?: any;
+    replyMarkup?: unknown;
   }
 ): Promise<void> {
   try {
-    const maxContext = (context as any)._maxContext;
+    const maxContext = getMaxContext(context);
 
     if (maxContext && typeof maxContext.reply === 'function') {
       // Формируем SendMessageExtra по документации MAX
-      const extra: any = {
+      const extra: MaxMessageExtra = {
         format: telegramParseModeToMaxFormat(options.parseMode)
       };
 
@@ -311,21 +409,29 @@ async function sendMaxMedia(
   context: ExecutionContext,
   type: string,
   file: string,
-  options: any
+  options: {
+    caption?: string;
+    parseMode?: string;
+    replyMarkup?: unknown;
+    hasSpoiler?: boolean;
+  }
 ): Promise<void> {
-  const maxContext = (context as any)._maxContext;
+  const maxContext = getMaxContext(context);
   const text = options.caption || '';
 
   // Маппинг типа: photo → image (MAX тип)
   const maxType =
     type === 'photo' ? 'image' : type === 'document' ? 'file' : type;
 
-  const extra: any = {
+  const extra: MaxMessageExtra = {
     format: telegramParseModeToMaxFormat(options.parseMode)
   };
 
   // Формируем вложение согласно AttachmentRequest
-  const mediaAttachment: any = {
+  const mediaAttachment: {
+    type: string;
+    payload: Record<string, unknown>;
+  } = {
     type: maxType,
     payload: {}
   };
@@ -370,9 +476,14 @@ async function sendMaxMedia(
 async function sendMaxAction(
   context: ExecutionContext,
   action: string,
-  options: any
+  options: {
+    messageId: string | number;
+    text?: string;
+    parseMode?: string;
+    replyMarkup?: unknown;
+  }
 ): Promise<void> {
-  const maxContext = (context as any)._maxContext;
+  const maxContext = getMaxContext(context);
 
   if (!maxContext) {
     logger.warn('[MAX] Нет доступа к MAX контексту для выполнения действия', {
@@ -390,7 +501,7 @@ async function sendMaxAction(
     // ctx.editMessage(EditMessageExtra)
     // EditMessageExtra = Omit<FlattenReq<EditMessageDTO>, 'message_id'>
     // EditMessageDTO.body = SendMessageDTO.body (text, attachments, format, ...)
-    const editExtra: any = {
+    const editExtra: MaxMessageExtra = {
       text: options.text,
       format: telegramParseModeToMaxFormat(options.parseMode)
     };

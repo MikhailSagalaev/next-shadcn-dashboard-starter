@@ -759,11 +759,16 @@ export class UserService {
     // Используем переданное where условие или создаем базовое
     const queryWhere = where || { projectId };
     const userInclude = {
-      project: true,
-      // Убираем загрузку бонусов/транзакций для предотвращения N+1
-      referrer: true,
-      referrals: true,
-      // Организация партнёра (b2b) — для колонки/фильтра «Организация».
+      // Для списка нужны только отображаемые поля реферера. Полные project и
+      // referrals раньше раздували каждый ответ, особенно на страницах 500–1000.
+      referrer: {
+        select: {
+          firstName: true,
+          lastName: true,
+          phone: true,
+          email: true
+        }
+      },
       organization: { select: { id: true, name: true, slug: true } }
     } as const;
 

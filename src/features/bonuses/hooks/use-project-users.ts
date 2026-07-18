@@ -479,7 +479,7 @@ export function useProjectUsers({
     users,
     isLoading,
     error,
-    totalUsers: totalCount,
+    totalUsers,
     activeUsers,
     totalBonuses,
     currentPage,
