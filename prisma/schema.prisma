@@ -93,6 +93,7 @@ model ReferralCommissionPlan {
   projectId      String   @map("project_id")
   name           String
   maxPayoutDepth Int      @default(3) @map("max_payout_depth")
+  isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -903,6 +904,16 @@ enum OrderStatus {
   REFUNDED
 }
 
+enum OrderAccountingState {
+  LEGACY
+  NOT_APPLIED
+  APPLYING
+  APPLIED
+  REVERSING
+  REVERSED
+  PARTIALLY_REVERSED
+}
+
 model SystemLog {
   id        String   @id @default(cuid())
   level     String // info, warn, error, debug
@@ -1103,10 +1114,17 @@ model Order {
   projectId       String           @map("project_id")
   userId          String?          @map("user_id")
   orderNumber     String           @unique @map("order_number")
-  status          OrderStatus      @default(PENDING)
-  totalAmount     Decimal          @map("total_amount") @db.Decimal(10, 2)
-  paidAmount      Decimal          @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  bonusAmount     Decimal          @default(0) @map("bonus_amount") @db.Decimal(10, 2)
+  status                      OrderStatus          @default(PENDING)
+  accountingState             OrderAccountingState @default(NOT_APPLIED) @map("accounting_state")
+  totalAmount                 Decimal              @map("total_amount") @db.Decimal(10, 2)
+  paidAmount                  Decimal              @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  bonusAmount                 Decimal              @default(0) @map("bonus_amount") @db.Decimal(10, 2)
+  accountedPurchaseAmount     Decimal              @default(0) @map("accounted_purchase_amount") @db.Decimal(10, 2)
+  accountedEarnBase           Decimal              @default(0) @map("accounted_earn_base") @db.Decimal(10, 2)
+  accountedSpentBonusAmount   Decimal              @default(0) @map("accounted_spent_bonus_amount") @db.Decimal(10, 2)
+  accountedAt                 DateTime?            @map("accounted_at")
+  reversedAt                  DateTime?            @map("reversed_at")
+  reversalShortfall           Decimal              @default(0) @map("reversal_shortfall") @db.Decimal(10, 2)
   deliveryAddress String?          @map("delivery_address") @db.Text
   paymentMethod   String?          @map("payment_method")
   deliveryMethod  String?          @map("delivery_method")

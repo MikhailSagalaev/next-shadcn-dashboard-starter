@@ -191,17 +191,17 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
           accent='zinc'
         />
         <SummaryCard
-          label='Тренеры'
+          label='Уровень 1'
           value={data.totals.trainers}
           accent='blue'
         />
         <SummaryCard
-          label='Менеджеры'
+          label='Уровень 2'
           value={data.totals.managers}
           accent='purple'
         />
         <SummaryCard
-          label='Руководители'
+          label='Уровень 3'
           value={data.totals.directors}
           accent='amber'
         />
@@ -216,7 +216,7 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
         <EmptyState
           icon={Users}
           title='Партнёров пока нет'
-          description='Назначьте пользователям роль (тренер / менеджер / руководитель) в разделе «Пользователи». Они начнут появляться в дереве сразу же.'
+          description='Назначьте пользователям роль «Уровень 1», «Уровень 2» или «Уровень 3» в разделе «Пользователи». Они начнут появляться в дереве сразу же.'
           action={
             <Link
               href={`/dashboard/projects/${projectId}/users`}

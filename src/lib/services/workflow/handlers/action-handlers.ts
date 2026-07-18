@@ -1661,12 +1661,11 @@ ${userVariables['user.progressBar']} (${userVariables['user.progressPercent']}%)
           break;
 
         case 'menu_referrals':
-          // b2b-режим: рефералку могут выдавать только партнёры (см. тот же
-          // гейт в PartnerLinkHandler) — этот легаси-пункт меню его раньше
-          // не проверял и показывал рабочую ссылку любому CLIENT.
+          // B2B-режим: ссылка доступна партнёрам уровней 1–3 (см. тот же
+          // гейт в PartnerLinkHandler); CLIENT получает понятное ограничение.
           if (userVariables['user.canRefer'] === false) {
             messageText =
-              '🔒 Реферальная ссылка доступна только партнёрам (тренерам / менеджерам / руководителям). Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
+              '🔒 Реферальная ссылка доступна только партнёрам уровней 1–3. Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
             break;
           }
           messageText = `<b>👥 Реферальная программа</b>
@@ -1675,7 +1674,7 @@ ${userVariables['user.progressBar']} (${userVariables['user.progressPercent']}%)
 👤 <b>Приглашено пользователей:</b> ${userVariables['user.referralCount']}
 💰 <b>Бонусов от рефералов:</b> ${userVariables['user.referralBonusTotalFormatted']}
 
-<b>🔗 Ваша реферальная ссылка:</b>
+<b>👉 ВАША РЕФЕРАЛЬНАЯ ССЫЛКА 👈</b>
 ${userVariables['user.referralLink']}
 
 📱 Поделитесь ссылкой с друзьями и получайте бонусы за их покупки!
@@ -1686,7 +1685,7 @@ ${userVariables['user.referralLink']}
         case 'menu_invite':
           if (userVariables['user.canRefer'] === false) {
             messageText =
-              '🔒 Реферальная ссылка доступна только партнёрам (тренерам / менеджерам / руководителям). Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
+              '🔒 Реферальная ссылка доступна только партнёрам уровней 1–3. Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
             break;
           }
           messageText = `<b>🔗 Пригласить друга</b>
@@ -1862,15 +1861,15 @@ function formatName(u: {
   return u.id ? `id:${u.id.slice(0, 8)}` : 'Без имени';
 }
 
-/** Лейбл партнёрской роли по-русски. */
+/** Пользовательский лейбл партнёрской роли без изменения enum. */
 function partnerRoleLabel(role: string | null | undefined): string {
   switch (role) {
     case 'DIRECTOR':
-      return 'Руководитель';
+      return 'Уровень 3';
     case 'MANAGER':
-      return 'Менеджер';
+      return 'Уровень 2';
     case 'TRAINER':
-      return 'Тренер';
+      return 'Уровень 1';
     case 'CLIENT':
     default:
       return 'Клиент';
@@ -2344,9 +2343,9 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
 }
 
 /**
- * action.partner_link — реферальная ссылка партнёра (только если canRefer).
+ * action.partner_link — реферальная ссылка для партнёров уровней 1–3.
  *
- * @see Requirement 6.2 (TRAINER+ button «🔗 Моя ссылка»)
+ * @see Requirement 6.2 (кнопка «👉 МОЯ ССЫЛКА 👈»)
  */
 export class PartnerLinkHandler extends BaseNodeHandler {
   canHandle(nodeType: WorkflowNodeType): boolean {
@@ -2391,13 +2390,13 @@ export class PartnerLinkHandler extends BaseNodeHandler {
 
       const enablePartnerRoles = !!user.project?.enablePartnerRoles;
       const role = user.partnerRole || 'CLIENT';
-      // canRefer: если b2b включён — только не-CLIENT, иначе разрешено всем (legacy).
+      // В B2B ссылка доступна партнёрам уровней 1–3, в legacy — всем.
       const canRefer = enablePartnerRoles ? role !== 'CLIENT' : true;
 
       if (!canRefer) {
         await sendPlatformMessage(
           context,
-          '🔒 Реферальная ссылка доступна только партнёрам (тренерам / менеджерам / руководителям). Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.',
+          '🔒 Реферальная ссылка доступна только партнёрам уровней 1–3. Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.',
           {
             replyMarkup: {
               inline_keyboard: [
@@ -2422,7 +2421,7 @@ export class PartnerLinkHandler extends BaseNodeHandler {
       await sendPlatformMessage(
         context,
         [
-          '<b>🔗 Ваша реферальная ссылка</b>',
+          '<b>👉 ВАША РЕФЕРАЛЬНАЯ ССЫЛКА 👈</b>',
           '',
           `<code>${link}</code>`,
           '',
@@ -2456,10 +2455,10 @@ export class PartnerLinkHandler extends BaseNodeHandler {
 /**
  * action.partner_org_summary — сводка по всему `Partner_Tree` для DIRECTOR.
  *
- * Показывает: общий оборот команды, число тренеров и менеджеров,
- * топ-5 партнёров по обороту.
+ * Показывает: общий оборот команды, число партнёров уровней 1 и 2,
+ * топ-5 партнёров уровня 1 по обороту.
  *
- * @see Requirement 6.2 (DIRECTOR button «📊 Сводка по организации»)
+ * @see Requirement 6.2 (сводка партнёра уровня 3)
  */
 export class PartnerOrgSummaryHandler extends BaseNodeHandler {
   canHandle(nodeType: WorkflowNodeType): boolean {
@@ -2506,11 +2505,11 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         return null;
       }
 
-      // Только DIRECTOR (или явный grant — но MVP ограничивается ролью).
+      // Сводка доступна только партнёру уровня 3.
       if (me.partnerRole !== 'DIRECTOR') {
         await sendPlatformMessage(
           context,
-          '🔒 Сводка по организации доступна только руководителю.',
+          '🔒 Сводка по организации доступна только партнёру уровня 3.',
           {
             replyMarkup: {
               inline_keyboard: [
@@ -2576,15 +2575,17 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         '<b>📊 Сводка по организации</b>',
         '',
         `👥 Всего в команде: <b>${descendants.length}</b>`,
-        `🏢 Менеджеров: <b>${roleCounts.get('MANAGER') ?? 0}</b>`,
-        `🏃 Тренеров: <b>${roleCounts.get('TRAINER') ?? 0}</b>`,
+        `🔷 Партнёров уровня 2: <b>${roleCounts.get('MANAGER') ?? 0}</b>`,
+        `🔹 Партнёров уровня 1: <b>${roleCounts.get('TRAINER') ?? 0}</b>`,
         `🛒 Клиентов: <b>${roleCounts.get('CLIENT') ?? 0}</b>`,
         `💼 Общий оборот: <b>${formatRub(Number(totalAgg._sum.totalPurchases ?? 0))}</b>`,
         ''
       ];
 
       if (topTrainers.length > 0) {
-        lines.push(`<b>🏆 Топ-${topTrainers.length} тренеров по обороту</b>`);
+        lines.push(
+          `<b>🏆 Топ-${topTrainers.length} партнёров уровня 1 по обороту</b>`
+        );
         topTrainers.forEach((u, i) => {
           lines.push(
             `${i + 1}. ${formatName(u)} — ${formatRub(Number(u.totalPurchases))}`

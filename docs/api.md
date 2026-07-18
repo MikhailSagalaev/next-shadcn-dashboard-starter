@@ -563,6 +563,44 @@ Authorization: Bearer <jwt_token>
 
 ---
 
+## 🏢 B2B организации, планы и учёт заказов
+
+Все endpoints требуют JWT администратора и проверяют доступ к `projectId`.
+
+### Организации
+
+- `GET /api/projects/[id]/organizations` — список организаций проекта.
+- `POST /api/projects/[id]/organizations` — создать организацию.
+- `GET/PATCH/DELETE /api/projects/[id]/organizations/[organizationId]` — просмотр, изменение и удаление.
+- `GET/POST /api/projects/[id]/organizations/[organizationId]/members` — список и добавление участников.
+- `PATCH/DELETE /api/projects/[id]/organizations/[organizationId]/members/[userId]` — изменить роль/реферера/план или удалить участника.
+- `POST /api/projects/[id]/organizations/[organizationId]/members/[userId]/transfer` — атомарно перенести участника в другую организацию. Тело: `{ "targetOrganizationId": "..." }`.
+
+Пользовательские названия ролей: `CLIENT` — «Клиент», `TRAINER` — «Уровень 1», `MANAGER` — «Уровень 2», `DIRECTOR` — «Уровень 3». Значения Prisma enum не изменены. `CLIENT` не может иметь outbound-план; при переводе в `CLIENT` назначение очищается.
+
+### Партнёрские планы
+
+- `GET/POST /api/projects/[id]/referral-commission-plans` — список активных планов и создание.
+- `PATCH/DELETE /api/projects/[id]/referral-commission-plans/[planId]` — изменение или безопасное удаление.
+- `POST /api/projects/[id]/referral-commission-plans/[planId]/bulk-assign` — массовое назначение активного плана по роли.
+
+`DELETE` физически удаляет только неиспользованный план. План с атрибуциями или назначениями архивируется (`isActive = false`). Если план является default проекта/организации, API возвращает `409 Conflict` с `dependencies`; сначала нужно назначить другой default.
+
+### Статус и экономика заказа
+
+`PATCH /api/projects/[id]/orders/[orderId]/status` принимает только:
+
+```json
+{
+  "status": "CONFIRMED",
+  "comment": "Оплата наличными подтверждена"
+}
+```
+
+`changedBy` определяется из JWT (`admin.sub`) и не принимается от клиента. Наличный заказ создаётся как `PENDING`, `paidAmount = 0`, `accountingState = NOT_APPLIED`; начисление, списание и оборот применяются только при ручном `PENDING → CONFIRMED`. Отмена/возврат выполняют идемпотентную компенсацию. Конкурирующая операция или недопустимый переход возвращает `409 Conflict`. Generic `PUT /orders/[orderId]` статус не изменяет.
+
+---
+
 ## ❌ Коды ошибок
 
 | Код | Описание | Примеры |
@@ -648,4 +686,4 @@ curl -X POST https://your-domain.com/api/webhook/YOUR_SECRET \
 ---
 
 **Версия API**: 1.0  
-**Последнее обновление**: 2025-11-16
+**Последнее обновление**: 2026-07-18

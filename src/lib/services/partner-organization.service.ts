@@ -5,6 +5,8 @@
  * @created: 2026-06-06
  */
 
+import type { PartnerRole, Prisma } from '@prisma/client';
+
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { PartnerTeamService } from './partner-team.service';
@@ -42,6 +44,65 @@ function slugify(name: string): string {
 }
 
 export class PartnerOrganizationService {
+  private static async validateDirector(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    directorUserId: string | null | undefined
+  ) {
+    if (!directorUserId) return null;
+
+    const director = await tx.user.findFirst({
+      where: { id: directorUserId, projectId },
+      select: { id: true }
+    });
+    if (!director) {
+      throw new Error('Руководитель не найден в этом проекте');
+    }
+    return director;
+  }
+
+  private static async validateDefaultPlan(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    planId: string | null | undefined
+  ) {
+    if (!planId) return null;
+
+    const plan = await tx.referralCommissionPlan.findFirst({
+      where: {
+        id: planId,
+        projectId,
+        isActive: true,
+        levels: { some: { isActive: true } }
+      },
+      select: { id: true }
+    });
+    if (!plan) {
+      throw new Error(
+        'Активный партнёрский план по умолчанию не найден в этом проекте'
+      );
+    }
+    return plan;
+  }
+
+  private static async validateOutboundPlan(
+    projectId: string,
+    planId: string | null | undefined,
+    partnerRole: PartnerRole
+  ): Promise<void> {
+    if (!planId) return;
+    if (partnerRole === 'CLIENT') {
+      throw new Error('Партнёрский план можно назначить только уровням 1–3');
+    }
+    const plan = await db.referralCommissionPlan.findFirst({
+      where: { id: planId, projectId, isActive: true },
+      select: { id: true }
+    });
+    if (!plan) {
+      throw new Error('Активный партнёрский план не найден в этом проекте');
+    }
+  }
+
   static async list(projectId: string) {
     return db.partnerOrganization.findMany({
       where: { projectId },
@@ -57,6 +118,7 @@ export class PartnerOrganizationService {
     const org = await db.partnerOrganization.findFirst({
       where: { id: organizationId, projectId },
       include: {
+        project: { select: { domain: true } },
         defaultReferralCommissionPlan: { select: { id: true, name: true } },
         _count: { select: { members: true } }
       }
@@ -69,6 +131,7 @@ export class PartnerOrganizationService {
       lastName: string | null;
       email: string | null;
       phone: string | null;
+      partnerRole: PartnerRole;
     } | null = null;
 
     if (org.directorUserId) {
@@ -191,6 +254,13 @@ export class PartnerOrganizationService {
     });
     if (!user) throw new Error('Пользователь не найден');
 
+    const effectiveRole = input.partnerRole ?? user.partnerRole;
+    await this.validateOutboundPlan(
+      projectId,
+      input.outboundReferralPlanId,
+      effectiveRole
+    );
+
     // Пользователь уже состоит в другой сети — раньше `addMember` тихо
     // перевешивал organizationId, из-за чего человек незаметно "переезжал"
     // между организациями. Теперь это требует явного шага: сначала убрать
@@ -302,6 +372,13 @@ export class PartnerOrganizationService {
     });
     if (!user) throw new Error('Участник не найден в этой организации');
 
+    const effectiveRole = input.partnerRole ?? user.partnerRole;
+    await this.validateOutboundPlan(
+      projectId,
+      input.outboundReferralPlanId,
+      effectiveRole
+    );
+
     // Привязка/снятие реферера — через общий сервис (см.
     // ReferrerAssignmentService), тот же путь, что и в карточке профиля:
     // проверяет цикл и синхронизирует attribution комиссий.
@@ -324,7 +401,9 @@ export class PartnerOrganizationService {
           : {}),
         ...(input.outboundReferralPlanId !== undefined
           ? { outboundReferralPlanId: input.outboundReferralPlanId }
-          : {})
+          : input.partnerRole === 'CLIENT'
+            ? { outboundReferralPlanId: null }
+            : {})
       }
     });
 
@@ -368,6 +447,102 @@ export class PartnerOrganizationService {
     return { user: updated, attributionLocked };
   }
 
+  static async transferMember(
+    projectId: string,
+    sourceOrganizationId: string,
+    userId: string,
+    targetOrganizationId: string
+  ) {
+    if (sourceOrganizationId === targetOrganizationId) {
+      throw new Error('Выберите другую организацию');
+    }
+
+    const transfer = await db.$transaction(async (tx) => {
+      const organizations = await tx.partnerOrganization.findMany({
+        where: {
+          projectId,
+          id: { in: [sourceOrganizationId, targetOrganizationId] }
+        },
+        select: { id: true, name: true, directorUserId: true }
+      });
+      const sourceOrganization = organizations.find(
+        (organization) => organization.id === sourceOrganizationId
+      );
+      const targetOrganization = organizations.find(
+        (organization) => organization.id === targetOrganizationId
+      );
+      if (!sourceOrganization)
+        throw new Error('Исходная организация не найдена');
+      if (!targetOrganization)
+        throw new Error('Целевая организация не найдена');
+
+      const user = await tx.user.findFirst({
+        where: { id: userId, projectId, organizationId: sourceOrganizationId },
+        select: {
+          id: true,
+          partnerRole: true,
+          outboundReferralPlanId: true
+        }
+      });
+      if (!user) throw new Error('Участник не найден в исходной организации');
+
+      const targetMembers = await tx.user.findMany({
+        where: { projectId, organizationId: targetOrganizationId },
+        select: { id: true, partnerRole: true }
+      });
+      const defaultReferrerId =
+        PartnerTeamService.resolveDefaultReferrerForOrgMember({
+          partnerRole: user.partnerRole,
+          members: targetMembers,
+          directorUserId: targetOrganization.directorUserId
+        });
+
+      if (sourceOrganization.directorUserId === userId) {
+        await tx.partnerOrganization.update({
+          where: { id: sourceOrganizationId },
+          data: { directorUserId: null }
+        });
+      }
+
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: { organizationId: targetOrganizationId }
+      });
+
+      if (user.partnerRole === 'DIRECTOR') {
+        await tx.partnerOrganization.update({
+          where: { id: targetOrganizationId },
+          data: { directorUserId: userId }
+        });
+      }
+
+      return {
+        user: updatedUser,
+        defaultReferrerId,
+        targetOrganizationName: targetOrganization.name
+      };
+    });
+
+    const referrer = await ReferrerAssignmentService.setReferrer({
+      projectId,
+      userId,
+      referrerId: transfer.defaultReferrerId,
+      organizationId: targetOrganizationId
+    });
+
+    void PartnerNotificationService.notifyRoleOrOrgChanged({
+      userId,
+      projectId,
+      newRole: transfer.user.partnerRole,
+      organizationName: transfer.targetOrganizationName
+    });
+
+    return {
+      user: { ...transfer.user, referredBy: referrer.referrerId },
+      attributionLocked: referrer.attributionLocked
+    };
+  }
+
   static async resolveBySlug(
     projectId: string,
     slug: string | null | undefined
@@ -384,36 +559,49 @@ export class PartnerOrganizationService {
 
   static async create(input: CreateOrganizationInput) {
     const slug = (input.slug?.trim() || slugify(input.name)).toLowerCase();
-    const existing = await db.partnerOrganization.findFirst({
-      where: { projectId: input.projectId, slug }
-    });
-    if (existing) {
-      throw new Error(`Организация со slug «${slug}» уже существует`);
-    }
 
-    const org = await db.partnerOrganization.create({
-      data: {
-        projectId: input.projectId,
-        name: input.name.trim(),
-        slug,
-        description: input.description?.trim() || null,
-        defaultReferralCommissionPlanId:
-          input.defaultReferralCommissionPlanId || null,
-        directorUserId: input.directorUserId || null
+    return db.$transaction(async (tx) => {
+      const existing = await tx.partnerOrganization.findFirst({
+        where: { projectId: input.projectId, slug },
+        select: { id: true }
+      });
+      if (existing) {
+        throw new Error(`Организация со slug «${slug}» уже существует`);
       }
-    });
 
-    if (input.directorUserId) {
-      await db.user.updateMany({
-        where: { id: input.directorUserId, projectId: input.projectId },
+      await Promise.all([
+        this.validateDirector(tx, input.projectId, input.directorUserId),
+        this.validateDefaultPlan(
+          tx,
+          input.projectId,
+          input.defaultReferralCommissionPlanId
+        )
+      ]);
+
+      const org = await tx.partnerOrganization.create({
         data: {
-          organizationId: org.id,
-          partnerRole: 'DIRECTOR'
+          projectId: input.projectId,
+          name: input.name.trim(),
+          slug,
+          description: input.description?.trim() || null,
+          defaultReferralCommissionPlanId:
+            input.defaultReferralCommissionPlanId || null,
+          directorUserId: input.directorUserId || null
         }
       });
-    }
 
-    return org;
+      if (input.directorUserId) {
+        await tx.user.update({
+          where: { id: input.directorUserId },
+          data: {
+            organizationId: org.id,
+            partnerRole: 'DIRECTOR'
+          }
+        });
+      }
+
+      return org;
+    });
   }
 
   static async update(
@@ -421,44 +609,62 @@ export class PartnerOrganizationService {
     organizationId: string,
     data: Partial<CreateOrganizationInput> & { isActive?: boolean }
   ) {
-    const org = await this.getById(projectId, organizationId);
-    if (!org) throw new Error('Организация не найдена');
-
-    let slug = data.slug?.trim().toLowerCase();
-    if (slug && slug !== org.slug) {
-      const clash = await db.partnerOrganization.findFirst({
-        where: { projectId, slug, NOT: { id: organizationId } }
+    return db.$transaction(async (tx) => {
+      const org = await tx.partnerOrganization.findFirst({
+        where: { id: organizationId, projectId }
       });
-      if (clash) throw new Error(`Slug «${slug}» уже занят`);
-    }
+      if (!org) throw new Error('Организация не найдена');
 
-    const updated = await db.partnerOrganization.update({
-      where: { id: organizationId },
-      data: {
-        name: data.name?.trim() ?? undefined,
-        slug: slug ?? undefined,
-        description:
-          data.description !== undefined
-            ? data.description?.trim() || null
-            : undefined,
-        isActive: data.isActive,
-        defaultReferralCommissionPlanId:
-          data.defaultReferralCommissionPlanId !== undefined
-            ? data.defaultReferralCommissionPlanId
-            : undefined,
-        directorUserId:
-          data.directorUserId !== undefined ? data.directorUserId : undefined
+      const slug = data.slug?.trim().toLowerCase();
+      if (slug && slug !== org.slug) {
+        const clash = await tx.partnerOrganization.findFirst({
+          where: { projectId, slug, NOT: { id: organizationId } },
+          select: { id: true }
+        });
+        if (clash) throw new Error(`Slug «${slug}» уже занят`);
       }
-    });
 
-    if (data.directorUserId) {
-      await db.user.updateMany({
-        where: { id: data.directorUserId, projectId },
-        data: { organizationId, partnerRole: 'DIRECTOR' }
+      await Promise.all([
+        data.directorUserId !== undefined
+          ? this.validateDirector(tx, projectId, data.directorUserId)
+          : Promise.resolve(null),
+        data.defaultReferralCommissionPlanId !== undefined
+          ? this.validateDefaultPlan(
+              tx,
+              projectId,
+              data.defaultReferralCommissionPlanId
+            )
+          : Promise.resolve(null)
+      ]);
+
+      const updated = await tx.partnerOrganization.update({
+        where: { id: organizationId },
+        data: {
+          name: data.name?.trim() ?? undefined,
+          slug: slug ?? undefined,
+          description:
+            data.description !== undefined
+              ? data.description?.trim() || null
+              : undefined,
+          isActive: data.isActive,
+          defaultReferralCommissionPlanId:
+            data.defaultReferralCommissionPlanId !== undefined
+              ? data.defaultReferralCommissionPlanId
+              : undefined,
+          directorUserId:
+            data.directorUserId !== undefined ? data.directorUserId : undefined
+        }
       });
-    }
 
-    return updated;
+      if (data.directorUserId) {
+        await tx.user.update({
+          where: { id: data.directorUserId },
+          data: { organizationId, partnerRole: 'DIRECTOR' }
+        });
+      }
+
+      return updated;
+    });
   }
 
   static async delete(projectId: string, organizationId: string) {

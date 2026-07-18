@@ -532,6 +532,119 @@ systemctl status redis-server
 
 ## 🔄 Обновление приложения
 
+### Фактический PM2 deploy этого проекта
+
+Этот раздел является каноническим сценарием для текущего production без Docker.
+
+**Контекст:**
+- SSH: `mixa@84.54.56.242`
+- Ключ на Windows: `$env:USERPROFILE\.ssh\id_rsa_gupil`
+- Проект: `/opt/next-shadcn-dashboard-starter`
+- Ветка: `main`
+- PM2 app: `bonus-app`
+- Health-check: `http://127.0.0.1:3000/api/health`
+
+Явная просьба пользователя выполнить deploy разрешает агенту пройти этот сценарий автономно. `.env` не изменяется автоматически, passphrase/private key не сохраняются.
+
+#### 1. Preflight
+
+```powershell
+$sshKey = "$env:USERPROFILE\.ssh\id_rsa_gupil"
+ssh -i $sshKey mixa@84.54.56.242 'cd /opt/next-shadcn-dashboard-starter && git status --short --branch && git rev-parse --short HEAD'
+```
+
+Сохраните существующие server-side изменения. Не используйте `reset --hard`, `git clean`, force push или автоматический stash. Если изменённый на сервере файл пересекается с релизом, сначала сделайте его резервную копию и примените обновление неразрушающим способом.
+
+#### 2. Обновление кода
+
+```bash
+cd /opt/next-shadcn-dashboard-starter
+git fetch origin main
+git merge --ff-only origin/main
+```
+
+Если изменился lockfile, выполните `yarn install --immutable`. Если релиз содержит миграции или изменения Prisma schema:
+
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
+
+#### 3. Единственная Webpack-сборка на low-memory VPS
+
+Сначала убедитесь, что другая сборка не запущена:
+
+```bash
+pgrep -af "next build|yarn.*build" || true
+```
+
+Если список пуст, остановите приложение, очистите build output и запустите **ровно одну** фоновую сборку:
+
+```bash
+cd /opt/next-shadcn-dashboard-starter
+pm2 stop bonus-app
+rm -rf .next
+mkdir -p logs
+nohup env NEXT_PHASE=phase-production-build NODE_OPTIONS=--max-old-space-size=1536 yarn next build --webpack > logs/deploy-build.log 2>&1 &
+echo $! > /tmp/bonus-build.pid
+```
+
+Контроль процесса:
+
+```bash
+BUILD_PID=$(cat /tmp/bonus-build.pid)
+ps -p "$BUILD_PID" -o pid,etime,%cpu,%mem,cmd
+tail -n 100 logs/deploy-build.log
+```
+
+Не запускайте второй build, даже если первый долго находится на compile/type-check этапе. Проверяйте его PID, CPU/RAM и лог. Успех подтверждается завершением процесса с code `0` и появлением build marker:
+
+```bash
+test -s .next/BUILD_ID
+cat .next/BUILD_ID
+```
+
+#### 4. Запуск и smoke-check
+
+Только после успешной сборки:
+
+```bash
+pm2 restart bonus-app --update-env
+pm2 status bonus-app
+curl -fsS http://127.0.0.1:3000/api/health
+pm2 logs bonus-app --lines 100 --nostream
+```
+
+Проверьте статус `online`, отсутствие restart loop, healthy application/database и отсутствие startup-ошибок Redis/BullMQ/Prisma/Telegram/MAX.
+
+#### 5. Fallback через минимальный Git bundle
+
+Используйте только если сервер не может получить commit из remote Git (например, deploy key требует недоступный passphrase):
+
+1. Определите server HEAD и создайте временную локальную ветку на deploy commit.
+2. Создайте bundle, исключив уже имеющийся на сервере диапазон: `git bundle create deploy.bundle deploy-transfer ^<server-head>`.
+3. Передайте его: `scp -i $sshKey deploy.bundle mixa@84.54.56.242:/tmp/deploy.bundle`.
+4. На сервере: `git fetch /tmp/deploy.bundle deploy-transfer`, затем `git merge --ff-only FETCH_HEAD`.
+5. Удалите временную ветку и bundle локально, а `/tmp/deploy.bundle` — на сервере.
+
+Bundle переносит только Git-объекты. Не добавляйте в него `.env`, ключи, дампы БД или незакоммиченные файлы.
+
+#### 6. PowerShell → SSH quoting
+
+Для сложных remote-команд не используйте интерполируемую строку с незащищёнными `|`, `$()` или heredoc. Надёжный вариант:
+
+```powershell
+$remote = @'
+set -e
+cd /opt/next-shadcn-dashboard-starter
+git status --short --branch
+pm2 status bonus-app
+'@
+$remote | ssh -i $sshKey mixa@84.54.56.242 'bash -s'
+```
+
+Ошибочный quoting может выполнить часть pipeline локально или запустить второй build. Если лишний процесс уже появился, найдите его через `pgrep -af`, проверьте конкретный PID и завершите только этот PID.
+
 ### С Docker:
 
 ```bash

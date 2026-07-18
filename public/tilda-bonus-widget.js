@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.16
+ * @version: 2.9.17
  * @author: AI Assistant + User
  * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
@@ -56,6 +56,7 @@
       DEFAULT_TTL_DAYS: 30,
       _domReady: false,
       _submitHandler: null,
+      _afterSuccessHandler: null,
       _mutationObserver: null,
       _injectDebounce: null,
 
@@ -116,6 +117,42 @@
         } catch (e) {
           return null;
         }
+      },
+
+      _deleteCookie: function (name) {
+        try {
+          document.cookie =
+            name +
+            '=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        } catch (e) {
+          /* ignore */
+        }
+      },
+
+      clear: function (widget) {
+        try {
+          localStorage.removeItem(this.STORAGE_KEY);
+        } catch (e) {
+          /* ignore */
+        }
+        this._deleteCookie(this.COOKIE_REF);
+        this._deleteCookie(this.COOKIE_ORG);
+
+        document
+          .querySelectorAll('input[name="utm_ref"], input[name="utm_org"]')
+          .forEach(function (input) {
+            input.value = '';
+            input.removeAttribute('value');
+            if (input.getAttribute('data-gupil-attribution') === 'true') {
+              input.remove();
+            }
+          });
+        document
+          .querySelectorAll('form[data-gupil-attribution-submitted]')
+          .forEach(function (form) {
+            form.removeAttribute('data-gupil-attribution-submitted');
+          });
+        this._log(widget, 'cleared after successful conversion');
       },
 
       _loadStored: function () {
@@ -185,6 +222,7 @@
         input.type = 'hidden';
         input.name = name;
         input.value = value;
+        input.setAttribute('data-gupil-attribution', 'true');
         form.appendChild(input);
       },
 
@@ -216,8 +254,34 @@
         var stored = this._loadStored();
         var ref = (stored && stored.ref) || this._getCookie(this.COOKIE_REF);
         var org = (stored && stored.org) || this._getCookie(this.COOKIE_ORG);
-        if (ref) this._ensureHiddenInput(form, 'utm_ref', ref);
+        if (ref) {
+          this._ensureHiddenInput(form, 'utm_ref', ref);
+          form.setAttribute('data-gupil-attribution-submitted', 'true');
+        }
         if (org) this._ensureHiddenInput(form, 'utm_org', org);
+      },
+
+      _onAfterSuccess: function (widget, e) {
+        var form = null;
+        if (e && e.detail && e.detail.form) {
+          form = e.detail.form;
+        } else if (e && e.target && e.target.tagName === 'FORM') {
+          form = e.target;
+        }
+        if (!form || typeof form.querySelector !== 'function') {
+          form = document.querySelector(
+            'form[data-gupil-attribution-submitted="true"]'
+          );
+        }
+        if (!form) return;
+
+        var refInput = form.querySelector('input[name="utm_ref"]');
+        var submittedWithAttribution =
+          form.getAttribute('data-gupil-attribution-submitted') === 'true' ||
+          (refInput && refInput.value);
+        if (!submittedWithAttribution) return;
+
+        this.clear(widget);
       },
 
       initDom: function (widget) {
@@ -232,6 +296,14 @@
           self._onSubmitCapture(widget, e);
         };
         document.addEventListener('submit', this._submitHandler, true);
+
+        this._afterSuccessHandler = function (e) {
+          self._onAfterSuccess(widget, e);
+        };
+        document.addEventListener(
+          'tildaform:aftersuccess',
+          this._afterSuccessHandler
+        );
 
         if (typeof MutationObserver !== 'undefined') {
           this._mutationObserver = new MutationObserver(function () {
@@ -256,6 +328,13 @@
         if (this._submitHandler) {
           document.removeEventListener('submit', this._submitHandler, true);
           this._submitHandler = null;
+        }
+        if (this._afterSuccessHandler) {
+          document.removeEventListener(
+            'tildaform:aftersuccess',
+            this._afterSuccessHandler
+          );
+          this._afterSuccessHandler = null;
         }
         if (this._mutationObserver) {
           try {

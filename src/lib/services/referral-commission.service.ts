@@ -38,6 +38,32 @@ export type PlanLevelInput = {
   isActive?: boolean;
 };
 
+export type ReferralCommissionPlanDependencies = {
+  projectDefaults: number;
+  organizationDefaults: number;
+  outboundUsers: number;
+  referralAttributions: number;
+};
+
+export type DeleteReferralCommissionPlanResult = {
+  deleted: boolean;
+  archived: boolean;
+  dependencies: ReferralCommissionPlanDependencies;
+};
+
+export class ReferralCommissionPlanConflictError extends Error {
+  readonly dependencies: ReferralCommissionPlanDependencies;
+
+  constructor(
+    message: string,
+    dependencies: ReferralCommissionPlanDependencies
+  ) {
+    super(message);
+    this.name = 'ReferralCommissionPlanConflictError';
+    this.dependencies = dependencies;
+  }
+}
+
 export class ReferralCommissionService {
   /**
    * После регистрации приглашённого: зафиксировать план выплат (если включено на проекте).
@@ -120,7 +146,7 @@ export class ReferralCommissionService {
     const preferred = referrer?.outboundReferralPlanId;
     if (preferred) {
       const ok = await db.referralCommissionPlan.findFirst({
-        where: { id: preferred, projectId },
+        where: { id: preferred, projectId, isActive: true },
         select: { id: true }
       });
       if (ok) return ok.id;
@@ -134,7 +160,11 @@ export class ReferralCommissionService {
       });
       if (org?.defaultReferralCommissionPlanId) {
         const ok = await db.referralCommissionPlan.findFirst({
-          where: { id: org.defaultReferralCommissionPlanId, projectId },
+          where: {
+            id: org.defaultReferralCommissionPlanId,
+            projectId,
+            isActive: true
+          },
           select: { id: true }
         });
         if (ok) return ok.id;
@@ -143,7 +173,7 @@ export class ReferralCommissionService {
 
     if (projectDefaultPlanId) {
       const ok = await db.referralCommissionPlan.findFirst({
-        where: { id: projectDefaultPlanId, projectId },
+        where: { id: projectDefaultPlanId, projectId, isActive: true },
         select: { id: true }
       });
       if (ok) return ok.id;
@@ -191,9 +221,15 @@ export class ReferralCommissionService {
     });
   }
 
-  static async listPlans(projectId: string) {
+  static async listPlans(
+    projectId: string,
+    options: { includeArchived?: boolean } = {}
+  ) {
     return db.referralCommissionPlan.findMany({
-      where: { projectId },
+      where: {
+        projectId,
+        ...(!options.includeArchived && { isActive: true })
+      },
       include: { levels: { orderBy: { level: 'asc' } } },
       orderBy: { createdAt: 'asc' }
     });
@@ -245,23 +281,56 @@ export class ReferralCommissionService {
     });
   }
 
-  static async deletePlan(projectId: string, planId: string): Promise<void> {
-    const project = await db.project.findFirst({
-      where: { id: projectId, defaultReferralCommissionPlanId: planId }
-    });
-    if (project) {
-      throw new Error('Нельзя удалить план, назначенный планом по умолчанию');
-    }
+  static async deletePlan(
+    projectId: string,
+    planId: string
+  ): Promise<DeleteReferralCommissionPlanResult> {
+    return db.$transaction(async (tx) => {
+      const plan = await tx.referralCommissionPlan.findFirst({
+        where: { id: planId, projectId },
+        select: {
+          _count: {
+            select: {
+              defaultForProjects: true,
+              organizationDefaults: true,
+              outboundUsers: true,
+              referralAttributions: true
+            }
+          }
+        }
+      });
+      if (!plan) throw new Error('План не найден');
 
-    const inUse = await db.user.count({
-      where: { outboundReferralPlanId: planId }
-    });
-    if (inUse > 0) {
-      throw new Error('План назначен пользователям (outbound)');
-    }
+      const dependencies: ReferralCommissionPlanDependencies = {
+        projectDefaults: plan._count.defaultForProjects,
+        organizationDefaults: plan._count.organizationDefaults,
+        outboundUsers: plan._count.outboundUsers,
+        referralAttributions: plan._count.referralAttributions
+      };
 
-    await db.referralCommissionPlan.deleteMany({
-      where: { id: planId, projectId }
+      if (
+        dependencies.projectDefaults > 0 ||
+        dependencies.organizationDefaults > 0
+      ) {
+        throw new ReferralCommissionPlanConflictError(
+          'Нельзя удалить план, назначенный планом по умолчанию',
+          dependencies
+        );
+      }
+
+      if (
+        dependencies.outboundUsers > 0 ||
+        dependencies.referralAttributions > 0
+      ) {
+        await tx.referralCommissionPlan.update({
+          where: { id: planId },
+          data: { isActive: false }
+        });
+        return { deleted: false, archived: true, dependencies };
+      }
+
+      await tx.referralCommissionPlan.delete({ where: { id: planId } });
+      return { deleted: true, archived: false, dependencies };
     });
   }
 
@@ -276,10 +345,13 @@ export class ReferralCommissionService {
       const ok = await db.referralCommissionPlan.findFirst({
         where: {
           id: settings.defaultReferralCommissionPlanId,
-          projectId
+          projectId,
+          isActive: true
         }
       });
-      if (!ok) throw new Error('План по умолчанию не принадлежит проекту');
+      if (!ok) {
+        throw new Error('Активный план по умолчанию не найден в проекте');
+      }
     }
 
     return db.project.update({
@@ -369,9 +441,9 @@ export class ReferralCommissionService {
   ) {
     if (planId) {
       const ok = await db.referralCommissionPlan.findFirst({
-        where: { id: planId, projectId }
+        where: { id: planId, projectId, isActive: true }
       });
-      if (!ok) throw new Error('План не найден в проекте');
+      if (!ok) throw new Error('Активный план не найден в проекте');
     }
 
     const user = await db.user.findFirst({

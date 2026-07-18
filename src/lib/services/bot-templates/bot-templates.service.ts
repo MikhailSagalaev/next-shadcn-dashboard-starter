@@ -59,13 +59,13 @@ const loyaltySystemTemplate: BotTemplate = {
   isPublic: true
 };
 
-// ✨ Phase 4: Шаблон «B2B Партнёр» — личный кабинет тренера / менеджера / руководителя
-// в b2b-иерархии. Меню адаптируется под `user.partnerRole`.
+// ✨ Phase 4: Шаблон «B2B Партнёр» — кабинеты партнёров уровней 1–3.
+// Меню адаптируется под `user.partnerRole`, не меняя значения enum.
 const b2bPartnerCabinetTemplate: BotTemplate = {
   id: 'b2b-partner-cabinet',
   name: 'B2B Партнёр',
   description:
-    'Кабинет партнёра в b2b-иерархии: меню адаптируется под роль (тренер / менеджер / руководитель), показывает команду, выплаты, реферальную ссылку и сводку. Требует включённого `enablePartnerRoles` у проекта.',
+    'B2B-кабинет с отдельными меню для клиента и партнёров уровней 1–3: команда, выплаты, реферальная ссылка и сводка организации для уровня 3. Требует включённого `enablePartnerRoles` у проекта.',
   category: 'loyalty',
   difficulty: 'advanced',
   tags: [
@@ -93,21 +93,21 @@ const b2bPartnerCabinetTemplate: BotTemplate = {
   },
 
   features: [
-    'Меню по роли (CLIENT / TRAINER / MANAGER / DIRECTOR)',
-    'Реферальная ссылка только для партнёров',
+    'Меню по роли: Клиент / Уровень 1 / Уровень 2 / Уровень 3',
+    'Реферальная ссылка для партнёров уровней 1–3',
     'Просмотр команды и истории выплат',
-    'Сводка по организации для руководителей'
+    'Сводка по организации для партнёров уровня 3'
   ],
   integrations: [],
   useCases: [
-    'Производитель → сеть тренеров → клиенты',
+    'Производитель → партнёры уровней 1–3 → клиенты',
     'Многоуровневая партнёрская программа'
   ],
   installs: 0,
   rating: 0,
   reviews: 0,
   author: 'Gupil Team',
-  version: '1.2.1',
+  version: '1.3.0',
   createdAt: new Date(),
   updatedAt: new Date(),
   isPublic: true

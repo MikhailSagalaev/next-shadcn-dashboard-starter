@@ -40,7 +40,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { PartnerUserCombobox } from './partner-user-combobox';
 
 type PlanOption = { id: string; name: string };
@@ -62,7 +62,6 @@ interface Props {
 }
 
 export function PartnerOrganizationsPanel({ projectId }: Props) {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -97,15 +96,11 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
         );
       }
     } catch {
-      toast({
-        title: 'Ошибка',
-        description: 'Не удалось загрузить организации',
-        variant: 'destructive'
-      });
+      toast.error('Не удалось загрузить организации');
     } finally {
       setLoading(false);
     }
-  }, [projectId, toast]);
+  }, [projectId]);
 
   useEffect(() => {
     load();
@@ -121,7 +116,7 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      toast({ title: 'Укажите название', variant: 'destructive' });
+      toast.error('Укажите название');
       return;
     }
     setSaving(true);
@@ -139,16 +134,12 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось создать');
-      toast({ title: 'Организация создана' });
+      toast.success('Организация создана');
       setCreateOpen(false);
       resetForm();
       await load();
     } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось создать',
-        variant: 'destructive'
-      });
+      toast.error(e instanceof Error ? e.message : 'Не удалось создать');
     } finally {
       setSaving(false);
     }
@@ -164,15 +155,11 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось удалить');
-      toast({ title: 'Организация удалена' });
+      toast.success('Организация удалена');
       setDeleteTarget(null);
       await load();
     } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось удалить',
-        variant: 'destructive'
-      });
+      toast.error(e instanceof Error ? e.message : 'Не удалось удалить');
     } finally {
       setSaving(false);
     }
@@ -260,7 +247,7 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
                   projectId={projectId}
                   value={directorUserId}
                   onChange={(u) => setDirectorUserId(u?.id ?? '')}
-                  partnerRolesOnly
+                  partnerRolesOnly={false}
                   placeholder='Выберите руководителя…'
                 />
               </div>

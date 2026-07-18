@@ -13,18 +13,19 @@ import { OrderService } from '@/lib/services/order.service';
 import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { z } from 'zod';
-import type { OrderStatus } from '@prisma/client';
+import { OrderAccountingConflictError } from '@/lib/services/orders/order-accounting.service';
 
-const updateOrderSchema = z.object({
-  status: z.enum(['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED']).optional(),
-  totalAmount: z.number().positive().optional(),
-  paidAmount: z.number().min(0).optional(),
-  bonusAmount: z.number().min(0).optional(),
-  deliveryAddress: z.string().optional(),
-  paymentMethod: z.string().optional(),
-  deliveryMethod: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
-});
+const updateOrderSchema = z
+  .object({
+    totalAmount: z.number().positive().optional(),
+    paidAmount: z.number().min(0).optional(),
+    bonusAmount: z.number().min(0).optional(),
+    deliveryAddress: z.string().optional(),
+    paymentMethod: z.string().optional(),
+    deliveryMethod: z.string().optional(),
+    metadata: z.record(z.unknown()).optional()
+  })
+  .strict();
 
 // GET /api/projects/[id]/orders/[orderId] - Получение заказа по ID
 export async function GET(
@@ -54,7 +55,7 @@ export async function GET(
     logger.error('Ошибка получения заказа', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'orders-api',
-      action: 'GET',
+      action: 'GET'
     });
 
     if (error instanceof Error && error.message === 'FORBIDDEN') {
@@ -91,14 +92,18 @@ export async function PUT(
     const validatedData = updateOrderSchema.parse(body);
 
     // Обновляем заказ
-    const order = await OrderService.updateOrder(projectId, orderId, validatedData);
+    const order = await OrderService.updateOrder(
+      projectId,
+      orderId,
+      validatedData
+    );
 
     return NextResponse.json(order);
   } catch (error) {
     logger.error('Ошибка обновления заказа', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'orders-api',
-      action: 'PUT',
+      action: 'PUT'
     });
 
     if (error instanceof z.ZodError) {
@@ -106,6 +111,10 @@ export async function PUT(
         { error: 'Неверные данные заказа', details: error.errors },
         { status: 400 }
       );
+    }
+
+    if (error instanceof OrderAccountingConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     if (error instanceof Error && error.message === 'Заказ не найден') {
@@ -150,8 +159,12 @@ export async function DELETE(
     logger.error('Ошибка удаления заказа', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
       component: 'orders-api',
-      action: 'DELETE',
+      action: 'DELETE'
     });
+
+    if (error instanceof OrderAccountingConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
 
     if (error instanceof Error && error.message === 'Заказ не найден') {
       return NextResponse.json({ error: error.message }, { status: 404 });
@@ -167,4 +180,3 @@ export async function DELETE(
     );
   }
 }
-

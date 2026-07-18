@@ -67,6 +67,16 @@ interface PartnerUserComboboxProps {
 
 const FETCH_LIMIT = 20;
 
+type UsersApiResponse = {
+  users?: Record<string, unknown>[];
+  pagination?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+    pages?: number;
+  };
+};
+
 /**
  * Поиск + выбор пользователя проекта с фильтром по партнёрской роли.
  * Возвращает обогащённый объект через `onChange`. Если убрать выбор — `null`.
@@ -111,52 +121,114 @@ export function PartnerUserCombobox({
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [items, setItems] = React.useState<PartnerUser[]>([]);
+  const [page, setPage] = React.useState(1);
+  const [total, setTotal] = React.useState(0);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [selected, setSelected] = React.useState<PartnerUser | null>(null);
-  const requestIdRef = React.useRef(0);
+  const searchRequestIdRef = React.useRef(0);
+  const loadMoreRequestIdRef = React.useRef(0);
+  const activeQueryRef = React.useRef('');
 
-  /**
-   * Загрузить список (или подгрузить выбранного по value).
-   * Используется при открытии Popover и при вводе в поиск.
-   */
   const fetchUsers = React.useCallback(
-    async (search: string) => {
-      const myReqId = ++requestIdRef.current;
-      setLoading(true);
+    async (search: string, requestedPage: number, append: boolean) => {
+      const normalizedSearch = search.trim();
+      const requestId = append
+        ? ++loadMoreRequestIdRef.current
+        : ++searchRequestIdRef.current;
+
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        loadMoreRequestIdRef.current += 1;
+        activeQueryRef.current = normalizedSearch;
+        setLoading(true);
+      }
+
+      const isCurrentRequest = () =>
+        activeQueryRef.current === normalizedSearch &&
+        (append
+          ? requestId === loadMoreRequestIdRef.current
+          : requestId === searchRequestIdRef.current);
+
       try {
-        const params = new URLSearchParams();
-        params.set('limit', String(FETCH_LIMIT));
-        if (search.trim()) params.set('search', search.trim());
+        const params = new URLSearchParams({
+          includeStats: 'false',
+          limit: String(FETCH_LIMIT),
+          page: String(requestedPage)
+        });
+        if (normalizedSearch) params.set('search', normalizedSearch);
         if (partnerRolesOnly) params.set('role', 'TRAINER,MANAGER,DIRECTOR');
+
         const res = await fetch(
           `/api/projects/${projectId}/users?${params.toString()}`
         );
-        if (!res.ok) {
-          if (myReqId === requestIdRef.current) setItems([]);
-          return;
-        }
-        const data = await res.json();
-        const users: PartnerUser[] = Array.isArray(data?.users)
-          ? data.users.map((u: Record<string, unknown>) => mapApiUser(u))
+        if (!res.ok) throw new Error('Failed to load users');
+
+        const data = (await res.json()) as UsersApiResponse;
+        const users = Array.isArray(data.users)
+          ? data.users.map((user) => mapApiUser(user))
           : [];
-        // Защита от race condition: учитываем только последний запрос.
-        if (myReqId === requestIdRef.current) setItems(users);
+        const responsePage = data.pagination?.page ?? requestedPage;
+        const responseTotal = data.pagination?.total ?? users.length;
+        const responseTotalPages = Math.max(1, data.pagination?.pages ?? 1);
+
+        if (!isCurrentRequest()) return;
+
+        setItems((current) => {
+          if (!append) return users;
+          const byId = new Map(current.map((user) => [user.id, user]));
+          users.forEach((user) => byId.set(user.id, user));
+          return Array.from(byId.values());
+        });
+        setPage(responsePage);
+        setTotal(responseTotal);
+        setTotalPages(responseTotalPages);
+        setHasMore(responsePage < responseTotalPages);
       } catch {
-        if (myReqId === requestIdRef.current) setItems([]);
+        if (!isCurrentRequest()) return;
+        if (!append) {
+          setItems([]);
+          setPage(1);
+          setTotal(0);
+          setTotalPages(1);
+          setHasMore(false);
+        }
       } finally {
-        if (myReqId === requestIdRef.current) setLoading(false);
+        if (!isCurrentRequest()) return;
+        if (append) setLoadingMore(false);
+        else setLoading(false);
       }
     },
     [projectId, partnerRolesOnly]
   );
 
-  const debouncedFetch = useDebouncedCallback(fetchUsers, 300);
+  const debouncedFetch = useDebouncedCallback(
+    (search: string) => fetchUsers(search, 1, false),
+    300
+  );
 
-  // При первом открытии и при изменении query вызываем поиск.
   React.useEffect(() => {
     if (!open) return;
+
+    searchRequestIdRef.current += 1;
+    loadMoreRequestIdRef.current += 1;
+    activeQueryRef.current = query.trim();
+    setItems([]);
+    setPage(1);
+    setTotal(0);
+    setTotalPages(1);
+    setHasMore(false);
+    setLoadingMore(false);
     debouncedFetch(query);
   }, [open, query, debouncedFetch]);
+
+  const loadMore = React.useCallback(() => {
+    if (loading || loadingMore || !hasMore || page >= totalPages) return;
+    void fetchUsers(query, page + 1, true);
+  }, [fetchUsers, hasMore, loading, loadingMore, page, query, totalPages]);
 
   // Если есть value, но нет данных о выбранном пользователе — догружаем профиль.
   React.useEffect(() => {
@@ -266,8 +338,10 @@ export function PartnerUserCombobox({
                   : 'Начните вводить имя или телефон'}
               </CommandEmpty>
             )}
-            {!loading && items.length > 0 && (
-              <CommandGroup heading='Партнёры'>
+            {items.length > 0 && (
+              <CommandGroup
+                heading={partnerRolesOnly ? 'Партнёры' : 'Пользователи'}
+              >
                 {items.map((u) => {
                   const planName =
                     u.outboundReferralPlanId && planNameById
@@ -314,6 +388,21 @@ export function PartnerUserCombobox({
                     </CommandItem>
                   );
                 })}
+                {hasMore && page < totalPages && (
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='sm'
+                    className='mt-1 w-full'
+                    disabled={loadingMore}
+                    onClick={loadMore}
+                  >
+                    {loadingMore && <Loader2 className='animate-spin' />}
+                    {loadingMore
+                      ? 'Загрузка…'
+                      : `Показать ещё (${items.length} из ${total})`}
+                  </Button>
+                )}
               </CommandGroup>
             )}
           </CommandList>

@@ -39,11 +39,11 @@ function formatName(u: {
 function roleLabel(role: string): string {
   switch (role) {
     case 'DIRECTOR':
-      return 'Руководитель';
+      return 'Уровень 3';
     case 'MANAGER':
-      return 'Менеджер';
+      return 'Уровень 2';
     case 'TRAINER':
-      return 'Тренер';
+      return 'Уровень 1';
     default:
       return 'Клиент';
   }
@@ -171,14 +171,9 @@ export class PartnerCabinetService {
           requestId,
           reviewerUserId: userId
         });
-        const roleLabel =
-          result.partnerRole === 'MANAGER'
-            ? 'Менеджер'
-            : result.partnerRole === 'TRAINER'
-              ? 'Тренер'
-              : 'Клиент';
+        const approvedRoleLabel = roleLabel(result.partnerRole);
         await ctx.answerCallbackQuery({ text: '✅ Заявка одобрена' });
-        await ctx.reply(`✅ ${roleLabel} добавлен в вашу команду.`);
+        await ctx.reply(`✅ ${approvedRoleLabel} добавлен в вашу команду.`);
         return true;
       }
 

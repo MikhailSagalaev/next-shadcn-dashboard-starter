@@ -7,6 +7,7 @@
  * @author: AI Assistant + User
  */
 
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import type {
@@ -16,14 +17,21 @@ import type {
   OrderWithRelations,
   OrderFilters,
   OrderListResponse,
-  OrderStatus,
   CreateProductInput,
   UpdateProductInput,
   CreateProductCategoryInput,
   UpdateProductCategoryInput
 } from '@/types/orders';
-import { UserService, BonusService } from './user.service';
-import { ReferralService } from './referral.service';
+import {
+  OrderAccountingConflictError,
+  OrderAccountingService
+} from './orders/order-accounting.service';
+
+function toInputJson(
+  value: Record<string, unknown> | undefined
+): Prisma.InputJsonValue | undefined {
+  return value as Prisma.InputJsonObject | undefined;
+}
 
 export class OrderService {
   /**
@@ -54,14 +62,14 @@ export class OrderService {
           projectId: data.projectId,
           userId: data.userId,
           orderNumber,
-          status: data.status || 'PENDING',
+          status: 'PENDING',
           totalAmount: data.totalAmount,
           paidAmount: data.paidAmount || 0,
           bonusAmount: data.bonusAmount || 0,
           deliveryAddress: data.deliveryAddress,
           paymentMethod: data.paymentMethod,
           deliveryMethod: data.deliveryMethod,
-          metadata: data.metadata,
+          metadata: toInputJson(data.metadata),
           items: {
             create: data.items.map((item) => ({
               productId: item.productId,
@@ -69,7 +77,7 @@ export class OrderService {
               quantity: item.quantity,
               price: item.price,
               total: item.total,
-              metadata: item.metadata
+              metadata: toInputJson(item.metadata)
             }))
           }
         },
@@ -112,16 +120,16 @@ export class OrderService {
         }
       });
 
-      // Обновляем статистику пользователя, если заказ связан с пользователем
-      if (data.userId && data.totalAmount > 0) {
-        await db.user.update({
-          where: { id: data.userId },
-          data: {
-            totalPurchases: {
-              increment: data.totalAmount
-            }
+      if (data.status && data.status !== 'PENDING') {
+        return (await OrderAccountingService.transition(
+          data.projectId,
+          order.id,
+          {
+            status: data.status,
+            comment: 'Статус указан при создании заказа',
+            changedBy: 'system'
           }
-        });
+        )) as OrderWithRelations;
       }
 
       logger.info('Создан новый заказ', {
@@ -401,9 +409,38 @@ export class OrderService {
         throw new Error('Заказ не найден');
       }
 
+      if ('status' in data) {
+        throw new OrderAccountingConflictError(
+          'Статус можно изменить только через status endpoint'
+        );
+      }
+
+      const changesEconomicFields =
+        data.totalAmount !== undefined ||
+        data.paidAmount !== undefined ||
+        data.bonusAmount !== undefined;
+      const accountingLockedStates = new Set([
+        'APPLIED',
+        'REVERSING',
+        'REVERSED',
+        'PARTIALLY_REVERSED'
+      ]);
+      if (
+        changesEconomicFields &&
+        accountingLockedStates.has(existingOrder.accountingState)
+      ) {
+        throw new OrderAccountingConflictError(
+          'Экономические поля учтенного заказа изменять нельзя'
+        );
+      }
+
+      const updateData: Prisma.OrderUncheckedUpdateInput = {
+        ...data,
+        metadata: toInputJson(data.metadata)
+      };
       const order = await db.order.update({
         where: { id: orderId },
-        data,
+        data: updateData,
         include: {
           user: {
             select: {
@@ -462,113 +499,23 @@ export class OrderService {
     data: ChangeOrderStatusInput
   ): Promise<OrderWithRelations> {
     try {
-      // Проверяем, что заказ существует и принадлежит проекту
-      const existingOrder = await db.order.findFirst({
-        where: {
-          id: orderId,
-          projectId
-        }
-      });
-
-      if (!existingOrder) {
-        throw new Error('Заказ не найден');
-      }
-
-      // Обновляем статус заказа
-      const order = await db.order.update({
-        where: { id: orderId },
-        data: {
-          status: data.status
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              phone: true,
-              firstName: true,
-              lastName: true
-            }
-          },
-          items: {
-            include: {
-              product: true
-            }
-          },
-          history: {
-            orderBy: {
-              createdAt: 'desc'
-            }
-          },
-          project: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      });
-
-      // Создаем запись в истории
-      await db.orderHistory.create({
-        data: {
-          orderId: order.id,
+      const order = await OrderAccountingService.transition(
+        projectId,
+        orderId,
+        {
           status: data.status,
           comment: data.comment,
-          changedBy: data.changedBy,
-          metadata: data.metadata
+          changedBy: data.changedBy
         }
-      });
+      );
 
       logger.info('Статус заказа изменен', {
         orderId: order.id,
         projectId,
-        oldStatus: existingOrder.status,
         newStatus: data.status,
+        accountingState: order.accountingState,
         component: 'order-service'
       });
-
-      // Откат бонусов и реферальных выплат при отмене/возврате заказа.
-      // Триггерим только при переходе В состояние отмены/возврата из НЕ-отменённого,
-      // чтобы повторные вызовы (повторный вебхук) не запускали откат заново.
-      const clawbackStatuses: OrderStatus[] = ['CANCELLED', 'REFUNDED'];
-      const isEnteringClawback =
-        clawbackStatuses.includes(data.status) &&
-        !clawbackStatuses.includes(existingOrder.status as OrderStatus);
-
-      if (isEnteringClawback) {
-        // externalId выплат закодирован через Order.orderNumber (см. план 001).
-        const reversalOrderId = order.orderNumber;
-        try {
-          await BonusService.reversePurchaseBonus(reversalOrderId, projectId);
-        } catch (error) {
-          // Сбой отката не должен ломать смену статуса заказа.
-          logger.error('Ошибка отката бонуса за покупку при смене статуса', {
-            orderId: order.id,
-            orderNumber: reversalOrderId,
-            projectId,
-            error:
-              error instanceof Error ? error.message : 'Неизвестная ошибка',
-            component: 'order-service'
-          });
-        }
-        try {
-          await ReferralService.reverseReferralBonus(
-            reversalOrderId,
-            projectId
-          );
-        } catch (error) {
-          logger.error('Ошибка отката реферальных выплат при смене статуса', {
-            orderId: order.id,
-            orderNumber: reversalOrderId,
-            projectId,
-            error:
-              error instanceof Error ? error.message : 'Неизвестная ошибка',
-            component: 'order-service'
-          });
-        }
-      }
-
       return order as OrderWithRelations;
     } catch (error) {
       logger.error('Ошибка изменения статуса заказа', {
@@ -659,7 +606,7 @@ export class OrderService {
           categoryId: data.categoryId,
           description: data.description,
           isActive: data.isActive ?? true,
-          metadata: data.metadata
+          metadata: toInputJson(data.metadata)
         },
         include: {
           category: true,
@@ -693,9 +640,13 @@ export class OrderService {
     data: UpdateProductInput
   ) {
     try {
+      const updateData: Prisma.ProductUncheckedUpdateInput = {
+        ...data,
+        metadata: toInputJson(data.metadata)
+      };
       const product = await db.product.update({
         where: { id: productId },
-        data,
+        data: updateData,
         include: {
           category: true,
           project: true
@@ -734,7 +685,7 @@ export class OrderService {
           parentId: data.parentId,
           sortOrder: data.sortOrder ?? 0,
           isActive: data.isActive ?? true,
-          metadata: data.metadata
+          metadata: toInputJson(data.metadata)
         },
         include: {
           parent: true,
@@ -769,9 +720,13 @@ export class OrderService {
     data: UpdateProductCategoryInput
   ) {
     try {
+      const updateData: Prisma.ProductCategoryUncheckedUpdateInput = {
+        ...data,
+        metadata: toInputJson(data.metadata)
+      };
       const category = await db.productCategory.update({
         where: { id: categoryId },
-        data,
+        data: updateData,
         include: {
           parent: true,
           children: true,

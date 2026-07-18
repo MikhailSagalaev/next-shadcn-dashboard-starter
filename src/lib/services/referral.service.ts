@@ -657,36 +657,21 @@ export class ReferralService {
     let failures = 0;
 
     try {
-      // Основной путь: транзакции с детерминированным externalId плана 001.
       const referralTransactions = await db.transaction.findMany({
         where: {
           type: 'EARN',
           isReferralBonus: true,
-          externalId: { startsWith: `referral_${orderId}_` }
+          ...(projectId ? { user: { projectId } } : {}),
+          OR: [
+            { externalId: { startsWith: `referral_${orderId}_` } },
+            {
+              externalId: null,
+              metadata: { path: ['orderId'], equals: orderId }
+            }
+          ]
         },
         include: { bonus: true }
       });
-
-      // Legacy-строки без externalId сматчить по externalId нельзя.
-      // Пытаемся найти их по metadata.orderId для информирования.
-      const legacyCandidates = await db.transaction.count({
-        where: {
-          type: 'EARN',
-          isReferralBonus: true,
-          externalId: null,
-          metadata: { path: ['orderId'], equals: orderId }
-        }
-      });
-      if (legacyCandidates > 0) {
-        logger.warn(
-          'Найдены legacy реферальные транзакции без externalId — откат по ним не выполняется автоматически',
-          {
-            orderId,
-            legacyCandidates,
-            component: 'referral-service'
-          }
-        );
-      }
 
       if (referralTransactions.length === 0) {
         logger.info(
@@ -700,10 +685,11 @@ export class ReferralService {
       }
 
       for (const referralTx of referralTransactions) {
-        const reversalExternalId = `reversal_${referralTx.externalId}`;
+        const reversalExternalId = referralTx.externalId
+          ? `reversal_${referralTx.externalId}`
+          : `reversal_legacy_referral_${orderId}_${referralTx.id}`;
 
         try {
-          // Идемпотентность: уже откатано?
           const existingReversal = await db.transaction.findUnique({
             where: { externalId: reversalExternalId }
           });
@@ -761,7 +747,8 @@ export class ReferralService {
                 externalId: reversalExternalId,
                 metadata: {
                   source: 'order_reversal',
-                  reversalOf: referralTx.externalId,
+                  reversalOf: referralTx.externalId ?? referralTx.id,
+                  legacy: referralTx.externalId === null,
                   orderId,
                   awardedAmount,
                   reversibleAmount,
@@ -775,7 +762,6 @@ export class ReferralService {
           reversedCount += 1;
           reversedAmount += reversibleAmount;
         } catch (error) {
-          // P2002: компенсирующая транзакция уже создана гонкой — идемпотентно ок.
           if (
             error instanceof Object &&
             (error as { code?: string }).code === 'P2002'
@@ -810,7 +796,7 @@ export class ReferralService {
         component: 'referral-service'
       });
     } catch (error) {
-      // Верхнеуровневый сбой не должен ломать смену статуса заказа.
+      failures += 1;
       logger.error('Ошибка отката реферальных выплат', {
         orderId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
@@ -1005,7 +991,7 @@ export class ReferralService {
         _count: { _all: true }
       });
 
-      const levelBreakdown = levelBreakdownRaw
+      const levelBreakdown = (levelBreakdownRaw ?? [])
         .filter(
           (row) =>
             typeof row.referralLevel === 'number' && row.referralLevel !== null

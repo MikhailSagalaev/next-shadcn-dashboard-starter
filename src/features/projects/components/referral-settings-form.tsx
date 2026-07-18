@@ -211,9 +211,9 @@ export function ReferralSettingsForm({
           <Users className='h-4 w-4' />
           <AlertDescription className='text-sm'>
             Эта вкладка настраивает <strong>вознаграждение для клиентов</strong>{' '}
-            (приветственные бонусы, % с первой покупки). Вознаграждения
-            партнёрам (тренер / менеджер / руководитель) настраиваются во
-            вкладке <strong>«Планы партнёров»</strong>.
+            (приветственные бонусы, % с первой покупки). Вознаграждения для
+            партнёров уровней 1–3 настраиваются во вкладке{' '}
+            <strong>«Планы партнёров»</strong>.
           </AlertDescription>
         </Alert>
       )}
@@ -461,9 +461,9 @@ export function ReferralSettingsForm({
                     const isLevelActive = levelField?.isActive ?? false;
                     const levelDescriptions = project?.enablePartnerRoles
                       ? [
-                          '→ Тренер (L1), план на вкладке «Планы партнёров»',
-                          '→ Менеджер (L2)',
-                          '→ Руководитель (L3)'
+                          '→ Уровень 1 (L1), план на вкладке «Планы партнёров»',
+                          '→ Уровень 2 (L2)',
+                          '→ Уровень 3 (L3)'
                         ]
                       : [
                           'Прямые приглашения',

@@ -11,8 +11,11 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  ArrowRightLeft,
   Building2,
+  Copy,
   Loader2,
+  MoreHorizontal,
   Network,
   Pencil,
   Plus,
@@ -23,13 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/composite/confirm-dialog';
 import {
   Dialog,
@@ -39,6 +36,14 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -59,12 +64,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
+import { buildReferralLink } from '@/lib/utils/referral-link';
 import {
   getPartnerRoleLabel,
   PartnerRoleBadge
 } from '@/features/bonuses/components/partner-role-badge';
-import { PartnerUserCombobox } from './partner-user-combobox';
+import { PartnerUserCombobox, type PartnerUser } from './partner-user-combobox';
 
 type PlanOption = { id: string; name: string };
 
@@ -87,6 +93,7 @@ type Organization = {
   defaultReferralCommissionPlanId: string | null;
   directorUserId: string | null;
   defaultReferralCommissionPlan?: { id: string; name: string } | null;
+  project?: { domain: string | null };
   director?: {
     id: string;
     firstName: string | null;
@@ -96,6 +103,13 @@ type Organization = {
     partnerRole: string;
   } | null;
   _count?: { members: number };
+};
+
+type OrganizationOption = {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
 };
 
 type Member = {
@@ -125,14 +139,26 @@ function resolveDefaultReferrerForRole(
   members: Member[],
   directorUserId: string | null
 ): string {
-  if (role === 'DIRECTOR' || role === 'CLIENT') return '';
+  if (role === 'DIRECTOR') return '';
   if (role === 'MANAGER' && directorUserId) return directorUserId;
-  if (role === 'TRAINER') {
-    const manager = members.find((m) => m.partnerRole === 'MANAGER');
+  if (role === 'TRAINER' || role === 'CLIENT') {
+    const manager = members.find((member) => member.partnerRole === 'MANAGER');
     if (manager) return manager.id;
     if (directorUserId) return directorUserId;
   }
   return '';
+}
+
+function memberToPartnerUser(member: Member | undefined): PartnerUser | null {
+  if (!member) return null;
+  return {
+    id: member.id,
+    name: member.name,
+    email: member.email,
+    phone: member.phone,
+    partnerRole: member.partnerRole,
+    outboundReferralPlanId: member.outboundReferralPlanId
+  };
 }
 
 interface Props {
@@ -148,12 +174,12 @@ const formatRub = (n: number) =>
   }).format(n);
 
 export function OrganizationDetailView({ projectId, organizationId }: Props) {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [stats, setStats] = useState<OrgStats | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
   const [plans, setPlans] = useState<PlanOption[]>([]);
   const [hierarchyWarnings, setHierarchyWarnings] = useState<
     HierarchyWarning[]
@@ -165,6 +191,9 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [removeMemberTarget, setRemoveMemberTarget] = useState<Member | null>(
     null
   );
+  const [transferMemberTarget, setTransferMemberTarget] =
+    useState<Member | null>(null);
+  const [targetOrganizationId, setTargetOrganizationId] = useState('');
 
   const [editName, setEditName] = useState('');
   const [editSlug, setEditSlug] = useState('');
@@ -194,18 +223,23 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       try {
         // cache: 'no-store' — иначе браузер отдаёт закэшированный ответ и свежие
         // данные видны только после полной перезагрузки страницы.
-        const [orgRes, membersRes, plansRes] = await Promise.all([
-          fetch(`/api/projects/${projectId}/organizations/${organizationId}`, {
-            cache: 'no-store'
-          }),
-          fetch(
-            `/api/projects/${projectId}/organizations/${organizationId}/members`,
-            { cache: 'no-store' }
-          ),
-          fetch(`/api/projects/${projectId}/referral-commission-plans`, {
-            cache: 'no-store'
-          })
-        ]);
+        const [orgRes, membersRes, organizationsRes, plansRes] =
+          await Promise.all([
+            fetch(
+              `/api/projects/${projectId}/organizations/${organizationId}`,
+              { cache: 'no-store' }
+            ),
+            fetch(
+              `/api/projects/${projectId}/organizations/${organizationId}/members`,
+              { cache: 'no-store' }
+            ),
+            fetch(`/api/projects/${projectId}/organizations`, {
+              cache: 'no-store'
+            }),
+            fetch(`/api/projects/${projectId}/referral-commission-plans`, {
+              cache: 'no-store'
+            })
+          ]);
 
         if (orgRes.ok) {
           const data = await orgRes.json();
@@ -217,6 +251,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           const data = await membersRes.json();
           setMembers(data.members ?? []);
         }
+        if (organizationsRes.ok) {
+          const data = await organizationsRes.json();
+          setOrganizations(data.organizations ?? []);
+        }
         if (plansRes.ok) {
           const data = await plansRes.json();
           setPlans(
@@ -227,16 +265,12 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           );
         }
       } catch {
-        toast({
-          title: 'Ошибка',
-          description: 'Не удалось загрузить организацию',
-          variant: 'destructive'
-        });
+        toast.error('Не удалось загрузить организацию');
       } finally {
         if (!opts?.silent) setLoading(false);
       }
     },
-    [projectId, organizationId, toast]
+    [projectId, organizationId]
   );
 
   useEffect(() => {
@@ -274,15 +308,11 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось сохранить');
-      toast({ title: 'Сохранено' });
+      toast.success('Сохранено');
       setEditOpen(false);
       await load({ silent: true });
-    } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
-      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Не удалось');
     } finally {
       setSaving(false);
     }
@@ -290,7 +320,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
   const addMember = async () => {
     if (!newUserId) {
-      toast({ title: 'Выберите пользователя', variant: 'destructive' });
+      toast.error('Выберите пользователя');
       return;
     }
     setSaving(true);
@@ -311,38 +341,32 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось добавить');
       if (data.attributionLocked) {
-        toast({
-          title: 'Участник добавлен, но комиссия — нет',
+        toast.warning('Участник добавлен, но комиссия не изменена', {
           description:
-            'У пользователя уже зафиксирована выплата другому рефереру — новая связь только отображается, начисления по ней не идут.',
-          variant: 'destructive'
+            'У пользователя уже зафиксирована выплата другому рефереру — новая связь только отображается.'
         });
       } else {
-        toast({ title: 'Участник добавлен' });
+        toast.success('Участник добавлен');
       }
       setAddMemberOpen(false);
       setNewUserId('');
       setNewReferrerId('');
       setNewPlanId('');
       await load({ silent: true });
-    } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
-      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Не удалось');
     } finally {
       setSaving(false);
     }
   };
 
-  const openEditMember = (m: Member) => {
-    setEditMember(m);
+  const openEditMember = (member: Member) => {
+    setEditMember(member);
     setMemberRole(
-      m.partnerRole as 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
+      member.partnerRole as 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
     );
-    setMemberReferrerId(m.referredBy ?? '');
-    setMemberPlanId(m.outboundReferralPlanId ?? '');
+    setMemberReferrerId(member.referredBy ?? '');
+    setMemberPlanId(member.outboundReferralPlanId ?? '');
   };
 
   const saveMember = async () => {
@@ -364,23 +388,17 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось сохранить');
       if (data.attributionLocked) {
-        toast({
-          title: 'Приведён обновлён, но выплата — нет',
+        toast.warning('Связь обновлена, но комиссия не изменена', {
           description:
-            'У пользователя уже зафиксирована комиссия за предыдущего реферера — она не переедет на нового. Это только меняет отображаемую связь.',
-          variant: 'destructive'
+            'За пользователем уже зафиксирована комиссия предыдущего реферера.'
         });
       } else {
-        toast({ title: 'Участник обновлён' });
+        toast.success('Участник обновлён');
       }
       setEditMember(null);
       await load({ silent: true });
-    } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
-      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Не удалось');
     } finally {
       setSaving(false);
     }
@@ -396,15 +414,72 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось удалить');
-      toast({ title: 'Участник убран из организации' });
+      toast.success('Участник убран из организации');
       setRemoveMemberTarget(null);
       await load({ silent: true });
-    } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
-      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Не удалось');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyMemberReferralLink = async (member: Member) => {
+    if (!organization || member.partnerRole === 'CLIENT') return;
+    try {
+      await navigator.clipboard.writeText(
+        buildReferralLink(
+          organization.project?.domain,
+          member.id,
+          organization.slug
+        )
+      );
+      toast.success('Реферальная ссылка скопирована');
+    } catch {
+      toast.error('Не удалось скопировать ссылку');
+    }
+  };
+
+  const openTransferMember = (member: Member) => {
+    const firstTarget = organizations.find(
+      (candidate) => candidate.id !== organizationId
+    );
+    setTransferMemberTarget(member);
+    setTargetOrganizationId(firstTarget?.id ?? '');
+  };
+
+  const transferMember = async () => {
+    if (!transferMemberTarget || !targetOrganizationId) {
+      toast.error('Выберите целевую организацию');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/organizations/${organizationId}/members/${transferMemberTarget.id}/transfer`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetOrganizationId })
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Не удалось перенести');
+
+      if (data.attributionLocked) {
+        toast.warning('Участник перенесён, но комиссия не изменена', {
+          description:
+            'Существующая атрибуция уже зафиксирована и не переносится на нового реферера.'
+        });
+      } else {
+        toast.success('Участник перенесён');
+      }
+      setTransferMemberTarget(null);
+      setTargetOrganizationId('');
+      await load({ silent: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Не удалось');
     } finally {
       setSaving(false);
     }
@@ -444,6 +519,12 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         outboundReferralPlanId: null
       }
     : null;
+  const newReferrerInitialUser = memberToPartnerUser(
+    members.find((member) => member.id === newReferrerId)
+  );
+  const memberReferrerInitialUser = memberToPartnerUser(
+    members.find((member) => member.id === memberReferrerId)
+  );
 
   return (
     <div className='space-y-6'>
@@ -492,7 +573,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             {directorName && (
               <>
                 {' · '}
-                руководитель: {directorName}
+                руководитель уровня 3: {directorName}
               </>
             )}
           </p>
@@ -517,9 +598,9 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7'>
           {[
             { label: 'Участников', value: stats.members },
-            { label: 'Тренеры', value: stats.trainers },
-            { label: 'Менеджеры', value: stats.managers },
-            { label: 'Руководители', value: stats.directors },
+            { label: 'Уровень 1', value: stats.trainers },
+            { label: 'Уровень 2', value: stats.managers },
+            { label: 'Уровень 3', value: stats.directors },
             { label: 'Клиенты', value: stats.clients },
             {
               label: 'Покупки',
@@ -565,8 +646,8 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         <TabsContent value='members' className='mt-4 space-y-4'>
           <div className='flex items-center justify-between gap-4'>
             <p className='text-muted-foreground text-xs'>
-              В «Иерархию партнёров» попадают только Тренеры, Менеджеры и
-              Руководители — Клиенты видны только здесь, в списке сети.
+              В «Иерархию партнёров» попадают только уровни 1, 2 и 3 — Клиенты
+              видны только здесь, в списке сети.
             </p>
             <Button onClick={() => setAddMemberOpen(true)}>
               <Plus className='mr-2 h-4 w-4' />
@@ -615,21 +696,54 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                           {formatRub(m.totalPurchases)}
                         </TableCell>
                         <TableCell>
-                          <div className='flex justify-end gap-1'>
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              onClick={() => openEditMember(m)}
-                            >
-                              <Pencil className='h-4 w-4' />
-                            </Button>
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              onClick={() => setRemoveMemberTarget(m)}
-                            >
-                              <UserMinus className='text-destructive h-4 w-4' />
-                            </Button>
+                          <div className='flex justify-end'>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant='ghost'
+                                  size='icon'
+                                  aria-label={`Действия: ${m.name}`}
+                                >
+                                  <MoreHorizontal />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align='end'>
+                                <DropdownMenuGroup>
+                                  <DropdownMenuItem
+                                    onSelect={() => openEditMember(m)}
+                                  >
+                                    <Pencil />
+                                    Редактировать
+                                  </DropdownMenuItem>
+                                  {m.partnerRole !== 'CLIENT' && (
+                                    <DropdownMenuItem
+                                      onSelect={() =>
+                                        void copyMemberReferralLink(m)
+                                      }
+                                    >
+                                      <Copy />
+                                      Копировать реферальную ссылку
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem
+                                    onSelect={() => openTransferMember(m)}
+                                  >
+                                    <ArrowRightLeft />
+                                    Перенести
+                                  </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuGroup>
+                                  <DropdownMenuItem
+                                    variant='destructive'
+                                    onSelect={() => setRemoveMemberTarget(m)}
+                                  >
+                                    <UserMinus />
+                                    Убрать из организации
+                                  </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -723,14 +837,14 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Select>
             </div>
             <div className='space-y-2'>
-              <Label>Руководитель сети</Label>
+              <Label>Уровень 3 сети</Label>
               <PartnerUserCombobox
                 projectId={projectId}
                 value={editDirectorId}
                 initialUser={directorInitialUser}
                 onChange={(u) => setEditDirectorId(u?.id ?? '')}
-                partnerRolesOnly
-                placeholder='Выберите руководителя…'
+                partnerRolesOnly={false}
+                placeholder='Выберите партнёра уровня 3…'
                 className='w-full max-w-none'
               />
             </div>
@@ -782,6 +896,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 onValueChange={(v) => {
                   const role = v as typeof newRole;
                   setNewRole(role);
+                  if (role === 'CLIENT') setNewPlanId('');
                   setNewReferrerId(
                     resolveDefaultReferrerForRole(
                       role,
@@ -810,6 +925,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               <PartnerUserCombobox
                 projectId={projectId}
                 value={newReferrerId}
+                initialUser={newReferrerInitialUser}
                 onChange={(u) => setNewReferrerId(u?.id ?? '')}
                 partnerRolesOnly
                 placeholder='Необязательно'
@@ -819,6 +935,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               <Label>Партнёрский план (outbound)</Label>
               <Select
                 value={newPlanId || '__none__'}
+                disabled={newRole === 'CLIENT'}
                 onValueChange={(v) => setNewPlanId(v === '__none__' ? '' : v)}
               >
                 <SelectTrigger>
@@ -864,7 +981,11 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               <Label>Роль</Label>
               <Select
                 value={memberRole}
-                onValueChange={(v) => setMemberRole(v as typeof memberRole)}
+                onValueChange={(v) => {
+                  const role = v as typeof memberRole;
+                  setMemberRole(role);
+                  if (role === 'CLIENT') setMemberPlanId('');
+                }}
               >
                 <SelectTrigger className='w-full'>
                   <SelectValue />
@@ -885,6 +1006,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               <PartnerUserCombobox
                 projectId={projectId}
                 value={memberReferrerId}
+                initialUser={memberReferrerInitialUser}
                 onChange={(u) => setMemberReferrerId(u?.id ?? '')}
                 partnerRolesOnly
                 placeholder='Не задан'
@@ -894,6 +1016,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               <Label>Партнёрский план</Label>
               <Select
                 value={memberPlanId || '__none__'}
+                disabled={memberRole === 'CLIENT'}
                 onValueChange={(v) =>
                   setMemberPlanId(v === '__none__' ? '' : v)
                 }
@@ -919,6 +1042,69 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             <Button onClick={saveMember} disabled={saving}>
               {saving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
               Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(transferMemberTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTransferMemberTarget(null);
+            setTargetOrganizationId('');
+          }
+        }}
+      >
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle>Перенести участника</DialogTitle>
+            <DialogDescription>
+              «{transferMemberTarget?.name}» будет перенесён в другую
+              организацию с сохранением роли и outbound-плана.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='flex flex-col gap-2 py-2'>
+            <Label>Целевая организация</Label>
+            <Select
+              value={targetOrganizationId}
+              onValueChange={setTargetOrganizationId}
+            >
+              <SelectTrigger className='w-full'>
+                <SelectValue placeholder='Выберите организацию' />
+              </SelectTrigger>
+              <SelectContent>
+                {organizations
+                  .filter((candidate) => candidate.id !== organizationId)
+                  .map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id}>
+                      {candidate.name}
+                      {candidate.isActive ? '' : ' (неактивна)'}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {organizations.every(
+              (candidate) => candidate.id === organizationId
+            ) && (
+              <p className='text-muted-foreground text-sm'>
+                Других организаций в проекте нет.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant='outline'
+              onClick={() => setTransferMemberTarget(null)}
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={transferMember}
+              disabled={saving || !targetOrganizationId}
+            >
+              {saving && <Loader2 className='animate-spin' />}
+              Перенести
             </Button>
           </DialogFooter>
         </DialogContent>

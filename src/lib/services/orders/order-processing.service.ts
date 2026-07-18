@@ -1,64 +1,69 @@
+import type { Order } from '@prisma/client';
 import { db } from '@/lib/db';
 import { NormalizedOrder } from '../integration/tilda-parser.service';
-import { UserService, BonusService } from '@/lib/services/user.service';
-import { BonusLevelService } from '@/lib/services/bonus-level.service';
+import { UserService } from '@/lib/services/user.service';
+import { OrderAccountingService } from './order-accounting.service';
 import { splitFullName } from '@/lib/user-display';
 import { logger } from '@/lib/logger';
 
 export interface OrderProcessingResult {
   success: boolean;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 export class OrderProcessingService {
+  private static isCashPayment(order: NormalizedOrder): boolean {
+    const paymentSystem = String(order.raw?.payment?.sys ?? '')
+      .trim()
+      .toLocaleLowerCase('ru-RU');
+    return paymentSystem === 'наличные';
+  }
+
   static async processOrder(
     projectId: string,
     order: NormalizedOrder
   ): Promise<OrderProcessingResult> {
     logger.info('Processing Order', { projectId, orderId: order.orderId });
 
-    // 1. Get Project Settings
-    const project = await db.project.findUnique({ where: { id: projectId } });
+    const project = await db.project.findUnique({
+      where: { id: projectId },
+      select: { id: true }
+    });
     if (!project) throw new Error('Project not found');
 
-    // Idempotency guard: a duplicate/retried webhook must not re-award bonuses.
-    if (order.orderId) {
-      const existingOrder = await db.order.findFirst({
-        where: { projectId, orderNumber: order.orderId },
-        select: { id: true }
+    const isCashPayment = this.isCashPayment(order);
+    let savedOrder = order.orderId
+      ? await db.order.findFirst({
+          where: { projectId, orderNumber: order.orderId }
+        })
+      : null;
+
+    if (savedOrder?.accountingState === 'APPLIED') {
+      logger.info('Order already accounted, skipping', {
+        projectId,
+        orderId: order.orderId,
+        existingOrderId: savedOrder.id,
+        component: 'order-processing'
       });
-      if (existingOrder) {
-        logger.info('Order already processed, skipping', {
-          projectId,
-          orderId: order.orderId,
-          existingOrderId: existingOrder.id,
-          component: 'order-processing'
-        });
-        return {
-          success: true,
-          message: 'Order already processed',
-          data: {
-            spent: 0,
-            earned: 0,
-            userId: null,
-            orderId: existingOrder.id,
-            userCreated: false,
-            signupForm: false
-          }
-        };
-      }
+      return {
+        success: true,
+        message: 'Order already processed',
+        data: {
+          spent: Number(savedOrder.accountedSpentBonusAmount),
+          userId: savedOrder.userId,
+          orderId: savedOrder.id,
+          userCreated: false,
+          signupForm: false
+        }
+      };
     }
 
-    // 2. Save Order to Database
-    const savedOrder = await this.saveOrder(projectId, order);
+    if (!savedOrder) {
+      savedOrder = await this.saveOrder(projectId, order, isCashPayment);
+    }
 
-    const bonusBehavior = (project.bonusBehavior || 'SPEND_AND_EARN') as
-      | 'SPEND_AND_EARN'
-      | 'SPEND_ONLY'
-      | 'EARN_ONLY';
-
-    // 3. Find or Create User
+    // Find or create the user before any accounting effects are applied.
     let user = await UserService.findUserByContact(
       projectId,
       order.email,
@@ -99,7 +104,7 @@ export class OrderProcessingService {
           where: { id: user.id },
           data: { email: order.email },
           include: { project: true, bonuses: true, transactions: true }
-        })) as any;
+        })) as unknown as typeof user;
       }
     }
 
@@ -121,7 +126,7 @@ export class OrderProcessingService {
           where: { id: user.id },
           data: { firstName, lastName },
           include: { project: true, bonuses: true, transactions: true }
-        })) as typeof user;
+        })) as unknown as typeof user;
       }
 
       if (order.utmSource) {
@@ -135,79 +140,40 @@ export class OrderProcessingService {
           user = (await db.user.findFirst({
             where: { id: user.id, projectId },
             include: { project: true, bonuses: true, transactions: true }
-          })) as typeof user;
+          })) as unknown as typeof user;
         }
       }
     }
 
-    // 4. Link Order to User
-    if (savedOrder && user) {
-      await db.order.update({
-        where: { id: savedOrder.id },
-        data: { userId: user.id }
-      });
-    }
+    // Link first; accounting refuses unlinked orders.
+    await db.order.update({
+      where: { id: savedOrder.id },
+      data: { userId: user.id }
+    });
 
-    // 5. Process Bonuses
-    // Determine Logic
-    // Legacy "GUPIL" promo code check replaced with generalized check or just appliedBonuses
-    // We trust 'appliedBonuses' from TildaParserService which normalizes widget behavior
-
-    const totalAmount = order.amount;
-    const appliedRequested = order.appliedBonuses;
-
-    const shouldSpend =
-      appliedRequested > 0 &&
-      (bonusBehavior === 'SPEND_AND_EARN' || bonusBehavior === 'SPEND_ONLY');
-
-    let spentAmount = 0;
-    let actuallySpent = false;
-
-    if (shouldSpend) {
-      const balance = await UserService.getUserBalance(user.id);
-      const canSpend = Math.min(
-        appliedRequested,
-        Number(balance.currentBalance),
-        totalAmount
+    let accountedOrder = await db.order.findUniqueOrThrow({
+      where: { id: savedOrder.id }
+    });
+    if (!isCashPayment) {
+      accountedOrder = await OrderAccountingService.transition(
+        projectId,
+        savedOrder.id,
+        {
+          status: 'CONFIRMED',
+          comment: 'Автоматическое подтверждение оплаченного заказа',
+          changedBy: 'system'
+        }
       );
-
-      if (canSpend > 0) {
-        const transactions = await BonusService.spendBonuses(
-          user.id,
-          canSpend,
-          `Order ${order.orderId}`,
-          { orderId: order.orderId, source: 'tilda' }
-        );
-        spentAmount = transactions.reduce(
-          (sum, t) => sum + Number(t.amount),
-          0
-        );
-        actuallySpent = true;
-      }
     }
 
-    // 4. Earn Bonuses
-    let shouldEarn = true;
-    let earnBase = totalAmount;
-
-    if (actuallySpent) {
-      if (bonusBehavior === 'SPEND_ONLY') {
-        shouldEarn = false;
-      } else {
-        earnBase = totalAmount - spentAmount;
-      }
-    }
-
-    let earnedBonusAmount = 0;
-    if (shouldEarn && earnBase > 0) {
-      const result = await BonusService.awardPurchaseBonus(
-        user.id,
-        earnBase,
-        order.orderId,
-        `Order #${order.orderId}`
-      );
-      earnedBonusAmount = Number(result.bonus.amount);
-    }
+    const purchaseBonus = !isCashPayment
+      ? await db.bonus.findUnique({
+          where: { externalId: `tilda_order_${order.orderId}` },
+          select: { amount: true }
+        })
+      : null;
+    const spentAmount = Number(accountedOrder.accountedSpentBonusAmount);
+    const earnedBonusAmount = Number(purchaseBonus?.amount ?? 0);
 
     return {
       success: true,
@@ -236,18 +202,19 @@ export class OrderProcessingService {
    */
   private static async saveOrder(
     projectId: string,
-    order: NormalizedOrder
-  ): Promise<any> {
+    order: NormalizedOrder,
+    isCashPayment: boolean
+  ): Promise<Order> {
     try {
       // Create Order with full metadata
       const savedOrder = await db.order.create({
         data: {
           projectId,
           orderNumber: order.orderId,
-          status: 'CONFIRMED',
+          status: 'PENDING',
           totalAmount: order.amount,
-          paidAmount: order.amount - order.appliedBonuses,
-          bonusAmount: order.appliedBonuses,
+          paidAmount: 0,
+          bonusAmount: 0,
           paymentMethod: order.raw?.payment?.sys || 'unknown',
           deliveryMethod: order.raw?.payment?.delivery || null,
           deliveryAddress: order.raw?.payment?.delivery_address || null,
@@ -255,6 +222,8 @@ export class OrderProcessingService {
             // Основные данные
             promocode: order.promocode,
             utmSource: order.utmSource,
+            requestedBonusAmount: order.appliedBonuses,
+            cashPending: isCashPayment,
 
             // Данные клиента
             customerName: order.name,
@@ -332,7 +301,10 @@ export class OrderProcessingService {
                   where: { id: dbProduct.id },
                   data: {
                     metadata: {
-                      ...(dbProduct.metadata as any),
+                      ...(dbProduct.metadata as unknown as Record<
+                        string,
+                        unknown
+                      >),
                       image: product.img,
                       options: product.options,
                       externalId: product.externalid
@@ -392,8 +364,7 @@ export class OrderProcessingService {
       return savedOrder;
     } catch (error) {
       logger.error('Failed to save order', { error, orderId: order.orderId });
-      // Don't throw - order processing should continue even if analytics fails
-      return null;
+      throw error;
     }
   }
 }

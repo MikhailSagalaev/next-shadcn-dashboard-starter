@@ -523,7 +523,7 @@ export class PartnerNotificationService {
 
 /**
  * Шаблон сообщения зависит от уровня в цепочке предков.
- * L1 — прямой рекрутер, L2 — менеджер, L3+ — руководитель.
+ * L1 — прямой рекрутер, L2 — уровень 2, L3+ — уровень 3.
  *
  * @see Requirement 7.2
  */
@@ -532,7 +532,7 @@ function buildMessageForLevel(level: number, newMemberName: string): string {
     return `🎉 Новый клиент в вашей команде: ${newMemberName}`;
   }
   if (level === 2) {
-    return `📈 У вашего тренера новый клиент: ${newMemberName}`;
+    return `📈 У партнёра уровня 1 новый клиент: ${newMemberName}`;
   }
   return `📊 В вашей организации новая регистрация: ${newMemberName}`;
 }
@@ -558,13 +558,13 @@ function formatName(u: {
 function roleLabel(role?: string | null): string {
   switch (role) {
     case 'DIRECTOR':
-      return 'Руководитель';
+      return 'Уровень 3';
     case 'MANAGER':
-      return 'Менеджер';
+      return 'Уровень 2';
     case 'TRAINER':
-      return 'Тренер';
+      return 'Уровень 1';
     default:
-      return 'партнёр';
+      return 'Клиент';
   }
 }
 

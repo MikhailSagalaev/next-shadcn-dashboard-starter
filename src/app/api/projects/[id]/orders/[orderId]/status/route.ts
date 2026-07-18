@@ -14,14 +14,15 @@ import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { z } from 'zod';
 import { OrderStatus } from '@prisma/client';
+import { OrderAccountingConflictError } from '@/lib/services/orders/order-accounting.service';
 import type { ChangeOrderStatusInput } from '@/types/orders';
 
-const changeStatusSchema = z.object({
-  status: z.nativeEnum(OrderStatus),
-  comment: z.string().optional(),
-  changedBy: z.string().optional(),
-  metadata: z.record(z.any()).optional()
-});
+const changeStatusSchema = z
+  .object({
+    status: z.nativeEnum(OrderStatus),
+    comment: z.string().max(500).optional()
+  })
+  .strict();
 
 // PUT /api/projects/[id]/orders/[orderId]/status - Изменение статуса заказа
 export async function PUT(
@@ -50,8 +51,7 @@ export async function PUT(
     const payload: ChangeOrderStatusInput = {
       status: validatedData.status,
       comment: validatedData.comment,
-      metadata: validatedData.metadata,
-      changedBy: validatedData.changedBy || admin.sub
+      changedBy: admin.sub
     };
 
     const order = await OrderService.changeOrderStatus(
@@ -73,6 +73,10 @@ export async function PUT(
         { error: 'Неверные данные', details: error.errors },
         { status: 400 }
       );
+    }
+
+    if (error instanceof OrderAccountingConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     if (error instanceof Error && error.message === 'Заказ не найден') {

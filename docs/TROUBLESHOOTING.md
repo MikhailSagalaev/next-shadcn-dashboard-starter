@@ -200,6 +200,45 @@ Error: Can't reach database server
 
 ---
 
+### ❌ Production build завис или запущен дважды
+
+**Симптомы:**
+- build долго не создаёт `.next/BUILD_ID`;
+- одновременно видны несколько `next build`/`yarn build` процессов;
+- VPS исчерпал RAM/swap, SSH отвечает медленно;
+- в логе есть compile-сообщения, но процесс не завершился.
+
+**Диагностика:**
+
+```bash
+cd /opt/next-shadcn-dashboard-starter
+pgrep -af "next build|yarn.*build"
+free -h
+tail -n 100 logs/deploy-build.log
+```
+
+Наличие `Compiled successfully` не означает завершение всей сборки: дождитесь exit code `0` и непустого `.next/BUILD_ID`.
+
+**Исправление:**
+1. Не запускайте ещё один build.
+2. Определите PID основной и случайно запущенной сборки; завершите только лишний процесс (`kill <pid>`, после таймаута — `kill -9 <pid>`). Не используйте `pkill node` или `killall`.
+3. На low-memory VPS остановите приложение: `pm2 stop bonus-app`.
+4. Когда build-процессов больше нет, удалите неполный `.next` и запустите одну Webpack-сборку:
+   ```bash
+   rm -rf .next
+   mkdir -p logs
+   nohup env NEXT_PHASE=phase-production-build NODE_OPTIONS=--max-old-space-size=1536 yarn next build --webpack > logs/deploy-build.log 2>&1 &
+   echo $! > /tmp/bonus-build.pid
+   ```
+5. Контролируйте сохранённый PID и лог. После успешного завершения проверьте `test -s .next/BUILD_ID`.
+6. Только затем выполните `pm2 restart bonus-app --update-env`, health-check и просмотр startup-логов.
+
+**Профилактика SSH quoting:** не передавайте `|`, `$()` и сложные конструкции внутри незащищённой интерполируемой SSH-строки. В PowerShell используйте single-quoted `$remote`/here-string и передавайте сценарий в `ssh ... 'bash -s'`. Ошибочный quoting уже может породить второй build, выполняя часть команды не на той стороне.
+
+Полный сценарий: [VPS Deployment Guide](./VPS_DEPLOYMENT_GUIDE.md#фактический-pm2-deploy-этого-проекта).
+
+---
+
 ## 🧪 Отладка
 
 ### Проверка webhook

@@ -14,46 +14,10 @@ import { OrderService } from '@/lib/services/order.service';
 import { UserService } from '@/lib/services/user.service';
 import { db } from '@/lib/db';
 import { OrderStatus } from '@prisma/client';
-import { isProductionBuildPhase } from '@/lib/runtime-phase';
+import { createBullMQConnectionOptions } from '@/lib/queues/bullmq-connection';
 
-// Конфигурация Redis для очереди синхронизации
-const getRedisConfig = () => {
-  if (isProductionBuildPhase()) {
-    return null;
-  }
-
-  // Проверяем доступность Redis
-  const hasRedisUrl = !!process.env.REDIS_URL;
-  const hasRedisHost = !!process.env.REDIS_HOST;
-
-  if (!hasRedisUrl && !hasRedisHost) {
-    return null; // Redis недоступен
-  }
-
-  if (process.env.REDIS_HOST) {
-    return {
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD
-      },
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times: number) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      }
-    };
-  }
-
-  return {
-    redis: process.env.REDIS_URL || 'redis://localhost:6379',
-    maxRetriesPerRequest: 3,
-    retryStrategy: (times: number) => {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
-    }
-  };
-};
+const queueConnection = createBullMQConnectionOptions('queue');
+const workerConnection = createBullMQConnectionOptions('worker');
 
 // Типы задач в очереди синхронизации
 export interface RetailCrmSyncJobData {
@@ -67,17 +31,90 @@ export interface RetailCrmSyncJobData {
 }
 
 // Создаем очередь для синхронизации (только если Redis доступен)
-const redisConfig = getRedisConfig();
-export const retailCrmSyncQueue = redisConfig
+export const retailCrmSyncQueue = queueConnection
   ? new Queue<RetailCrmSyncJobData>('retailcrm-sync', {
-      connection:
-        typeof redisConfig.redis === 'string'
-          ? { host: 'localhost', port: 6379 }
-          : redisConfig.redis
+      connection: queueConnection
     })
   : null;
 
 // Worker создается в конце файла
+
+// Проводит внешний статус только по разрешенной цепочке. Это не позволяет
+// RetailCRM перепрыгнуть PENDING → DELIVERED и обойти ручку учета экономики.
+async function syncOrderStatus(
+  projectId: string,
+  orderId: string,
+  targetStatus: OrderStatus
+): Promise<void> {
+  const order = await db.order.findFirst({
+    where: { id: orderId, projectId },
+    select: { status: true, userId: true, accountingState: true }
+  });
+  if (!order || order.status === targetStatus) return;
+  if (
+    order.status === OrderStatus.CANCELLED ||
+    order.status === OrderStatus.REFUNDED
+  ) {
+    return;
+  }
+
+  if (targetStatus === OrderStatus.CANCELLED) {
+    const terminalStatus =
+      order.status === OrderStatus.DELIVERED
+        ? OrderStatus.REFUNDED
+        : OrderStatus.CANCELLED;
+    await OrderService.changeOrderStatus(projectId, orderId, {
+      status: terminalStatus,
+      comment: 'Синхронизация статуса из RetailCRM',
+      changedBy: 'retailcrm-sync'
+    });
+    return;
+  }
+
+  if (targetStatus === OrderStatus.REFUNDED) {
+    // Не применяем экономику к заказу, который пришел уже возвращенным.
+    const terminalStatus =
+      order.status === OrderStatus.PENDING &&
+      order.accountingState === 'NOT_APPLIED'
+        ? OrderStatus.CANCELLED
+        : OrderStatus.REFUNDED;
+    await OrderService.changeOrderStatus(projectId, orderId, {
+      status: terminalStatus,
+      comment: 'Синхронизация возврата из RetailCRM',
+      changedBy: 'retailcrm-sync'
+    });
+    return;
+  }
+
+  const forwardStatuses: OrderStatus[] = [
+    OrderStatus.PENDING,
+    OrderStatus.CONFIRMED,
+    OrderStatus.PROCESSING,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED
+  ];
+  const currentIndex = forwardStatuses.indexOf(order.status);
+  const targetIndex = forwardStatuses.indexOf(targetStatus);
+  if (currentIndex < 0 || targetIndex <= currentIndex) return;
+
+  if (!order.userId && order.status === OrderStatus.PENDING) {
+    logger.warn('RetailCRM order cannot be accounted without a linked user', {
+      projectId,
+      orderId,
+      targetStatus,
+      component: 'retailcrm-sync-queue'
+    });
+    return;
+  }
+
+  for (let index = currentIndex + 1; index <= targetIndex; index += 1) {
+    await OrderService.changeOrderStatus(projectId, orderId, {
+      status: forwardStatuses[index],
+      comment: 'Синхронизация статуса из RetailCRM',
+      changedBy: 'retailcrm-sync'
+    });
+  }
+}
 
 // Синхронизация заказов
 async function syncOrders(
@@ -110,19 +147,39 @@ async function syncOrders(
         }
       });
 
+      const nextStatus = mapRetailCrmStatusToOrderStatus(retailCrmOrder.status);
       if (existingOrder) {
-        // Обновляем существующий заказ
-        await OrderService.updateOrder(projectId, existingOrder.id, {
-          status: mapRetailCrmStatusToOrderStatus(retailCrmOrder.status),
-          totalAmount: retailCrmOrder.totalSumm
-        });
+        const totalChanged =
+          Number(existingOrder.totalAmount) !==
+          Number(retailCrmOrder.totalSumm);
+        if (
+          totalChanged &&
+          existingOrder.status === OrderStatus.PENDING &&
+          existingOrder.accountingState === 'NOT_APPLIED'
+        ) {
+          await OrderService.updateOrder(projectId, existingOrder.id, {
+            totalAmount: retailCrmOrder.totalSumm
+          });
+        } else if (totalChanged) {
+          logger.warn('RetailCRM total ignored for an accounted order', {
+            projectId,
+            orderId: existingOrder.id,
+            orderNumber: existingOrder.orderNumber,
+            localTotal: Number(existingOrder.totalAmount),
+            retailCrmTotal: Number(retailCrmOrder.totalSumm),
+            accountingState: existingOrder.accountingState,
+            component: 'retailcrm-sync-queue'
+          });
+        }
+        await syncOrderStatus(projectId, existingOrder.id, nextStatus);
       } else {
-        // Создаем новый заказ
-        await OrderService.createOrder({
+        // Сначала сохраняем PENDING: дальнейшие статусы проходят через
+        // централизованный accounting и не могут перепрыгнуть начисления/откат.
+        const createdOrder = await OrderService.createOrder({
           projectId,
           userId,
           orderNumber: retailCrmOrder.number,
-          status: mapRetailCrmStatusToOrderStatus(retailCrmOrder.status),
+          status: OrderStatus.PENDING,
           totalAmount: retailCrmOrder.totalSumm,
           items: retailCrmOrder.items.map((item) => ({
             name: item.productName,
@@ -135,6 +192,7 @@ async function syncOrders(
             retailCrmData: retailCrmOrder
           }
         });
+        await syncOrderStatus(projectId, createdOrder.id, nextStatus);
       }
     } catch (error) {
       logger.error('Error syncing order from RetailCRM', {
@@ -244,7 +302,7 @@ function mapRetailCrmStatusToOrderStatus(retailCrmStatus: string): OrderStatus {
 let retailCrmSyncWorker: Worker<RetailCrmSyncJobData> | null = null;
 
 export function getRetailCrmSyncWorker(): Worker<RetailCrmSyncJobData> | null {
-  if (!redisConfig) {
+  if (!workerConnection) {
     logger.warn('RetailCRM sync queue disabled: Redis not available');
     return null;
   }
@@ -327,10 +385,7 @@ export function getRetailCrmSyncWorker(): Worker<RetailCrmSyncJobData> | null {
         }
       },
       {
-        connection:
-          typeof redisConfig.redis === 'string'
-            ? { host: 'localhost', port: 6379 }
-            : redisConfig.redis
+        connection: workerConnection
       }
     );
 

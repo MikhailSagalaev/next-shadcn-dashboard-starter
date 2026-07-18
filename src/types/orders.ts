@@ -7,9 +7,25 @@
  * @author: AI Assistant + User
  */
 
-import type { OrderStatus, Order, OrderItem, OrderHistory, Product, ProductCategory } from '@prisma/client';
+import type {
+  OrderStatus,
+  OrderAccountingState,
+  Order,
+  OrderItem,
+  OrderHistory,
+  Product,
+  ProductCategory
+} from '@prisma/client';
 
-export type { OrderStatus, Order, OrderItem, OrderHistory, Product, ProductCategory };
+export type {
+  OrderStatus,
+  OrderAccountingState,
+  Order,
+  OrderItem,
+  OrderHistory,
+  Product,
+  ProductCategory
+};
 
 export interface CreateOrderInput {
   projectId: string;
@@ -22,7 +38,7 @@ export interface CreateOrderInput {
   deliveryAddress?: string;
   paymentMethod?: string;
   deliveryMethod?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   items: CreateOrderItemInput[];
 }
 
@@ -32,28 +48,28 @@ export interface CreateOrderItemInput {
   quantity: number;
   price: number;
   total: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateOrderInput {
-  status?: OrderStatus;
   totalAmount?: number;
   paidAmount?: number;
   bonusAmount?: number;
   deliveryAddress?: string;
   paymentMethod?: string;
   deliveryMethod?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChangeOrderStatusInput {
   status: OrderStatus;
   comment?: string;
   changedBy?: string;
-  metadata?: Record<string, any>;
 }
 
 export interface OrderWithRelations extends Order {
+  accountingState: OrderAccountingState;
+  reversalShortfall: Order['totalAmount'];
   user?: {
     id: string;
     email?: string | null;
@@ -102,7 +118,7 @@ export interface CreateProductInput {
   categoryId?: string;
   description?: string;
   isActive?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateProductInput {
@@ -112,7 +128,7 @@ export interface UpdateProductInput {
   categoryId?: string;
   description?: string;
   isActive?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateProductCategoryInput {
@@ -122,7 +138,7 @@ export interface CreateProductCategoryInput {
   parentId?: string;
   sortOrder?: number;
   isActive?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateProductCategoryInput {
@@ -131,6 +147,5 @@ export interface UpdateProductCategoryInput {
   parentId?: string;
   sortOrder?: number;
   isActive?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
-

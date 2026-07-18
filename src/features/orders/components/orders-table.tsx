@@ -26,7 +26,9 @@ import {
   XCircle,
   Clock,
   Truck,
-  Archive
+  Archive,
+  AlertTriangle,
+  type LucideIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -75,7 +77,7 @@ const statusColors: Record<
   REFUNDED: 'outline'
 };
 
-const statusIcons: Record<string, any> = {
+const statusIcons: Record<string, LucideIcon> = {
   PENDING: Clock,
   CONFIRMED: CheckCircle2,
   PROCESSING: Package,
@@ -160,11 +162,53 @@ export function OrdersTable({
       },
       cell: ({ row }) => {
         const status = row.getValue('status') as string;
+        const order = row.original;
         const StatusIcon = statusIcons[status] || Clock;
+        const isCashPending =
+          status === 'PENDING' &&
+          String(order.paymentMethod ?? '')
+            .trim()
+            .toLocaleLowerCase('ru-RU') === 'наличные';
         return (
-          <Badge variant={statusColors[status] || 'secondary'}>
-            <StatusIcon className='mr-1 h-3 w-3' />
-            {statusLabels[status] || status}
+          <div className='flex flex-col items-start gap-1'>
+            <Badge variant={statusColors[status] || 'secondary'}>
+              <StatusIcon className='mr-1 h-3 w-3' />
+              {statusLabels[status] || status}
+            </Badge>
+            {isCashPending && (
+              <Badge variant='outline'>
+                <AlertTriangle className='mr-1 h-3 w-3' />
+                Требует подтверждения
+              </Badge>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      accessorKey: 'accountingState',
+      header: 'Учет',
+      cell: ({ row }) => {
+        const order = row.original;
+        const label =
+          order.accountingState === 'PARTIALLY_REVERSED'
+            ? 'Частичный откат'
+            : order.accountingState === 'APPLIED'
+              ? 'Применен'
+              : order.accountingState === 'REVERSED'
+                ? 'Отменен'
+                : order.accountingState === 'LEGACY'
+                  ? 'Legacy'
+                  : 'Не применен';
+        return (
+          <Badge
+            variant={
+              order.accountingState === 'PARTIALLY_REVERSED'
+                ? 'destructive'
+                : 'outline'
+            }
+          >
+            {label}
           </Badge>
         );
       }

@@ -9,21 +9,9 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  Package,
-  User,
-  Calendar,
-  MapPin,
-  CreditCard,
-  Truck,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  History
-} from 'lucide-react';
+import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -43,8 +31,19 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import type { OrderWithRelations, OrderStatus } from '@/types/orders';
+import { toast } from 'sonner';
+import type { OrderWithRelations } from '@/types/orders';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 
 interface OrderDetailViewProps {
   projectId: string;
@@ -74,19 +73,25 @@ const statusLabels: Record<string, string> = {
   REFUNDED: 'Возврат'
 };
 
+const accountingStateLabels: Record<string, string> = {
+  LEGACY: 'Исторический заказ',
+  NOT_APPLIED: 'Не применен',
+  APPLYING: 'Применяется',
+  APPLIED: 'Применен',
+  REVERSING: 'Отменяется',
+  REVERSED: 'Отменен',
+  PARTIALLY_REVERSED: 'Частично отменен'
+};
+
 export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const [order, setOrder] = useState<OrderWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [newStatus, setNewStatus] = useState<string>('');
   const [comment, setComment] = useState('');
+  const [confirmStatusChange, setConfirmStatusChange] = useState(false);
 
-  useEffect(() => {
-    fetchOrder();
-  }, [projectId, orderId]);
-
-  const fetchOrder = async () => {
+  const fetchOrder = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(
@@ -96,20 +101,21 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
         throw new Error('Ошибка загрузки заказа');
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as OrderWithRelations;
       setOrder(data);
       setNewStatus(data.status);
     } catch (error) {
-      toast({
-        title: 'Ошибка',
-        description:
-          error instanceof Error ? error.message : 'Не удалось загрузить заказ',
-        variant: 'destructive'
-      });
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось загрузить заказ'
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, orderId]);
+
+  useEffect(() => {
+    void fetchOrder();
+  }, [fetchOrder]);
 
   const handleStatusChange = async () => {
     if (!order || newStatus === order.status) {
@@ -132,23 +138,18 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
       );
 
       if (!response.ok) {
-        throw new Error('Ошибка изменения статуса');
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error || 'Ошибка изменения статуса');
       }
 
-      toast({
-        title: 'Успешно',
-        description: 'Статус заказа изменен'
-      });
-
-      fetchOrder();
+      toast.success('Статус заказа изменен');
+      setConfirmStatusChange(false);
+      await fetchOrder();
       setComment('');
     } catch (error) {
-      toast({
-        title: 'Ошибка',
-        description:
-          error instanceof Error ? error.message : 'Не удалось изменить статус',
-        variant: 'destructive'
-      });
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось изменить статус'
+      );
     }
   };
 
@@ -159,6 +160,12 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
   if (!order) {
     return <div>Заказ не найден</div>;
   }
+
+  const isCashPending =
+    order.status === 'PENDING' &&
+    String(order.paymentMethod ?? '')
+      .trim()
+      .toLocaleLowerCase('ru-RU') === 'наличные';
 
   return (
     <div className='space-y-6'>
@@ -189,6 +196,17 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
           {statusLabels[order.status] || order.status}
         </Badge>
       </div>
+
+      {isCashPending && (
+        <Alert>
+          <AlertTriangle />
+          <AlertTitle>Наличный заказ ожидает подтверждения</AlertTitle>
+          <AlertDescription>
+            Бонусы, сумма покупок и реферальные начисления будут применены
+            только после ручного перевода заказа в статус «Подтвержден».
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className='grid gap-6 md:grid-cols-2'>
         <Card>
@@ -234,6 +252,30 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
                 </div>
               </div>
             )}
+            <div>
+              <Label className='text-muted-foreground'>Состояние учета</Label>
+              <div className='flex items-center gap-2'>
+                <Badge
+                  variant={
+                    order.accountingState === 'PARTIALLY_REVERSED'
+                      ? 'destructive'
+                      : 'outline'
+                  }
+                >
+                  {accountingStateLabels[order.accountingState] ||
+                    order.accountingState}
+                </Badge>
+                {Number(order.reversalShortfall) > 0 && (
+                  <span className='text-destructive text-sm'>
+                    Недостача:{' '}
+                    {new Intl.NumberFormat('ru-RU', {
+                      style: 'currency',
+                      currency: 'RUB'
+                    }).format(Number(order.reversalShortfall))}
+                  </span>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -381,11 +423,12 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
             <Textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
+              maxLength={500}
               placeholder='Введите комментарий к изменению статуса...'
             />
           </div>
           <Button
-            onClick={handleStatusChange}
+            onClick={() => setConfirmStatusChange(true)}
             disabled={newStatus === order.status}
           >
             Изменить статус
@@ -438,6 +481,28 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={confirmStatusChange}
+        onOpenChange={setConfirmStatusChange}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Подтвердить изменение статуса?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Статус заказа изменится с «{statusLabels[order.status]}» на «
+              {statusLabels[newStatus] || newStatus}». Экономические эффекты
+              заказа могут быть применены или отменены.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleStatusChange}>
+              Подтвердить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

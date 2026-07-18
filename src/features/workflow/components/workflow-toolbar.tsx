@@ -279,7 +279,7 @@ const NODE_TEMPLATES: NodeTemplate[] = [
     icon: BarChart3,
     color: '#6366f1',
     category: 'partners',
-    description: 'Сводка по дереву партнёров (DIRECTOR)'
+    description: 'Сводка для партнёра уровня 3 по всей структуре'
   },
   {
     type: 'action.partner_team',
@@ -287,7 +287,7 @@ const NODE_TEMPLATES: NodeTemplate[] = [
     icon: Users,
     color: '#6366f1',
     category: 'partners',
-    description: 'Список подопечных с пагинацией'
+    description: 'Список клиентов и партнёров уровней 1–3 с пагинацией'
   },
   {
     type: 'action.partner_link',
@@ -295,7 +295,7 @@ const NODE_TEMPLATES: NodeTemplate[] = [
     icon: Link2,
     color: '#6366f1',
     category: 'partners',
-    description: 'Выдача utm_ref ссылки (TRAINER+)'
+    description: 'Выдача utm_ref ссылки партнёрам уровней 1–3'
   },
   {
     type: 'action.partner_payouts',
@@ -311,7 +311,7 @@ const NODE_TEMPLATES: NodeTemplate[] = [
     icon: User,
     color: '#6366f1',
     category: 'partners',
-    description: 'Детали клиента/тренера с проверкой доступа'
+    description: 'Детали клиента или партнёра уровня 1 с проверкой доступа'
   },
 
   // Logic & Flow
@@ -400,7 +400,7 @@ const CATEGORY_METADATA: Record<
   actions: { label: 'Действия', description: 'Работа с данными и сервисами' },
   partners: {
     label: 'B2B партнёры',
-    description: 'Кабинет тренера / менеджера / руководителя'
+    description: 'Кабинеты партнёров уровней 1–3'
   },
   logic: { label: 'Логика', description: 'Ветвления и switch-case' },
   flow: {

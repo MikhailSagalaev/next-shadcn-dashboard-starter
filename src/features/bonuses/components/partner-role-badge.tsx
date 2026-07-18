@@ -20,9 +20,9 @@ export type PartnerRole = 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR';
 
 const ROLE_LABEL: Record<PartnerRole, string> = {
   CLIENT: 'Клиент',
-  TRAINER: 'Тренер',
-  MANAGER: 'Менеджер',
-  DIRECTOR: 'Руководитель'
+  TRAINER: 'Уровень 1',
+  MANAGER: 'Уровень 2',
+  DIRECTOR: 'Уровень 3'
 };
 
 const ROLE_CLASS: Record<PartnerRole, string> = {

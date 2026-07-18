@@ -1,5 +1,6 @@
 // Типизация восстановлена для обеспечения безопасности типов
 
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 import { db } from '@/lib/db';
@@ -1299,7 +1300,21 @@ export class BonusService {
         reversalExternalId,
         component: 'bonus-service'
       });
-      return { reversed: false, amount: 0, shortfall: 0 };
+      const reversalMetadata =
+        existingReversal.metadata &&
+        typeof existingReversal.metadata === 'object' &&
+        !Array.isArray(existingReversal.metadata)
+          ? (existingReversal.metadata as Record<string, unknown>)
+          : {};
+      const recordedShortfall =
+        typeof reversalMetadata.shortfall === 'number'
+          ? reversalMetadata.shortfall
+          : 0;
+      return {
+        reversed: false,
+        amount: Number(existingReversal.amount),
+        shortfall: recordedShortfall
+      };
     }
 
     // Находим исходную транзакцию начисления.
@@ -1413,28 +1428,49 @@ export class BonusService {
     userId: string,
     amount: number,
     description?: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>,
+    idempotencyKey?: string
   ): Promise<Transaction[]> {
-    // Получаем пользователя для контекста уровня и уведомлений
+    const findExistingSpend = async (): Promise<Transaction[]> => {
+      if (!idempotencyKey) return [];
+      const existing = await db.transaction.findMany({
+        where: {
+          userId,
+          type: 'SPEND',
+          externalId: { startsWith: `${idempotencyKey}:` }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+      const existingAmount = existing.reduce(
+        (sum, transaction) => sum + Number(transaction.amount),
+        0
+      );
+      if (existing.length > 0 && existingAmount !== amount) {
+        throw new Error('Конфликт идемпотентного списания бонусов');
+      }
+      return existing as unknown as Transaction[];
+    };
+
+    const existingSpend = await findExistingSpend();
+    if (existingSpend.length > 0) return existingSpend;
+
     const user = await db.user.findUnique({
       where: { id: userId },
       include: { project: true }
     });
-
-    if (!user) {
-      throw new Error('Пользователь не найден');
-    }
+    if (!user) throw new Error('Пользователь не найден');
 
     const currentLevel = await BonusLevelService.calculateUserLevel(
       user.projectId,
       Number(user.totalPurchases)
     );
-
-    const baseMetadata = metadata ? { ...metadata } : {};
+    const baseMetadata: Record<string, unknown> = metadata
+      ? { ...metadata }
+      : {};
     const spendBatchId =
       typeof baseMetadata.spendBatchId === 'string'
         ? baseMetadata.spendBatchId
-        : randomUUID();
+        : idempotencyKey || randomUUID();
     baseMetadata.spendBatchId = spendBatchId;
 
     const normalizedOrderId =
@@ -1442,94 +1478,94 @@ export class BonusService {
       baseMetadata.orderId ??
       baseMetadata.order_id ??
       baseMetadata.orderID ??
-      baseMetadata.orderNumber ??
-      undefined;
-
+      baseMetadata.orderNumber;
     if (normalizedOrderId && !baseMetadata.spendOrderId) {
       baseMetadata.spendOrderId = normalizedOrderId;
     }
-
-    // ✅ КРИТИЧНО: Сохраняем orderId в метаданные для проверки идемпотентности
     if (normalizedOrderId && !baseMetadata.orderId) {
       baseMetadata.orderId = normalizedOrderId;
     }
 
-    const transactions = await db.$transaction(async (tx) => {
-      const availableBonuses = await tx.bonus.findMany({
-        where: {
-          userId,
-          isUsed: false,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-        },
-        orderBy: { expiresAt: 'asc' }
-      });
-
-      const totalAvailable = availableBonuses.reduce(
-        (sum: number, bonus) => sum + Number(bonus.amount),
-        0
-      );
-
-      if (totalAvailable < amount) {
-        throw new Error(
-          `Недостаточно бонусов. Доступно: ${totalAvailable}, требуется: ${amount}`
-        );
-      }
-
-      const created: Transaction[] = [];
-      let remainingAmount = amount;
-
-      for (const bonus of availableBonuses) {
-        if (remainingAmount <= 0) break;
-
-        const bonusAmount = Number(bonus.amount);
-        const spendFromThisBonus = Math.min(bonusAmount, remainingAmount);
-
-        const transactionMetadata = {
-          ...baseMetadata,
-          spendBatchId,
-          spendBatchIndex: created.length,
-          spendOrderId: baseMetadata.spendOrderId,
-          spendSource: baseMetadata.source || baseMetadata.spendSource,
-          spentFromBonusId: bonus.id,
-          originalBonusAmount: bonusAmount
-        };
-
-        const transaction = await tx.transaction.create({
-          data: {
+    let transactions: Transaction[];
+    try {
+      transactions = await db.$transaction(async (tx) => {
+        const availableBonuses = await tx.bonus.findMany({
+          where: {
             userId,
-            bonusId: bonus.id,
-            amount: spendFromThisBonus,
-            type: 'SPEND',
-            description: description || 'Списание бонусов',
-            metadata: transactionMetadata,
-            userLevel: currentLevel?.name,
-            appliedPercent: currentLevel?.paymentPercent
+            isUsed: false,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
           },
-          include: { user: true, bonus: true }
+          orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }]
         });
-
-        created.push(transaction as any);
-
-        const newAmount = bonusAmount - spendFromThisBonus;
-        if (newAmount <= 0) {
-          await tx.bonus.update({
-            where: { id: bonus.id },
-            data: { isUsed: true }
-          });
-        } else {
-          await tx.bonus.update({
-            where: { id: bonus.id },
-            data: { amount: newAmount }
-          });
+        const totalAvailable = availableBonuses.reduce(
+          (sum, bonus) => sum + Number(bonus.amount),
+          0
+        );
+        if (totalAvailable < amount) {
+          throw new Error(
+            `Недостаточно бонусов. Доступно: ${totalAvailable}, требуется: ${amount}`
+          );
         }
 
-        remainingAmount -= spendFromThisBonus;
+        const created: Transaction[] = [];
+        let remainingAmount = amount;
+        for (const bonus of availableBonuses) {
+          if (remainingAmount <= 0) break;
+          const bonusAmount = Number(bonus.amount);
+          const spendFromThisBonus = Math.min(bonusAmount, remainingAmount);
+          const spendSource =
+            typeof baseMetadata.source === 'string'
+              ? baseMetadata.source
+              : typeof baseMetadata.spendSource === 'string'
+                ? baseMetadata.spendSource
+                : 'manual';
+          const transaction = await tx.transaction.create({
+            data: {
+              userId,
+              bonusId: bonus.id,
+              amount: spendFromThisBonus,
+              type: 'SPEND',
+              description: description || 'Списание бонусов',
+              externalId: idempotencyKey
+                ? `${idempotencyKey}:${bonus.id}`
+                : undefined,
+              metadata: {
+                ...baseMetadata,
+                spendBatchIndex: created.length,
+                spendSource,
+                spentFromBonusId: bonus.id,
+                originalBonusAmount: bonusAmount
+              } as Prisma.InputJsonObject,
+              userLevel: currentLevel?.name,
+              appliedPercent: currentLevel?.paymentPercent
+            }
+          });
+          created.push(transaction as unknown as Transaction);
+
+          const newAmount = bonusAmount - spendFromThisBonus;
+          await tx.bonus.update({
+            where: { id: bonus.id },
+            data:
+              newAmount <= 0
+                ? { isUsed: true }
+                : { amount: newAmount, isUsed: false }
+          });
+          remainingAmount -= spendFromThisBonus;
+        }
+        return created;
+      });
+    } catch (error) {
+      if (
+        idempotencyKey &&
+        error instanceof Object &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        const concurrentSpend = await findExistingSpend();
+        if (concurrentSpend.length > 0) return concurrentSpend;
       }
+      throw error;
+    }
 
-      return created;
-    });
-
-    // Неблокирующее уведомление
     if (transactions.length > 0) {
       try {
         await sendBonusSpentNotification(
@@ -1547,17 +1583,21 @@ export class BonusService {
         });
       }
 
-      // Синхронизация с МойСклад Direct (неблокирующе)
       try {
         const { SyncService } = await import(
           '@/lib/moysklad-direct/sync-service'
         );
         const syncService = new SyncService();
-
+        const metadataSource =
+          typeof baseMetadata.source === 'string'
+            ? baseMetadata.source
+            : typeof baseMetadata.spendSource === 'string'
+              ? baseMetadata.spendSource
+              : 'manual';
         await syncService.syncBonusSpendingToMoySklad({
           userId,
           amount,
-          source: baseMetadata.source || baseMetadata.spendSource || 'manual',
+          source: metadataSource,
           description
         });
       } catch (error) {
@@ -1567,7 +1607,6 @@ export class BonusService {
           error: error instanceof Error ? error.message : 'Неизвестная ошибка',
           component: 'bonus-service'
         });
-        // Не блокируем основной процесс - синхронизация некритична
       }
     }
 
@@ -1596,7 +1635,7 @@ export class BonusService {
     orderId: string,
     description?: string,
     bonusType: BonusType = 'PURCHASE',
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): Promise<{
     bonus: Bonus;
     levelInfo: {
@@ -1614,54 +1653,53 @@ export class BonusService {
       where: { id: userId },
       include: { project: true }
     });
-
     if (!user || !user.project) {
       throw new Error('Пользователь или проект не найден');
     }
 
-    // Обновляем общую сумму покупок и уровень пользователя
-    const newTotalPurchases = Number(user.totalPurchases) + purchaseAmount;
-    const levelUpdateResult = await BonusLevelService.updateUserLevel(
-      userId,
+    const externalId = `tilda_order_${orderId}`;
+    const existingBonus = await db.bonus.findUnique({ where: { externalId } });
+    const accountingManaged = metadata?.accountingManaged === true;
+    const newTotalPurchases = accountingManaged
+      ? Number(user.totalPurchases)
+      : Number(user.totalPurchases) + purchaseAmount;
+    const levelUpdateResult = existingBonus
+      ? {
+          newLevel: user.currentLevel || 'Базовый',
+          levelChanged: false
+        }
+      : await BonusLevelService.updateUserLevel(userId, newTotalPurchases);
+
+    let bonusPercent = Number(user.project.bonusPercentage);
+    const currentLevel = await BonusLevelService.calculateUserLevel(
+      user.projectId,
       newTotalPurchases
     );
-
-    // Определяем процент бонуса на основе уровня
-    let bonusPercent = Number(user.project.bonusPercentage); // Базовый процент
-
-    if (levelUpdateResult.newLevel) {
-      const currentLevel = await BonusLevelService.calculateUserLevel(
-        user.projectId,
-        newTotalPurchases
-      );
-      if (currentLevel) {
-        bonusPercent = currentLevel.bonusPercent;
-      }
-    }
+    if (currentLevel) bonusPercent = currentLevel.bonusPercent;
 
     const bonusAmount = (purchaseAmount * bonusPercent) / 100;
+    const metadataSource =
+      typeof metadata?.source === 'string' ? metadata.source : 'tilda_order';
+    const bonus =
+      existingBonus ||
+      (await this.awardBonus({
+        userId,
+        amount: bonusAmount,
+        type: bonusType,
+        description:
+          description ||
+          `Бонус за покупку на сумму ${purchaseAmount} руб. (заказ ${orderId})`,
+        metadata: {
+          ...metadata,
+          orderId,
+          source: metadataSource,
+          purchaseAmount
+        },
+        externalId
+      } as CreateBonusInput & { externalId: string }));
 
-    // Начисляем основной бонус
-    // ✅ КРИТИЧНО: Передаем orderId в метаданных для проверки идемпотентности
-    const bonus = await this.awardBonus({
-      userId,
-      amount: bonusAmount,
-      type: bonusType,
-      description:
-        description ||
-        `Бонус за покупку на сумму ${purchaseAmount} руб. (заказ ${orderId})`,
-      metadata: {
-        ...metadata,
-        orderId,
-        source: metadata?.source || 'tilda_order',
-        purchaseAmount
-      }
-    });
-
-    // Дополнительная EARN-транзакция не создаётся, чтобы избежать дублирования.
-    // Подробности покупки уже отражены в описании бонуса.
-
-    // Обрабатываем реферальную систему
+    // Referral payouts have their own deterministic external IDs, so rerunning
+    // this step safely completes a previously interrupted payout chain.
     const referralInfo = await ReferralService.processReferralBonus(
       userId,
       purchaseAmount,
@@ -1673,6 +1711,8 @@ export class BonusService {
       purchaseAmount,
       bonusAmount,
       bonusPercent,
+      accountingManaged,
+      reusedExistingBonus: Boolean(existingBonus),
       currentLevel: levelUpdateResult.newLevel,
       levelChanged: levelUpdateResult.levelChanged,
       referralBonusAwarded: referralInfo.bonusAwarded,
@@ -1680,7 +1720,7 @@ export class BonusService {
     });
 
     return {
-      bonus,
+      bonus: bonus as Bonus,
       levelInfo: {
         currentLevel: levelUpdateResult.newLevel || 'Базовый',
         bonusPercent,

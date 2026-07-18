@@ -60,8 +60,8 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useToast } from '@/hooks/use-toast';
-import { getPartnerRoleLabel } from '@/features/bonuses/components/partner-role-badge';
+import { ConfirmDialog } from '@/components/composite/confirm-dialog';
+import { toast } from 'sonner';
 import { PartnerUserCombobox, type PartnerUser } from './partner-user-combobox';
 
 type PlanLevel = {
@@ -76,6 +76,17 @@ type Plan = {
   name: string;
   maxPayoutDepth: number;
   levels: PlanLevel[];
+};
+
+type DeletePlanResponse = {
+  deleted: boolean;
+  archived: boolean;
+  dependencies: {
+    projectDefaults: number;
+    organizationDefaults: number;
+    outboundUsers: number;
+    referralAttributions: number;
+  };
 };
 
 interface Props {
@@ -94,41 +105,25 @@ interface Props {
 const SLIDER_MIN = 1;
 const SLIDER_MAX = 3;
 
-const LEVEL_ROLE_LABELS = [
-  'Тренер (L1)',
-  'Менеджер (L2)',
-  'Руководитель (L3)'
-] as const;
-
-function formatPlanLevels(
-  levels: PlanLevel[],
-  enablePartnerRoles: boolean
-): string {
-  const sorted = [...levels].sort((a, b) => a.level - b.level);
-  if (enablePartnerRoles) {
-    return sorted
-      .map(
-        (l) =>
-          `${LEVEL_ROLE_LABELS[l.level - 1] ?? `L${l.level}`}: ${l.percent}%`
-      )
-      .join(' · ');
-  }
-  return sorted.map((l) => `L${l.level}: ${l.percent}%`).join(' · ');
+function formatPlanLevels(levels: PlanLevel[]): string {
+  return [...levels]
+    .sort((a, b) => a.level - b.level)
+    .map((level) => `Уровень ${level.level}: ${level.percent}%`)
+    .join(' · ');
 }
 
 type AssignTarget = 'one' | 'role';
 
 const ROLE_PLURAL: Record<'TRAINER' | 'MANAGER' | 'DIRECTOR', string> = {
-  TRAINER: 'тренеров',
-  MANAGER: 'менеджеров',
-  DIRECTOR: 'руководителей'
+  TRAINER: 'партнёров уровня 1',
+  MANAGER: 'партнёров уровня 2',
+  DIRECTOR: 'партнёров уровня 3'
 };
 
 export function ReferralCommissionPlansPanel({
   projectId,
   enablePartnerRoles = false
 }: Props) {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [referralPlansEnabled, setReferralPlansEnabled] = useState(false);
@@ -157,6 +152,9 @@ export function ReferralCommissionPlansPanel({
   } | null>(null);
   const [loadingRolePreview, setLoadingRolePreview] = useState(false);
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [planToDelete, setPlanToDelete] = useState<Plan | null>(null);
+  const [bulkOverwriteConfirmOpen, setBulkOverwriteConfirmOpen] =
+    useState(false);
 
   const planNameById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -176,15 +174,13 @@ export function ReferralCommissionPlansPanel({
       setDefaultPlanId(data.defaultReferralCommissionPlanId ?? null);
       setPlans(data.plans || []);
     } catch {
-      toast({
-        title: 'Ошибка',
-        description: 'Не удалось загрузить настройки планов',
-        variant: 'destructive'
+      toast.error('Ошибка', {
+        description: 'Не удалось загрузить настройки планов'
       });
     } finally {
       setLoading(false);
     }
-  }, [projectId, toast]);
+  }, [projectId]);
 
   useEffect(() => {
     load();
@@ -250,13 +246,11 @@ export function ReferralCommissionPlansPanel({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'save failed');
       }
-      toast({ title: 'Сохранено' });
+      toast.success('Сохранено');
       await load();
     } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не сохранилось',
-        variant: 'destructive'
+      toast.error('Ошибка', {
+        description: e instanceof Error ? e.message : 'Не сохранилось'
       });
     } finally {
       setSaving(false);
@@ -274,16 +268,13 @@ export function ReferralCommissionPlansPanel({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'seed failed');
       }
-      toast({
-        title: 'Готово',
+      toast.success('Готово', {
         description: 'Создан план по умолчанию из текущих уровней программы'
       });
       await load();
     } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
+      toast.error('Ошибка', {
+        description: e instanceof Error ? e.message : 'Не удалось'
       });
     } finally {
       setSaving(false);
@@ -313,14 +304,12 @@ export function ReferralCommissionPlansPanel({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'create failed');
       }
-      toast({ title: 'План создан' });
+      toast.success('План создан');
       setCreatePlanOpen(false);
       await load();
     } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
+      toast.error('Ошибка', {
+        description: e instanceof Error ? e.message : 'Не удалось'
       });
     } finally {
       setSaving(false);
@@ -328,7 +317,6 @@ export function ReferralCommissionPlansPanel({
   };
 
   const deletePlan = async (planId: string) => {
-    if (!confirm('Удалить план?')) return;
     setSaving(true);
     try {
       const res = await fetch(
@@ -339,88 +327,19 @@ export function ReferralCommissionPlansPanel({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'delete failed');
       }
-      toast({ title: 'Удалено' });
+      const result = (await res.json()) as DeletePlanResponse;
+      toast.success(result.archived ? 'План архивирован' : 'План удалён');
       await load();
     } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
+      toast.error('Ошибка', {
+        description: e instanceof Error ? e.message : 'Не удалось'
       });
     } finally {
       setSaving(false);
     }
   };
 
-  const submitAssign = async () => {
-    if (!assignPlanId) {
-      toast({ title: 'Выберите план', variant: 'destructive' });
-      return;
-    }
-
-    if (assignTarget === 'one') {
-      if (!assignUser) {
-        toast({ title: 'Выберите партнёра', variant: 'destructive' });
-        return;
-      }
-      setSaving(true);
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/users/${assignUser.id}/referral-outbound-plan`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ outboundReferralPlanId: assignPlanId })
-          }
-        );
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || 'assign failed');
-        }
-        toast({
-          title: 'План назначен',
-          description: `«${planNameById[assignPlanId]}» → ${assignUser.name}`
-        });
-        setAssignDialogOpen(false);
-        await load();
-      } catch (e) {
-        toast({
-          title: 'Ошибка',
-          description: e instanceof Error ? e.message : 'Не удалось',
-          variant: 'destructive'
-        });
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
-
-    const affected = assignOnlyWithoutPlan
-      ? (rolePreview?.empty ?? 0)
-      : (rolePreview?.total ?? 0);
-
-    if (affected === 0) {
-      toast({
-        title: 'Никого не затронет',
-        description: assignOnlyWithoutPlan
-          ? `У всех ${ROLE_PLURAL[assignRole]} уже есть свой план`
-          : `В проекте нет ${ROLE_PLURAL[assignRole]}`,
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    if (
-      !assignOnlyWithoutPlan &&
-      rolePreview &&
-      rolePreview.total > rolePreview.empty &&
-      !confirm(
-        `Перезаписать план у ${rolePreview.total} ${ROLE_PLURAL[assignRole]}? У ${rolePreview.total - rolePreview.empty} уже есть другой план.`
-      )
-    ) {
-      return;
-    }
-
+  const assignPlanToRole = async () => {
     setSaving(true);
     try {
       const res = await fetch(
@@ -439,21 +358,83 @@ export function ReferralCommissionPlansPanel({
         throw new Error(err.error || 'Не удалось назначить');
       }
       const data = await res.json();
-      toast({
-        title: 'План назначен',
+      toast.success('План назначен', {
         description: `«${planNameById[assignPlanId]}» → ${data.updated} ${ROLE_PLURAL[assignRole]}`
       });
       setAssignDialogOpen(false);
       await load();
     } catch (e) {
-      toast({
-        title: 'Ошибка',
-        description: e instanceof Error ? e.message : 'Не удалось',
-        variant: 'destructive'
+      toast.error('Ошибка', {
+        description: e instanceof Error ? e.message : 'Не удалось'
       });
     } finally {
       setSaving(false);
     }
+  };
+
+  const submitAssign = async () => {
+    if (!assignPlanId) {
+      toast.error('Выберите план');
+      return;
+    }
+
+    if (assignTarget === 'one') {
+      if (!assignUser) {
+        toast.error('Выберите партнёра');
+        return;
+      }
+      setSaving(true);
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/users/${assignUser.id}/referral-outbound-plan`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ outboundReferralPlanId: assignPlanId })
+          }
+        );
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'assign failed');
+        }
+        toast.success('План назначен', {
+          description: `«${planNameById[assignPlanId]}» → ${assignUser.name}`
+        });
+        setAssignDialogOpen(false);
+        await load();
+      } catch (e) {
+        toast.error('Ошибка', {
+          description: e instanceof Error ? e.message : 'Не удалось'
+        });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    const affected = assignOnlyWithoutPlan
+      ? (rolePreview?.empty ?? 0)
+      : (rolePreview?.total ?? 0);
+
+    if (affected === 0) {
+      toast.error('Никого не затронет', {
+        description: assignOnlyWithoutPlan
+          ? `У всех ${ROLE_PLURAL[assignRole]} уже есть свой план`
+          : `В проекте нет ${ROLE_PLURAL[assignRole]}`
+      });
+      return;
+    }
+
+    if (
+      !assignOnlyWithoutPlan &&
+      rolePreview &&
+      rolePreview.total > rolePreview.empty
+    ) {
+      setBulkOverwriteConfirmOpen(true);
+      return;
+    }
+
+    await assignPlanToRole();
   };
 
   if (loading) {
@@ -486,9 +467,9 @@ export function ReferralCommissionPlansPanel({
           <AlertCircle className='h-4 w-4' />
           <AlertTitle>Партнёрские планы ≠ бонусы клиентам</AlertTitle>
           <AlertDescription className='text-sm'>
-            Здесь задаётся, сколько % от покупки получают тренер (L1), менеджер
-            (L2) и руководитель (L3). Бонусы для клиентов — во вкладке
-            «Настройки». Приоритет плана: персональный outbound → план
+            Здесь задаётся, сколько % от покупки выплачивается на уровнях
+            «Уровень 1», «Уровень 2» и «Уровень 3». Бонусы для клиентов — во
+            вкладке «Настройки». Приоритет плана: персональный outbound → план
             организации → план по умолчанию.
           </AlertDescription>
         </Alert>
@@ -620,7 +601,7 @@ export function ReferralCommissionPlansPanel({
                     )}
                   </div>
                   <p className='text-muted-foreground mt-0.5 text-sm'>
-                    {formatPlanLevels(p.levels, enablePartnerRoles)}
+                    {formatPlanLevels(p.levels)}
                     {' · '}
                     глубина {p.maxPayoutDepth}
                   </p>
@@ -639,7 +620,7 @@ export function ReferralCommissionPlansPanel({
                     size='sm'
                     variant='ghost'
                     className='text-destructive hover:text-destructive'
-                    onClick={() => void deletePlan(p.id)}
+                    onClick={() => setPlanToDelete(p)}
                     disabled={saving || defaultPlanId === p.id}
                   >
                     <Trash2 className='h-4 w-4' />
@@ -691,12 +672,7 @@ export function ReferralCommissionPlansPanel({
                 if (levelNum > maxDepth) return null;
                 return (
                   <div key={index} className='space-y-2'>
-                    <Label>
-                      {enablePartnerRoles
-                        ? LEVEL_ROLE_LABELS[index]
-                        : `Уровень ${levelNum}`}{' '}
-                      %
-                    </Label>
+                    <Label>Уровень {levelNum}</Label>
                     <Input
                       type='number'
                       value={value}
@@ -730,8 +706,8 @@ export function ReferralCommissionPlansPanel({
           <DialogHeader>
             <DialogTitle>Назначить партнёрский план</DialogTitle>
             <DialogDescription>
-              План определяет проценты L1/L2/L3 для клиентов, которых пригласил
-              партнёр
+              План определяет проценты для уровней «Уровень 1», «Уровень 2» и
+              «Уровень 3» клиентов, которых пригласил партнёр
             </DialogDescription>
           </DialogHeader>
           <div className='grid gap-5 py-2'>
@@ -790,7 +766,7 @@ export function ReferralCommissionPlansPanel({
                         Всем партнёрам одной роли
                       </p>
                       <p className='text-muted-foreground text-xs'>
-                        Например, всем тренерам сразу
+                        Например, всем партнёрам уровня 1 сразу
                       </p>
                     </div>
                   </label>
@@ -831,9 +807,9 @@ export function ReferralCommissionPlansPanel({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='TRAINER'>Тренеры</SelectItem>
-                      <SelectItem value='MANAGER'>Менеджеры</SelectItem>
-                      <SelectItem value='DIRECTOR'>Руководители</SelectItem>
+                      <SelectItem value='TRAINER'>Уровень 1</SelectItem>
+                      <SelectItem value='MANAGER'>Уровень 2</SelectItem>
+                      <SelectItem value='DIRECTOR'>Уровень 3</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -897,6 +873,38 @@ export function ReferralCommissionPlansPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={planToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPlanToDelete(null);
+        }}
+        title='Удалить план?'
+        description={
+          planToDelete
+            ? `План «${planToDelete.name}» будет удалён, если не используется, или архивирован при наличии назначений и атрибуций.`
+            : undefined
+        }
+        confirmLabel='Удалить'
+        variant='destructive'
+        onConfirm={async () => {
+          if (planToDelete) await deletePlan(planToDelete.id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={bulkOverwriteConfirmOpen}
+        onOpenChange={setBulkOverwriteConfirmOpen}
+        title='Перезаписать назначенные планы?'
+        description={
+          rolePreview
+            ? `План будет назначен ${rolePreview.total} ${ROLE_PLURAL[assignRole]}. У ${rolePreview.total - rolePreview.empty} уже есть другой план — он будет заменён.`
+            : undefined
+        }
+        confirmLabel='Перезаписать'
+        variant='destructive'
+        onConfirm={assignPlanToRole}
+      />
     </div>
   );
 }

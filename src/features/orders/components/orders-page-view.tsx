@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package, Plus, Search, Filter, Download } from 'lucide-react';
+import { Plus, Search, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -29,8 +29,18 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { OrdersTable } from './orders-table';
-import { useToast } from '@/hooks/use-toast';
-import type { OrderWithRelations, OrderStatus } from '@/types/orders';
+import { toast } from 'sonner';
+import type { OrderWithRelations } from '@/types/orders';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 
 interface OrdersPageViewProps {
   projectId: string;
@@ -38,7 +48,6 @@ interface OrdersPageViewProps {
 
 export function OrdersPageView({ projectId }: OrdersPageViewProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const [orders, setOrders] = useState<OrderWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
@@ -48,6 +57,11 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [pendingStatusChange, setPendingStatusChange] = useState<{
+    orderId: string;
+    orderNumber: string;
+    status: string;
+  } | null>(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -72,27 +86,13 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
       setOrders(data.orders || []);
       setTotalCount(data.total || 0);
     } catch (error) {
-      toast({
-        title: 'Ошибка',
-        description:
-          error instanceof Error
-            ? error.message
-            : 'Не удалось загрузить заказы',
-        variant: 'destructive'
-      });
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось загрузить заказы'
+      );
     } finally {
       setLoading(false);
     }
-  }, [
-    projectId,
-    page,
-    pageSize,
-    sortBy,
-    sortOrder,
-    search,
-    statusFilter,
-    toast
-  ]);
+  }, [projectId, page, pageSize, sortBy, sortOrder, search, statusFilter]);
 
   useEffect(() => {
     fetchOrders();
@@ -102,39 +102,45 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
     router.push(`/dashboard/projects/${projectId}/orders/${order.id}`);
   };
 
-  const handleStatusChange = async (orderId: string, status: string) => {
+  const requestStatusChange = (orderId: string, status: string) => {
+    const selectedOrder = orders.find((order) => order.id === orderId);
+    if (!selectedOrder) return;
+    setPendingStatusChange({
+      orderId,
+      orderNumber: selectedOrder.orderNumber,
+      status
+    });
+  };
+
+  const handleStatusChange = async () => {
+    if (!pendingStatusChange) return;
     try {
       const response = await fetch(
-        `/api/projects/${projectId}/orders/${orderId}/status`,
+        `/api/projects/${projectId}/orders/${pendingStatusChange.orderId}/status`,
         {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            status,
+            status: pendingStatusChange.status,
             comment: 'Изменение статуса из списка заказов'
           })
         }
       );
 
       if (!response.ok) {
-        throw new Error('Ошибка изменения статуса');
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error || 'Ошибка изменения статуса');
       }
 
-      toast({
-        title: 'Успешно',
-        description: 'Статус заказа изменен'
-      });
-
-      fetchOrders();
+      toast.success('Статус заказа изменен');
+      setPendingStatusChange(null);
+      await fetchOrders();
     } catch (error) {
-      toast({
-        title: 'Ошибка',
-        description:
-          error instanceof Error ? error.message : 'Не удалось изменить статус',
-        variant: 'destructive'
-      });
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось изменить статус'
+      );
     }
   };
 
@@ -206,10 +212,32 @@ export function OrdersPageView({ projectId }: OrdersPageViewProps) {
               setPage(1);
             }}
             onOrderClick={handleOrderClick}
-            onStatusChange={handleStatusChange}
+            onStatusChange={requestStatusChange}
           />
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={Boolean(pendingStatusChange)}
+        onOpenChange={(open) => !open && setPendingStatusChange(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Подтвердить изменение статуса?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Заказ {pendingStatusChange?.orderNumber}: новый статус —{' '}
+              {pendingStatusChange?.status}. Это действие может изменить бонусы
+              и сумму покупок клиента.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleStatusChange}>
+              Подтвердить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
