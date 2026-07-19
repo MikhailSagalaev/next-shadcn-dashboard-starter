@@ -159,13 +159,26 @@ export class PartnerTeamService {
     referrerId: string,
     organizationId: string | null
   ): Promise<boolean> {
-    if (reviewerUserId === referrerId) return true;
+    const project = await this.getProjectPartnerFlags(projectId);
+    if (!project?.enablePartnerRoles || !project.enablePartnerTeamManagement) {
+      return false;
+    }
 
-    const reviewer = await db.user.findFirst({
-      where: { id: reviewerUserId, projectId },
-      select: { partnerRole: true, organizationId: true }
-    });
+    const [reviewer, referrer] = await Promise.all([
+      db.user.findFirst({
+        where: { id: reviewerUserId, projectId, isActive: true },
+        select: { partnerRole: true, organizationId: true }
+      }),
+      db.user.findFirst({
+        where: { id: referrerId, projectId, isActive: true },
+        select: { partnerRole: true, organizationId: true, referredBy: true }
+      })
+    ]);
     if (!reviewer || reviewer.partnerRole === 'CLIENT') return false;
+
+    // A referrer can review only if they are an actual B2B partner.
+    if (reviewerUserId === referrerId)
+      return referrer?.partnerRole !== 'CLIENT';
 
     if (
       reviewer.partnerRole === 'DIRECTOR' &&
@@ -176,10 +189,6 @@ export class PartnerTeamService {
     }
 
     if (reviewer.partnerRole === 'MANAGER') {
-      const referrer = await db.user.findFirst({
-        where: { id: referrerId, projectId },
-        select: { referredBy: true }
-      });
       if (referrer?.referredBy === reviewerUserId) return true;
     }
 
@@ -594,7 +603,7 @@ export class PartnerTeamService {
       if (!canReview) throw new Error('Нет прав одобрить эту заявку');
     }
 
-    const [referrer, applicant] = await Promise.all([
+    const [referrer, applicant, project] = await Promise.all([
       db.user.findFirst({
         where: { id: request.referrerId, projectId: params.projectId },
         select: { partnerRole: true }
@@ -602,42 +611,77 @@ export class PartnerTeamService {
       db.user.findFirst({
         where: { id: request.userId, projectId: params.projectId },
         select: { partnerRole: true }
+      }),
+      db.project.findUnique({
+        where: { id: params.projectId },
+        select: {
+          referralPlansEnabled: true,
+          defaultReferralCommissionPlanId: true
+        }
       })
     ]);
+
+    if (!referrer || !applicant) {
+      throw new Error('Участник или пригласивший пользователь не найден');
+    }
 
     const partnerRole =
       applicant?.partnerRole && applicant.partnerRole !== 'CLIENT'
         ? applicant.partnerRole
         : this.resolveRoleOnJoinApproval(referrer?.partnerRole ?? 'TRAINER');
 
-    await db.user.update({
-      where: { id: request.userId },
-      data: {
-        referredBy: request.referrerId,
-        partnerRole,
-        ...(request.organizationId
-          ? { organizationId: request.organizationId }
-          : {})
-      }
-    });
+    const commissionPlanId = project?.referralPlansEnabled
+      ? await ReferralCommissionService.resolvePlanIdForNewReferral(
+          params.projectId,
+          request.referrerId,
+          project.defaultReferralCommissionPlanId,
+          request.organizationId
+        )
+      : null;
 
-    try {
-      await ReferralCommissionService.syncAttributionForInvitedUser({
-        invitedUserId: request.userId,
-        projectId: params.projectId,
-        referrerId: request.referrerId,
-        organizationId: request.organizationId
+    // Claim the pending request and commit the hierarchy and attribution as one
+    // unit. A competing approval can no longer leave a half-applied referral.
+    await db.$transaction(async (tx) => {
+      const claimed = await tx.partnerJoinRequest.updateMany({
+        where: {
+          id: request.id,
+          projectId: params.projectId,
+          status: 'PENDING'
+        },
+        data: {
+          status: 'APPROVED',
+          reviewedBy: params.reviewerUserId,
+          reviewedAt: new Date()
+        }
       });
-    } catch (err) {
-      logger.warn('approveJoinRequest: attribution failed', { err });
-    }
+      if (claimed.count !== 1) {
+        throw new Error('Заявка уже обработана');
+      }
 
-    await db.partnerJoinRequest.update({
-      where: { id: request.id },
-      data: {
-        status: 'APPROVED',
-        reviewedBy: params.reviewerUserId,
-        reviewedAt: new Date()
+      await tx.user.update({
+        where: { id: request.userId },
+        data: {
+          referredBy: request.referrerId,
+          partnerRole,
+          ...(request.organizationId
+            ? { organizationId: request.organizationId }
+            : {})
+        }
+      });
+
+      if (commissionPlanId) {
+        await tx.referralAttribution.upsert({
+          where: { userId: request.userId },
+          update: {},
+          create: {
+            userId: request.userId,
+            projectId: params.projectId,
+            referrerId: request.referrerId,
+            commissionPlanId,
+            organizationId: request.organizationId,
+            locked: true
+          }
+        });
       }
     });
 

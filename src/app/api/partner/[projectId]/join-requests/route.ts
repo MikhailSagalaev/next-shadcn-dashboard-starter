@@ -8,9 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requirePartnerUser } from '@/lib/with-partner-auth';
+import { withRateLimit } from '@/lib/with-rate-limit';
 import { PartnerTeamService } from '@/lib/services/partner-team.service';
 
-export async function GET(
+async function getHandler(
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> }
 ) {
@@ -25,3 +26,8 @@ export async function GET(
 
   return NextResponse.json({ requests });
 }
+
+export const GET = withRateLimit(getHandler, {
+  maxRequests: 30,
+  windowMs: 60_000
+});

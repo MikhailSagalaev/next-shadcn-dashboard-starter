@@ -8,9 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requirePartnerUser } from '@/lib/with-partner-auth';
+import { withRateLimit } from '@/lib/with-rate-limit';
 import { PartnerTeamService } from '@/lib/services/partner-team.service';
 
-export async function POST(
+async function postHandler(
   request: NextRequest,
   context: { params: Promise<{ projectId: string; requestId: string }> }
 ) {
@@ -33,3 +34,8 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 403 });
   }
 }
+
+export const POST = withRateLimit(postHandler, {
+  maxRequests: 20,
+  windowMs: 60_000
+});

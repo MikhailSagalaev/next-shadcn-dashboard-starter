@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { requirePartnerUser } from '@/lib/with-partner-auth';
+import { withRateLimit } from '@/lib/with-rate-limit';
 import {
   PartnerTeamService,
   type TeamListFilter
@@ -26,7 +27,7 @@ const FILTERS = new Set<TeamListFilter>([
   'all'
 ]);
 
-export async function GET(
+async function getHandler(
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> }
 ) {
@@ -61,7 +62,7 @@ export async function GET(
   return NextResponse.json(result);
 }
 
-export async function POST(
+async function postHandler(
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> }
 ) {
@@ -97,3 +98,12 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 403 });
   }
 }
+
+export const GET = withRateLimit(getHandler, {
+  maxRequests: 60,
+  windowMs: 60_000
+});
+export const POST = withRateLimit(postHandler, {
+  maxRequests: 20,
+  windowMs: 60_000
+});

@@ -50,8 +50,19 @@ export class PayoutService {
       const existing = await db.payout.findUnique({
         where: { externalId: input.externalId }
       });
-      if (existing) return existing;
+      if (existing) {
+        if (existing.projectId !== projectId || existing.userId !== userId) {
+          throw new Error('Ключ идемпотентности уже использован');
+        }
+        return existing;
+      }
     }
+
+    const user = await db.user.findFirst({
+      where: { id: userId, projectId, isActive: true },
+      select: { id: true }
+    });
+    if (!user) throw new Error('Партнёр не принадлежит активному проекту');
 
     // Порог вывода из настроек b2b-программы (план 007, 0 = без порога).
     const program = await db.referralProgram.findUnique({
@@ -66,18 +77,46 @@ export class PayoutService {
     // Резерв бонусов. spendBonuses атомарно проверяет баланс и бросает при
     // нехватке (нельзя зарезервировать больше заработанного-и-непотраченного).
     const spendBatchId = randomUUID();
-    await BonusService.spendBonuses(
-      userId,
-      amount,
-      'Резерв под вывод средств',
-      {
-        source: 'payout',
-        spendBatchId
+    const reservingPayout = await db.payout.create({
+      data: {
+        projectId,
+        userId,
+        amount: new Prisma.Decimal(amount),
+        status: 'RESERVING',
+        requestSource: input.requestSource ?? 'telegram_bot',
+        requestTelegramId:
+          input.requestTelegramId != null
+            ? BigInt(input.requestTelegramId)
+            : null,
+        payoutMethod: input.payoutMethod ?? null,
+        payoutDetails: (input.payoutDetails ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
+        externalId: input.externalId ?? null,
+        ledgerBatchId: spendBatchId,
+        metadata: { reserveSpendBatchId: spendBatchId }
       }
-    );
+    });
+    try {
+      await BonusService.spendBonuses(
+        userId,
+        amount,
+        'Резерв под вывод средств',
+        {
+          source: 'payout',
+          spendBatchId
+        }
+      );
+    } catch (error) {
+      await db.payout.deleteMany({
+        where: { id: reservingPayout.id, status: 'RESERVING' }
+      });
+      throw error;
+    }
 
     try {
-      const payout = await db.payout.create({
+      const payout = await db.payout.update({
+        where: { id: reservingPayout.id },
         data: {
           projectId,
           userId,
@@ -116,6 +155,9 @@ export class PayoutService {
         `payout_reserve_rollback_${spendBatchId}`,
         { source: 'payout_reserve_rollback', spendBatchId }
       );
+      await db.payout.deleteMany({
+        where: { id: reservingPayout.id, status: 'RESERVING' }
+      });
       logger.error('Payout create failed after reserve — reserve refunded', {
         projectId,
         userId,

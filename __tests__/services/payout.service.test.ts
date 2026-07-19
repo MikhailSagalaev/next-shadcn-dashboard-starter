@@ -39,11 +39,16 @@ beforeEach(() => {
   (mockDb as any).referralProgram = {
     findUnique: jest.fn().mockResolvedValue({ payoutMinAmount: 0 })
   };
+  (mockDb as any).user = {
+    findFirst: jest.fn().mockResolvedValue({ id: userId })
+  };
   (mockDb as any).payout = {
     findUnique: jest.fn().mockResolvedValue(null),
     findUniqueOrThrow: jest.fn(),
     create: jest.fn().mockResolvedValue(payoutRow()),
-    updateMany: jest.fn()
+    update: jest.fn().mockResolvedValue(payoutRow()),
+    updateMany: jest.fn(),
+    deleteMany: jest.fn()
   };
 });
 
@@ -63,7 +68,7 @@ describe('PayoutService.requestPayout', () => {
     );
     expect((mockDb as any).payout.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'REQUESTED', userId })
+        data: expect.objectContaining({ status: 'RESERVING', userId })
       })
     );
     expect(result.status).toBe('REQUESTED');

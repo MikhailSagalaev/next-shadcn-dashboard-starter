@@ -41,6 +41,43 @@ export class OrderService {
     data: CreateOrderInput
   ): Promise<OrderWithRelations> {
     try {
+      if (data.userId) {
+        const user = await db.user.findFirst({
+          where: { id: data.userId, projectId: data.projectId },
+          select: { id: true }
+        });
+        if (!user)
+          throw new Error('Пользователь не принадлежит проекту заказа');
+      }
+
+      const productIds = data.items
+        .map((item) => item.productId)
+        .filter((id): id is string => Boolean(id));
+      if (productIds.length > 0) {
+        const products = await db.product.findMany({
+          where: { id: { in: productIds }, projectId: data.projectId },
+          select: { id: true }
+        });
+        if (products.length !== new Set(productIds).size) {
+          throw new Error('Товар не принадлежит проекту заказа');
+        }
+      }
+
+      const calculatedItemsTotal = data.items.reduce(
+        (sum, item) => sum + item.quantity * item.price,
+        0
+      );
+      const declaredItemsTotal = data.items.reduce(
+        (sum, item) => sum + item.total,
+        0
+      );
+      if (
+        Math.abs(calculatedItemsTotal - declaredItemsTotal) > 0.01 ||
+        Math.abs(data.totalAmount - declaredItemsTotal) > 0.01
+      ) {
+        throw new Error('Сумма заказа не соответствует составу товаров');
+      }
+
       // Генерируем номер заказа, если не указан
       let orderNumber = data.orderNumber;
       if (!orderNumber) {

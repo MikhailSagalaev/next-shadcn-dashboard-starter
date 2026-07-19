@@ -308,6 +308,7 @@ model Payout {
 }
 
 enum PayoutStatus {
+  RESERVING @map("reserving") // durable saga state before the bonus reserve
   REQUESTED @map("requested") // подана из бота, бонусы зарезервированы (hold)
   APPROVED  @map("approved") // админ одобрил, ждёт ручной выплаты
   PAID      @map("paid") // деньги выплачены, бонусы списаны окончательно

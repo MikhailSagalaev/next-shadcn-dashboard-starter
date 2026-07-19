@@ -8,9 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requirePartnerUser } from '@/lib/with-partner-auth';
+import { withRateLimit } from '@/lib/with-rate-limit';
 import { PartnerTeamService } from '@/lib/services/partner-team.service';
 
-export async function DELETE(
+async function deleteHandler(
   request: NextRequest,
   context: {
     params: Promise<{ projectId: string; subjectUserId: string }>;
@@ -32,3 +33,8 @@ export async function DELETE(
     return NextResponse.json({ error: msg }, { status: 403 });
   }
 }
+
+export const DELETE = withRateLimit(deleteHandler, {
+  maxRequests: 20,
+  windowMs: 60_000
+});
