@@ -51,6 +51,7 @@ export class OrderProcessingService {
         message: 'Order already processed',
         data: {
           spent: Number(savedOrder.accountedSpentBonusAmount),
+          earned: 0,
           userId: savedOrder.userId,
           orderId: savedOrder.id,
           userCreated: false,
@@ -211,9 +212,14 @@ export class OrderProcessingService {
         data: {
           projectId,
           orderNumber: order.orderId,
+          externalOrderId: order.externalOrderId,
+          paymentProvider: order.paymentSystem || null,
+          providerPaymentId: order.providerTransactionId || null,
+          paymentStatus: isCashPayment ? 'UNPAID' : 'PAID',
+          paidAt: isCashPayment ? null : new Date(),
           status: 'PENDING',
           totalAmount: order.amount,
-          paidAmount: 0,
+          paidAmount: isCashPayment ? 0 : order.amount,
           bonusAmount: 0,
           paymentMethod: order.raw?.payment?.sys || 'unknown',
           deliveryMethod: order.raw?.payment?.delivery || null,
@@ -277,10 +283,21 @@ export class OrderProcessingService {
 
           // Find or create product
           let dbProduct = null;
-          if (product.sku) {
-            dbProduct = await db.product.findUnique({
-              where: { sku: product.sku }
-            });
+          const externalId = String(
+            product.externalid ?? product.externalId ?? ''
+          ).trim();
+          const sku = String(product.sku ?? '').trim();
+          if (externalId || sku) {
+            dbProduct = externalId
+              ? await db.product.findFirst({
+                  where: { projectId, externalId }
+                })
+              : null;
+            if (!dbProduct && sku) {
+              dbProduct = await db.product.findFirst({
+                where: { projectId, sku }
+              });
+            }
 
             if (!dbProduct) {
               // Создаем товар со всеми данными включая изображения
@@ -288,7 +305,8 @@ export class OrderProcessingService {
                 data: {
                   projectId,
                   name: productName,
-                  sku: product.sku,
+                  sku: sku || null,
+                  externalId: externalId || null,
                   price: product.price,
                   metadata: {
                     // Изображение товара
@@ -298,7 +316,7 @@ export class OrderProcessingService {
                     options: product.options,
 
                     // External ID из Tilda
-                    externalId: product.externalid,
+                    externalId: externalId || undefined,
 
                     // Все остальные данные
                     ...product
@@ -306,23 +324,25 @@ export class OrderProcessingService {
                 }
               });
             } else {
-              // Обновляем изображение если его нет
-              if (product.img && !dbProduct.metadata?.image) {
-                await db.product.update({
-                  where: { id: dbProduct.id },
-                  data: {
-                    metadata: {
-                      ...(dbProduct.metadata as unknown as Record<
-                        string,
-                        unknown
-                      >),
-                      image: product.img,
-                      options: product.options,
-                      externalId: product.externalid
-                    }
+              // Tilda remains the source for commercial catalog fields. Fiscal
+              // attributes (GTIN, VAT, marking status) stay managed in Gupil.
+              dbProduct = await db.product.update({
+                where: { id: dbProduct.id },
+                data: {
+                  name: productName,
+                  price: product.price,
+                  externalId: dbProduct.externalId || externalId || null,
+                  metadata: {
+                    ...(dbProduct.metadata as unknown as Record<
+                      string,
+                      unknown
+                    >),
+                    image: product.img ?? dbProduct.metadata?.image,
+                    options: product.options,
+                    externalId: externalId || undefined
                   }
-                });
-              }
+                }
+              });
             }
           }
 
@@ -332,6 +352,13 @@ export class OrderProcessingService {
               orderId: savedOrder.id,
               productId: dbProduct?.id,
               name: productName,
+              sku: sku || null,
+              externalProductId: externalId || null,
+              gtin: dbProduct?.gtin ?? null,
+              markingStatus: dbProduct?.markingStatus ?? 'UNKNOWN',
+              vatCode: dbProduct?.vatCode ?? null,
+              paymentSubject: dbProduct?.paymentSubject ?? null,
+              measure: dbProduct?.measure ?? 'piece',
               quantity: product.quantity || 1,
               price: product.price,
               total: product.amount || product.price * (product.quantity || 1),
@@ -355,6 +382,22 @@ export class OrderProcessingService {
           });
         }
       }
+
+      const itemStates = await db.orderItem.findMany({
+        where: { orderId: savedOrder.id },
+        select: { markingStatus: true }
+      });
+      const markingState = itemStates.some(
+        (item) => item.markingStatus === 'UNKNOWN'
+      )
+        ? 'UNCONFIGURED'
+        : itemStates.some((item) => item.markingStatus === 'MARKED_REQUIRED')
+          ? 'PENDING'
+          : 'NOT_REQUIRED';
+      await db.order.update({
+        where: { id: savedOrder.id },
+        data: { markingState }
+      });
 
       // Create analytics event
       await db.analyticsEvent.create({

@@ -10,10 +10,21 @@ import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { ProductService } from '@/lib/services/product.service';
 import { z } from 'zod';
+import { ProductMarkingStatus } from '@prisma/client';
 
 const createProductSchema = z.object({
   name: z.string().min(1),
   sku: z.string().optional(),
+  externalId: z.string().optional(),
+  gtin: z
+    .string()
+    .regex(/^\d{8,14}$/)
+    .optional(),
+  markingStatus: z.nativeEnum(ProductMarkingStatus).optional(),
+  vatCode: z.number().int().min(1).max(12).optional(),
+  paymentSubject: z.string().max(64).optional(),
+  measure: z.string().max(32).optional(),
+  stockOnHand: z.number().int().min(0).optional(),
   price: z.number().positive(),
   categoryId: z.string().optional(),
   description: z.string().optional(),
@@ -37,14 +48,21 @@ export async function GET(
     const categoryId = url.searchParams.get('categoryId') || undefined;
     const isActive =
       url.searchParams.get('isActive') === 'true' ? true : undefined;
+    const markingParam = url.searchParams.get('markingStatus');
+    const markingStatus = markingParam
+      ? ProductMarkingStatus[markingParam as keyof typeof ProductMarkingStatus]
+      : undefined;
+    const search = url.searchParams.get('search') || undefined;
 
     const products = await ProductService.getProducts(projectId, {
       categoryId,
-      isActive
+      isActive,
+      markingStatus,
+      search
     });
 
     return NextResponse.json({ products });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Ошибка получения товаров' },
       { status: 500 }
@@ -72,6 +90,13 @@ export async function POST(
       projectId,
       name: data.name,
       sku: data.sku,
+      externalId: data.externalId,
+      gtin: data.gtin,
+      markingStatus: data.markingStatus,
+      vatCode: data.vatCode,
+      paymentSubject: data.paymentSubject,
+      measure: data.measure,
+      stockOnHand: data.stockOnHand,
       price: data.price,
       categoryId: data.categoryId,
       description: data.description,

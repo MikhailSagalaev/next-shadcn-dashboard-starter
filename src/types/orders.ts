@@ -14,7 +14,9 @@ import type {
   OrderItem,
   OrderHistory,
   Product,
-  ProductCategory
+  ProductCategory,
+  MarkedUnit,
+  FiscalReceipt
 } from '@prisma/client';
 
 export type {
@@ -79,6 +81,18 @@ export interface OrderWithRelations extends Order {
   } | null;
   items: OrderItemWithProduct[];
   history: OrderHistory[];
+  fiscalReceipts?: Array<
+    Pick<
+      FiscalReceipt,
+      | 'id'
+      | 'type'
+      | 'status'
+      | 'providerReceiptId'
+      | 'lastError'
+      | 'createdAt'
+      | 'succeededAt'
+    >
+  >;
   project?: {
     id: string;
     name: string;
@@ -87,6 +101,12 @@ export interface OrderWithRelations extends Order {
 
 export interface OrderItemWithProduct extends OrderItem {
   product?: Product | null;
+  markedUnits?: Array<
+    Pick<
+      MarkedUnit,
+      'id' | 'gtin' | 'serial' | 'status' | 'scannedBy' | 'scannedAt'
+    >
+  >;
 }
 
 export interface OrderFilters {

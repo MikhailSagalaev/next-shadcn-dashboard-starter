@@ -28,8 +28,21 @@ module.exports = {
       autorestart: true,
       max_restarts: 10,
       watch: false
+    },
+    {
+      name: 'gupil-fiscal-worker',
+      script: 'yarn',
+      args: 'worker:fiscal',
+      cwd: '/opt/next-shadcn-dashboard-starter',
+      env: {
+        ...process.env,
+        NODE_ENV: 'production'
+      },
+      env_file: '/opt/next-shadcn-dashboard-starter/.env',
+      time: true,
+      autorestart: true,
+      max_restarts: 10,
+      watch: false
     }
   ]
 };
-
-

@@ -11,6 +11,7 @@ export type TildaOrder = {
     amount: string | number;
     orderid?: string;
     systranid?: string;
+    sys?: string;
     products?: TildaProduct[];
     promocode?: string;
   };
@@ -34,7 +35,14 @@ export type TildaProduct = {
 };
 
 export interface NormalizedOrder {
+  /** Internal compatibility alias currently used as Order.orderNumber. */
   orderId: string;
+  /** Stable order identifier supplied by Tilda. Absent for signup-only forms. */
+  externalOrderId?: string;
+  /** Payment-provider transaction identifier (for YooKassa this is systranid). */
+  providerTransactionId?: string;
+  /** Payment system reported by Tilda, for example `yakassa`. */
+  paymentSystem?: string;
   email?: string;
   phone?: string;
   name?: string;
@@ -48,6 +56,26 @@ export interface NormalizedOrder {
   isSignupForm?: boolean;
 }
 
+export class TildaOrderValidationError extends Error {
+  readonly code = 'TILDA_ORDER_ID_REQUIRED';
+
+  constructor() {
+    super('Tilda paid order must contain a stable orderid');
+    this.name = 'TildaOrderValidationError';
+    Object.setPrototypeOf(this, TildaOrderValidationError.prototype);
+  }
+}
+
+export class TildaPaymentIdRequiredError extends Error {
+  readonly code = 'TILDA_PAYMENT_ID_REQUIRED';
+
+  constructor() {
+    super('Tilda YooKassa order must contain systranid');
+    this.name = 'TildaPaymentIdRequiredError';
+    Object.setPrototypeOf(this, TildaPaymentIdRequiredError.prototype);
+  }
+}
+
 export class TildaParserService {
   static normalizeOrder(raw: any): NormalizedOrder {
     const toNum = (v: unknown): number => {
@@ -58,6 +86,13 @@ export class TildaParserService {
     };
 
     const out: any = { ...raw };
+    const optionalString = (value: unknown): string | undefined => {
+      if (typeof value !== 'string' && typeof value !== 'number') {
+        return undefined;
+      }
+      const normalized = String(value).trim();
+      return normalized || undefined;
+    };
 
     // Lowercase contact fields
     if (out.Email && !out.email)
@@ -110,9 +145,6 @@ export class TildaParserService {
 
     if (out.payment) {
       amount = toNum(out.payment.amount);
-      if (!out.payment.orderid && out.payment.systranid) {
-        out.payment.orderid = String(out.payment.systranid);
-      }
       if (out.payment.promocode) {
         promocode = out.payment.promocode;
       }
@@ -133,13 +165,50 @@ export class TildaParserService {
       // Handle test requests or simpler formats if necessary
     }
 
-    const orderId =
-      out.payment?.orderid || out.orderid || `tilda_gen_${Date.now()}`;
-
     const extracted = extractReferralFromWebhookBody(out);
+    const isSignupForm = isSignupOnlyPayload(out);
+    const externalOrderId =
+      optionalString(out.payment?.orderid) ?? optionalString(out.orderid);
+    const providerTransactionId = optionalString(out.payment?.systranid);
+    const paymentSystem = optionalString(out.payment?.sys);
+    const normalizedPaymentSystem = paymentSystem?.toLocaleLowerCase('ru-RU');
+    const isCashPayment =
+      normalizedPaymentSystem === 'наличные' ||
+      normalizedPaymentSystem === 'cash';
+    const isCommercialPayment =
+      amount > 0 ||
+      products.length > 0 ||
+      Boolean(providerTransactionId) ||
+      (Boolean(paymentSystem) && !isCashPayment);
+
+    if (
+      !externalOrderId &&
+      !isSignupForm &&
+      isCommercialPayment &&
+      !isCashPayment
+    ) {
+      throw new TildaOrderValidationError();
+    }
+    if (
+      externalOrderId &&
+      isCommercialPayment &&
+      ['yakassa', 'yookassa', 'юkassa', 'юкасса'].includes(
+        normalizedPaymentSystem ?? ''
+      ) &&
+      !providerTransactionId
+    ) {
+      throw new TildaPaymentIdRequiredError();
+    }
+
+    // Signup-only forms are not commercial orders, so they retain a generated
+    // compatibility identifier until signup processing is separated from Order.
+    const orderId = externalOrderId ?? `tilda_gen_${Date.now()}`;
 
     return {
       orderId,
+      externalOrderId,
+      providerTransactionId,
+      paymentSystem,
       email: out.email,
       phone: out.phone,
       name: out.name,
@@ -150,7 +219,7 @@ export class TildaParserService {
       utmOrg: extracted.utmOrg || out.utm_org,
       raw: out,
       appliedBonuses,
-      isSignupForm: isSignupOnlyPayload(out)
+      isSignupForm
     };
   }
 }

@@ -7,6 +7,7 @@
  */
 
 import { OrderProcessingService } from '@/lib/services/orders/order-processing.service';
+import { OrderAccountingService } from '@/lib/services/orders/order-accounting.service';
 import { ReferralService } from '@/lib/services/referral.service';
 import { UserService, BonusService } from '@/lib/services/user.service';
 import { db } from '@/lib/db';
@@ -41,15 +42,26 @@ describe('OrderProcessingService.processOrder idempotency', () => {
     // The automock of @/lib/db does not always materialize every Prisma model
     // delegate, so ensure the namespaces we touch exist.
     (mockDb as any).order = (mockDb as any).order || {};
+    (mockDb as any).orderItem = (mockDb as any).orderItem || {};
+    (mockDb as any).bonus = (mockDb as any).bonus || {};
     (mockDb as any).project = (mockDb as any).project || {};
     (mockDb as any).analyticsEvent = (mockDb as any).analyticsEvent || {};
 
-    mockDb.project.findUnique = jest
+    mockDb.project.findUnique = jest.fn().mockResolvedValue({
+      id: projectId,
+      bonusBehavior: 'SPEND_AND_EARN'
+    } as any);
+    mockDb.orderItem.findMany = jest.fn().mockResolvedValue([] as any);
+    mockDb.order.findUniqueOrThrow = jest.fn().mockResolvedValue({
+      id: 'saved-order-1',
+      accountedSpentBonusAmount: 0
+    } as any);
+    mockDb.bonus.findUnique = jest
       .fn()
-      .mockResolvedValue({
-        id: projectId,
-        bonusBehavior: 'SPEND_AND_EARN'
-      } as any);
+      .mockResolvedValue({ amount: 50 } as any);
+    jest.spyOn(OrderAccountingService, 'transition').mockResolvedValue({
+      accountedSpentBonusAmount: 0
+    } as any);
 
     // No spend by default; getUserBalance is only called when appliedBonuses > 0.
     jest
@@ -57,7 +69,7 @@ describe('OrderProcessingService.processOrder idempotency', () => {
       .mockResolvedValue({ currentBalance: 0 } as any);
   });
 
-  it('happy path: a new orderNumber awards the purchase bonus exactly once', async () => {
+  it('happy path: a new orderNumber enters accounting exactly once', async () => {
     // No pre-existing order.
     mockDb.order.findFirst = jest.fn().mockResolvedValue(null);
     mockDb.order.update = jest.fn().mockResolvedValue({} as any);
@@ -73,9 +85,7 @@ describe('OrderProcessingService.processOrder idempotency', () => {
       .spyOn(UserService, 'createUser')
       .mockResolvedValue({ id: 'user-1', projectId } as any);
 
-    const awardSpy = jest
-      .spyOn(BonusService, 'awardPurchaseBonus')
-      .mockResolvedValue({ bonus: { amount: 50 } } as any);
+    const transitionSpy = jest.spyOn(OrderAccountingService, 'transition');
 
     const result = await OrderProcessingService.processOrder(
       projectId,
@@ -84,20 +94,22 @@ describe('OrderProcessingService.processOrder idempotency', () => {
 
     expect(result.success).toBe(true);
     expect(result.message).not.toBe('Order already processed');
-    expect(awardSpy).toHaveBeenCalledTimes(1);
-    expect(awardSpy).toHaveBeenCalledWith(
-      'user-1',
-      1000,
-      'ORDER-100',
-      expect.any(String)
+    expect(transitionSpy).toHaveBeenCalledTimes(1);
+    expect(transitionSpy).toHaveBeenCalledWith(
+      projectId,
+      'saved-order-1',
+      expect.objectContaining({ status: 'CONFIRMED' })
     );
   });
 
   it('duplicate webhook: a second call for the same orderNumber awards nothing and returns "Order already processed"', async () => {
     // An order with this orderNumber already exists.
-    mockDb.order.findFirst = jest
-      .fn()
-      .mockResolvedValue({ id: 'existing-order-1' } as any);
+    mockDb.order.findFirst = jest.fn().mockResolvedValue({
+      id: 'existing-order-1',
+      accountingState: 'APPLIED',
+      accountedSpentBonusAmount: 0,
+      userId: 'user-1'
+    } as any);
 
     const awardSpy = jest
       .spyOn(BonusService, 'awardPurchaseBonus')

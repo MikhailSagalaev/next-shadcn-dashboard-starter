@@ -130,8 +130,31 @@ export class OrderService {
           },
           items: {
             include: {
-              product: true
+              product: true,
+              markedUnits: {
+                select: {
+                  id: true,
+                  gtin: true,
+                  serial: true,
+                  status: true,
+                  scannedBy: true,
+                  scannedAt: true
+                },
+                orderBy: { scannedAt: 'desc' }
+              }
             }
+          },
+          fiscalReceipts: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              providerReceiptId: true,
+              lastError: true,
+              createdAt: true,
+              succeededAt: true
+            },
+            orderBy: { createdAt: 'desc' }
           },
           history: {
             orderBy: {
@@ -158,15 +181,11 @@ export class OrderService {
       });
 
       if (data.status && data.status !== 'PENDING') {
-        return (await OrderAccountingService.transition(
-          data.projectId,
-          order.id,
-          {
-            status: data.status,
-            comment: 'Статус указан при создании заказа',
-            changedBy: 'system'
-          }
-        )) as OrderWithRelations;
+        return this.changeOrderStatus(data.projectId, order.id, {
+          status: data.status,
+          comment: 'Статус указан при создании заказа',
+          changedBy: 'system'
+        });
       }
 
       logger.info('Создан новый заказ', {
@@ -536,6 +555,32 @@ export class OrderService {
     data: ChangeOrderStatusInput
   ): Promise<OrderWithRelations> {
     try {
+      if (data.status === 'SHIPPED' || data.status === 'DELIVERED') {
+        const readiness = await db.order.findFirst({
+          where: { id: orderId, projectId },
+          select: {
+            markingState: true,
+            fiscalState: true,
+            paymentStatus: true
+          }
+        });
+        if (!readiness) throw new Error('Заказ не найден');
+        if (readiness.paymentStatus !== 'PAID') {
+          throw new OrderAccountingConflictError(
+            'Нельзя отправить неоплаченный заказ'
+          );
+        }
+        if (!['COMPLETE', 'NOT_REQUIRED'].includes(readiness.markingState)) {
+          throw new OrderAccountingConflictError(
+            'Не завершена маркировка заказа'
+          );
+        }
+        if (readiness.fiscalState !== 'SETTLED') {
+          throw new OrderAccountingConflictError(
+            'Закрывающий чек ещё не зарегистрирован'
+          );
+        }
+      }
       const order = await OrderAccountingService.transition(
         projectId,
         orderId,
@@ -545,6 +590,22 @@ export class OrderService {
           changedBy: data.changedBy
         }
       );
+      const fulfillmentByStatus = {
+        PROCESSING: 'PICKING',
+        SHIPPED: 'SHIPPED',
+        DELIVERED: 'DELIVERED',
+        CANCELLED: 'CANCELLED',
+        REFUNDED: 'RETURNED'
+      } as const;
+      const fulfillmentState =
+        fulfillmentByStatus[data.status as keyof typeof fulfillmentByStatus];
+      if (fulfillmentState) {
+        await db.order.update({
+          where: { id: order.id },
+          data: { fulfillmentState }
+        });
+        order.fulfillmentState = fulfillmentState;
+      }
 
       logger.info('Статус заказа изменен', {
         orderId: order.id,

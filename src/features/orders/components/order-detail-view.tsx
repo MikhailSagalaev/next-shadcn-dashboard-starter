@@ -44,6 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
+import { OrderMarkingCard } from './order-marking-card';
 
 interface OrderDetailViewProps {
   projectId: string;
@@ -392,6 +393,13 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
           </div>
         </CardContent>
       </Card>
+
+      <OrderMarkingCard
+        projectId={projectId}
+        orderId={orderId}
+        order={order}
+        onChanged={fetchOrder}
+      />
 
       <Card>
         <CardHeader>

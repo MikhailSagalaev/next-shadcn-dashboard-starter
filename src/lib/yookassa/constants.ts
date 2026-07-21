@@ -5,7 +5,8 @@
  * @created: 2026-06-06
  */
 
-export const YOOKASSA_API_URL = 'https://api.yookassa.ru/v3/payments';
+export const YOOKASSA_API_BASE_URL = 'https://api.yookassa.ru/v3';
+export const YOOKASSA_API_URL = `${YOOKASSA_API_BASE_URL}/payments`;
 
 /** Официальный whitelist IP для webhook (https://yookassa.ru/developers/using-api/webhooks) */
 export const YOOKASSA_WEBHOOK_CIDRS = [

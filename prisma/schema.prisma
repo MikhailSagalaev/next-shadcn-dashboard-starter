@@ -8,63 +8,67 @@ datasource db {
 }
 
 model Project {
-  id                            String                @id @default(cuid())
-  name                          String
-  domain                        String?               @unique
-  webhookSecret                 String                @unique @default(cuid()) @map("webhook_secret")
-  bonusPercentage               Decimal               @default(1.0) @map("bonus_percentage") @db.Decimal(5, 2)
-  bonusExpiryDays               Int                   @default(365) @map("bonus_expiry_days")
-  bonusBehavior                 BonusBehavior         @default(SPEND_AND_EARN) @map("bonus_behavior")
-  bonusMode                     BonusMode             @default(SIMPLE) @map("bonus_mode")
-  operationMode                 OperationMode         @default(WITH_BOT) @map("operation_mode")
-  welcomeBonus                  Decimal               @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
-  welcomeRewardType             WelcomeRewardType     @default(BONUS) @map("welcome_reward_type")
-  firstPurchaseDiscountPercent  Int                   @default(0) @map("first_purchase_discount_percent")
-  maxPaymentPercentage          Decimal               @default(100) @map("max_payment_percentage") @db.Decimal(5, 2)
-  isActive                      Boolean               @default(true) @map("is_active")
-  widgetVersion                 String                @default("legacy") @map("widget_version") // "legacy" | "universal"
-  createdAt                     DateTime              @default(now()) @map("created_at")
-  updatedAt                     DateTime              @updatedAt @map("updated_at")
-  botStatus                     BotStatus             @default(INACTIVE) @map("bot_status")
-  botToken                      String?               @map("bot_token")
-  botUsername                   String?               @map("bot_username")
-  maxBotToken                   String?               @map("max_bot_token")
-  maxBotUsername                String?               @map("max_bot_username")
-  ownerId                       String?               @map("owner_id")
+  id                           String                     @id @default(cuid())
+  name                         String
+  domain                       String?                    @unique
+  webhookSecret                String                     @unique @default(cuid()) @map("webhook_secret")
+  bonusPercentage              Decimal                    @default(1.0) @map("bonus_percentage") @db.Decimal(5, 2)
+  bonusExpiryDays              Int                        @default(365) @map("bonus_expiry_days")
+  bonusBehavior                BonusBehavior              @default(SPEND_AND_EARN) @map("bonus_behavior")
+  bonusMode                    BonusMode                  @default(SIMPLE) @map("bonus_mode")
+  operationMode                OperationMode              @default(WITH_BOT) @map("operation_mode")
+  welcomeBonus                 Decimal                    @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
+  welcomeRewardType            WelcomeRewardType          @default(BONUS) @map("welcome_reward_type")
+  firstPurchaseDiscountPercent Int                        @default(0) @map("first_purchase_discount_percent")
+  maxPaymentPercentage         Decimal                    @default(100) @map("max_payment_percentage") @db.Decimal(5, 2)
+  isActive                     Boolean                    @default(true) @map("is_active")
+  widgetVersion                String                     @default("legacy") @map("widget_version") // "legacy" | "universal"
+  createdAt                    DateTime                   @default(now()) @map("created_at")
+  updatedAt                    DateTime                   @updatedAt @map("updated_at")
+  botStatus                    BotStatus                  @default(INACTIVE) @map("bot_status")
+  botToken                     String?                    @map("bot_token")
+  botUsername                  String?                    @map("bot_username")
+  maxBotToken                  String?                    @map("max_bot_token")
+  maxBotUsername               String?                    @map("max_bot_username")
+  ownerId                      String?                    @map("owner_id")
   // Конфигурируемые лимиты workflow
-  workflowMaxSteps              Int                   @default(100) @map("workflow_max_steps")
-  workflowTimeoutMs             Int                   @default(30000) @map("workflow_timeout_ms")
-  bonusLevels          BonusLevel[]
-  botFlows             BotFlow[]
-  botSettings          BotSettings?
-  widgetSettings       WidgetSettings?
-  notifications        Notification[]
-  projectVariables     ProjectVariable[]
-  owner                AdminAccount?         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  referralProgram      ReferralProgram?
-  referralLevels       ReferralLevel[]
-  users                User[]
-  webhookLogs          WebhookLog[]
-  workflowVariables    WorkflowVariable[]
-  workflows            Workflow[]
-  systemLogs           SystemLog[]
-  orders               Order[]
-  products             Product[]
-  productCategories    ProductCategory[]
-  analyticsEvents      AnalyticsEvent[]
-  analyticsMetrics     AnalyticsMetric[]
-  segments             Segment[]
-  mailings             Mailing[]
-  mailingTemplates     MailingTemplate[]
-  notificationTemplates NotificationTemplate[]
-  retailCrmIntegration RetailCrmIntegration?
-  moySkladIntegration  MoySkladIntegration?
-  moySkladDirectIntegration MoySkladDirectIntegration?
-  inSalesIntegration   InSalesIntegration?
-  ChatChannel          ChatChannel[]
-  Chat                 Chat[]
-  payouts              Payout[]
-  adminNotifications   AdminNotification[]
+  workflowMaxSteps             Int                        @default(100) @map("workflow_max_steps")
+  workflowTimeoutMs            Int                        @default(30000) @map("workflow_timeout_ms")
+  bonusLevels                  BonusLevel[]
+  botFlows                     BotFlow[]
+  botSettings                  BotSettings?
+  widgetSettings               WidgetSettings?
+  notifications                Notification[]
+  projectVariables             ProjectVariable[]
+  owner                        AdminAccount?              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  referralProgram              ReferralProgram?
+  referralLevels               ReferralLevel[]
+  users                        User[]
+  webhookLogs                  WebhookLog[]
+  workflowVariables            WorkflowVariable[]
+  workflows                    Workflow[]
+  systemLogs                   SystemLog[]
+  orders                       Order[]
+  products                     Product[]
+  productCategories            ProductCategory[]
+  inventoryMovements           InventoryMovement[]
+  fiscalReceipts               FiscalReceipt[]
+  markedUnits                  MarkedUnit[]
+  fiscalOutbox                 FiscalOutbox[]
+  analyticsEvents              AnalyticsEvent[]
+  analyticsMetrics             AnalyticsMetric[]
+  segments                     Segment[]
+  mailings                     Mailing[]
+  mailingTemplates             MailingTemplate[]
+  notificationTemplates        NotificationTemplate[]
+  retailCrmIntegration         RetailCrmIntegration?
+  moySkladIntegration          MoySkladIntegration?
+  moySkladDirectIntegration    MoySkladDirectIntegration?
+  inSalesIntegration           InSalesIntegration?
+  ChatChannel                  ChatChannel[]
+  Chat                         Chat[]
+  payouts                      Payout[]
+  adminNotifications           AdminNotification[]
 
   /// Персональные планы % по уровням (блогеры / инфлюенсеры)
   referralPlansEnabled            Boolean                  @default(false) @map("referral_plans_enabled")
@@ -75,14 +79,14 @@ model Project {
   /// Feature flag для включения b2b-иерархии партнёров: роли CLIENT/TRAINER/MANAGER/DIRECTOR,
   /// фильтр в `findReferrer` (только партнёры могут быть реферерами), hierarchy UI и т.д.
   /// Когда `false`, поведение полностью совпадает с прежней c2c-логикой (опт-ин per project).
-  enablePartnerRoles              Boolean                  @default(false) @map("enable_partner_roles")
+  enablePartnerRoles           Boolean @default(false) @map("enable_partner_roles")
   /// Партнёры могут управлять командой через бот (добавление, удаление, заявки)
-  enablePartnerTeamManagement     Boolean                  @default(true) @map("enable_partner_team_management")
+  enablePartnerTeamManagement  Boolean @default(true) @map("enable_partner_team_management")
   /// Регистрация по реф-ссылке создаёт заявку вместо мгновенной привязки referredBy
-  referralJoinRequiresApproval    Boolean                  @default(false) @map("referral_join_requires_approval")
+  referralJoinRequiresApproval Boolean @default(false) @map("referral_join_requires_approval")
 
-  partnerOrganizations            PartnerOrganization[]
-  partnerJoinRequests             PartnerJoinRequest[]
+  partnerOrganizations PartnerOrganization[]
+  partnerJoinRequests  PartnerJoinRequest[]
 
   @@map("projects")
 }
@@ -97,11 +101,11 @@ model ReferralCommissionPlan {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  project              Project                         @relation("ProjectCommissionPlans", fields: [projectId], references: [id], onDelete: Cascade)
-  defaultForProjects   Project[]                       @relation("ProjectDefaultCommissionPlan")
-  organizationDefaults PartnerOrganization[]           @relation("OrganizationDefaultPlan")
+  project              Project                       @relation("ProjectCommissionPlans", fields: [projectId], references: [id], onDelete: Cascade)
+  defaultForProjects   Project[]                     @relation("ProjectDefaultCommissionPlan")
+  organizationDefaults PartnerOrganization[]         @relation("OrganizationDefaultPlan")
   levels               ReferralCommissionPlanLevel[]
-  outboundUsers        User[]                          @relation("UserOutboundReferralPlan")
+  outboundUsers        User[]                        @relation("UserOutboundReferralPlan")
   referralAttributions ReferralAttribution[]
 
   @@index([projectId])
@@ -147,21 +151,21 @@ model ReferralAttribution {
 
 /// B2B-сеть / филиал (фитнес-клуб, партнёрская сеть) внутри проекта
 model PartnerOrganization {
-  id                            String   @id @default(cuid())
-  projectId                     String   @map("project_id")
-  name                          String
-  slug                          String
-  description                   String?
-  isActive                      Boolean  @default(true) @map("is_active")
-  defaultReferralCommissionPlanId String? @map("default_referral_commission_plan_id")
-  directorUserId                String?  @map("director_user_id")
-  settings                      Json?    @default("{}")
-  createdAt                     DateTime @default(now()) @map("created_at")
-  updatedAt                     DateTime @updatedAt @map("updated_at")
+  id                              String   @id @default(cuid())
+  projectId                       String   @map("project_id")
+  name                            String
+  slug                            String
+  description                     String?
+  isActive                        Boolean  @default(true) @map("is_active")
+  defaultReferralCommissionPlanId String?  @map("default_referral_commission_plan_id")
+  directorUserId                  String?  @map("director_user_id")
+  settings                        Json?    @default("{}")
+  createdAt                       DateTime @default(now()) @map("created_at")
+  updatedAt                       DateTime @updatedAt @map("updated_at")
 
-  project                       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  defaultReferralCommissionPlan ReferralCommissionPlan?  @relation("OrganizationDefaultPlan", fields: [defaultReferralCommissionPlanId], references: [id], onDelete: SetNull)
-  members                       User[]                   @relation("UserOrganization")
+  project                       Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  defaultReferralCommissionPlan ReferralCommissionPlan? @relation("OrganizationDefaultPlan", fields: [defaultReferralCommissionPlanId], references: [id], onDelete: SetNull)
+  members                       User[]                  @relation("UserOrganization")
   referralAttributions          ReferralAttribution[]
 
   @@unique([projectId, slug])
@@ -230,26 +234,26 @@ model BonusLevel {
 }
 
 model ReferralProgram {
-  id                         String            @id @default(cuid())
-  projectId                  String            @unique @map("project_id")
-  isActive                   Boolean           @default(true) @map("is_active")
-  bonusPercent               Int               @default(5) @map("bonus_percent")
-  referrerBonus              Decimal           @default(0) @map("referrer_bonus") @db.Decimal(10, 2)
-  minPurchaseAmount          Decimal           @default(0) @map("min_purchase_amount") @db.Decimal(10, 2)
-  cookieLifetime             Int               @default(30) @map("cookie_lifetime")
-  welcomeBonus               Decimal           @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
-  welcomeRewardType          WelcomeRewardType @default(BONUS) @map("welcome_reward_type")
-  firstPurchaseDiscountPercent Int             @default(0) @map("first_purchase_discount_percent")
-  description                String?
+  id                           String            @id @default(cuid())
+  projectId                    String            @unique @map("project_id")
+  isActive                     Boolean           @default(true) @map("is_active")
+  bonusPercent                 Int               @default(5) @map("bonus_percent")
+  referrerBonus                Decimal           @default(0) @map("referrer_bonus") @db.Decimal(10, 2)
+  minPurchaseAmount            Decimal           @default(0) @map("min_purchase_amount") @db.Decimal(10, 2)
+  cookieLifetime               Int               @default(30) @map("cookie_lifetime")
+  welcomeBonus                 Decimal           @default(0) @map("welcome_bonus") @db.Decimal(10, 2)
+  welcomeRewardType            WelcomeRewardType @default(BONUS) @map("welcome_reward_type")
+  firstPurchaseDiscountPercent Int               @default(0) @map("first_purchase_discount_percent")
+  description                  String?
 
   // Настройки вывода b2b-комиссии (план 007). 0 = без порога / без выдержки.
-  payoutMinAmount            Decimal           @default(0) @map("payout_min_amount") @db.Decimal(10, 2)
-  payoutHoldDays             Int               @default(0) @map("payout_hold_days")
+  payoutMinAmount Decimal @default(0) @map("payout_min_amount") @db.Decimal(10, 2)
+  payoutHoldDays  Int     @default(0) @map("payout_hold_days")
 
-  createdAt                  DateTime          @default(now()) @map("created_at")
-  updatedAt                  DateTime          @updatedAt @map("updated_at")
-  project                    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  levels                     ReferralLevel[]
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  levels    ReferralLevel[]
 
   @@map("referral_programs")
 }
@@ -259,48 +263,48 @@ model ReferralProgram {
 /// конвертация 1:1 в деньги фиксируется в момент PAID. Бонусы резервируются
 /// (debit) уже на REQUESTED — см. docs/partner-payout-flow-design.md.
 model Payout {
-  id                String       @id @default(cuid())
-  projectId         String       @map("project_id")
-  userId            String       @map("user_id") // партнёр-получатель
+  id        String @id @default(cuid())
+  projectId String @map("project_id")
+  userId    String @map("user_id") // партнёр-получатель
 
-  amount            Decimal      @db.Decimal(10, 2) // сумма вывода (бонусы → деньги 1:1)
-  currency          String       @default("RUB")
+  amount   Decimal @db.Decimal(10, 2) // сумма вывода (бонусы → деньги 1:1)
+  currency String  @default("RUB")
 
-  status            PayoutStatus @default(REQUESTED)
+  status PayoutStatus @default(REQUESTED)
 
   // Канал и идентичность заявителя (решение: только бот).
-  requestSource     String       @default("telegram_bot") @map("request_source")
-  requestTelegramId BigInt?      @map("request_telegram_id")
+  requestSource     String  @default("telegram_bot") @map("request_source")
+  requestTelegramId BigInt? @map("request_telegram_id")
 
   // Реквизиты выплаты, как их указал партнёр (свободная форма в v1).
-  payoutMethod      String?      @map("payout_method")
-  payoutDetails     Json?        @map("payout_details") // маскировать в логах
+  payoutMethod  String? @map("payout_method")
+  payoutDetails Json?   @map("payout_details") // маскировать в логах
 
   // Аудит переходов состояния.
-  requestedAt       DateTime     @default(now()) @map("requested_at")
-  reviewedBy        String?      @map("reviewed_by")
-  reviewedAt        DateTime?    @map("reviewed_at")
-  rejectReason      String?      @map("reject_reason")
-  paidAt            DateTime?    @map("paid_at")
-  paidBy            String?      @map("paid_by")
-  failReason        String?      @map("fail_reason")
-  cancelledAt       DateTime?    @map("cancelled_at")
+  requestedAt  DateTime  @default(now()) @map("requested_at")
+  reviewedBy   String?   @map("reviewed_by")
+  reviewedAt   DateTime? @map("reviewed_at")
+  rejectReason String?   @map("reject_reason")
+  paidAt       DateTime? @map("paid_at")
+  paidBy       String?   @map("paid_by")
+  failReason   String?   @map("fail_reason")
+  cancelledAt  DateTime? @map("cancelled_at")
 
   // Учёт/бухгалтерия: № платёжки / строки выгрузки.
-  externalRef       String?      @map("external_ref")
+  externalRef String? @map("external_ref")
 
   // Идемпотентность заявки (дисциплина externalId плана 001).
-  externalId        String?      @unique @map("external_id")
+  externalId String? @unique @map("external_id")
 
   // Связь с ledger: spendBatchId резерва (для возврата при reject/cancel/fail).
-  ledgerBatchId     String?      @map("ledger_batch_id")
+  ledgerBatchId String? @map("ledger_batch_id")
 
-  metadata          Json?        @default("{}")
-  createdAt         DateTime     @default(now()) @map("created_at")
-  updatedAt         DateTime     @updatedAt @map("updated_at")
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  project           Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([projectId, status])
   @@index([projectId, userId, status])
@@ -353,44 +357,44 @@ model BotSettings {
 }
 
 model WidgetSettings {
-  id                              String   @id @default(cuid())
-  projectId                       String   @unique @map("project_id")
-  
+  id        String @id @default(cuid())
+  projectId String @unique @map("project_id")
+
   // Текстовые настройки плашки регистрации
-  registrationTitle               String   @default("Зарегистрируйся и получи {bonusAmount} бонусов!") @map("registration_title")
-  registrationDescription         String   @default("Зарегистрируйся в нашей бонусной программе") @map("registration_description")
-  registrationButtonText          String   @default("Для участия в акции перейдите в бота") @map("registration_button_text")
-  registrationButtonUrl           String?  @map("registration_button_url")
-  verificationButtonUrl           String?  @map("verification_button_url")
-  registrationFallbackText        String   @default("Свяжитесь с администратором для регистрации") @map("registration_fallback_text")
-  
+  registrationTitle        String  @default("Зарегистрируйся и получи {bonusAmount} бонусов!") @map("registration_title")
+  registrationDescription  String  @default("Зарегистрируйся в нашей бонусной программе") @map("registration_description")
+  registrationButtonText   String  @default("Для участия в акции перейдите в бота") @map("registration_button_text")
+  registrationButtonUrl    String? @map("registration_button_url")
+  verificationButtonUrl    String? @map("verification_button_url")
+  registrationFallbackText String  @default("Свяжитесь с администратором для регистрации") @map("registration_fallback_text")
+
   // Настройки видимости элементов плашки
-  showIcon                        Boolean  @default(true) @map("show_icon")
-  showTitle                       Boolean  @default(true) @map("show_title")
-  showDescription                 Boolean  @default(true) @map("show_description")
-  showButton                      Boolean  @default(true) @map("show_button")
-  showFallbackText                Boolean  @default(true) @map("show_fallback_text")
-  showPromocodeForGuests          Boolean  @default(true) @map("show_promocode_for_guests")
-  
+  showIcon               Boolean @default(true) @map("show_icon")
+  showTitle              Boolean @default(true) @map("show_title")
+  showDescription        Boolean @default(true) @map("show_description")
+  showButton             Boolean @default(true) @map("show_button")
+  showFallbackText       Boolean @default(true) @map("show_fallback_text")
+  showPromocodeForGuests Boolean @default(true) @map("show_promocode_for_guests")
+
   // Настройки бонусных плашек на товарах
-  productBadgeEnabled             Boolean  @default(true) @map("product_badge_enabled")
-  productBadgeShowOnCards         Boolean  @default(true) @map("product_badge_show_on_cards")
-  productBadgeShowOnProductPage   Boolean  @default(true) @map("product_badge_show_on_product_page")
-  productBadgeText                String   @default("Начислим до {bonusAmount} бонусов") @map("product_badge_text")
-  productBadgeLinkUrl             String?  @map("product_badge_link_url")
-  productBadgeBonusPercent        Decimal  @default(10) @map("product_badge_bonus_percent") @db.Decimal(5, 2)
-  productBadgePosition            String   @default("after-price") @map("product_badge_position")
-  productBadgeCustomSelector      String?  @map("product_badge_custom_selector")
-  
+  productBadgeEnabled           Boolean @default(true) @map("product_badge_enabled")
+  productBadgeShowOnCards       Boolean @default(true) @map("product_badge_show_on_cards")
+  productBadgeShowOnProductPage Boolean @default(true) @map("product_badge_show_on_product_page")
+  productBadgeText              String  @default("Начислим до {bonusAmount} бонусов") @map("product_badge_text")
+  productBadgeLinkUrl           String? @map("product_badge_link_url")
+  productBadgeBonusPercent      Decimal @default(10) @map("product_badge_bonus_percent") @db.Decimal(5, 2)
+  productBadgePosition          String  @default("after-price") @map("product_badge_position")
+  productBadgeCustomSelector    String? @map("product_badge_custom_selector")
+
   // Стили (JSON для гибкости)
-  registrationStyles              Json?    @default("{}") @map("registration_styles")
-  productBadgeStyles              Json?    @default("{}") @map("product_badge_styles")
-  widgetStyles                    Json?    @default("{}") @map("widget_styles")
-  
-  createdAt                       DateTime @default(now()) @map("created_at")
-  updatedAt                       DateTime @updatedAt @map("updated_at")
-  
-  project                         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  registrationStyles Json? @default("{}") @map("registration_styles")
+  productBadgeStyles Json? @default("{}") @map("product_badge_styles")
+  widgetStyles       Json? @default("{}") @map("widget_styles")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("widget_settings")
 }
@@ -431,51 +435,51 @@ model BotSession {
 }
 
 model User {
-  id                      String             @id @default(cuid())
-  projectId               String             @map("project_id")
-  email                   String?
-  phone                   String?
-  firstName               String?            @map("first_name")
-  lastName                String?            @map("last_name")
-  birthDate               DateTime?          @map("birth_date") @db.Date
-  telegramId              BigInt?            @map("telegram_id")
-  telegramUsername        String?            @map("telegram_username")
-  maxId                   BigInt?            @unique @map("max_id")
-  maxUsername             String?            @map("max_username")
-  isActive                Boolean            @default(false) @map("is_active")
-  registeredAt            DateTime           @default(now()) @map("registered_at")
-  updatedAt               DateTime           @updatedAt @map("updated_at")
-  currentLevel            String             @default("Базовый") @map("current_level")
-  referralCode            String?            @unique @map("referral_code")
-  referredBy              String?            @map("referred_by")
-  totalPurchases          Decimal            @default(0) @map("total_purchases") @db.Decimal(10, 2)
-  utmCampaign             String?            @map("utm_campaign")
-  utmContent              String?            @map("utm_content")
-  utmMedium               String?            @map("utm_medium")
-  utmSource               String?            @map("utm_source")
-  utmTerm                 String?            @map("utm_term")
-  metadata                Json?              @default("{}")
-  
+  id               String    @id @default(cuid())
+  projectId        String    @map("project_id")
+  email            String?
+  phone            String?
+  firstName        String?   @map("first_name")
+  lastName         String?   @map("last_name")
+  birthDate        DateTime? @map("birth_date") @db.Date
+  telegramId       BigInt?   @map("telegram_id")
+  telegramUsername String?   @map("telegram_username")
+  maxId            BigInt?   @unique @map("max_id")
+  maxUsername      String?   @map("max_username")
+  isActive         Boolean   @default(false) @map("is_active")
+  registeredAt     DateTime  @default(now()) @map("registered_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  currentLevel     String    @default("Базовый") @map("current_level")
+  referralCode     String?   @unique @map("referral_code")
+  referredBy       String?   @map("referred_by")
+  totalPurchases   Decimal   @default(0) @map("total_purchases") @db.Decimal(10, 2)
+  utmCampaign      String?   @map("utm_campaign")
+  utmContent       String?   @map("utm_content")
+  utmMedium        String?   @map("utm_medium")
+  utmSource        String?   @map("utm_source")
+  utmTerm          String?   @map("utm_term")
+  metadata         Json?     @default("{}")
+
   // МойСклад integration fields (LoyaltyAPI - старая реализация)
-  moySkladCounterpartyId  String?            @unique @map("moysklad_counterparty_id")
-  lastSyncAt              DateTime?          @map("last_sync_at")
-  
+  moySkladCounterpartyId String?   @unique @map("moysklad_counterparty_id")
+  lastSyncAt             DateTime? @map("last_sync_at")
+
   // МойСклад Direct API integration fields (новая реализация)
-  moySkladDirectCounterpartyId String?       @unique @map("moysklad_direct_counterparty_id")
+  moySkladDirectCounterpartyId String?                 @unique @map("moysklad_direct_counterparty_id")
   moySkladDirectSyncLogs       MoySkladDirectSyncLog[]
-  
-  bonuses                 Bonus[]
-  notifications           Notification[]
-  transactions            Transaction[]
-  orders                  Order[]
-  analyticsEvents         AnalyticsEvent[]
-  segmentMembers          SegmentMember[]
-  mailingRecipients       MailingRecipient[]
-  mailingHistory          MailingHistory[]
-  project                 Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  referrer                User?              @relation("UserReferrals", fields: [referredBy], references: [id])
-  referrals               User[]             @relation("UserReferrals")
-  Chat                    Chat[]
+
+  bonuses           Bonus[]
+  notifications     Notification[]
+  transactions      Transaction[]
+  orders            Order[]
+  analyticsEvents   AnalyticsEvent[]
+  segmentMembers    SegmentMember[]
+  mailingRecipients MailingRecipient[]
+  mailingHistory    MailingHistory[]
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  referrer          User?              @relation("UserReferrals", fields: [referredBy], references: [id])
+  referrals         User[]             @relation("UserReferrals")
+  Chat              Chat[]
 
   outboundReferralPlanId String?                 @map("outbound_referral_plan_id")
   outboundReferralPlan   ReferralCommissionPlan? @relation("UserOutboundReferralPlan", fields: [outboundReferralPlanId], references: [id], onDelete: SetNull)
@@ -483,21 +487,21 @@ model User {
 
   /// Роль пользователя в b2b-иерархии партнёров (CLIENT / TRAINER / MANAGER / DIRECTOR).
   /// По умолчанию CLIENT. Применяется только когда у проекта включён `enablePartnerRoles`.
-  partnerRole            PartnerRole             @default(CLIENT) @map("partner_role")
+  partnerRole PartnerRole @default(CLIENT) @map("partner_role")
 
-  organizationId         String?                 @map("organization_id")
-  organization           PartnerOrganization?    @relation("UserOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationId String?              @map("organization_id")
+  organization   PartnerOrganization? @relation("UserOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
   /// Явный платёжный родитель в b2b-иерархии (тренер → менеджер → директор).
   /// Authoritative для resolvePayoutChain (план 005): кому уходит комиссия на
   /// уровень выше. Отдельно от `referredBy` ("кто пригласил"), потому что
   /// пригласивший не всегда совпадает с тем, кто получает выплату выше.
   /// SetNull при удалении родителя — цепочка прерывается, а не падает.
-  partnerParentId        String?                 @map("partner_parent_id")
-  partnerParent          User?                   @relation("PartnerParent", fields: [partnerParentId], references: [id], onDelete: SetNull)
-  partnerChildren        User[]                  @relation("PartnerParent")
+  partnerParentId String? @map("partner_parent_id")
+  partnerParent   User?   @relation("PartnerParent", fields: [partnerParentId], references: [id], onDelete: SetNull)
+  partnerChildren User[]  @relation("PartnerParent")
 
-  payouts                Payout[]
+  payouts Payout[]
 
   @@unique([projectId, email])
   @@unique([projectId, phone])
@@ -509,19 +513,19 @@ model User {
 }
 
 model Bonus {
-  id           String        @id @default(cuid())
-  userId       String        @map("user_id")
-  amount       Decimal       @db.Decimal(10, 2)
-  type         BonusType     @default(MANUAL)
-  description  String?
-  expiresAt    DateTime?     @map("expires_at")
-  isUsed       Boolean       @default(false) @map("is_used")
-  metadata     Json?
-  createdAt    DateTime      @default(now()) @map("created_at")
-  referralLevel Int?         @map("referral_level")
-  externalId   String?       @unique @map("external_id")
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  id            String        @id @default(cuid())
+  userId        String        @map("user_id")
+  amount        Decimal       @db.Decimal(10, 2)
+  type          BonusType     @default(MANUAL)
+  description   String?
+  expiresAt     DateTime?     @map("expires_at")
+  isUsed        Boolean       @default(false) @map("is_used")
+  metadata      Json?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  referralLevel Int?          @map("referral_level")
+  externalId    String?       @unique @map("external_id")
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
 
   @@map("bonuses")
 }
@@ -541,12 +545,12 @@ model Transaction {
   referralUserId  String?         @map("referral_user_id")
   referralLevel   Int?            @map("referral_level")
   userLevel       String?         @map("user_level")
-  
+
   // МойСклад integration field
-  moySkladSaleId  String?         @map("moysklad_sale_id") // ID продажи в МойСклад для связи с возвратами
-  
-  bonus           Bonus?          @relation(fields: [bonusId], references: [id])
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moySkladSaleId String? @map("moysklad_sale_id") // ID продажи в МойСклад для связи с возвратами
+
+  bonus Bonus? @relation(fields: [bonusId], references: [id])
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([moySkladSaleId])
   @@map("transactions")
@@ -569,20 +573,20 @@ model WebhookLog {
 }
 
 model AdminAccount {
-  id                       String         @id @default(cuid())
-  email                    String         @unique
-  passwordHash             String         @map("password_hash")
-  role                     String?        @default("ADMIN")
-  isActive                 Boolean?       @default(true) @map("is_active")
-  emailVerified            Boolean        @default(false) @map("email_verified")
-  emailVerificationToken   String?        @map("email_verification_token")
-  emailVerificationExpires DateTime?      @map("email_verification_expires")
-  twoFactorSecret          String?        @map("two_factor_secret")
-  twoFactorTempSecret      String?        @map("two_factor_temp_secret")
-  twoFactorEnabled         Boolean        @default(false) @map("two_factor_enabled")
+  id                       String              @id @default(cuid())
+  email                    String              @unique
+  passwordHash             String              @map("password_hash")
+  role                     String?             @default("ADMIN")
+  isActive                 Boolean?            @default(true) @map("is_active")
+  emailVerified            Boolean             @default(false) @map("email_verified")
+  emailVerificationToken   String?             @map("email_verification_token")
+  emailVerificationExpires DateTime?           @map("email_verification_expires")
+  twoFactorSecret          String?             @map("two_factor_secret")
+  twoFactorTempSecret      String?             @map("two_factor_temp_secret")
+  twoFactorEnabled         Boolean             @default(false) @map("two_factor_enabled")
   metadata                 Json?
-  createdAt                DateTime?      @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt                DateTime?      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdAt                DateTime?           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                DateTime?           @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
   projects                 Project[]
   subscriptions            Subscription[]
   payments                 Payment[]
@@ -725,31 +729,31 @@ model WorkflowVersion {
 }
 
 model WorkflowExecution {
-  id             String        @id @default(cuid())
-  projectId      String        @map("project_id")
-  workflowId     String        @map("workflow_id")
+  id             String    @id @default(cuid())
+  projectId      String    @map("project_id")
+  workflowId     String    @map("workflow_id")
   version        Int
-  sessionId      String        @map("session_id")
-  userId         String?       @map("user_id")
-  telegramChatId String?       @map("telegram_chat_id")
-  maxChatId      String?       @map("max_chat_id")
+  sessionId      String    @map("session_id")
+  userId         String?   @map("user_id")
+  telegramChatId String?   @map("telegram_chat_id")
+  maxChatId      String?   @map("max_chat_id")
   status         String
-  startedAt      DateTime      @default(now()) @map("started_at")
-  finishedAt     DateTime?     @map("finished_at")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
   error          String?
-  stepCount      Int?          @map("step_count")
-  currentNodeId  String?       @map("current_node_id")
-  waitType       String?       @map("wait_type")
-  waitPayload    Json?         @map("wait_payload")
-  
+  stepCount      Int?      @map("step_count")
+  currentNodeId  String?   @map("current_node_id")
+  waitType       String?   @map("wait_type")
+  waitPayload    Json?     @map("wait_payload")
+
   // Restart tracking (для перезапуска выполнения)
   parentExecutionId   String?             @map("parent_execution_id")
   parentExecution     WorkflowExecution?  @relation("ExecutionRestart", fields: [parentExecutionId], references: [id], onDelete: SetNull)
   childExecutions     WorkflowExecution[] @relation("ExecutionRestart")
   restartedFromNodeId String?             @map("restarted_from_node_id")
-  
-  workflow       Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  logs           WorkflowLog[]
+
+  workflow Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  logs     WorkflowLog[]
 
   @@index([projectId, workflowId, startedAt])
   @@index([sessionId])
@@ -759,32 +763,32 @@ model WorkflowExecution {
 }
 
 model WorkflowLog {
-  id          BigInt            @id @default(autoincrement())
-  executionId String            @map("execution_id")
+  id          BigInt   @id @default(autoincrement())
+  executionId String   @map("execution_id")
   step        Int
-  nodeId      String            @map("node_id")
-  nodeType    String            @map("node_type")
-  branchKey   String?           @map("branch_key")
-  status      String?           @map("status")
-  timestamp   DateTime          @default(now())
-  level       String            @default("info")
+  nodeId      String   @map("node_id")
+  nodeType    String   @map("node_type")
+  branchKey   String?  @map("branch_key")
+  status      String?  @map("status")
+  timestamp   DateTime @default(now())
+  level       String   @default("info")
   message     String
   input       Json?
   output      Json?
   error       Json?
-  durationMs  Int?              @map("duration_ms")
+  durationMs  Int?     @map("duration_ms")
   data        Json?
-  
+
   // Full payload logging (для детального просмотра выполнения)
-  inputData       Json?   @map("input_data")       // Full input data
-  outputData      Json?   @map("output_data")      // Full output data  
-  variablesBefore Json?   @map("variables_before") // Variables state before
-  variablesAfter  Json?   @map("variables_after")  // Variables state after
-  httpRequest     Json?   @map("http_request")     // HTTP request details
-  httpResponse    Json?   @map("http_response")    // HTTP response details
-  duration        Int?                             // Step duration in ms (alias for durationMs)
-  
-  execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  inputData       Json? @map("input_data") // Full input data
+  outputData      Json? @map("output_data") // Full output data
+  variablesBefore Json? @map("variables_before") // Variables state before
+  variablesAfter  Json? @map("variables_after") // Variables state after
+  httpRequest     Json? @map("http_request") // HTTP request details
+  httpResponse    Json? @map("http_response") // HTTP response details
+  duration        Int? // Step duration in ms (alias for durationMs)
+
+  execution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
   @@index([executionId, step])
   @@index([timestamp])
@@ -835,8 +839,8 @@ enum BonusBehavior {
 }
 
 enum BonusMode {
-  SIMPLE  @map("simple")
-  LEVELS  @map("levels")
+  SIMPLE @map("simple")
+  LEVELS @map("levels")
 }
 
 enum OperationMode {
@@ -891,7 +895,7 @@ enum AlphaTesterStatus {
 }
 
 enum WelcomeRewardType {
-  BONUS   @map("bonus")
+  BONUS    @map("bonus")
   DISCOUNT @map("discount")
 }
 
@@ -903,6 +907,88 @@ enum OrderStatus {
   DELIVERED
   CANCELLED
   REFUNDED
+}
+
+enum StorePaymentStatus {
+  UNPAID
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum FiscalState {
+  NOT_STARTED
+  PREPAYMENT_REGISTERED
+  SETTLEMENT_PENDING
+  SETTLED
+  FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum MarkingState {
+  NOT_REQUIRED
+  UNCONFIGURED
+  PENDING
+  PARTIAL
+  COMPLETE
+  FAILED
+}
+
+enum FulfillmentState {
+  NEW
+  PICKING
+  READY_TO_SHIP
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum ProductMarkingStatus {
+  UNKNOWN
+  MARKED_REQUIRED
+  LEGACY_UNMARKED_ALLOWED
+  NOT_SUBJECT
+}
+
+enum InventoryMovementType {
+  RECEIPT
+  ADJUSTMENT
+  RESERVE
+  RELEASE
+  SALE
+  RETURN
+  WRITE_OFF
+}
+
+enum MarkedUnitStatus {
+  SCANNED
+  ASSIGNED
+  SOLD
+  RETURNED
+  VOID
+}
+
+enum FiscalReceiptType {
+  PREPAYMENT
+  SETTLEMENT
+  REFUND
+}
+
+enum FiscalReceiptStatus {
+  NEW
+  PENDING
+  SUCCEEDED
+  CANCELED
+  FAILED
+}
+
+enum FiscalOutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 enum OrderAccountingState {
@@ -992,11 +1078,11 @@ model Subscription {
   customLimits Json? @map("custom_limits")
 
   // Биллинг (для будущей интеграции)
-  billingEmail    String?   @map("billing_email")
-  paymentMethod   String?   @map("payment_method") // YooKassa payment_method_id
-  autoRenewEnabled Boolean  @default(false) @map("auto_renew_enabled")
-  lastPaymentDate DateTime? @map("last_payment_date")
-  nextPaymentDate DateTime? @map("next_payment_date")
+  billingEmail     String?   @map("billing_email")
+  paymentMethod    String?   @map("payment_method") // YooKassa payment_method_id
+  autoRenewEnabled Boolean   @default(false) @map("auto_renew_enabled")
+  lastPaymentDate  DateTime? @map("last_payment_date")
+  nextPaymentDate  DateTime? @map("next_payment_date")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1092,7 +1178,7 @@ model Payment {
   planId            String?  @map("plan_id")
   amount            Decimal  @db.Decimal(10, 2)
   currency          String   @default("RUB")
-  status            String   // created, pending, succeeded, canceled, failed
+  status            String // created, pending, succeeded, canceled, failed
   provider          String   @default("yookassa")
   providerPaymentId String   @unique @map("provider_payment_id")
   confirmationUrl   String?  @map("confirmation_url")
@@ -1101,8 +1187,8 @@ model Payment {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  adminAccount AdminAccount   @relation(fields: [adminAccountId], references: [id], onDelete: Cascade)
-  subscription Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  adminAccount AdminAccount      @relation(fields: [adminAccountId], references: [id], onDelete: Cascade)
+  subscription Subscription?     @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   plan         SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
 
   @@index([adminAccountId])
@@ -1111,51 +1197,73 @@ model Payment {
 }
 
 model Order {
-  id              String           @id @default(cuid())
-  projectId       String           @map("project_id")
-  userId          String?          @map("user_id")
-  orderNumber     String           @unique @map("order_number")
-  status                      OrderStatus          @default(PENDING)
-  accountingState             OrderAccountingState @default(NOT_APPLIED) @map("accounting_state")
-  totalAmount                 Decimal              @map("total_amount") @db.Decimal(10, 2)
-  paidAmount                  Decimal              @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  bonusAmount                 Decimal              @default(0) @map("bonus_amount") @db.Decimal(10, 2)
-  accountedPurchaseAmount     Decimal              @default(0) @map("accounted_purchase_amount") @db.Decimal(10, 2)
-  accountedEarnBase           Decimal              @default(0) @map("accounted_earn_base") @db.Decimal(10, 2)
-  accountedSpentBonusAmount   Decimal              @default(0) @map("accounted_spent_bonus_amount") @db.Decimal(10, 2)
-  accountedAt                 DateTime?            @map("accounted_at")
-  reversedAt                  DateTime?            @map("reversed_at")
-  reversalShortfall           Decimal              @default(0) @map("reversal_shortfall") @db.Decimal(10, 2)
-  deliveryAddress String?          @map("delivery_address") @db.Text
-  paymentMethod   String?          @map("payment_method")
-  deliveryMethod  String?          @map("delivery_method")
-  metadata        Json?
-  history         OrderHistory[]
-  items           OrderItem[]
-  analyticsEvents AnalyticsEvent[]
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id                        String               @id @default(cuid())
+  projectId                 String               @map("project_id")
+  userId                    String?              @map("user_id")
+  orderNumber               String               @unique @map("order_number")
+  externalOrderId           String?              @map("external_order_id")
+  paymentProvider           String?              @map("payment_provider")
+  providerPaymentId         String?              @unique @map("provider_payment_id")
+  paymentStatus             StorePaymentStatus   @default(UNPAID) @map("payment_status")
+  paidAt                    DateTime?            @map("paid_at")
+  fiscalState               FiscalState          @default(NOT_STARTED) @map("fiscal_state")
+  markingState              MarkingState         @default(NOT_REQUIRED) @map("marking_state")
+  fulfillmentState          FulfillmentState     @default(NEW) @map("fulfillment_state")
+  status                    OrderStatus          @default(PENDING)
+  accountingState           OrderAccountingState @default(NOT_APPLIED) @map("accounting_state")
+  totalAmount               Decimal              @map("total_amount") @db.Decimal(10, 2)
+  paidAmount                Decimal              @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  bonusAmount               Decimal              @default(0) @map("bonus_amount") @db.Decimal(10, 2)
+  accountedPurchaseAmount   Decimal              @default(0) @map("accounted_purchase_amount") @db.Decimal(10, 2)
+  accountedEarnBase         Decimal              @default(0) @map("accounted_earn_base") @db.Decimal(10, 2)
+  accountedSpentBonusAmount Decimal              @default(0) @map("accounted_spent_bonus_amount") @db.Decimal(10, 2)
+  accountedAt               DateTime?            @map("accounted_at")
+  reversedAt                DateTime?            @map("reversed_at")
+  reversalShortfall         Decimal              @default(0) @map("reversal_shortfall") @db.Decimal(10, 2)
+  deliveryAddress           String?              @map("delivery_address") @db.Text
+  paymentMethod             String?              @map("payment_method")
+  deliveryMethod            String?              @map("delivery_method")
+  metadata                  Json?
+  history                   OrderHistory[]
+  items                     OrderItem[]
+  analyticsEvents           AnalyticsEvent[]
+  inventoryMovements        InventoryMovement[]
+  fiscalReceipts            FiscalReceipt[]
+  markedUnits               MarkedUnit[]
+  fiscalOutbox              FiscalOutbox[]
+  createdAt                 DateTime             @default(now()) @map("created_at")
+  updatedAt                 DateTime             @updatedAt @map("updated_at")
+  project                   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                      User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
   @@index([projectId, createdAt])
+  @@index([projectId, paymentStatus])
+  @@index([projectId, fulfillmentState])
   @@index([userId])
   @@index([orderNumber])
   @@map("orders")
 }
 
 model OrderItem {
-  id        String   @id @default(cuid())
-  orderId   String   @map("order_id")
-  productId String?  @map("product_id")
-  name      String
-  quantity  Int
-  price     Decimal  @db.Decimal(10, 2)
-  total     Decimal  @db.Decimal(10, 2)
-  metadata  Json?
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  id                String               @id @default(cuid())
+  orderId           String               @map("order_id")
+  productId         String?              @map("product_id")
+  name              String
+  sku               String?
+  externalProductId String?              @map("external_product_id")
+  gtin              String?
+  markingStatus     ProductMarkingStatus @default(UNKNOWN) @map("marking_status")
+  vatCode           Int?                 @map("vat_code")
+  paymentSubject    String?              @map("payment_subject")
+  measure           String               @default("piece")
+  quantity          Int
+  price             Decimal              @db.Decimal(10, 2)
+  total             Decimal              @db.Decimal(10, 2)
+  metadata          Json?
+  order             Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product           Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  markedUnits       MarkedUnit[]
 
   @@index([orderId])
   @@index([productId])
@@ -1198,25 +1306,141 @@ model ProductCategory {
 }
 
 model Product {
-  id          String           @id @default(cuid())
-  projectId   String           @map("project_id")
-  name        String
-  sku         String?          @unique
-  price       Decimal          @db.Decimal(10, 2)
-  categoryId  String?          @map("category_id")
-  description String?          @db.Text
-  isActive    Boolean          @default(true) @map("is_active")
-  metadata    Json?
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-  category    ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  items       OrderItem[]
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                 String               @id @default(cuid())
+  projectId          String               @map("project_id")
+  name               String
+  sku                String?
+  externalId         String?              @map("external_id")
+  gtin               String?
+  markingStatus      ProductMarkingStatus @default(UNKNOWN) @map("marking_status")
+  vatCode            Int?                 @map("vat_code")
+  paymentSubject     String?              @map("payment_subject")
+  measure            String               @default("piece")
+  stockOnHand        Int                  @default(0) @map("stock_on_hand")
+  stockReserved      Int                  @default(0) @map("stock_reserved")
+  price              Decimal              @db.Decimal(10, 2)
+  categoryId         String?              @map("category_id")
+  description        String?              @db.Text
+  isActive           Boolean              @default(true) @map("is_active")
+  metadata           Json?
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+  category           ProductCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items              OrderItem[]
+  inventoryMovements InventoryMovement[]
+  markedUnits        MarkedUnit[]
+  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@unique([projectId, sku])
+  @@unique([projectId, externalId])
   @@index([projectId])
+  @@index([projectId, gtin])
   @@index([categoryId])
   @@index([sku])
   @@map("products")
+}
+
+model InventoryMovement {
+  id             String                @id @default(cuid())
+  projectId      String                @map("project_id")
+  productId      String                @map("product_id")
+  orderId        String?               @map("order_id")
+  type           InventoryMovementType
+  quantity       Int
+  balanceAfter   Int?                  @map("balance_after")
+  reason         String?
+  idempotencyKey String?               @unique @map("idempotency_key")
+  metadata       Json?
+  createdBy      String?               @map("created_by")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  project        Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  product        Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order          Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([productId, createdAt])
+  @@index([orderId])
+  @@map("inventory_movements")
+}
+
+model FiscalReceipt {
+  id                String              @id @default(cuid())
+  projectId         String              @map("project_id")
+  orderId           String              @map("order_id")
+  providerReceiptId String?             @unique @map("provider_receipt_id")
+  providerPaymentId String              @map("provider_payment_id")
+  type              FiscalReceiptType
+  status            FiscalReceiptStatus @default(NEW)
+  idempotencyKey    String              @unique @map("idempotency_key")
+  requestPayload    Json?               @map("request_payload")
+  responsePayload   Json?               @map("response_payload")
+  attemptCount      Int                 @default(0) @map("attempt_count")
+  lastError         String?             @map("last_error") @db.Text
+  submittedAt       DateTime?           @map("submitted_at")
+  succeededAt       DateTime?           @map("succeeded_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order             Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  markedUnits       MarkedUnit[]
+  outboxEntries     FiscalOutbox[]
+
+  @@index([projectId, status, createdAt])
+  @@index([orderId, type])
+  @@map("fiscal_receipts")
+}
+
+model MarkedUnit {
+  id            String           @id @default(cuid())
+  projectId     String           @map("project_id")
+  orderId       String           @map("order_id")
+  orderItemId   String           @map("order_item_id")
+  productId     String?          @map("product_id")
+  receiptId     String?          @map("receipt_id")
+  codeHash      String           @unique @map("code_hash")
+  codeEncrypted String           @map("code_encrypted") @db.Text
+  gtin          String
+  serial        String?
+  status        MarkedUnitStatus @default(ASSIGNED)
+  scannedBy     String?          @map("scanned_by")
+  scannedAt     DateTime         @default(now()) @map("scanned_at")
+  soldAt        DateTime?        @map("sold_at")
+  returnedAt    DateTime?        @map("returned_at")
+  metadata      Json?
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order         Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem     OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  product       Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  receipt       FiscalReceipt?   @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([orderId, orderItemId])
+  @@index([gtin])
+  @@map("marked_units")
+}
+
+model FiscalOutbox {
+  id             String             @id @default(cuid())
+  projectId      String             @map("project_id")
+  orderId        String?            @map("order_id")
+  receiptId      String?            @map("receipt_id")
+  type           String
+  status         FiscalOutboxStatus @default(PENDING)
+  idempotencyKey String             @unique @map("idempotency_key")
+  payload        Json
+  attemptCount   Int                @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime           @default(now()) @map("next_attempt_at")
+  lockedAt       DateTime?          @map("locked_at")
+  lastError      String?            @map("last_error") @db.Text
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order          Order?             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  receipt        FiscalReceipt?     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([projectId, createdAt])
+  @@map("fiscal_outbox")
 }
 
 model AnalyticsEvent {
@@ -1310,36 +1534,36 @@ enum MailingStatus {
 }
 
 model Mailing {
-  id                 String             @id @default(cuid())
-  projectId          String             @map("project_id")
-  name               String
-  type               MailingType
-  segmentId          String?            @map("segment_id")
-  templateId         String?            @map("template_id")
-  status             MailingStatus      @default(DRAFT)
-  scheduledAt        DateTime?          @map("scheduled_at")
-  sentAt             DateTime?          @map("sent_at")
-  completedAt        DateTime?          @map("completed_at")
-  clonedFromId       String?            @map("cloned_from_id")
-  messageText        String?            @map("message_text") @db.Text
-  messageHtml        String?            @map("message_html") @db.Text
-  recipients         MailingRecipient[]
-  statistics         Json?
-  sentCount          Int                @default(0) @map("sent_count")
-  openedCount        Int                @default(0) @map("opened_count")
-  clickedCount       Int                @default(0) @map("clicked_count")
-  failedCount        Int                @default(0) @map("failed_count")
-  linkTrackingEnabled Boolean           @default(false) @map("link_tracking_enabled")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
-  segment            Segment?           @relation(fields: [segmentId], references: [id], onDelete: SetNull)
-  template           MailingTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  clonedFrom         Mailing?           @relation("MailingClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
-  clones             Mailing[]          @relation("MailingClones")
-  linkClicks         MailingLinkClick[]
-  history            MailingHistory[]
-  links              MailingLink[]
+  id                  String             @id @default(cuid())
+  projectId           String             @map("project_id")
+  name                String
+  type                MailingType
+  segmentId           String?            @map("segment_id")
+  templateId          String?            @map("template_id")
+  status              MailingStatus      @default(DRAFT)
+  scheduledAt         DateTime?          @map("scheduled_at")
+  sentAt              DateTime?          @map("sent_at")
+  completedAt         DateTime?          @map("completed_at")
+  clonedFromId        String?            @map("cloned_from_id")
+  messageText         String?            @map("message_text") @db.Text
+  messageHtml         String?            @map("message_html") @db.Text
+  recipients          MailingRecipient[]
+  statistics          Json?
+  sentCount           Int                @default(0) @map("sent_count")
+  openedCount         Int                @default(0) @map("opened_count")
+  clickedCount        Int                @default(0) @map("clicked_count")
+  failedCount         Int                @default(0) @map("failed_count")
+  linkTrackingEnabled Boolean            @default(false) @map("link_tracking_enabled")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  segment             Segment?           @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  template            MailingTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  project             Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clonedFrom          Mailing?           @relation("MailingClones", fields: [clonedFromId], references: [id], onDelete: SetNull)
+  clones              Mailing[]          @relation("MailingClones")
+  linkClicks          MailingLinkClick[]
+  history             MailingHistory[]
+  links               MailingLink[]
 
   @@index([projectId, status])
   @@index([status, scheduledAt])
@@ -1366,33 +1590,33 @@ model MailingTemplate {
 }
 
 model MailingRecipient {
-  id                  String    @id @default(cuid())
-  mailingId           String    @map("mailing_id")
-  userId               String?   @map("user_id")
-  email                String?
-  phone                String?
-  telegramId           String?   @map("telegram_id")
-  status               String    @default("PENDING") // PENDING, SENT, FAILED, BOUNCED, DELIVERED
-  sentAt               DateTime? @map("sent_at")
-  deliveredAt          DateTime? @map("delivered_at")
-  openedAt             DateTime? @map("opened_at")
-  clickedAt            DateTime? @map("clicked_at")
-  openCount            Int       @default(0) @map("open_count")
-  clickCount           Int       @default(0) @map("click_count")
-  error                String?   @db.Text
-  errorCode            Int?      @map("error_code")
-  errorDescription     String?   @map("error_description") @db.Text
-  retryAfter           Int?      @map("retry_after")
-  attemptCount         Int       @default(0) @map("attempt_count")
-  maxAttempts          Int       @default(3) @map("max_attempts")
-  jobId                String?   @map("job_id")
-  telegramMessageId    String?   @map("telegram_message_id")
-  lastAttemptAt        DateTime? @map("last_attempt_at")
-  metadata             Json?
-  mailing              Mailing   @relation(fields: [mailingId], references: [id], onDelete: Cascade)
-  user                 User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  linkClicks           MailingLinkClick[]
-  history              MailingHistory[]
+  id                String             @id @default(cuid())
+  mailingId         String             @map("mailing_id")
+  userId            String?            @map("user_id")
+  email             String?
+  phone             String?
+  telegramId        String?            @map("telegram_id")
+  status            String             @default("PENDING") // PENDING, SENT, FAILED, BOUNCED, DELIVERED
+  sentAt            DateTime?          @map("sent_at")
+  deliveredAt       DateTime?          @map("delivered_at")
+  openedAt          DateTime?          @map("opened_at")
+  clickedAt         DateTime?          @map("clicked_at")
+  openCount         Int                @default(0) @map("open_count")
+  clickCount        Int                @default(0) @map("click_count")
+  error             String?            @db.Text
+  errorCode         Int?               @map("error_code")
+  errorDescription  String?            @map("error_description") @db.Text
+  retryAfter        Int?               @map("retry_after")
+  attemptCount      Int                @default(0) @map("attempt_count")
+  maxAttempts       Int                @default(3) @map("max_attempts")
+  jobId             String?            @map("job_id")
+  telegramMessageId String?            @map("telegram_message_id")
+  lastAttemptAt     DateTime?          @map("last_attempt_at")
+  metadata          Json?
+  mailing           Mailing            @relation(fields: [mailingId], references: [id], onDelete: Cascade)
+  user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  linkClicks        MailingLinkClick[]
+  history           MailingHistory[]
 
   @@unique([mailingId, userId])
   @@index([mailingId, status])
@@ -1554,16 +1778,16 @@ model ChatMessage {
 }
 
 model NotificationTemplate {
-  id          String   @id @default(cuid())
-  projectId   String   @map("project_id")
-  name        String
-  message     String   @db.Text
-  imageUrl    String?  @map("image_url")
-  buttons     Json?    // Array of { text, url?, callback_data? }
-  parseMode   String   @default("HTML") @map("parse_mode") // HTML or Markdown
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  name      String
+  message   String   @db.Text
+  imageUrl  String?  @map("image_url")
+  buttons   Json? // Array of { text, url?, callback_data? }
+  parseMode String   @default("HTML") @map("parse_mode") // HTML or Markdown
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@map("notification_templates")
@@ -1573,32 +1797,32 @@ model NotificationTemplate {
 // Архитектура: МЫ являемся API provider, МойСклад вызывает НАШИ endpoints
 
 model MoySkladIntegration {
-  id                String              @id @default(cuid())
-  projectId         String              @unique @map("project_id")
-  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  projectId String  @unique @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   // Auth token для аутентификации запросов от МойСклад
   // МойСклад отправляет этот токен в заголовке Lognex-Discount-API-Auth-Token
-  authToken         String              @unique @map("auth_token") // Hashed with bcrypt
-  
+  authToken String @unique @map("auth_token") // Hashed with bcrypt
+
   // Base URL нашего Loyalty API, который мы предоставляем МойСклад
-  baseUrl           String              @map("base_url") // https://gupil.ru/api/moysklad-loyalty/[projectId]
-  
+  baseUrl String @map("base_url") // https://gupil.ru/api/moysklad-loyalty/[projectId]
+
   // Настройки бонусной программы
-  bonusPercentage   Decimal             @default(10) @map("bonus_percentage") @db.Decimal(5, 2)
-  maxBonusSpend     Decimal             @default(50) @map("max_bonus_spend") @db.Decimal(5, 2) // max % оплаты бонусами
-  
+  bonusPercentage Decimal @default(10) @map("bonus_percentage") @db.Decimal(5, 2)
+  maxBonusSpend   Decimal @default(50) @map("max_bonus_spend") @db.Decimal(5, 2) // max % оплаты бонусами
+
   // Status
-  isActive          Boolean             @default(false) @map("is_active")
-  lastRequestAt     DateTime?           @map("last_request_at")
-  
+  isActive      Boolean   @default(false) @map("is_active")
+  lastRequestAt DateTime? @map("last_request_at")
+
   // Timestamps
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relations
-  apiLogs           MoySkladApiLog[]
-  
+  apiLogs MoySkladApiLog[]
+
   @@index([projectId])
   @@index([authToken])
   @@map("moysklad_integrations")
@@ -1606,28 +1830,28 @@ model MoySkladIntegration {
 
 // API Log для всех запросов к Loyalty API
 model MoySkladApiLog {
-  id                String              @id @default(cuid())
-  integrationId     String              @map("integration_id")
-  integration       MoySkladIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  
+  id            String              @id @default(cuid())
+  integrationId String              @map("integration_id")
+  integration   MoySkladIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
   // Request details
-  endpoint          String              @map("endpoint") // /counterparty, /retaildemand, etc.
-  method            String              @map("method") // GET, POST
-  requestBody       Json?               @map("request_body")
-  
+  endpoint    String @map("endpoint") // /counterparty, /retaildemand, etc.
+  method      String @map("method") // GET, POST
+  requestBody Json?  @map("request_body")
+
   // Response details
-  responseStatus    Int                 @map("response_status") // HTTP status code
-  responseBody      Json?               @map("response_body")
-  
+  responseStatus Int   @map("response_status") // HTTP status code
+  responseBody   Json? @map("response_body")
+
   // Performance
-  processingTimeMs  Int                 @map("processing_time_ms")
-  
+  processingTimeMs Int @map("processing_time_ms")
+
   // Error details (if failed)
-  errorMessage      String?             @map("error_message") @db.Text
-  
+  errorMessage String? @map("error_message") @db.Text
+
   // Timestamp
-  createdAt         DateTime            @default(now()) @map("created_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+
   @@index([integrationId, createdAt])
   @@index([endpoint])
   @@index([responseStatus])
@@ -1642,7 +1866,7 @@ model VerificationCode {
   expiresAt DateTime @map("expires_at") // 5 minutes from creation
   isUsed    Boolean  @default(false) @map("is_used")
   createdAt DateTime @default(now()) @map("created_at")
-  
+
   @@index([userId, isUsed, expiresAt])
   @@map("verification_codes")
 }
@@ -1651,43 +1875,43 @@ model VerificationCode {
 // Архитектура: REST API + Webhooks + JavaScript Widget
 
 model InSalesIntegration {
-  id                String   @id @default(cuid())
-  projectId         String   @unique @map("project_id")
-  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  projectId String  @unique @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   // InSales API Credentials
-  apiKey            String   @map("api_key")
-  apiPassword       String   @map("api_password") // Encrypted
-  shopDomain        String   @map("shop_domain") // myshop.myinsales.ru
-  
+  apiKey      String @map("api_key")
+  apiPassword String @map("api_password") // Encrypted
+  shopDomain  String @map("shop_domain") // myshop.myinsales.ru
+
   // Webhook Secret для валидации входящих webhooks
-  webhookSecret     String   @unique @map("webhook_secret")
-  
+  webhookSecret String @unique @map("webhook_secret")
+
   // Настройки бонусной программы
-  bonusPercent      Int      @default(10) @map("bonus_percent") // % начисления бонусов
-  maxBonusSpend     Int      @default(50) @map("max_bonus_spend") // max % оплаты бонусами
+  bonusPercent       Int     @default(10) @map("bonus_percent") // % начисления бонусов
+  maxBonusSpend      Int     @default(50) @map("max_bonus_spend") // max % оплаты бонусами
   useProjectSettings Boolean @default(true) @map("use_project_settings")
-  
+
   // Widget Settings
-  widgetEnabled     Boolean  @default(true) @map("widget_enabled")
-  showProductBadges Boolean  @default(true) @map("show_product_badges")
-  
+  widgetEnabled     Boolean @default(true) @map("widget_enabled")
+  showProductBadges Boolean @default(true) @map("show_product_badges")
+
   // Status
-  isActive          Boolean  @default(false) @map("is_active")
-  lastWebhookAt     DateTime? @map("last_webhook_at")
-  
+  isActive      Boolean   @default(false) @map("is_active")
+  lastWebhookAt DateTime? @map("last_webhook_at")
+
   // Statistics
-  totalOrders       Int      @default(0) @map("total_orders")
-  totalBonusAwarded Decimal  @default(0) @map("total_bonus_awarded") @db.Decimal(10, 2)
-  totalBonusSpent   Decimal  @default(0) @map("total_bonus_spent") @db.Decimal(10, 2)
-  
+  totalOrders       Int     @default(0) @map("total_orders")
+  totalBonusAwarded Decimal @default(0) @map("total_bonus_awarded") @db.Decimal(10, 2)
+  totalBonusSpent   Decimal @default(0) @map("total_bonus_spent") @db.Decimal(10, 2)
+
   // Timestamps
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relations
-  webhookLogs       InSalesWebhookLog[]
-  
+  webhookLogs InSalesWebhookLog[]
+
   @@index([projectId])
   @@index([webhookSecret])
   @@map("insales_integrations")
@@ -1695,32 +1919,31 @@ model InSalesIntegration {
 
 // Webhook Log для всех входящих webhooks от InSales
 model InSalesWebhookLog {
-  id            String              @id @default(cuid())
-  integrationId String              @map("integration_id")
-  integration   InSalesIntegration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  
+  id            String             @id @default(cuid())
+  integrationId String             @map("integration_id")
+  integration   InSalesIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
   // Webhook details
-  event         String              @map("event") // orders/create, clients/create, etc.
-  payload       Json                @map("payload")
-  
+  event   String @map("event") // orders/create, clients/create, etc.
+  payload Json   @map("payload")
+
   // Processing details
-  status        Int                 @map("status") // HTTP status code
-  success       Boolean             @map("success")
-  response      Json?               @map("response")
-  error         String?             @map("error") @db.Text
-  
+  status   Int     @map("status") // HTTP status code
+  success  Boolean @map("success")
+  response Json?   @map("response")
+  error    String? @map("error") @db.Text
+
   // Performance
-  processingTimeMs Int?             @map("processing_time_ms")
-  
+  processingTimeMs Int? @map("processing_time_ms")
+
   // Timestamp
-  processedAt   DateTime            @default(now()) @map("processed_at")
-  
+  processedAt DateTime @default(now()) @map("processed_at")
+
   @@index([integrationId, processedAt])
   @@index([event])
   @@index([success])
   @@map("insales_webhook_logs")
 }
-
 
 // ============================================================================
 // МойСклад Direct API Integration (Новая реализация через Bonus Transaction API)
@@ -1730,40 +1953,40 @@ model InSalesWebhookLog {
 // Двусторонняя синхронизация: онлайн покупки → МойСклад, офлайн покупки → наша система
 
 enum SyncDirection {
-  MOYSKLAD_TO_US    // Только из МойСклад в нашу систему
-  US_TO_MOYSKLAD    // Только из нашей системы в МойСклад
-  BIDIRECTIONAL     // Двусторонняя синхронизация (рекомендуется)
+  MOYSKLAD_TO_US // Только из МойСклад в нашу систему
+  US_TO_MOYSKLAD // Только из нашей системы в МойСклад
+  BIDIRECTIONAL // Двусторонняя синхронизация (рекомендуется)
 }
 
 model MoySkladDirectIntegration {
-  id                String              @id @default(cuid())
-  projectId         String              @unique @map("project_id")
-  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+  id        String  @id @default(cuid())
+  projectId String  @unique @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   // Credentials (зашифрованы)
-  accountId         String              @map("account_id") // ID организации в МойСклад
-  apiToken          String              @map("api_token") // Bearer token для API (encrypted)
-  bonusProgramId    String              @map("bonus_program_id") // ID программы лояльности
-  
+  accountId      String @map("account_id") // ID организации в МойСклад
+  apiToken       String @map("api_token") // Bearer token для API (encrypted)
+  bonusProgramId String @map("bonus_program_id") // ID программы лояльности
+
   // Настройки синхронизации
-  syncDirection     SyncDirection       @default(BIDIRECTIONAL) @map("sync_direction")
-  autoSync          Boolean             @default(true) @map("auto_sync")
-  
+  syncDirection SyncDirection @default(BIDIRECTIONAL) @map("sync_direction")
+  autoSync      Boolean       @default(true) @map("auto_sync")
+
   // Webhook
-  webhookSecret     String?             @unique @map("webhook_secret") // Secret для валидации webhook
-  
+  webhookSecret String? @unique @map("webhook_secret") // Secret для валидации webhook
+
   // Статус
-  isActive          Boolean             @default(false) @map("is_active")
-  lastSyncAt        DateTime?           @map("last_sync_at")
-  lastError         String?             @map("last_error") @db.Text
-  
+  isActive   Boolean   @default(false) @map("is_active")
+  lastSyncAt DateTime? @map("last_sync_at")
+  lastError  String?   @map("last_error") @db.Text
+
   // Timestamps
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relations
-  syncLogs          MoySkladDirectSyncLog[]
-  
+  syncLogs MoySkladDirectSyncLog[]
+
   @@index([projectId])
   @@index([webhookSecret])
   @@map("moysklad_direct_integrations")
@@ -1771,31 +1994,31 @@ model MoySkladDirectIntegration {
 
 // Лог синхронизации для прямой интеграции
 model MoySkladDirectSyncLog {
-  id            String                      @id @default(cuid())
-  integrationId String                      @map("integration_id")
-  integration   MoySkladDirectIntegration   @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  
+  id            String                    @id @default(cuid())
+  integrationId String                    @map("integration_id")
+  integration   MoySkladDirectIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
   // Операция
-  operation     String                      @map("operation") // "bonus_accrual", "bonus_spending", "balance_sync"
-  direction     String                      @map("direction") // "incoming" (от МойСклад), "outgoing" (в МойСклад)
-  
+  operation String @map("operation") // "bonus_accrual", "bonus_spending", "balance_sync"
+  direction String @map("direction") // "incoming" (от МойСклад), "outgoing" (в МойСклад)
+
   // Связи
-  moySkladTransactionId String?           @map("moysklad_transaction_id") // ID транзакции в МойСклад
-  userId        String?                     @map("user_id") // ID пользователя в нашей системе
-  user          User?                       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
+  moySkladTransactionId String? @map("moysklad_transaction_id") // ID транзакции в МойСклад
+  userId                String? @map("user_id") // ID пользователя в нашей системе
+  user                  User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   // Данные
-  amount        Decimal?                    @db.Decimal(10, 2)
-  requestData   Json?                       @map("request_data")
-  responseData  Json?                       @map("response_data")
-  
+  amount       Decimal? @db.Decimal(10, 2)
+  requestData  Json?    @map("request_data")
+  responseData Json?    @map("response_data")
+
   // Результат
-  status        String                      @map("status") // "success", "error", "pending"
-  errorMessage  String?                     @map("error_message") @db.Text
-  
+  status       String  @map("status") // "success", "error", "pending"
+  errorMessage String? @map("error_message") @db.Text
+
   // Timestamp
-  createdAt     DateTime                    @default(now()) @map("created_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+
   @@index([integrationId, createdAt])
   @@index([userId])
   @@index([status])

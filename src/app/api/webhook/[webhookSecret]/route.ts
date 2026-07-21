@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import { TildaParserService } from '@/lib/services/integration/tilda-parser.service';
+import {
+  TildaOrderValidationError,
+  TildaPaymentIdRequiredError,
+  TildaParserService
+} from '@/lib/services/integration/tilda-parser.service';
 import { OrderProcessingService } from '@/lib/services/orders/order-processing.service';
 import { AdminNotificationService } from '@/lib/services/admin-notification.service';
 
@@ -45,25 +49,28 @@ export async function POST(
         // JSON format (custom integrations)
         body = await req.json();
         logger.debug('Parsed as JSON', { bodyKeys: Object.keys(body) });
-      } else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+      } else if (
+        contentType.includes('application/x-www-form-urlencoded') ||
+        contentType.includes('multipart/form-data')
+      ) {
         // Form data format (Tilda)
         const formData = await req.formData();
         body = Object.fromEntries(formData.entries());
-        
-        logger.debug('Parsed as FormData', { 
+
+        logger.debug('Parsed as FormData', {
           bodyKeys: Object.keys(body),
-          paymentType: typeof body.payment 
+          paymentType: typeof body.payment
         });
-        
+
         // Tilda sends nested data as JSON strings, parse them
         if (body.payment && typeof body.payment === 'string') {
           try {
             body.payment = JSON.parse(body.payment);
-            logger.debug('Payment field parsed successfully', { 
-              paymentKeys: Object.keys(body.payment) 
+            logger.debug('Payment field parsed successfully', {
+              paymentKeys: Object.keys(body.payment)
             });
           } catch (e) {
-            logger.warn('Failed to parse payment field', { 
+            logger.warn('Failed to parse payment field', {
               payment: body.payment,
               error: e instanceof Error ? e.message : 'Unknown'
             });
@@ -75,14 +82,17 @@ export async function POST(
         body = await req.json();
       }
     } catch (e) {
-      logger.error('Failed to parse request body', { 
-        contentType, 
-        error: e instanceof Error ? e.message : 'Unknown' 
+      logger.error('Failed to parse request body', {
+        contentType,
+        error: e instanceof Error ? e.message : 'Unknown'
       });
-      return NextResponse.json({ 
-        error: 'Invalid request format. Expected JSON or form data.',
-        details: e instanceof Error ? e.message : 'Unknown error'
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: 'Invalid request format. Expected JSON or form data.',
+          details: e instanceof Error ? e.message : 'Unknown error'
+        },
+        { status: 400 }
+      );
     }
 
     // Handle test requests
@@ -106,7 +116,14 @@ export async function POST(
         projectId: project.id,
         endpoint: `/api/webhook/${webhookSecret}`,
         method: 'POST',
-        headers: Object.fromEntries(req.headers.entries()),
+        headers: Object.fromEntries(
+          [...req.headers.entries()].filter(
+            ([key]) =>
+              !['authorization', 'cookie', 'x-forwarded-for'].includes(
+                key.toLowerCase()
+              )
+          )
+        ),
         body: body,
         response: result as any, // Cast to any for JSON compatibility
         status: 200,
@@ -126,6 +143,11 @@ export async function POST(
     return NextResponse.json(result);
   } catch (error) {
     logger.error('Webhook Error', error);
+    const responseStatus =
+      error instanceof TildaOrderValidationError ||
+      error instanceof TildaPaymentIdRequiredError
+        ? 400
+        : 500;
 
     // Log error to database if we have projectId
     try {
@@ -147,7 +169,7 @@ export async function POST(
               error: 'Internal Server Error',
               details: error instanceof Error ? error.message : 'Unknown'
             },
-            status: 500,
+            status: responseStatus,
             success: false
           }
         });
@@ -163,13 +185,16 @@ export async function POST(
           link: `/dashboard/projects/${project.id}/integrations`,
           dedupeKey: `integration_error:webhook:${project.id}`
         }).catch((notifyError) =>
-          logger.error('Failed to create admin notification (integration_error)', {
-            projectId: project.id,
-            error:
-              notifyError instanceof Error
-                ? notifyError.message
-                : String(notifyError)
-          })
+          logger.error(
+            'Failed to create admin notification (integration_error)',
+            {
+              projectId: project.id,
+              error:
+                notifyError instanceof Error
+                  ? notifyError.message
+                  : String(notifyError)
+            }
+          )
         );
       }
     } catch (logError) {
@@ -178,10 +203,15 @@ export async function POST(
 
     return NextResponse.json(
       {
-        error: 'Internal Server Error',
+        error:
+          error instanceof TildaOrderValidationError
+            ? 'Tilda orderid is required for a paid order'
+            : error instanceof TildaPaymentIdRequiredError
+              ? 'Tilda systranid is required for a YooKassa order'
+              : 'Internal Server Error',
         details: error instanceof Error ? error.message : 'Unknown'
       },
-      { status: 500 }
+      { status: responseStatus }
     );
   }
 }

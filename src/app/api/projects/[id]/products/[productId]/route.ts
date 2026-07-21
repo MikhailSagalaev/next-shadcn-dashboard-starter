@@ -10,14 +10,26 @@ import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import { ProductService } from '@/lib/services/product.service';
 import { z } from 'zod';
+import { ProductMarkingStatus } from '@prisma/client';
 
 const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
   sku: z.string().optional(),
+  externalId: z.string().nullable().optional(),
+  gtin: z
+    .string()
+    .regex(/^\d{8,14}$/)
+    .nullable()
+    .optional(),
+  markingStatus: z.nativeEnum(ProductMarkingStatus).optional(),
+  vatCode: z.number().int().min(1).max(12).nullable().optional(),
+  paymentSubject: z.string().max(64).nullable().optional(),
+  measure: z.string().max(32).optional(),
+  stockOnHand: z.number().int().min(0).optional(),
   price: z.number().positive().optional(),
   categoryId: z.string().optional(),
   description: z.string().optional(),
-  isActive: z.boolean().optional(),
+  isActive: z.boolean().optional()
 });
 
 export async function GET(
@@ -41,7 +53,7 @@ export async function GET(
     }
 
     return NextResponse.json({ product });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Ошибка получения товара' },
       { status: 500 }
@@ -65,7 +77,21 @@ export async function PUT(
     const body = await request.json();
     const data = updateProductSchema.parse(body);
 
-    const product = await ProductService.updateProduct(projectId, productId, data);
+    const { stockOnHand, ...productData } = data;
+    let product = await ProductService.updateProduct(
+      projectId,
+      productId,
+      productData
+    );
+    if (typeof stockOnHand === 'number') {
+      product = await ProductService.setStock({
+        projectId,
+        productId,
+        quantity: stockOnHand,
+        reason: 'Ручная корректировка каталога',
+        createdBy: admin.sub
+      });
+    }
 
     return NextResponse.json({ product });
   } catch (error) {
@@ -98,11 +124,10 @@ export async function DELETE(
     await ProductService.deleteProduct(projectId, productId);
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Ошибка удаления товара' },
       { status: 500 }
     );
   }
 }
-
