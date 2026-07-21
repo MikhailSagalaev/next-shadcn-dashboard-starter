@@ -10,6 +10,10 @@ import {
 
 const originalShopId = process.env.YOOKASSA_SHOP_ID;
 const originalSecretKey = process.env.YOOKASSA_SECRET_KEY;
+const merchantCredentials = {
+  shopId: 'merchant-shop',
+  secretKey: 'merchant-secret'
+};
 
 describe('YooKassa client', () => {
   beforeEach(() => {
@@ -109,10 +113,11 @@ describe('YooKassa client', () => {
         ],
         send: true
       },
-      'receipt-key'
+      'receipt-key',
+      merchantCredentials
     );
-    await getYooKassaReceipt('receipt-1');
-    await listYooKassaReceipts({
+    await getYooKassaReceipt('receipt-1', merchantCredentials);
+    await listYooKassaReceipts(merchantCredentials, {
       paymentId: 'payment-1',
       cursor: 'next cursor'
     });
@@ -123,6 +128,11 @@ describe('YooKassa client', () => {
     expect(
       (global.fetch as jest.Mock).mock.calls[0][1].headers['Idempotence-Key']
     ).toBe('receipt-key');
+    expect(
+      (global.fetch as jest.Mock).mock.calls[0][1].headers.Authorization
+    ).toBe(
+      `Basic ${Buffer.from('merchant-shop:merchant-secret').toString('base64')}`
+    );
     expect((global.fetch as jest.Mock).mock.calls[1][0]).toBe(
       'https://api.yookassa.ru/v3/receipts/receipt-1'
     );
@@ -151,8 +161,8 @@ describe('YooKassa client', () => {
       amount: { value: '50.00', currency: 'RUB' },
       description: 'Partial refund'
     };
-    await createYooKassaRefund(payload, 'refund-key');
-    await getYooKassaRefund('refund-1');
+    await createYooKassaRefund(payload, 'refund-key', merchantCredentials);
+    await getYooKassaRefund('refund-1', merchantCredentials);
 
     expect((global.fetch as jest.Mock).mock.calls[0][0]).toBe(
       'https://api.yookassa.ru/v3/refunds'
@@ -170,7 +180,7 @@ describe('YooKassa client', () => {
     expect(await getYooKassaPayment('payment-1')).toEqual({
       ok: false,
       status: 500,
-      body: 'YooKassa credentials missing'
+      body: 'Platform YooKassa credentials missing'
     });
     expect(global.fetch).not.toHaveBeenCalled();
 

@@ -14,6 +14,10 @@ import type {
   YooKassaReceiptItem,
   YooKassaVatCode
 } from '@/lib/yookassa/types';
+import {
+  getActiveYooKassaFiscalIntegration,
+  YooKassaFiscalConfigurationError
+} from '@/lib/services/yookassa-fiscal-integration.service';
 
 export class MarkingConflictError extends Error {}
 
@@ -164,6 +168,14 @@ export class MarkingService {
   }
 
   static async queueSettlement(params: { projectId: string; orderId: string }) {
+    try {
+      await getActiveYooKassaFiscalIntegration(params.projectId);
+    } catch (error) {
+      if (error instanceof YooKassaFiscalConfigurationError) {
+        throw new MarkingConflictError(error.message);
+      }
+      throw error;
+    }
     const order = await db.order.findFirst({
       where: { id: params.orderId, projectId: params.projectId },
       include: { fiscalReceipts: true }
@@ -284,6 +296,9 @@ export class MarkingService {
     });
     if (!receipt) throw new Error('Fiscal receipt not found');
     const { order } = receipt;
+    const { integration } = await getActiveYooKassaFiscalIntegration(
+      order.projectId
+    );
     if (!order.providerPaymentId)
       throw new Error('YooKassa payment id missing');
     const metadata = (order.metadata ?? {}) as Record<string, unknown>;
@@ -327,15 +342,13 @@ export class MarkingService {
     const delivery = Number(order.totalAmount) - itemTotal;
     if (delivery < -0.01) throw new Error('Order items exceed the paid amount');
     if (delivery > 0.009) {
-      const deliveryVat = Number(process.env.YOOKASSA_DELIVERY_VAT_CODE);
+      const deliveryVat = integration.deliveryVatCode;
       if (
         !Number.isInteger(deliveryVat) ||
         deliveryVat < 1 ||
         deliveryVat > 12
       ) {
-        throw new Error(
-          'YOOKASSA_DELIVERY_VAT_CODE is required for paid delivery'
-        );
+        throw new Error('Укажите НДС доставки в интеграции ЮKassa проекта');
       }
       items.push({
         description: 'Доставка',
@@ -356,7 +369,7 @@ export class MarkingService {
       items,
       send: true,
       internet: true,
-      timezone: Number(process.env.YOOKASSA_RECEIPT_TIMEZONE ?? 2),
+      timezone: integration.receiptTimezone,
       settlements: [
         {
           type: 'prepayment',

@@ -36,11 +36,25 @@ export type {
   YooKassaVatCode
 } from '@/lib/yookassa/types';
 
-export function getYooKassaAuthHeader(): string | null {
+export type YooKassaCredentials = {
+  shopId: string;
+  secretKey: string;
+};
+
+export function getPlatformYooKassaAuthHeader(): string | null {
   const shopId = process.env.YOOKASSA_SHOP_ID;
   const secretKey = process.env.YOOKASSA_SECRET_KEY;
   if (!shopId || !secretKey) return null;
   const token = Buffer.from(`${shopId}:${secretKey}`).toString('base64');
+  return `Basic ${token}`;
+}
+
+export function getYooKassaAuthHeader(
+  credentials: YooKassaCredentials
+): string {
+  const token = Buffer.from(
+    `${credentials.shopId}:${credentials.secretKey}`
+  ).toString('base64');
   return `Basic ${token}`;
 }
 
@@ -51,15 +65,11 @@ export type YooKassaRequestOptions = {
   query?: Record<string, string | undefined>;
 };
 
-export async function requestYooKassa<T>(
+async function requestWithAuth<T>(
   path: string,
-  options: YooKassaRequestOptions = {}
+  authHeader: string,
+  options: YooKassaRequestOptions
 ): Promise<YooKassaApiResult<T>> {
-  const authHeader = getYooKassaAuthHeader();
-  if (!authHeader) {
-    return { ok: false, status: 500, body: 'YooKassa credentials missing' };
-  }
-
   const url = new URL(`${YOOKASSA_API_BASE_URL}${path}`);
   for (const [key, value] of Object.entries(options.query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, value);
@@ -91,6 +101,29 @@ export async function requestYooKassa<T>(
   }
 }
 
+export async function requestYooKassa<T>(
+  path: string,
+  options: YooKassaRequestOptions = {}
+): Promise<YooKassaApiResult<T>> {
+  const authHeader = getPlatformYooKassaAuthHeader();
+  if (!authHeader) {
+    return {
+      ok: false,
+      status: 500,
+      body: 'Platform YooKassa credentials missing'
+    };
+  }
+  return requestWithAuth(path, authHeader, options);
+}
+
+export async function requestMerchantYooKassa<T>(
+  credentials: YooKassaCredentials,
+  path: string,
+  options: YooKassaRequestOptions = {}
+): Promise<YooKassaApiResult<T>> {
+  return requestWithAuth(path, getYooKassaAuthHeader(credentials), options);
+}
+
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
 }
@@ -114,11 +147,22 @@ export async function getYooKassaPayment(
   );
 }
 
+export async function getMerchantYooKassaPayment(
+  paymentId: string,
+  credentials: YooKassaCredentials
+): Promise<YooKassaApiResult<YooKassaPayment>> {
+  return requestMerchantYooKassa<YooKassaPayment>(
+    credentials,
+    `/payments/${encodePathSegment(paymentId)}`
+  );
+}
+
 export async function createYooKassaReceipt(
   payload: YooKassaCreateReceiptPayload,
-  idempotenceKey: string
+  idempotenceKey: string,
+  credentials: YooKassaCredentials
 ): Promise<YooKassaApiResult<YooKassaReceipt>> {
-  return requestYooKassa<YooKassaReceipt>('/receipts', {
+  return requestMerchantYooKassa<YooKassaReceipt>(credentials, '/receipts', {
     method: 'POST',
     body: payload,
     idempotenceKey
@@ -126,32 +170,44 @@ export async function createYooKassaReceipt(
 }
 
 export async function getYooKassaReceipt(
-  receiptId: string
+  receiptId: string,
+  credentials: YooKassaCredentials
 ): Promise<YooKassaApiResult<YooKassaReceipt>> {
-  return requestYooKassa<YooKassaReceipt>(
+  return requestMerchantYooKassa<YooKassaReceipt>(
+    credentials,
     `/receipts/${encodePathSegment(receiptId)}`
   );
 }
 
-export async function listYooKassaReceipts(params: {
-  paymentId?: string;
-  refundId?: string;
-  cursor?: string;
-}): Promise<YooKassaApiResult<YooKassaReceiptList>> {
-  return requestYooKassa<YooKassaReceiptList>('/receipts', {
-    query: {
-      payment_id: params.paymentId,
-      refund_id: params.refundId,
-      cursor: params.cursor
+export async function listYooKassaReceipts(
+  credentials: YooKassaCredentials,
+  params: {
+    paymentId?: string;
+    refundId?: string;
+    cursor?: string;
+    limit?: string;
+  } = {}
+): Promise<YooKassaApiResult<YooKassaReceiptList>> {
+  return requestMerchantYooKassa<YooKassaReceiptList>(
+    credentials,
+    '/receipts',
+    {
+      query: {
+        payment_id: params.paymentId,
+        refund_id: params.refundId,
+        cursor: params.cursor,
+        limit: params.limit
+      }
     }
-  });
+  );
 }
 
 export async function createYooKassaRefund(
   payload: YooKassaCreateRefundPayload,
-  idempotenceKey: string
+  idempotenceKey: string,
+  credentials: YooKassaCredentials
 ): Promise<YooKassaApiResult<YooKassaRefund>> {
-  return requestYooKassa<YooKassaRefund>('/refunds', {
+  return requestMerchantYooKassa<YooKassaRefund>(credentials, '/refunds', {
     method: 'POST',
     body: payload,
     idempotenceKey
@@ -159,9 +215,11 @@ export async function createYooKassaRefund(
 }
 
 export async function getYooKassaRefund(
-  refundId: string
+  refundId: string,
+  credentials: YooKassaCredentials
 ): Promise<YooKassaApiResult<YooKassaRefund>> {
-  return requestYooKassa<YooKassaRefund>(
+  return requestMerchantYooKassa<YooKassaRefund>(
+    credentials,
     `/refunds/${encodePathSegment(refundId)}`
   );
 }

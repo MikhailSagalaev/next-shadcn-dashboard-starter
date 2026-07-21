@@ -2,8 +2,10 @@ import { db } from '@/lib/db';
 import { MarkingService } from '@/lib/services/marking.service';
 import {
   createYooKassaReceipt,
+  getMerchantYooKassaPayment,
   getYooKassaReceipt
 } from '@/lib/yookassa/client';
+import { getActiveYooKassaFiscalIntegration } from '@/lib/services/yookassa-fiscal-integration.service';
 
 const MAX_ATTEMPTS = 10;
 
@@ -70,17 +72,48 @@ async function applyReceiptStatus(receiptId: string, status: string) {
 
 async function processEntry(entry: {
   id: string;
+  projectId: string;
   receiptId: string | null;
   type: string;
   idempotencyKey: string;
   attemptCount: number;
 }) {
   if (!entry.receiptId) throw new Error('Outbox entry has no receipt');
+  const { credentials } = await getActiveYooKassaFiscalIntegration(
+    entry.projectId
+  );
   if (entry.type === 'CREATE_SETTLEMENT_RECEIPT') {
     const payload = await MarkingService.buildSettlementPayload(
       entry.receiptId
     );
-    const response = await createYooKassaReceipt(payload, entry.idempotencyKey);
+    if (!payload.payment_id) throw new Error('YooKassa payment id missing');
+    const payment = await getMerchantYooKassaPayment(
+      payload.payment_id,
+      credentials
+    );
+    if ('status' in payment) {
+      throw new Error(
+        `Платёж не найден в ЮKassa этого проекта (${payment.status})`
+      );
+    }
+    const expectedAmount = payload.settlements?.[0]?.amount;
+    if (
+      payment.data.status !== 'succeeded' ||
+      payment.data.paid === false ||
+      !expectedAmount ||
+      payment.data.amount.currency !== expectedAmount.currency ||
+      Math.round(Number(payment.data.amount.value) * 100) !==
+        Math.round(Number(expectedAmount.value) * 100)
+    ) {
+      throw new Error(
+        'Платёж ЮKassa проекта не завершён или его сумма не совпадает с заказом'
+      );
+    }
+    const response = await createYooKassaReceipt(
+      payload,
+      entry.idempotencyKey,
+      credentials
+    );
     if ('status' in response) {
       throw new Error(`ЮKassa ${response.status}: ${response.body}`);
     }
@@ -136,7 +169,10 @@ async function processEntry(entry: {
     });
     if (!receipt.providerReceiptId)
       throw new Error('Provider receipt id missing');
-    const response = await getYooKassaReceipt(receipt.providerReceiptId);
+    const response = await getYooKassaReceipt(
+      receipt.providerReceiptId,
+      credentials
+    );
     if ('status' in response) {
       throw new Error(`ЮKassa ${response.status}: ${response.body}`);
     }
@@ -177,6 +213,7 @@ export async function processFiscalOutboxBatch(limit = 20): Promise<number> {
     take: limit,
     select: {
       id: true,
+      projectId: true,
       receiptId: true,
       type: true,
       idempotencyKey: true,

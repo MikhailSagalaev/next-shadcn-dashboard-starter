@@ -29,6 +29,13 @@ interface IntegrationsHubProps {
       shopDomain: string;
       lastWebhookAt: Date | null;
     } | null;
+    yooKassaFiscal: {
+      id: string;
+      shopId: string;
+      isActive: boolean;
+      lastTestedAt: Date | null;
+      lastError: string | null;
+    } | null;
     tilda: { id: string } | null;
     maxBot?: {
       isConfigured: boolean;
@@ -145,7 +152,8 @@ function IntegrationCard({
 }
 
 export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
-  const { moySklad, inSales, tilda, maxBot, telegramBot } = data;
+  const { moySklad, inSales, yooKassaFiscal, tilda, maxBot, telegramBot } =
+    data;
 
   const integrations: IntegrationCardProps[] = [
     {
@@ -217,6 +225,30 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
         ? `Последняя синхронизация: ${new Date(moySklad.lastSyncAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`
         : undefined,
       href: `/dashboard/projects/${projectId}/integrations/moysklad-direct`
+    },
+    {
+      icon: '🛒',
+      name: 'ЮKassa и маркировка',
+      description:
+        'Касса конкретного магазина для автоматической отправки чеков полного расчёта с кодами маркировки после сборки заказа.',
+      status: yooKassaFiscal?.isActive
+        ? 'connected'
+        : yooKassaFiscal
+          ? 'configured'
+          : 'disconnected',
+      statusLabel: yooKassaFiscal?.isActive
+        ? 'Подключена'
+        : yooKassaFiscal
+          ? 'Требует активации'
+          : 'Не подключена',
+      secondaryText: yooKassaFiscal?.lastError
+        ? `Ошибка: ${yooKassaFiscal.lastError}`
+        : yooKassaFiscal?.lastTestedAt
+          ? `Проверено: ${new Date(yooKassaFiscal.lastTestedAt).toLocaleString('ru-RU')}`
+          : yooKassaFiscal
+            ? `shopId: ${yooKassaFiscal.shopId}`
+            : undefined,
+      href: `/dashboard/projects/${projectId}/integrations/yookassa-fiscal`
     },
     {
       icon: '🛒',

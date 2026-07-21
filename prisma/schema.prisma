@@ -65,6 +65,7 @@ model Project {
   moySkladIntegration          MoySkladIntegration?
   moySkladDirectIntegration    MoySkladDirectIntegration?
   inSalesIntegration           InSalesIntegration?
+  yooKassaFiscalIntegration    YooKassaFiscalIntegration?
   ChatChannel                  ChatChannel[]
   Chat                         Chat[]
   payouts                      Payout[]
@@ -1441,6 +1442,24 @@ model FiscalOutbox {
   @@index([status, nextAttemptAt])
   @@index([projectId, createdAt])
   @@map("fiscal_outbox")
+}
+
+model YooKassaFiscalIntegration {
+  id                 String    @id @default(cuid())
+  projectId          String    @unique @map("project_id")
+  shopId             String    @map("shop_id")
+  secretKeyEncrypted String    @map("secret_key_encrypted") @db.Text
+  isActive           Boolean   @default(false) @map("is_active")
+  receiptTimezone    Int       @default(2) @map("receipt_timezone")
+  deliveryVatCode    Int?      @map("delivery_vat_code")
+  lastTestedAt       DateTime? @map("last_tested_at")
+  lastError          String?   @map("last_error") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
+  @@map("yookassa_fiscal_integrations")
 }
 
 model AnalyticsEvent {

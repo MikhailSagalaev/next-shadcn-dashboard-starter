@@ -38,6 +38,7 @@ const segmentTranslations: Record<string, string> = {
   moysklad: 'МойСклад (Loyalty API)',
   'moysklad-direct': 'МойСклад (Direct API)',
   insales: 'InSales',
+  'yookassa-fiscal': 'ЮKassa и маркировка',
   tilda: 'Tilda',
   new: 'Создание проекта'
 };

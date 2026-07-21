@@ -53,6 +53,19 @@ async function getIntegrationStatuses(projectId: string) {
     })
     .catch(() => null);
 
+  const yooKassaFiscalIntegration = await db.yooKassaFiscalIntegration
+    .findUnique({
+      where: { projectId },
+      select: {
+        id: true,
+        shopId: true,
+        isActive: true,
+        lastTestedAt: true,
+        lastError: true
+      }
+    })
+    .catch(() => null);
+
   // Tilda — всегда доступна (настраивается через виджет)
   const widgetSettings = await db.widgetSettings
     .findUnique({
@@ -97,6 +110,7 @@ async function getIntegrationStatuses(projectId: string) {
     project,
     moySklad: moySkladIntegration,
     inSales: inSalesIntegration,
+    yooKassaFiscal: yooKassaFiscalIntegration,
     tilda: widgetSettings,
     telegramBot: {
       isConfigured: !!telegramSettings?.botToken,
