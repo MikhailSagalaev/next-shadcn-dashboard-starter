@@ -90,6 +90,23 @@ export class TildaParserService {
     let amount = 0;
     let products: TildaProduct[] = [];
     let promocode = out.promocode;
+    const productName = (product: Record<string, unknown>): string => {
+      const candidates = [
+        product.name,
+        product.title,
+        product.product_name,
+        product.productName,
+        product.sku,
+        product.externalid,
+        product.externalId
+      ];
+      return (
+        candidates
+          .find((value) => typeof value === 'string' && value.trim().length > 0)
+          ?.toString()
+          .trim() || 'Товар из заказа'
+      );
+    };
 
     if (out.payment) {
       amount = toNum(out.payment.amount);
@@ -103,6 +120,7 @@ export class TildaParserService {
       if (Array.isArray(out.payment.products)) {
         products = out.payment.products.map((p: any) => ({
           ...p,
+          name: productName(p ?? {}),
           price: toNum(p?.price),
           amount:
             typeof p?.amount !== 'undefined'

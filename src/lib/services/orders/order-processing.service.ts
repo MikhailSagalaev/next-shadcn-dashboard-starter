@@ -264,6 +264,17 @@ export class OrderProcessingService {
       // Create Order Items and Products
       if (order.products && order.products.length > 0) {
         for (const product of order.products) {
+          // Tilda payloads are not uniform: some delivery/form variants send
+          // `title` or SKU but omit `name`. Prisma requires a non-null name.
+          const productName =
+            String(
+              product.name ??
+                product.title ??
+                product.product_name ??
+                product.sku ??
+                'Товар из заказа'
+            ).trim() || 'Товар из заказа';
+
           // Find or create product
           let dbProduct = null;
           if (product.sku) {
@@ -276,7 +287,7 @@ export class OrderProcessingService {
               dbProduct = await db.product.create({
                 data: {
                   projectId,
-                  name: product.name,
+                  name: productName,
                   sku: product.sku,
                   price: product.price,
                   metadata: {
@@ -320,7 +331,7 @@ export class OrderProcessingService {
             data: {
               orderId: savedOrder.id,
               productId: dbProduct?.id,
-              name: product.name,
+              name: productName,
               quantity: product.quantity || 1,
               price: product.price,
               total: product.amount || product.price * (product.quantity || 1),
