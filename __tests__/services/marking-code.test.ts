@@ -18,6 +18,12 @@ describe('marking code utilities', () => {
     });
   });
 
+  it('explains that a bare GTIN is not a Data Matrix', () => {
+    expect(() => parseGs1DataMatrix('04601234567890')).toThrow(
+      'Введён только GTIN товара'
+    );
+  });
+
   it('encrypts codes with authenticated encryption', () => {
     const code = '010460123456789021SERIAL';
     const encrypted = encryptMarkCode(code);

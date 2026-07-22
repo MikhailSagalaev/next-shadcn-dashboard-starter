@@ -45,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import {
   FISCAL_STATE_LABELS,
   MARKING_STATE_LABELS,
@@ -319,7 +320,7 @@ export function OrderMarkingCard({
                       соответствует одной физической упаковке.
                     </div>
                   </div>
-                  <div className='flex gap-2'>
+                  <div className='flex flex-wrap gap-2'>
                     <ScannerHelp />
                     <ScannerDiagnostic
                       projectId={projectId}
@@ -330,31 +331,40 @@ export function OrderMarkingCard({
                     />
                   </div>
                 </div>
-                <div className='grid gap-3 lg:grid-cols-[minmax(14rem,1fr)_minmax(20rem,2fr)_auto]'>
-                  <Select
-                    value={itemId}
-                    onValueChange={(value) => {
-                      setItemId(value);
-                      setScanError(null);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder='Выберите товар' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {required.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name} ({item.markedUnits?.length ?? 0}/
-                          {item.quantity})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className='space-y-1'>
+                <div className='grid min-w-0 gap-3 2xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)_auto] 2xl:items-end'>
+                  <div className='min-w-0 space-y-1'>
+                    <div className='text-muted-foreground text-xs'>Товар</div>
+                    <Select
+                      value={itemId}
+                      onValueChange={(value) => {
+                        setItemId(value);
+                        setScanError(null);
+                      }}
+                    >
+                      <SelectTrigger className='w-full min-w-0 overflow-hidden [&>span]:truncate'>
+                        <SelectValue placeholder='Выберите товар' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {required.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name} ({item.markedUnits?.length ?? 0}/
+                            {item.quantity})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className='min-w-0 space-y-1'>
+                    <div className='text-muted-foreground text-xs'>
+                      Data Matrix с упаковки
+                    </div>
                     <Input
                       ref={inputRef}
                       value={code}
-                      className={scanError ? 'border-destructive' : undefined}
+                      className={cn(
+                        'w-full min-w-0 font-mono',
+                        scanError && 'border-destructive'
+                      )}
                       placeholder='Нажмите сюда и отсканируйте Data Matrix'
                       disabled={busy}
                       onChange={(event) => {
@@ -373,7 +383,11 @@ export function OrderMarkingCard({
                       сканер должен завершать ввод клавишей Enter
                     </div>
                   </div>
-                  <Button disabled={!code || busy} onClick={() => void scan()}>
+                  <Button
+                    className='w-full 2xl:w-auto'
+                    disabled={!code || busy}
+                    onClick={() => void scan()}
+                  >
                     {busy ? <Loader2 className='animate-spin' /> : <ScanLine />}
                     Добавить
                   </Button>

@@ -56,6 +56,51 @@ export interface ListAdminNotificationsResult {
 }
 
 export class AdminNotificationService {
+  static async notifyNewOrder(input: {
+    projectId: string;
+    orderId: string;
+    orderNumber: string;
+    totalAmount: number;
+    itemsCount: number;
+    source?: string | null;
+  }): Promise<AdminNotification | null> {
+    const amount = new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB'
+    }).format(input.totalAmount);
+    const positions = new Intl.NumberFormat('ru-RU').format(input.itemsCount);
+
+    try {
+      return await AdminNotificationService.notifyProjectOwner(
+        input.projectId,
+        {
+          type: 'new_order',
+          severity: 'success',
+          title: `Новый заказ №${input.orderNumber}`,
+          message: `${amount} · ${positions} поз. Откройте заказ и проверьте оплату, каталог и маркировку.`,
+          link: `/dashboard/projects/${input.projectId}/orders/${input.orderId}`,
+          metadata: {
+            orderId: input.orderId,
+            orderNumber: input.orderNumber,
+            totalAmount: input.totalAmount,
+            itemsCount: input.itemsCount,
+            source: input.source ?? 'unknown'
+          },
+          dedupeKey: `new_order:${input.orderId}`
+        }
+      );
+    } catch (error) {
+      // An auxiliary notification must never roll back or reject a paid order.
+      logger.error('Failed to create new order notification', {
+        projectId: input.projectId,
+        orderId: input.orderId,
+        error: error instanceof Error ? error.message : String(error),
+        component: COMPONENT
+      });
+      return null;
+    }
+  }
+
   /**
    * Создаёт уведомление. Если передан dedupeKey — сначала ищет НЕпрочитанную
    * запись с тем же adminAccountId + dedupeKey, созданную за последние 60 минут,
@@ -150,10 +195,7 @@ export class AdminNotificationService {
     adminAccountId: string,
     opts: ListAdminNotificationsOptions = {}
   ): Promise<ListAdminNotificationsResult> {
-    const limit = Math.min(
-      Math.max(1, opts.limit ?? DEFAULT_LIMIT),
-      MAX_LIMIT
-    );
+    const limit = Math.min(Math.max(1, opts.limit ?? DEFAULT_LIMIT), MAX_LIMIT);
 
     const items = await db.adminNotification.findMany({
       where: {
@@ -162,9 +204,7 @@ export class AdminNotificationService {
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
-      ...(opts.cursor
-        ? { cursor: { id: opts.cursor }, skip: 1 }
-        : {})
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {})
     });
 
     let nextCursor: string | null = null;

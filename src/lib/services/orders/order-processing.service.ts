@@ -5,6 +5,7 @@ import { UserService } from '@/lib/services/user.service';
 import { OrderAccountingService } from './order-accounting.service';
 import { splitFullName } from '@/lib/user-display';
 import { logger } from '@/lib/logger';
+import { AdminNotificationService } from '@/lib/services/admin-notification.service';
 
 export interface OrderProcessingResult {
   success: boolean;
@@ -413,6 +414,18 @@ export class OrderProcessingService {
             deliveryMethod: order.raw?.payment?.delivery
           }
         }
+      });
+
+      await AdminNotificationService.notifyNewOrder({
+        projectId,
+        orderId: savedOrder.id,
+        orderNumber: savedOrder.orderNumber,
+        totalAmount: Number(savedOrder.totalAmount),
+        itemsCount: order.products.reduce(
+          (sum, product) => sum + (product.quantity || 1),
+          0
+        ),
+        source: 'tilda'
       });
 
       return savedOrder;

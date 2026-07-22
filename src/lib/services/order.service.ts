@@ -26,6 +26,7 @@ import {
   OrderAccountingConflictError,
   OrderAccountingService
 } from './orders/order-accounting.service';
+import { AdminNotificationService } from './admin-notification.service';
 
 function toInputJson(
   value: Record<string, unknown> | undefined
@@ -178,6 +179,15 @@ export class OrderService {
           comment: 'Заказ создан',
           metadata: { source: 'system' }
         }
+      });
+
+      await AdminNotificationService.notifyNewOrder({
+        projectId: data.projectId,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        totalAmount: Number(order.totalAmount),
+        itemsCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
+        source: String(data.metadata?.source ?? 'api')
       });
 
       if (data.status && data.status !== 'PENDING') {

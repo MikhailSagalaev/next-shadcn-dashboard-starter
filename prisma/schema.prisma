@@ -621,6 +621,7 @@ model Notification {
 }
 
 enum AdminNotificationType {
+  new_order
   payout_requested
   payout_cancelled
   referral_join_request

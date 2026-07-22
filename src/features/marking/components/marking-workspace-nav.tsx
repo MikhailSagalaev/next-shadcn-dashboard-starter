@@ -1,7 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { BookOpenCheck, Package, ReceiptText, Settings2 } from 'lucide-react';
+import {
+  BookOpenCheck,
+  ChevronRight,
+  Package,
+  ReceiptText,
+  Route,
+  Settings2,
+  Warehouse
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -68,8 +76,81 @@ export function MarkingWorkspaceNav({
           );
         })}
       </nav>
-      <TestingGuide />
+      <div className='flex shrink-0 flex-wrap gap-2'>
+        <OperationsGuide />
+        <TestingGuide />
+      </div>
     </div>
+  );
+}
+
+function OperationsGuide() {
+  const steps = [
+    ['1', 'Приёмка', 'УПД, ЭДО и сверка Data Matrix'],
+    ['2', 'Склад', 'Доступные коды и карантин ошибок'],
+    ['3', 'Заказ', 'Оплата, уведомление и резерв'],
+    ['4', 'Сборка', 'Сканирование каждой упаковки'],
+    ['5', 'Реализация', 'Чек с кодами через ЮKassa и ОФД'],
+    ['6', 'Отправка', 'Только после успешного чека']
+  ];
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant='outline' className='shrink-0'>
+          <Route /> Схема работы
+        </Button>
+      </DialogTrigger>
+      <DialogContent className='max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-4xl'>
+        <DialogHeader>
+          <DialogTitle>Путь маркированного товара</DialogTitle>
+          <DialogDescription>
+            Физический склад, документы «Честного знака» и заказ должны
+            завершаться согласованно. Одного изменения остатка недостаточно.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className='grid gap-2 md:grid-cols-3 xl:grid-cols-6'>
+          {steps.map(([number, title, description], index) => (
+            <div key={number} className='relative rounded-lg border p-3'>
+              <div className='bg-primary text-primary-foreground mb-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold'>
+                {number}
+              </div>
+              <div className='text-sm font-medium'>{title}</div>
+              <div className='text-muted-foreground mt-1 text-xs'>
+                {description}
+              </div>
+              {index < steps.length - 1 && (
+                <ChevronRight className='text-muted-foreground absolute top-1/2 -right-3 z-10 hidden h-4 w-4 -translate-y-1/2 xl:block' />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className='grid gap-3 md:grid-cols-2'>
+          <div className='rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950 dark:bg-emerald-950/20 dark:text-emerald-100'>
+            <div className='mb-2 flex items-center gap-2 font-medium'>
+              <ReceiptText className='h-4 w-4' /> Уже работает
+            </div>
+            Каталог, получение заказа, уведомление, сканирование при сборке, чек
+            полного расчёта и блокировка отправки.
+          </div>
+          <div className='rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/20 dark:text-amber-100'>
+            <div className='mb-2 flex items-center gap-2 font-medium'>
+              <Warehouse className='h-4 w-4' /> Следующий модуль
+            </div>
+            Приёмки по УПД, складской реестр конкретных Data Matrix, резерв,
+            возвраты и отдельное списание через ГИС МТ.
+          </div>
+        </div>
+
+        <p className='text-muted-foreground text-sm'>
+          Продажа выводит код через фискальный чек и ОФД. Брак, утрата или
+          собственные нужды требуют отдельного основания и документа вывода в
+          ГИС МТ — это не та же операция, что складское списание.
+        </p>
+      </DialogContent>
+    </Dialog>
   );
 }
 

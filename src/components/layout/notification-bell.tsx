@@ -34,7 +34,7 @@ interface AdminNotificationItem {
   createdAt: string;
 }
 
-const POLL_INTERVAL_MS = 45_000;
+const POLL_INTERVAL_MS = 15_000;
 
 const SEVERITY_DOT: Record<Severity, string> = {
   info: 'bg-sky-500',
@@ -99,12 +99,20 @@ export function NotificationBell() {
   React.useEffect(() => {
     fetchCount();
     const timer = setInterval(fetchCount, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
+    const refreshOnFocus = () => void fetchCount();
+    window.addEventListener('focus', refreshOnFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', refreshOnFocus);
+    };
   }, [fetchCount]);
 
   // Полный список при открытии popover.
   React.useEffect(() => {
-    if (open) fetchList();
+    if (!open) return;
+    void fetchList();
+    const timer = setInterval(fetchList, POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
   }, [open, fetchList]);
 
   const markRead = React.useCallback(async (ids: string[]) => {
