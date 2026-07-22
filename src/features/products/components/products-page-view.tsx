@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
   FileUp,
+  Layers3,
   Package,
   Pencil,
   Search,
@@ -13,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Card,
   CardContent,
@@ -40,6 +42,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { CatalogImportDialog } from './catalog-import-dialog';
+import { MarkingWorkspaceNav } from '@/features/marking/components/marking-workspace-nav';
 import {
   type CatalogPagination,
   type CatalogSummary,
@@ -48,6 +51,7 @@ import {
   productNeedsSetup
 } from './product-catalog-types';
 import { ProductEditDialog } from './product-edit-dialog';
+import { ProductBulkEditDialog } from './product-bulk-edit-dialog';
 
 const PAGE_SIZE = 25;
 const EMPTY_SUMMARY: CatalogSummary = {
@@ -57,6 +61,7 @@ const EMPTY_SUMMARY: CatalogSummary = {
 };
 
 export function ProductsPageView({ projectId }: { projectId: string }) {
+  const requestId = useRef(0);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [summary, setSummary] = useState<CatalogSummary>(EMPTY_SUMMARY);
   const [pagination, setPagination] = useState<CatalogPagination>({
@@ -72,6 +77,8 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
   const [page, setPage] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -82,6 +89,7 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
   }, [searchInput]);
 
   const load = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -97,15 +105,19 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
       if (!response.ok) {
         throw new Error(data.error || 'Не удалось загрузить каталог');
       }
+      if (currentRequest !== requestId.current) return;
       setProducts(data.products ?? []);
+      setSelectedIds(new Set());
       setSummary(data.summary ?? EMPTY_SUMMARY);
       setPagination(data.pagination);
       if (page > data.pagination.totalPages)
         setPage(data.pagination.totalPages);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Ошибка каталога');
+      if (currentRequest === requestId.current) {
+        toast.error(error instanceof Error ? error.message : 'Ошибка каталога');
+      }
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   }, [page, projectId, search, status]);
 
@@ -136,6 +148,7 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
         </Button>
       </div>
       <Separator />
+      <MarkingWorkspaceNav projectId={projectId} active='catalog' />
 
       <div className='grid gap-4 md:grid-cols-3'>
         <SummaryCard label='Товаров в каталоге' value={summary.total} />
@@ -143,6 +156,10 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
           label='Требуют настройки'
           value={summary.needsSetup}
           tone={summary.needsSetup ? 'warning' : 'default'}
+          active={status === 'NEEDS_SETUP'}
+          onClick={() =>
+            changeStatus(status === 'NEEDS_SETUP' ? 'ALL' : 'NEEDS_SETUP')
+          }
         />
         <SummaryCard label='Доступно единиц' value={summary.availableUnits} />
       </div>
@@ -186,6 +203,25 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
               </SelectContent>
             </Select>
           </div>
+          {selectedIds.size > 0 && (
+            <div className='bg-muted/40 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3'>
+              <span className='text-sm font-medium'>
+                Выбрано товаров: {selectedIds.size}
+              </span>
+              <div className='flex gap-2'>
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Снять выбор
+                </Button>
+                <Button size='sm' onClick={() => setBulkOpen(true)}>
+                  <Layers3 /> Изменить выбранные
+                </Button>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className='px-0'>
           {loading ? (
@@ -218,7 +254,23 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className='pl-6'>Товар</TableHead>
+                    <TableHead className='w-10 pl-6'>
+                      <Checkbox
+                        checked={
+                          products.length > 0 &&
+                          selectedIds.size === products.length
+                        }
+                        aria-label='Выбрать все товары на странице'
+                        onCheckedChange={(checked) =>
+                          setSelectedIds(
+                            checked
+                              ? new Set(products.map((product) => product.id))
+                              : new Set()
+                          )
+                        }
+                      />
+                    </TableHead>
+                    <TableHead>Товар</TableHead>
                     <TableHead>Готовность</TableHead>
                     <TableHead>Маркировка</TableHead>
                     <TableHead>НДС</TableHead>
@@ -231,7 +283,21 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
                     const needsSetup = productNeedsSetup(product);
                     return (
                       <TableRow key={product.id}>
-                        <TableCell className='max-w-[28rem] py-3 pl-6'>
+                        <TableCell className='w-10 pl-6'>
+                          <Checkbox
+                            checked={selectedIds.has(product.id)}
+                            aria-label={`Выбрать ${product.name}`}
+                            onCheckedChange={(checked) =>
+                              setSelectedIds((current) => {
+                                const next = new Set(current);
+                                if (checked) next.add(product.id);
+                                else next.delete(product.id);
+                                return next;
+                              })
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className='max-w-[28rem] py-3'>
                           <div className='truncate font-medium'>
                             {product.name}
                           </div>
@@ -348,6 +414,13 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
         }}
         onSaved={load}
       />
+      <ProductBulkEditDialog
+        projectId={projectId}
+        ids={[...selectedIds]}
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        onSaved={load}
+      />
     </div>
   );
 }
@@ -355,14 +428,23 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
 function SummaryCard({
   label,
   value,
-  tone = 'default'
+  tone = 'default',
+  active,
+  onClick
 }: {
   label: string;
   value: number;
   tone?: 'default' | 'warning';
+  active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <Card className={tone === 'warning' ? 'border-amber-300/70' : undefined}>
+    <Card
+      className={`${tone === 'warning' ? 'border-amber-300/70' : ''} ${
+        onClick ? 'hover:bg-muted/40 cursor-pointer transition-colors' : ''
+      } ${active ? 'ring-primary ring-2' : ''}`}
+      onClick={onClick}
+    >
       <CardHeader className='pb-3'>
         <CardDescription>{label}</CardDescription>
         <CardTitle className='text-3xl tabular-nums'>{value}</CardTitle>

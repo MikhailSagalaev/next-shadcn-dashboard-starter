@@ -49,6 +49,7 @@ const getOrdersQuerySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   search: z.string().optional(),
+  attention: z.coerce.boolean().optional(),
   sortBy: z
     .enum(['createdAt', 'totalAmount', 'status'])
     .default('createdAt')
@@ -82,6 +83,7 @@ export async function GET(
       startDate: url.searchParams.get('startDate') || undefined,
       endDate: url.searchParams.get('endDate') || undefined,
       search: url.searchParams.get('search') || undefined,
+      attention: url.searchParams.get('attention') || undefined,
       sortBy: url.searchParams.get('sortBy') || 'createdAt',
       sortOrder: url.searchParams.get('sortOrder') || 'desc'
     };
@@ -112,6 +114,7 @@ export async function GET(
       startDate,
       endDate,
       search: validated.search,
+      needsAttention: validated.attention,
       page: validated.page,
       pageSize: validated.pageSize,
       sortBy: validated.sortBy,

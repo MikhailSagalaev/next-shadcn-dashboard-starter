@@ -121,7 +121,7 @@ export function parseCatalogCsv(csv: string): CatalogImportRow[] {
       price,
       sku: optional(raw.sku),
       externalId: optional(raw.externalId),
-      gtin,
+      gtin: gtin?.padStart(14, '0'),
       markingStatus: markingStatus as ProductMarkingStatus | undefined,
       vatCode: vatCode ? Number(vatCode) : undefined,
       paymentSubject: optional(raw.paymentSubject),

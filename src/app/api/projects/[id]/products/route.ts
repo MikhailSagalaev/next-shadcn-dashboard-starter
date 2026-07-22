@@ -19,6 +19,7 @@ const createProductSchema = z.object({
   gtin: z
     .string()
     .regex(/^\d{8,14}$/)
+    .transform((value) => value.padStart(14, '0'))
     .optional(),
   markingStatus: z.nativeEnum(ProductMarkingStatus).optional(),
   vatCode: z.number().int().min(1).max(12).optional(),

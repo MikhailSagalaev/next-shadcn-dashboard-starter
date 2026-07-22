@@ -58,7 +58,7 @@ export function ProductEditDialog({
 
   async function save() {
     const name = draft.name.trim();
-    const gtin = draft.gtin?.trim() || null;
+    const gtin = draft.gtin?.trim().padStart(14, '0') || null;
     if (!name) return toast.error('Укажите название товара');
     if (!Number.isFinite(Number(draft.price)) || Number(draft.price) <= 0) {
       return toast.error('Цена должна быть больше нуля');

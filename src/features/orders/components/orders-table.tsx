@@ -1,44 +1,9 @@
-/**
- * @file: src/features/orders/components/orders-table.tsx
- * @description: Таблица заказов с фильтрами и пагинацией
- * @project: SaaS Bonus System
- * @dependencies: TanStack Table, shadcn/ui, React
- * @created: 2025-01-30
- * @author: AI Assistant + User
- */
-
 'use client';
 
-import { useState } from 'react';
-import {
-  type ColumnDef,
-  type SortingState,
-  flexRender,
-  getCoreRowModel,
-  useReactTable
-} from '@tanstack/react-table';
-import {
-  ArrowUpDown,
-  MoreHorizontal,
-  Eye,
-  Package,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Truck,
-  Archive,
-  AlertTriangle,
-  type LucideIcon
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -47,370 +12,232 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { DataTablePagination } from '@/components/ui/table/data-table-pagination';
 import type { OrderWithRelations } from '@/types/orders';
+import {
+  FISCAL_STATE_LABELS,
+  MARKING_STATE_LABELS,
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  orderNeedsAttention
+} from './order-workflow-ui';
 
 interface OrdersTableProps {
   data: OrderWithRelations[];
-  loading?: boolean;
-  totalCount?: number;
-  onPageChange?: (page: number) => void;
-  onPageSizeChange?: (pageSize: number) => void;
-  onSortChange?: (sortBy: string, sortOrder: 'asc' | 'desc') => void;
-  onOrderClick?: (order: OrderWithRelations) => void;
-  onStatusChange?: (orderId: string, status: string) => void;
-  currentPage?: number;
-  pageSize?: number;
+  loading: boolean;
+  totalCount: number;
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onOrderClick: (order: OrderWithRelations) => void;
 }
-
-const statusColors: Record<
-  string,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  PENDING: 'secondary',
-  CONFIRMED: 'default',
-  PROCESSING: 'default',
-  SHIPPED: 'default',
-  DELIVERED: 'default',
-  CANCELLED: 'destructive',
-  REFUNDED: 'outline'
-};
-
-const statusIcons: Record<string, LucideIcon> = {
-  PENDING: Clock,
-  CONFIRMED: CheckCircle2,
-  PROCESSING: Package,
-  SHIPPED: Truck,
-  DELIVERED: CheckCircle2,
-  CANCELLED: XCircle,
-  REFUNDED: Archive
-};
-
-const statusLabels: Record<string, string> = {
-  PENDING: 'Ожидает',
-  CONFIRMED: 'Подтвержден',
-  PROCESSING: 'Обрабатывается',
-  SHIPPED: 'Отправлен',
-  DELIVERED: 'Доставлен',
-  CANCELLED: 'Отменен',
-  REFUNDED: 'Возврат'
-};
 
 export function OrdersTable({
   data,
-  loading = false,
-  totalCount = data.length,
+  loading,
+  totalCount,
+  currentPage,
+  pageSize,
+  totalPages,
   onPageChange,
-  onPageSizeChange,
-  onSortChange,
-  onOrderClick,
-  onStatusChange,
-  currentPage = 1,
-  pageSize = 20
+  onOrderClick
 }: OrdersTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: 'createdAt', desc: true }
-  ]);
+  if (loading) return <OrdersSkeleton />;
 
-  const columns: ColumnDef<OrderWithRelations>[] = [
-    {
-      accessorKey: 'orderNumber',
-      enableSorting: false,
-      // API (/api/projects/[id]/orders) не поддерживает sortBy=orderNumber —
-      // сортировка только по createdAt/totalAmount/status, см. getOrdersQuerySchema
-      header: 'Номер заказа',
-      cell: ({ row }) => {
-        const order = row.original;
-        return <div className='font-mono font-medium'>{order.orderNumber}</div>;
-      }
-    },
-    {
-      accessorKey: 'user',
-      header: 'Клиент',
-      cell: ({ row }) => {
-        const user = row.original.user;
-        if (!user) {
-          return <span className='text-muted-foreground'>Гость</span>;
-        }
-        return (
-          <div>
-            <div className='font-medium'>
-              {user.firstName || user.lastName
-                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                : user.email || user.phone || 'Без имени'}
-            </div>
-            {user.email && (
-              <div className='text-muted-foreground text-sm'>{user.email}</div>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      accessorKey: 'status',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Статус
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
-      cell: ({ row }) => {
-        const status = row.getValue('status') as string;
-        const order = row.original;
-        const StatusIcon = statusIcons[status] || Clock;
-        const isCashPending =
-          status === 'PENDING' &&
-          String(order.paymentMethod ?? '')
-            .trim()
-            .toLocaleLowerCase('ru-RU') === 'наличные';
-        return (
-          <div className='flex flex-col items-start gap-1'>
-            <Badge variant={statusColors[status] || 'secondary'}>
-              <StatusIcon className='mr-1 h-3 w-3' />
-              {statusLabels[status] || status}
-            </Badge>
-            {isCashPending && (
-              <Badge variant='outline'>
-                <AlertTriangle className='mr-1 h-3 w-3' />
-                Требует подтверждения
-              </Badge>
-            )}
-          </div>
-        );
-      }
-    },
-    {
-      accessorKey: 'accountingState',
-      header: 'Учет',
-      cell: ({ row }) => {
-        const order = row.original;
-        const label =
-          order.accountingState === 'PARTIALLY_REVERSED'
-            ? 'Частичный откат'
-            : order.accountingState === 'APPLIED'
-              ? 'Применен'
-              : order.accountingState === 'REVERSED'
-                ? 'Отменен'
-                : order.accountingState === 'LEGACY'
-                  ? 'Legacy'
-                  : 'Не применен';
-        return (
-          <Badge
-            variant={
-              order.accountingState === 'PARTIALLY_REVERSED'
-                ? 'destructive'
-                : 'outline'
-            }
-          >
-            {label}
-          </Badge>
-        );
-      }
-    },
-    {
-      accessorKey: 'totalAmount',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Сумма
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
-      cell: ({ row }) => {
-        const amount = row.getValue('totalAmount') as number;
-        return (
-          <div className='font-medium'>
-            {new Intl.NumberFormat('ru-RU', {
-              style: 'currency',
-              currency: 'RUB'
-            }).format(Number(amount))}
-          </div>
-        );
-      }
-    },
-    {
-      accessorKey: 'items',
-      header: 'Товары',
-      cell: ({ row }) => {
-        const items = row.original.items || [];
-        return (
-          <div className='text-sm'>
-            {items.length} {items.length === 1 ? 'товар' : 'товаров'}
-          </div>
-        );
-      }
-    },
-    {
-      accessorKey: 'createdAt',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant='ghost'
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Дата
-            <ArrowUpDown className='ml-2 h-4 w-4' />
-          </Button>
-        );
-      },
-      cell: ({ row }) => {
-        const date = row.getValue('createdAt') as Date;
-        return (
-          <div className='text-sm'>
-            {new Intl.DateTimeFormat('ru-RU', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }).format(new Date(date))}
-          </div>
-        );
-      }
-    },
-    {
-      id: 'actions',
-      cell: ({ row }) => {
-        const order = row.original;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='ghost' className='h-8 w-8 p-0'>
-                <span className='sr-only'>Открыть меню</span>
-                <MoreHorizontal className='h-4 w-4' />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end'>
-              <DropdownMenuLabel>Действия</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onOrderClick?.(order)}>
-                <Eye className='mr-2 h-4 w-4' />
-                Просмотреть
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onStatusChange?.(order.id, 'CONFIRMED')}
-                disabled={order.status === 'CONFIRMED'}
-              >
-                <CheckCircle2 className='mr-2 h-4 w-4' />
-                Подтвердить
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onStatusChange?.(order.id, 'CANCELLED')}
-                disabled={order.status === 'CANCELLED'}
-              >
-                <XCircle className='mr-2 h-4 w-4' />
-                Отменить
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      }
-    }
-  ];
+  if (!data.length) {
+    return (
+      <div className='text-muted-foreground px-6 py-16 text-center text-sm'>
+        Заказы по выбранным условиям не найдены.
+      </div>
+    );
+  }
 
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    onSortingChange: (updater) => {
-      const next = typeof updater === 'function' ? updater(sorting) : updater;
-      setSorting(next);
-      if (next[0]) {
-        onSortChange?.(next[0].id, next[0].desc ? 'desc' : 'asc');
-      }
-    },
-    state: {
-      sorting,
-      pagination: {
-        pageIndex: Math.max(0, currentPage - 1),
-        pageSize
-      }
-    },
-    manualPagination: true,
-    manualSorting: true,
-    pageCount: Math.max(1, Math.ceil(totalCount / pageSize)),
-    onPaginationChange: () => {
-      // Пагинация управляется извне через onPageChange/onPageSizeChange
-    }
-  });
+  const first = (currentPage - 1) * pageSize + 1;
+  const last = Math.min(currentPage * pageSize, totalCount);
 
   return (
-    <div className='space-y-4'>
-      <div className='rounded-md border'>
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className='h-24 text-center'
-                >
-                  Загрузка...
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className='pl-6'>Заказ</TableHead>
+            <TableHead>Покупатель</TableHead>
+            <TableHead>Сумма</TableHead>
+            <TableHead>Оплата</TableHead>
+            <TableHead>Маркировка</TableHead>
+            <TableHead>Чек</TableHead>
+            <TableHead className='pr-6 text-right'>Действие</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.map((order) => {
+            const attention = orderNeedsAttention(order);
+            return (
+              <TableRow
+                key={order.id}
+                className='cursor-pointer'
+                onClick={() => onOrderClick(order)}
+              >
+                <TableCell className='py-3 pl-6'>
+                  <div className='font-medium'>№ {order.orderNumber}</div>
+                  <div className='text-muted-foreground mt-1 text-xs'>
+                    {formatDate(order.createdAt)} · {order.items?.length ?? 0}{' '}
+                    поз.
+                  </div>
+                  <Badge
+                    variant={attention ? 'destructive' : 'outline'}
+                    className='mt-2'
+                  >
+                    {ORDER_STATUS_LABELS[order.status] || order.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className='max-w-56 truncate font-medium'>
+                    {customerName(order)}
+                  </div>
+                  <div className='text-muted-foreground mt-1 max-w-56 truncate text-xs'>
+                    {order.user?.email || order.user?.phone || 'Без контакта'}
+                  </div>
+                </TableCell>
+                <TableCell className='font-medium tabular-nums'>
+                  {formatMoney(order.totalAmount)}
+                </TableCell>
+                <TableCell>
+                  <StateBadge
+                    state={order.paymentStatus}
+                    label={
+                      PAYMENT_STATUS_LABELS[order.paymentStatus] ||
+                      order.paymentStatus
+                    }
+                    success={order.paymentStatus === 'PAID'}
+                  />
+                </TableCell>
+                <TableCell>
+                  <StateBadge
+                    state={order.markingState}
+                    label={
+                      MARKING_STATE_LABELS[order.markingState] ||
+                      order.markingState
+                    }
+                    success={['COMPLETE', 'NOT_REQUIRED'].includes(
+                      order.markingState
+                    )}
+                  />
+                </TableCell>
+                <TableCell>
+                  <StateBadge
+                    state={order.fiscalState}
+                    label={
+                      FISCAL_STATE_LABELS[order.fiscalState] ||
+                      order.fiscalState
+                    }
+                    success={order.fiscalState === 'SETTLED'}
+                  />
+                </TableCell>
+                <TableCell className='pr-6 text-right'>
+                  <Button
+                    size='sm'
+                    variant={attention ? 'default' : 'outline'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOrderClick(order);
+                    }}
+                  >
+                    <ExternalLink /> {attention ? 'Исправить' : 'Открыть'}
+                  </Button>
                 </TableCell>
               </TableRow>
-            ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
-                  className='cursor-pointer'
-                  onClick={() => onOrderClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className='h-24 text-center'
-                >
-                  Заказы не найдены
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <div className='flex flex-col gap-3 border-t px-6 py-4 sm:flex-row sm:items-center sm:justify-between'>
+        <div className='text-muted-foreground text-sm'>
+          Показано {first}–{last} из {totalCount}
+        </div>
+        <div className='flex items-center gap-2'>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange(currentPage - 1)}
+          >
+            <ChevronLeft /> Назад
+          </Button>
+          <span className='min-w-20 text-center text-sm'>
+            {currentPage} из {totalPages}
+          </span>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+          >
+            Далее <ChevronRight />
+          </Button>
+        </div>
       </div>
-      <DataTablePagination
-        table={table}
-        onPageChange={onPageChange}
-        onPageSizeChange={onPageSizeChange}
-        totalCount={totalCount}
-      />
+    </>
+  );
+}
+
+function StateBadge({
+  state,
+  label,
+  success
+}: {
+  state: string;
+  label: string;
+  success: boolean;
+}) {
+  const failed = ['FAILED', 'UNCONFIGURED'].includes(state);
+  return (
+    <Badge
+      variant={failed ? 'destructive' : success ? 'secondary' : 'outline'}
+      className='max-w-44 text-left whitespace-normal'
+    >
+      {label}
+    </Badge>
+  );
+}
+
+function customerName(order: OrderWithRelations) {
+  if (!order.user) return 'Гостевой заказ';
+  const name =
+    `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim();
+  return name || order.user.email || order.user.phone || 'Без имени';
+}
+
+function formatMoney(value: unknown) {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB'
+  }).format(Number(value));
+}
+
+function formatDate(value: Date | string) {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(value));
+}
+
+function OrdersSkeleton() {
+  return (
+    <div className='space-y-1 px-6 py-2'>
+      {Array.from({ length: 7 }).map((_, index) => (
+        <div key={index} className='flex items-center gap-5 border-b py-4'>
+          <div className='flex-1 space-y-2'>
+            <Skeleton className='h-4 w-36' />
+            <Skeleton className='h-3 w-24' />
+          </div>
+          <Skeleton className='h-6 w-24' />
+          <Skeleton className='h-6 w-32' />
+          <Skeleton className='h-8 w-20' />
+        </div>
+      ))}
     </div>
   );
 }

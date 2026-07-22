@@ -20,6 +20,7 @@ import {
 } from '@/lib/services/yookassa-fiscal-integration.service';
 
 export class MarkingConflictError extends Error {}
+export class InvalidMarkCodeError extends Error {}
 
 function money(value: number): string {
   return value.toFixed(2);
@@ -36,6 +37,78 @@ function splitCents(total: number, quantity: number): number[] {
 }
 
 export class MarkingService {
+  private static parseCode(code: string) {
+    try {
+      return parseGs1DataMatrix(code);
+    } catch (error) {
+      throw new InvalidMarkCodeError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось прочитать Data Matrix'
+      );
+    }
+  }
+
+  static async validateCode(params: {
+    projectId: string;
+    orderId: string;
+    orderItemId: string;
+    code: string;
+  }) {
+    const parsed = this.parseCode(params.code);
+    const item = await db.orderItem.findFirst({
+      where: {
+        id: params.orderItemId,
+        orderId: params.orderId,
+        order: { projectId: params.projectId }
+      },
+      select: {
+        id: true,
+        name: true,
+        quantity: true,
+        gtin: true,
+        markingStatus: true,
+        _count: {
+          select: {
+            markedUnits: {
+              where: { status: { in: ['SCANNED', 'ASSIGNED', 'SOLD'] } }
+            }
+          }
+        }
+      }
+    });
+    if (!item) throw new MarkingConflictError('Позиция заказа не найдена');
+    if (item.markingStatus !== 'MARKED_REQUIRED') {
+      throw new MarkingConflictError(
+        'Для этой позиции Data Matrix не требуется'
+      );
+    }
+    if (!item.gtin) {
+      throw new MarkingConflictError('Для товара не настроен GTIN');
+    }
+    if (item.gtin !== parsed.gtin) {
+      throw new MarkingConflictError(
+        `Отсканирован GTIN ${parsed.gtin}, а для товара ожидается ${item.gtin}`
+      );
+    }
+    if (item._count.markedUnits >= item.quantity) {
+      throw new MarkingConflictError(
+        'Все упаковки этой позиции уже отсканированы'
+      );
+    }
+    const duplicate = await db.markedUnit.findUnique({
+      where: { codeHash: hashMarkCode(parsed.raw) },
+      select: { id: true }
+    });
+    if (duplicate) throw new MarkingConflictError('Этот код уже использован');
+    return {
+      gtin: parsed.gtin,
+      serial: parsed.serial,
+      productName: item.name,
+      rawLength: parsed.raw.length
+    };
+  }
+
   static async assignCode(params: {
     projectId: string;
     orderId: string;
@@ -43,7 +116,7 @@ export class MarkingService {
     code: string;
     scannedBy: string;
   }) {
-    const parsed = parseGs1DataMatrix(params.code);
+    const parsed = this.parseCode(params.code);
     const codeHash = hashMarkCode(parsed.raw);
     return db.$transaction(async (tx) => {
       const item = await tx.orderItem.findFirst({
@@ -141,7 +214,14 @@ export class MarkingService {
         }
       }
     });
-    if (items.some((item) => item.markingStatus === 'UNKNOWN')) {
+    if (
+      items.some(
+        (item) =>
+          item.markingStatus === 'UNKNOWN' ||
+          !item.vatCode ||
+          (item.markingStatus === 'MARKED_REQUIRED' && !item.gtin)
+      )
+    ) {
       await tx.order.update({
         where: { id: orderId },
         data: { markingState: 'UNCONFIGURED' }
@@ -165,6 +245,50 @@ export class MarkingService {
             ? 'PARTIAL'
             : 'COMPLETE';
     await tx.order.update({ where: { id: orderId }, data: { markingState } });
+  }
+
+  static async syncOrderFromCatalog(params: {
+    projectId: string;
+    orderId: string;
+  }) {
+    return db.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id: params.orderId, projectId: params.projectId },
+        include: {
+          items: { include: { product: true } },
+          _count: { select: { markedUnits: true } }
+        }
+      });
+      if (!order) throw new MarkingConflictError('Заказ не найден');
+      if (order.fiscalState !== 'NOT_STARTED') {
+        throw new MarkingConflictError(
+          'Реквизиты нельзя обновить после начала формирования чека'
+        );
+      }
+      if (order._count.markedUnits > 0) {
+        throw new MarkingConflictError(
+          'Сначала удалите отсканированные коды, затем обновите реквизиты'
+        );
+      }
+
+      let updated = 0;
+      for (const item of order.items) {
+        if (!item.product) continue;
+        await tx.orderItem.update({
+          where: { id: item.id },
+          data: {
+            gtin: item.product.gtin,
+            markingStatus: item.product.markingStatus,
+            vatCode: item.product.vatCode,
+            paymentSubject: item.product.paymentSubject,
+            measure: item.product.measure
+          }
+        });
+        updated += 1;
+      }
+      await this.refreshMarkingState(tx, order.id);
+      return { updated };
+    });
   }
 
   static async queueSettlement(params: { projectId: string; orderId: string }) {

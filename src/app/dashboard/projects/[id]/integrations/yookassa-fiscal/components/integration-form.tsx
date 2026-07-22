@@ -386,12 +386,24 @@ export function YooKassaFiscalForm({
               3
             </span>
             <div>
-              <p className='font-medium'>Обработайте тестовый заказ</p>
-              <p className='text-muted-foreground'>
-                Проведите минимальную реальную оплату через Tilda, откройте
-                заказ, отсканируйте Data Matrix каждой упаковки и сформируйте
-                чек полного расчёта.
+              <p className='font-medium'>
+                Проверьте в отдельном тестовом проекте
               </p>
+              <p className='text-muted-foreground'>
+                Создайте тестовый магазин ЮKassa и отдельный проект Gupil,
+                подключите к нему тестовую оплату Tilda. В тестовом магазине
+                деньги не списываются. Не подключайте тестовый ключ к проекту с
+                боевыми заказами: payment_id привязан к конкретному shopId.
+              </p>
+              <a
+                href='https://yookassa.ru/developers/payment-acceptance/testing-and-going-live/testing'
+                target='_blank'
+                rel='noreferrer'
+                className='text-primary mt-1 inline-flex items-center hover:underline'
+              >
+                Открыть инструкцию ЮKassa{' '}
+                <ArrowRight className='ml-1 h-3 w-3' />
+              </a>
               <Link
                 href={`/dashboard/projects/${projectId}/orders`}
                 className='text-primary mt-1 inline-flex items-center hover:underline'

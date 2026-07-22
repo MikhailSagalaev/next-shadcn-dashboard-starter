@@ -1,38 +1,18 @@
-/**
- * @file: src/features/orders/components/order-detail-view.tsx
- * @description: Компонент детальной страницы заказа
- * @project: SaaS Bonus System
- * @dependencies: React
- * @created: 2025-01-30
- * @author: AI Assistant + User
- */
-
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  Circle,
+  Package,
+  RefreshCw,
+  Save,
+  UserRound
+} from 'lucide-react';
 import { toast } from 'sonner';
-import type { OrderWithRelations } from '@/types/orders';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -44,451 +24,386 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { MarkingWorkspaceNav } from '@/features/marking/components/marking-workspace-nav';
+import type { OrderWithRelations } from '@/types/orders';
 import { OrderMarkingCard } from './order-marking-card';
+import {
+  FISCAL_STATE_LABELS,
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS
+} from './order-workflow-ui';
 
-interface OrderDetailViewProps {
+export function OrderDetailView({
+  projectId,
+  orderId
+}: {
   projectId: string;
   orderId: string;
-}
-
-const statusColors: Record<
-  string,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  PENDING: 'secondary',
-  CONFIRMED: 'default',
-  PROCESSING: 'default',
-  SHIPPED: 'default',
-  DELIVERED: 'default',
-  CANCELLED: 'destructive',
-  REFUNDED: 'outline'
-};
-
-const statusLabels: Record<string, string> = {
-  PENDING: 'Ожидает',
-  CONFIRMED: 'Подтвержден',
-  PROCESSING: 'Обрабатывается',
-  SHIPPED: 'Отправлен',
-  DELIVERED: 'Доставлен',
-  CANCELLED: 'Отменен',
-  REFUNDED: 'Возврат'
-};
-
-const accountingStateLabels: Record<string, string> = {
-  LEGACY: 'Исторический заказ',
-  NOT_APPLIED: 'Не применен',
-  APPLYING: 'Применяется',
-  APPLIED: 'Применен',
-  REVERSING: 'Отменяется',
-  REVERSED: 'Отменен',
-  PARTIALLY_REVERSED: 'Частично отменен'
-};
-
-export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
+}) {
   const router = useRouter();
   const [order, setOrder] = useState<OrderWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
-  const [newStatus, setNewStatus] = useState<string>('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [newStatus, setNewStatus] = useState('');
   const [comment, setComment] = useState('');
   const [confirmStatusChange, setConfirmStatusChange] = useState(false);
 
-  const fetchOrder = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `/api/projects/${projectId}/orders/${orderId}`
-      );
-      if (!response.ok) {
-        throw new Error('Ошибка загрузки заказа');
+  const fetchOrder = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setLoading(true);
+      else setRefreshing(true);
+      try {
+        const response = await fetch(
+          `/api/projects/${projectId}/orders/${orderId}`
+        );
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(data.error || 'Не удалось загрузить заказ');
+        setOrder(data);
+        setNewStatus(data.status);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Не удалось загрузить заказ'
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
+    },
+    [orderId, projectId]
+  );
 
-      const data = (await response.json()) as OrderWithRelations;
-      setOrder(data);
-      setNewStatus(data.status);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Не удалось загрузить заказ'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, orderId]);
+  useEffect(() => void fetchOrder(), [fetchOrder]);
 
   useEffect(() => {
-    void fetchOrder();
-  }, [fetchOrder]);
+    if (!order || order.fiscalState !== 'SETTLEMENT_PENDING') return;
+    const timer = window.setInterval(() => void fetchOrder(true), 4000);
+    return () => window.clearInterval(timer);
+  }, [fetchOrder, order]);
 
-  const handleStatusChange = async () => {
-    if (!order || newStatus === order.status) {
-      return;
-    }
-
+  async function changeStatus() {
+    if (!order || newStatus === order.status) return;
     try {
       const response = await fetch(
         `/api/projects/${projectId}/orders/${orderId}/status`,
         {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             status: newStatus,
-            comment: comment || 'Изменение статуса'
+            comment: comment.trim() || 'Изменение статуса заказа'
           })
         }
       );
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error || 'Ошибка изменения статуса');
-      }
-
-      toast.success('Статус заказа изменен');
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Не удалось изменить статус');
+      toast.success('Статус заказа изменён');
       setConfirmStatusChange(false);
-      await fetchOrder();
       setComment('');
+      await fetchOrder(true);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : 'Не удалось изменить статус'
       );
     }
-  };
-
-  if (loading) {
-    return <div>Загрузка...</div>;
   }
 
-  if (!order) {
-    return <div>Заказ не найден</div>;
-  }
+  if (loading) return <OrderDetailSkeleton />;
+  if (!order) return <div className='py-16 text-center'>Заказ не найден</div>;
 
-  const isCashPending =
-    order.status === 'PENDING' &&
-    String(order.paymentMethod ?? '')
-      .trim()
-      .toLocaleLowerCase('ru-RU') === 'наличные';
+  const readyToShip =
+    order.paymentStatus === 'PAID' &&
+    ['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState) &&
+    order.fiscalState === 'SETTLED';
+  const shippingBlocked =
+    !readyToShip && ['SHIPPED', 'DELIVERED'].includes(newStatus);
 
   return (
     <div className='space-y-6'>
-      <div className='flex items-center justify-between'>
-        <div className='flex items-center gap-4'>
+      <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
+        <div>
           <Button
             variant='ghost'
+            className='mb-2 -ml-3'
             onClick={() =>
               router.push(`/dashboard/projects/${projectId}/orders`)
             }
           >
-            <ArrowLeft className='mr-2 h-4 w-4' />
-            Назад
+            <ArrowLeft /> К списку заказов
           </Button>
-          <div>
-            <h2 className='text-3xl font-bold tracking-tight'>
-              Заказ {order.orderNumber}
-            </h2>
-            <p className='text-muted-foreground'>
-              Детальная информация о заказе
-            </p>
+          <div className='flex flex-wrap items-center gap-3'>
+            <h1 className='text-3xl font-bold tracking-tight'>
+              Заказ № {order.orderNumber}
+            </h1>
+            <Badge variant='secondary'>
+              {ORDER_STATUS_LABELS[order.status] || order.status}
+            </Badge>
           </div>
+          <p className='text-muted-foreground mt-1'>
+            Создан {formatDate(order.createdAt)} ·{' '}
+            {formatMoney(order.totalAmount)}
+          </p>
         </div>
-        <Badge
-          variant={statusColors[order.status] || 'secondary'}
-          className='px-4 py-2 text-lg'
+        <Button
+          variant='outline'
+          disabled={refreshing}
+          onClick={() => void fetchOrder(true)}
         >
-          {statusLabels[order.status] || order.status}
-        </Badge>
+          <RefreshCw className={refreshing ? 'animate-spin' : ''} /> Обновить
+        </Button>
       </div>
 
-      {isCashPending && (
+      <MarkingWorkspaceNav projectId={projectId} active='orders' />
+      <OrderWorkflow order={order} />
+
+      {!readyToShip && ['PROCESSING', 'CONFIRMED'].includes(order.status) && (
         <Alert>
           <AlertTriangle />
-          <AlertTitle>Наличный заказ ожидает подтверждения</AlertTitle>
+          <AlertTitle>Заказ пока нельзя отгружать</AlertTitle>
           <AlertDescription>
-            Бонусы, сумма покупок и реферальные начисления будут применены
-            только после ручного перевода заказа в статус «Подтвержден».
+            {shippingBlockers(order).join(' ')} Ниже показано следующее
+            доступное действие.
           </AlertDescription>
         </Alert>
       )}
-
-      <div className='grid gap-6 md:grid-cols-2'>
-        <Card>
-          <CardHeader>
-            <CardTitle>Информация о заказе</CardTitle>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            <div>
-              <Label className='text-muted-foreground'>Номер заказа</Label>
-              <div className='font-mono font-medium'>{order.orderNumber}</div>
-            </div>
-            <div>
-              <Label className='text-muted-foreground'>Дата создания</Label>
-              <div>
-                {new Intl.DateTimeFormat('ru-RU', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                }).format(new Date(order.createdAt))}
-              </div>
-            </div>
-            <div>
-              <Label className='text-muted-foreground'>Общая сумма</Label>
-              <div className='text-2xl font-bold'>
-                {new Intl.NumberFormat('ru-RU', {
-                  style: 'currency',
-                  currency: 'RUB'
-                }).format(Number(order.totalAmount))}
-              </div>
-            </div>
-            {Number(order.bonusAmount ?? 0) > 0 && (
-              <div>
-                <Label className='text-muted-foreground'>
-                  Бонусы использованы
-                </Label>
-                <div className='font-medium'>
-                  {new Intl.NumberFormat('ru-RU', {
-                    style: 'currency',
-                    currency: 'RUB'
-                  }).format(Number(order.bonusAmount))}
-                </div>
-              </div>
-            )}
-            <div>
-              <Label className='text-muted-foreground'>Состояние учета</Label>
-              <div className='flex items-center gap-2'>
-                <Badge
-                  variant={
-                    order.accountingState === 'PARTIALLY_REVERSED'
-                      ? 'destructive'
-                      : 'outline'
-                  }
-                >
-                  {accountingStateLabels[order.accountingState] ||
-                    order.accountingState}
-                </Badge>
-                {Number(order.reversalShortfall) > 0 && (
-                  <span className='text-destructive text-sm'>
-                    Недостача:{' '}
-                    {new Intl.NumberFormat('ru-RU', {
-                      style: 'currency',
-                      currency: 'RUB'
-                    }).format(Number(order.reversalShortfall))}
-                  </span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Клиент</CardTitle>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            {order.user ? (
-              <>
-                <div>
-                  <Label className='text-muted-foreground'>Имя</Label>
-                  <div className='font-medium'>
-                    {order.user.firstName || order.user.lastName
-                      ? `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim()
-                      : 'Без имени'}
-                  </div>
-                </div>
-                {order.user.email && (
-                  <div>
-                    <Label className='text-muted-foreground'>Email</Label>
-                    <div>{order.user.email}</div>
-                  </div>
-                )}
-                {order.user.phone && (
-                  <div>
-                    <Label className='text-muted-foreground'>Телефон</Label>
-                    <div>{order.user.phone}</div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className='text-muted-foreground'>Гостевой заказ</div>
-            )}
-          </CardContent>
-        </Card>
-
-        {order.deliveryAddress && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Доставка</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div>
-                <Label className='text-muted-foreground'>Адрес доставки</Label>
-                <div>{order.deliveryAddress}</div>
-              </div>
-              {order.deliveryMethod && (
-                <div className='mt-4'>
-                  <Label className='text-muted-foreground'>
-                    Способ доставки
-                  </Label>
-                  <div>{order.deliveryMethod}</div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {order.paymentMethod && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Оплата</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div>
-                <Label className='text-muted-foreground'>Способ оплаты</Label>
-                <div>{order.paymentMethod}</div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Товары</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className='space-y-4'>
-            {order.items.map((item) => (
-              <div
-                key={item.id}
-                className='flex items-center justify-between border-b pb-4'
-              >
-                <div>
-                  <div className='font-medium'>{item.name}</div>
-                  <div className='text-muted-foreground text-sm'>
-                    Количество: {item.quantity} ×{' '}
-                    {new Intl.NumberFormat('ru-RU', {
-                      style: 'currency',
-                      currency: 'RUB'
-                    }).format(Number(item.price))}
-                  </div>
-                </div>
-                <div className='font-medium'>
-                  {new Intl.NumberFormat('ru-RU', {
-                    style: 'currency',
-                    currency: 'RUB'
-                  }).format(Number(item.total))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <Separator className='my-4' />
-          <div className='flex items-center justify-between'>
-            <div className='text-lg font-medium'>Итого</div>
-            <div className='text-2xl font-bold'>
-              {new Intl.NumberFormat('ru-RU', {
-                style: 'currency',
-                currency: 'RUB'
-              }).format(Number(order.totalAmount))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       <OrderMarkingCard
         projectId={projectId}
         orderId={orderId}
         order={order}
-        onChanged={fetchOrder}
+        onChanged={() => fetchOrder(true)}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Изменение статуса</CardTitle>
-          <CardDescription>
-            Измените статус заказа и добавьте комментарий
-          </CardDescription>
-        </CardHeader>
-        <CardContent className='space-y-4'>
-          <div>
-            <Label>Новый статус</Label>
-            <Select value={newStatus} onValueChange={setNewStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='PENDING'>Ожидает</SelectItem>
-                <SelectItem value='CONFIRMED'>Подтвержден</SelectItem>
-                <SelectItem value='PROCESSING'>Обрабатывается</SelectItem>
-                <SelectItem value='SHIPPED'>Отправлен</SelectItem>
-                <SelectItem value='DELIVERED'>Доставлен</SelectItem>
-                <SelectItem value='CANCELLED'>Отменен</SelectItem>
-                <SelectItem value='REFUNDED'>Возврат</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Комментарий</Label>
-            <Textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              maxLength={500}
-              placeholder='Введите комментарий к изменению статуса...'
-            />
-          </div>
-          <Button
-            onClick={() => setConfirmStatusChange(true)}
-            disabled={newStatus === order.status}
-          >
-            Изменить статус
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>История изменений</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className='space-y-4'>
-            {order.history && order.history.length > 0 ? (
-              order.history.map((historyItem) => (
-                <div
-                  key={historyItem.id}
-                  className='flex items-start gap-4 border-b pb-4'
-                >
-                  <div className='flex-1'>
-                    <div className='flex items-center gap-2'>
-                      <Badge
-                        variant={
-                          statusColors[historyItem.status] || 'secondary'
-                        }
-                      >
-                        {statusLabels[historyItem.status] || historyItem.status}
-                      </Badge>
-                      <span className='text-muted-foreground text-sm'>
-                        {new Intl.DateTimeFormat('ru-RU', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }).format(new Date(historyItem.createdAt))}
-                      </span>
-                    </div>
-                    {historyItem.comment && (
-                      <div className='mt-2 text-sm'>{historyItem.comment}</div>
-                    )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className='text-muted-foreground py-8 text-center'>
-                История изменений отсутствует
+      <div className='grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]'>
+        <div className='space-y-6'>
+          <Card>
+            <CardHeader>
+              <CardTitle className='flex items-center gap-2'>
+                <Package className='h-5 w-5' /> Состав заказа
+              </CardTitle>
+              <CardDescription>
+                Фискальные реквизиты зафиксированы в заказе и не меняются
+                автоматически вместе с каталогом.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='px-0'>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className='pl-6'>Товар</TableHead>
+                    <TableHead>Маркировка</TableHead>
+                    <TableHead>Количество</TableHead>
+                    <TableHead className='pr-6 text-right'>Сумма</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {order.items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className='max-w-lg py-3 pl-6'>
+                        <div className='font-medium'>{item.name}</div>
+                        <div className='text-muted-foreground mt-1 text-xs'>
+                          {item.sku && `SKU ${item.sku} · `}
+                          {item.gtin ? `GTIN ${item.gtin}` : 'GTIN не указан'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            item.markingStatus === 'UNKNOWN'
+                              ? 'destructive'
+                              : 'outline'
+                          }
+                        >
+                          {item.markingStatus === 'MARKED_REQUIRED'
+                            ? `Отсканировано ${item.markedUnits?.length ?? 0}/${item.quantity}`
+                            : item.markingStatus === 'UNKNOWN'
+                              ? 'Не настроено'
+                              : 'Код не требуется'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.quantity} × {formatMoney(item.price)}
+                      </TableCell>
+                      <TableCell className='pr-6 text-right font-medium'>
+                        {formatMoney(item.total)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className='flex justify-between border-t px-6 py-4 text-lg font-semibold'>
+                <span>Итого</span>
+                <span>{formatMoney(order.totalAmount)}</span>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>История заказа</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {order.history?.length ? (
+                <div className='space-y-4'>
+                  {order.history.map((entry, index) => (
+                    <div key={entry.id} className='relative flex gap-3'>
+                      <div className='flex flex-col items-center'>
+                        <span className='bg-primary mt-1 h-2.5 w-2.5 rounded-full' />
+                        {index < order.history.length - 1 && (
+                          <span className='bg-border h-full w-px' />
+                        )}
+                      </div>
+                      <div className='pb-4'>
+                        <div className='font-medium'>
+                          {ORDER_STATUS_LABELS[entry.status] || entry.status}
+                        </div>
+                        <div className='text-muted-foreground text-xs'>
+                          {formatDate(entry.createdAt)}
+                        </div>
+                        {entry.comment && (
+                          <div className='mt-1 text-sm'>{entry.comment}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className='text-muted-foreground text-sm'>
+                  История пуста
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className='space-y-6 xl:sticky xl:top-6'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Покупатель и доставка</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-4 text-sm'>
+              <InfoRow
+                icon={UserRound}
+                label='Покупатель'
+                value={customerName(order)}
+              />
+              {order.user?.email && (
+                <InfoRow label='Email' value={order.user.email} />
+              )}
+              {order.user?.phone && (
+                <InfoRow label='Телефон' value={order.user.phone} />
+              )}
+              {order.deliveryMethod && (
+                <InfoRow label='Доставка' value={order.deliveryMethod} />
+              )}
+              {order.deliveryAddress && (
+                <InfoRow label='Адрес' value={order.deliveryAddress} />
+              )}
+              <Separator />
+              <InfoRow
+                label='Оплата'
+                value={`${PAYMENT_STATUS_LABELS[order.paymentStatus] || order.paymentStatus}${
+                  order.paymentMethod ? ` · ${order.paymentMethod}` : ''
+                }`}
+              />
+              {order.providerPaymentId && (
+                <InfoRow
+                  label='Платёж ЮKassa'
+                  value={order.providerPaymentId}
+                  mono
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Статус заказа</CardTitle>
+              <CardDescription>
+                Отгрузка доступна только после оплаты, маркировки и регистрации
+                чека.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='space-y-2'>
+                <Label>Новый статус</Label>
+                <Select value={newStatus} onValueChange={setNewStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ORDER_STATUS_LABELS).map(
+                      ([value, label]) => (
+                        <SelectItem
+                          key={value}
+                          value={value}
+                          disabled={
+                            !readyToShip &&
+                            ['SHIPPED', 'DELIVERED'].includes(value)
+                          }
+                        >
+                          {label}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='status-comment'>Комментарий</Label>
+                <Textarea
+                  id='status-comment'
+                  value={comment}
+                  maxLength={500}
+                  placeholder='Причина или примечание для истории'
+                  onChange={(event) => setComment(event.target.value)}
+                />
+              </div>
+              {shippingBlocked && (
+                <p className='text-destructive text-sm'>
+                  Сначала завершите обязательные шаги выше.
+                </p>
+              )}
+              <Button
+                className='w-full'
+                disabled={newStatus === order.status || shippingBlocked}
+                onClick={() => setConfirmStatusChange(true)}
+              >
+                <Save /> Изменить статус
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <AlertDialog
         open={confirmStatusChange}
@@ -496,21 +411,191 @@ export function OrderDetailView({ projectId, orderId }: OrderDetailViewProps) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Подтвердить изменение статуса?</AlertDialogTitle>
+            <AlertDialogTitle>Изменить статус заказа?</AlertDialogTitle>
             <AlertDialogDescription>
-              Статус заказа изменится с «{statusLabels[order.status]}» на «
-              {statusLabels[newStatus] || newStatus}». Экономические эффекты
-              заказа могут быть применены или отменены.
+              «{ORDER_STATUS_LABELS[order.status] || order.status}» → «
+              {ORDER_STATUS_LABELS[newStatus] || newStatus}». Изменение может
+              повлиять на бонусы и складской учёт.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={handleStatusChange}>
+            <AlertDialogAction onClick={() => void changeStatus()}>
               Подтвердить
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function OrderWorkflow({ order }: { order: OrderWithRelations }) {
+  const scanned = order.items.reduce(
+    (sum, item) => sum + (item.markedUnits?.length ?? 0),
+    0
+  );
+  const expected = order.items
+    .filter((item) => item.markingStatus === 'MARKED_REQUIRED')
+    .reduce((sum, item) => sum + item.quantity, 0);
+  const steps = [
+    {
+      label: 'Оплата',
+      value: PAYMENT_STATUS_LABELS[order.paymentStatus] || order.paymentStatus,
+      complete: order.paymentStatus === 'PAID',
+      error: false
+    },
+    {
+      label: 'Каталог',
+      value:
+        order.markingState === 'UNCONFIGURED'
+          ? 'Нужно исправить товары'
+          : 'Реквизиты готовы',
+      complete: order.markingState !== 'UNCONFIGURED',
+      error: order.markingState === 'UNCONFIGURED'
+    },
+    {
+      label: 'Data Matrix',
+      value: expected ? `${scanned} из ${expected}` : 'Не требуется',
+      complete: ['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState),
+      error: order.markingState === 'FAILED'
+    },
+    {
+      label: 'Чек',
+      value: FISCAL_STATE_LABELS[order.fiscalState] || order.fiscalState,
+      complete: order.fiscalState === 'SETTLED',
+      error: order.fiscalState === 'FAILED'
+    },
+    {
+      label: 'Отгрузка',
+      value:
+        order.paymentStatus === 'PAID' &&
+        ['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState) &&
+        order.fiscalState === 'SETTLED'
+          ? 'Можно отправлять'
+          : 'Заблокирована',
+      complete:
+        order.paymentStatus === 'PAID' &&
+        ['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState) &&
+        order.fiscalState === 'SETTLED',
+      error: false
+    }
+  ];
+
+  return (
+    <Card>
+      <CardContent className='grid gap-2 pt-6 sm:grid-cols-5'>
+        {steps.map((step, index) => (
+          <div
+            key={step.label}
+            className='relative flex gap-3 rounded-lg p-3 sm:block'
+          >
+            <div className='flex items-center sm:mb-2'>
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-full border ${
+                  step.error
+                    ? 'border-destructive bg-destructive text-white'
+                    : step.complete
+                      ? 'border-green-600 bg-green-600 text-white'
+                      : 'bg-background'
+                }`}
+              >
+                {step.error ? (
+                  <AlertTriangle className='h-4 w-4' />
+                ) : step.complete ? (
+                  <Check className='h-4 w-4' />
+                ) : (
+                  <Circle className='h-3 w-3' />
+                )}
+              </span>
+              {index < steps.length - 1 && (
+                <span className='bg-border ml-2 hidden h-px flex-1 sm:block' />
+              )}
+            </div>
+            <div>
+              <div className='text-sm font-medium'>{step.label}</div>
+              <div className='text-muted-foreground mt-0.5 text-xs'>
+                {step.value}
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function shippingBlockers(order: OrderWithRelations) {
+  const blockers: string[] = [];
+  if (order.paymentStatus !== 'PAID') blockers.push('Оплата не подтверждена.');
+  if (order.markingState === 'UNCONFIGURED')
+    blockers.push('Не настроены товары в каталоге.');
+  else if (!['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState))
+    blockers.push('Не завершено сканирование Data Matrix.');
+  if (order.fiscalState !== 'SETTLED') blockers.push('Чек не зарегистрирован.');
+  return blockers;
+}
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  mono
+}: {
+  icon?: typeof UserRound;
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className='flex gap-3'>
+      {Icon && <Icon className='text-muted-foreground mt-0.5 h-4 w-4' />}
+      <div className='min-w-0'>
+        <div className='text-muted-foreground text-xs'>{label}</div>
+        <div
+          className={`break-words ${mono ? 'font-mono text-xs' : 'font-medium'}`}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function customerName(order: OrderWithRelations) {
+  if (!order.user) return 'Гостевой заказ';
+  const name =
+    `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim();
+  return name || order.user.email || order.user.phone || 'Без имени';
+}
+
+function formatMoney(value: unknown) {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB'
+  }).format(Number(value));
+}
+
+function formatDate(value: Date | string) {
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(value));
+}
+
+function OrderDetailSkeleton() {
+  return (
+    <div className='space-y-6'>
+      <Skeleton className='h-10 w-80' />
+      <Skeleton className='h-24 w-full' />
+      <Skeleton className='h-56 w-full' />
+      <div className='grid gap-6 lg:grid-cols-2'>
+        <Skeleton className='h-80 w-full' />
+        <Skeleton className='h-80 w-full' />
+      </div>
     </div>
   );
 }

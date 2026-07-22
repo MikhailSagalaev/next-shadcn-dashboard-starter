@@ -116,6 +116,7 @@ export interface OrderFilters {
   startDate?: Date;
   endDate?: Date;
   search?: string;
+  needsAttention?: boolean;
   page?: number;
   pageSize?: number;
   sortBy?: 'createdAt' | 'totalAmount' | 'status';
@@ -128,6 +129,12 @@ export interface OrderListResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+  summary?: {
+    total: number;
+    needsAttention: number;
+    awaitingScanning: number;
+    readyToShip: number;
+  };
 }
 
 export interface CreateProductInput {

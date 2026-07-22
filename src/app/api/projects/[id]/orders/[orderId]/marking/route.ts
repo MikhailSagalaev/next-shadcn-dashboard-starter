@@ -3,13 +3,15 @@ import { z } from 'zod';
 import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
 import {
+  InvalidMarkCodeError,
   MarkingConflictError,
   MarkingService
 } from '@/lib/services/marking.service';
 
 const scanSchema = z.object({
   orderItemId: z.string().min(1),
-  code: z.string().min(16).max(512)
+  code: z.string().min(16).max(512),
+  validateOnly: z.boolean().optional()
 });
 
 export async function POST(
@@ -23,6 +25,15 @@ export async function POST(
     const { id: projectId, orderId } = await params;
     await ProjectService.verifyProjectAccess(projectId, admin.sub);
     const data = scanSchema.parse(await request.json());
+    if (data.validateOnly) {
+      const validation = await MarkingService.validateCode({
+        projectId,
+        orderId,
+        orderItemId: data.orderItemId,
+        code: data.code
+      });
+      return NextResponse.json({ validation });
+    }
     const unit = await MarkingService.assignCode({
       projectId,
       orderId,
@@ -37,6 +48,9 @@ export async function POST(
     }
     if (error instanceof MarkingConflictError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof InvalidMarkCodeError) {
+      return NextResponse.json({ error: error.message }, { status: 422 });
     }
     return NextResponse.json(
       { error: 'Не удалось сохранить код маркировки' },

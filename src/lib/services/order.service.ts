@@ -243,8 +243,31 @@ export class OrderService {
           },
           items: {
             include: {
-              product: true
+              product: true,
+              markedUnits: {
+                select: {
+                  id: true,
+                  gtin: true,
+                  serial: true,
+                  status: true,
+                  scannedBy: true,
+                  scannedAt: true
+                },
+                orderBy: { scannedAt: 'asc' }
+              }
             }
+          },
+          fiscalReceipts: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              providerReceiptId: true,
+              lastError: true,
+              createdAt: true,
+              succeededAt: true
+            },
+            orderBy: { createdAt: 'desc' }
           },
           history: {
             orderBy: {
@@ -338,6 +361,7 @@ export class OrderService {
         startDate,
         endDate,
         search,
+        needsAttention,
         page = 1,
         pageSize = 20,
         sortBy = 'createdAt',
@@ -387,7 +411,25 @@ export class OrderService {
         ];
       }
 
-      const [orders, total] = await Promise.all([
+      if (needsAttention) {
+        where.AND = [
+          {
+            OR: [
+              { markingState: { in: ['UNCONFIGURED', 'FAILED'] } },
+              { fiscalState: 'FAILED' }
+            ]
+          }
+        ];
+      }
+
+      const [
+        orders,
+        total,
+        projectTotal,
+        attentionTotal,
+        awaitingScanning,
+        readyToShip
+      ] = await Promise.all([
         db.order.findMany({
           where,
           include: {
@@ -401,21 +443,7 @@ export class OrderService {
               }
             },
             items: {
-              include: {
-                product: true
-              }
-            },
-            history: {
-              take: 1,
-              orderBy: {
-                createdAt: 'desc'
-              }
-            },
-            project: {
-              select: {
-                id: true,
-                name: true
-              }
+              select: { id: true }
             }
           },
           orderBy: {
@@ -424,7 +452,29 @@ export class OrderService {
           skip: (page - 1) * pageSize,
           take: pageSize
         }),
-        db.order.count({ where })
+        db.order.count({ where }),
+        db.order.count({ where: { projectId } }),
+        db.order.count({
+          where: {
+            projectId,
+            OR: [
+              { markingState: { in: ['UNCONFIGURED', 'FAILED'] } },
+              { fiscalState: 'FAILED' }
+            ]
+          }
+        }),
+        db.order.count({
+          where: { projectId, markingState: { in: ['PENDING', 'PARTIAL'] } }
+        }),
+        db.order.count({
+          where: {
+            projectId,
+            paymentStatus: 'PAID',
+            markingState: { in: ['COMPLETE', 'NOT_REQUIRED'] },
+            fiscalState: 'SETTLED',
+            status: { notIn: ['SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'] }
+          }
+        })
       ]);
 
       return {
@@ -432,7 +482,13 @@ export class OrderService {
         total,
         page,
         pageSize,
-        totalPages: Math.ceil(total / pageSize)
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        summary: {
+          total: projectTotal,
+          needsAttention: attentionTotal,
+          awaitingScanning,
+          readyToShip
+        }
       };
     } catch (error) {
       logger.error('Ошибка получения списка заказов', {

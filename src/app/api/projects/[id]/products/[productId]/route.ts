@@ -19,6 +19,7 @@ const updateProductSchema = z.object({
   gtin: z
     .string()
     .regex(/^\d{8,14}$/)
+    .transform((value) => value.padStart(14, '0'))
     .nullable()
     .optional(),
   markingStatus: z.nativeEnum(ProductMarkingStatus).optional(),

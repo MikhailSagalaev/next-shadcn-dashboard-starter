@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { YooKassaFiscalForm } from './components/integration-form';
+import { MarkingWorkspaceNav } from '@/features/marking/components/marking-workspace-nav';
 
 export const metadata = {
   title: 'ЮKassa и маркировка | Gupil',
@@ -54,6 +55,7 @@ export default async function YooKassaFiscalPage({
         description='Подключите ЮKassa этого магазина для отправки чеков с кодами маркировки'
       />
       <Separator />
+      <MarkingWorkspaceNav projectId={projectId} active='integration' />
       <YooKassaFiscalForm
         projectId={projectId}
         integration={
