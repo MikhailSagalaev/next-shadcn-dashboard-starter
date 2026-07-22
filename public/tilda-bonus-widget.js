@@ -2,7 +2,7 @@
  * @file: tilda-bonus-widget.js
  * @description: Готовый виджет для интеграции бонусной системы с Tilda
  * @project: SaaS Bonus System
- * @version: 2.9.17
+ * @version: 2.9.18
  * @author: AI Assistant + User
  * @architecture: Modular design with memory management, rate limiting, and graceful degradation
  */
@@ -582,13 +582,15 @@
       // Отслеживаем изменения в корзине
       this.observeCart();
 
-      // Отслеживаем ввод email/телефона
-      this.observeUserInput();
+      // Отслеживаем только события сессии Tilda. Контакты из checkout-формы
+      // не являются признаком авторизации и не должны открывать бонусный виджет.
+      this.observeUserSession();
 
       // Отслеживаем авторизацию Tilda
       this.observeTildaAuth();
 
-      // Загружаем сохраненные данные пользователя из localStorage
+      // Загружаем сохранённое состояние бонусов. Контакты пользователя берём
+      // исключительно из авторизованного профиля Tilda.
       this.loadUserDataFromStorage();
 
       this.state.initialized = true;
@@ -598,20 +600,19 @@
     // Загрузка данных пользователя из localStorage при инициализации
     loadUserDataFromStorage: function () {
       try {
-        const savedEmail = this.safeGetStorage('tilda_user_email');
-        const savedPhone = this.safeGetStorage('tilda_user_phone');
         const savedAppliedBonuses = this.safeGetStorage(
           'tilda_applied_bonuses'
         );
 
-        if (savedEmail && this.validateEmail(savedEmail)) {
-          this.state.userEmail = savedEmail;
-          this.log('📧 Загружен валидный email из localStorage');
-        }
-
-        if (savedPhone && this.validatePhone(savedPhone)) {
-          this.state.userPhone = savedPhone;
-          this.log('📱 Загружен валидный телефон из localStorage');
+        const authenticatedContact = this.getUserContact();
+        if (!authenticatedContact) {
+          this.state.userEmail = null;
+          this.state.userPhone = null;
+          this.state.appliedBonuses = 0;
+          localStorage.removeItem('tilda_user_email');
+          localStorage.removeItem('tilda_user_phone');
+          localStorage.removeItem('tilda_applied_bonuses');
+          return;
         }
 
         // УЛУЧШЕНИЕ #4: Валидация appliedBonuses при загрузке
@@ -3577,116 +3578,14 @@
 
     // Определяет и обновляет состояние виджета на основе данных пользователя
     updateWidgetState: function () {
-      // Сначала проверяем tilda_members_profile из window или localStorage
-      let profile = null;
-      if (typeof window !== 'undefined' && window.tilda_members_profile) {
-        profile = window.tilda_members_profile;
-      } else if (this.config && this.config.projectId) {
-        // Проверяем localStorage по projectId
-        try {
-          const localStorageKey = `tilda_members_profile${this.config.projectId}`;
-          const profileFromStorage = localStorage.getItem(localStorageKey);
-          if (profileFromStorage) {
-            try {
-              profile = JSON.parse(profileFromStorage);
-              this.log(
-                '📦 Профиль загружен из localStorage в updateWidgetState:',
-                localStorageKey
-              );
-            } catch (parseError) {
-              this.log('⚠️ Ошибка парсинга профиля:', parseError);
-            }
-          } else {
-            // Пробуем найти любой ключ с tilda_members_profile
-            const legacyKeys = Object.keys(localStorage).filter(
-              (key) =>
-                key.startsWith('tilda_members_profile') &&
-                !key.includes('_timestamp')
-            );
-            if (legacyKeys.length > 0) {
-              const legacyKey = legacyKeys[0];
-              const legacyProfile = localStorage.getItem(legacyKey);
-              if (legacyProfile) {
-                try {
-                  profile = JSON.parse(legacyProfile);
-                  this.log(
-                    '📦 Профиль загружен из localStorage (legacy) в updateWidgetState:',
-                    legacyKey
-                  );
-                } catch (parseError) {
-                  this.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
-                }
-              }
-            }
-          }
-        } catch (error) {
-          this.log('⚠️ Ошибка чтения профиля из localStorage:', error);
-        }
-      }
-
-      if (profile) {
-        try {
-          const email =
-            profile.login && profile.login.trim() ? profile.login.trim() : null;
-          const phone =
-            profile.phone && profile.phone.trim() ? profile.phone.trim() : null;
-
-          // Обновляем state если данные есть и еще не сохранены или изменились
-          if (email && email !== this.state.userEmail) {
-            this.state.userEmail = email;
-            this.safeSetStorage('tilda_user_email', email);
-            this.log(
-              '📧 Обновлен email из tilda_members_profile в updateWidgetState'
-            );
-          }
-          if (phone && phone !== this.state.userPhone) {
-            this.state.userPhone = phone;
-            this.safeSetStorage('tilda_user_phone', phone);
-            this.log(
-              '📱 Обновлен phone из tilda_members_profile в updateWidgetState'
-            );
-          }
-          if (
-            !email &&
-            this.state.userEmail &&
-            !localStorage.getItem('tilda_user_email')
-          ) {
-            this.state.userEmail = null;
-          }
-          if (
-            !phone &&
-            this.state.userPhone &&
-            !localStorage.getItem('tilda_user_phone')
-          ) {
-            this.state.userPhone = null;
-          }
-        } catch (error) {
-          this.log(
-            '⚠️ Ошибка проверки tilda_members_profile в updateWidgetState:',
-            error
-          );
-        }
-      }
-
-      // Проверяем данные в состоянии виджета (загруженные из localStorage)
-      const hasStoredData = this.state.userEmail || this.state.userPhone;
-
-      // Также проверяем данные через getUserContact() для дополнительной валидации
       const userContact = this.getUserContact();
 
-      if (
-        hasStoredData ||
-        (userContact && (userContact.email || userContact.phone))
-      ) {
-        // У пользователя есть контактные данные - показываем виджет с балансом
-        this.log('✅ Пользователь авторизован - показываем виджет с балансом', {
-          hasStoredData,
-          userContact: userContact
-            ? {
-                hasEmail: !!userContact.email,
-                hasPhone: !!userContact.phone
-              }
-            : null
+      if (userContact && (userContact.email || userContact.phone)) {
+        this.log('✅ Профиль Tilda авторизован — показываем бонусный виджет', {
+          userContact: {
+            hasEmail: !!userContact.email,
+            hasPhone: !!userContact.phone
+          }
         });
         this.hideRegistrationPrompt();
         this.ensureWidgetMounted();
@@ -3712,16 +3611,18 @@
           this.applyWidgetStyles(this.state.widgetSettings);
         }
 
-        this.loadUserBalance(
-          userContact || {
-            email: this.state.userEmail,
-            phone: this.state.userPhone
-          }
-        );
+        this.loadUserBalance(userContact);
       } else {
-        // У пользователя нет контактных данных - показываем плашку регистрации
+        // Обычные поля checkout и служебные tilda_user_* не авторизуют клиента.
+        this.state.userEmail = null;
+        this.state.userPhone = null;
+        this.state.bonusBalance = 0;
+        this.state.appliedBonuses = 0;
+        localStorage.removeItem('tilda_user_email');
+        localStorage.removeItem('tilda_user_phone');
+        localStorage.removeItem('tilda_applied_bonuses');
         this.log(
-          '❌ Пользователь не авторизован - показываем плашку регистрации'
+          '❌ Нет авторизованного профиля Tilda — показываем плашку регистрации'
         );
         this.removeWidget();
         this.showRegistrationPrompt();
@@ -4036,12 +3937,9 @@
       // Отслеживаем события storage (localStorage/cookies изменения)
       if (typeof window !== 'undefined' && window.addEventListener) {
         const storageHandler = (e) => {
-          // Проверяем изменения в localStorage связанные с авторизацией Tilda
-          if (
-            e.key === 'tilda_user_email' ||
-            e.key === 'tilda_user_phone' ||
-            !e.key
-          ) {
+          // Реагируем только на профиль Tilda Members. Изменение служебных
+          // tilda_user_* не является событием авторизации.
+          if ((e.key && e.key.startsWith('tilda_members_profile')) || !e.key) {
             self.log('🔄 Обнаружено изменение в localStorage');
             setTimeout(() => {
               self.updateWidgetState();
@@ -4094,20 +3992,8 @@
       self.log('✅ Отслеживание авторизации Tilda настроено');
     },
 
-    // Наблюдение за вводом пользователя
-    observeUserInput: function () {
-      // Отслеживаем изменения в полях email и телефона
-      document.addEventListener('input', (e) => {
-        if (
-          e.target.type === 'email' ||
-          e.target.name === 'email' ||
-          e.target.type === 'tel' ||
-          e.target.name === 'phone'
-        ) {
-          this.onUserInputChange(e.target);
-        }
-      });
-
+    // Наблюдение за событиями сессии Tilda
+    observeUserSession: function () {
       // Отслеживаем клики по кнопке выхода
       document.addEventListener('click', (e) => {
         if (
@@ -4153,194 +4039,72 @@
       );
     },
 
-    // Обработка изменения данных пользователя
-    onUserInputChange: function (input) {
-      const value = input.value.trim();
-      if (!value) return;
-
-      let hasNewData = false;
-
-      if (input.type === 'email' || input.name === 'email') {
-        if (this.state.userEmail !== value) {
-          this.state.userEmail = value;
-          localStorage.setItem('tilda_user_email', value);
-          hasNewData = true;
+    // Возвращает только профиль авторизованного участника Tilda Members.
+    // Служебные tilda_user_* и поля checkout намеренно не используются:
+    // они не доказывают, что пользователь вошёл в личный кабинет Tilda.
+    getTildaMemberProfile: function () {
+      try {
+        if (typeof window !== 'undefined' && window.tilda_members_profile) {
+          return window.tilda_members_profile;
         }
-      } else if (input.type === 'tel' || input.name === 'phone') {
-        if (this.state.userPhone !== value) {
-          this.state.userPhone = value;
-          localStorage.setItem('tilda_user_phone', value);
-          hasNewData = true;
-        }
-      }
 
-      // Обновляем состояние виджета только при изменении данных
-      if (hasNewData) {
-        this.log('📝 Новые контактные данные, обновляем состояние виджета');
-
-        // Проверяем, показана ли сейчас плашка регистрации
-        const registrationPrompt = document.querySelector(
-          '.registration-prompt-inline'
+        const preferredKey = this.config?.projectId
+          ? `tilda_members_profile${this.config.projectId}`
+          : null;
+        const profileKeys = Object.keys(localStorage).filter(
+          (key) =>
+            key.startsWith('tilda_members_profile') &&
+            !key.includes('_timestamp')
         );
-        if (registrationPrompt) {
-          this.log('🔄 Переключаемся с плашки регистрации на виджет');
-          this.hideRegistrationPrompt();
-          this.ensureWidgetMounted();
+        if (preferredKey && profileKeys.includes(preferredKey)) {
+          profileKeys.splice(profileKeys.indexOf(preferredKey), 1);
+          profileKeys.unshift(preferredKey);
         }
 
-        // Обновляем состояние виджета
-        this.updateWidgetState();
-
-        // Загружаем баланс с дебаунсом (только если есть контактные данные)
-        if (this.state.userEmail || this.state.userPhone) {
-          this.loadUserBalanceDebounced({
-            email: this.state.userEmail,
-            phone: this.state.userPhone
-          });
+        for (const key of profileKeys) {
+          const storedProfile = localStorage.getItem(key);
+          if (!storedProfile) continue;
+          try {
+            const profile = JSON.parse(storedProfile);
+            if (profile && typeof profile === 'object') {
+              this.log('✅ Найден авторизованный профиль Tilda:', key);
+              return profile;
+            }
+          } catch (parseError) {
+            this.log('⚠️ Ошибка парсинга профиля Tilda:', key, parseError);
+          }
         }
+      } catch (error) {
+        this.log('⚠️ Ошибка чтения профиля Tilda:', error);
       }
+
+      return null;
     },
 
-    // Получение контактов пользователя
+    // Получение контактов исключительно из авторизованного профиля Tilda
     getUserContact: function () {
       try {
-        this.log('🔍 Ищем контактные данные пользователя...');
+        const profile = this.getTildaMemberProfile();
+        if (!profile) return null;
 
-        // 1. Проверяем window.tilda_members_profile (приоритетно)
-        let profile = null;
-        if (typeof window !== 'undefined' && window.tilda_members_profile) {
-          profile = window.tilda_members_profile;
-          this.log('✅ Найден window.tilda_members_profile');
-        }
+        const email =
+          typeof profile.login === 'string' && profile.login.trim()
+            ? profile.login.trim()
+            : null;
+        const phone =
+          typeof profile.phone === 'string' && profile.phone.trim()
+            ? profile.phone.trim()
+            : null;
+        if (!email && !phone) return null;
 
-        // 2. Если window.tilda_members_profile недоступен, проверяем localStorage
-        // Tilda сохраняет профиль с ключом tilda_members_profile{projectId}
-        if (!profile && this.config && this.config.projectId) {
-          try {
-            const localStorageKey = `tilda_members_profile${this.config.projectId}`;
-            const profileFromStorage = localStorage.getItem(localStorageKey);
-            if (profileFromStorage) {
-              try {
-                profile = JSON.parse(profileFromStorage);
-                this.log('✅ Найден профиль в localStorage:', localStorageKey);
-              } catch (parseError) {
-                this.log(
-                  '⚠️ Ошибка парсинга профиля из localStorage:',
-                  parseError
-                );
-              }
-            } else {
-              // Также проверяем без projectId (старый формат)
-              const legacyKeys = Object.keys(localStorage).filter((key) =>
-                key.startsWith('tilda_members_profile')
-              );
-              if (legacyKeys.length > 0) {
-                // Пробуем первый найденный ключ
-                const legacyKey = legacyKeys[0];
-                const legacyProfile = localStorage.getItem(legacyKey);
-                if (legacyProfile) {
-                  try {
-                    profile = JSON.parse(legacyProfile);
-                    this.log(
-                      '✅ Найден профиль в localStorage (legacy):',
-                      legacyKey
-                    );
-                  } catch (parseError) {
-                    this.log('⚠️ Ошибка парсинга legacy профиля:', parseError);
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            this.log('⚠️ Ошибка чтения профиля из localStorage:', error);
-          }
-        }
+        this.state.userEmail = email;
+        this.state.userPhone = phone;
+        if (email) this.safeSetStorage('tilda_user_email', email);
+        else localStorage.removeItem('tilda_user_email');
+        if (phone) this.safeSetStorage('tilda_user_phone', phone);
+        else localStorage.removeItem('tilda_user_phone');
 
-        // 3. Обрабатываем найденный профиль
-        if (profile) {
-          try {
-            // Очищаем email и phone от пустых строк
-            const email =
-              profile.login && profile.login.trim()
-                ? profile.login.trim()
-                : null;
-            const phone =
-              profile.phone && profile.phone.trim()
-                ? profile.phone.trim()
-                : null;
-
-            if (email || phone) {
-              this.log('✅ Найдены контакты в window.tilda_members_profile:', {
-                hasEmail: !!email,
-                hasPhone: !!phone,
-                emailValue: email ? email.substring(0, 3) + '***' : 'пусто',
-                phoneValue: phone ? phone.substring(0, 3) + '***' : 'пусто'
-              });
-
-              // Сохраняем в localStorage для последующего использования
-              if (email) {
-                this.state.userEmail = email;
-                this.safeSetStorage('tilda_user_email', email);
-              } else {
-                // Если email пустой, очищаем из state и localStorage
-                this.state.userEmail = null;
-                localStorage.removeItem('tilda_user_email');
-              }
-              if (phone) {
-                this.state.userPhone = phone;
-                this.safeSetStorage('tilda_user_phone', phone);
-              } else {
-                // Если phone пустой, очищаем из state и localStorage
-                this.state.userPhone = null;
-                localStorage.removeItem('tilda_user_phone');
-              }
-
-              return { email, phone };
-            }
-          } catch (error) {
-            this.log('⚠️ Ошибка чтения tilda_members_profile:', error);
-          }
-        }
-
-        // 2. Из localStorage
-        const savedEmail = localStorage.getItem('tilda_user_email');
-        const savedPhone = localStorage.getItem('tilda_user_phone');
-
-        if (savedEmail || savedPhone) {
-          this.log('📦 Найдены сохраненные контакты в localStorage:', {
-            hasEmail: !!savedEmail,
-            hasPhone: !!savedPhone
-          });
-          return { email: savedEmail, phone: savedPhone };
-        }
-
-        // 3. Из полей формы
-        const emailField = document.querySelector(
-          'input[name="email"], input[type="email"], input[name="Email"]'
-        );
-        const phoneField = document.querySelector(
-          'input[name="phone"], input[type="tel"], input[name="Phone"], input[name="tildaspec-phone-part"]'
-        );
-
-        const email = emailField ? emailField.value.trim() : null;
-        const phone = phoneField ? phoneField.value.trim() : null;
-
-        this.log('🔍 Поиск в полях формы:', {
-          emailField: !!emailField,
-          phoneField: !!phoneField,
-          hasEmail: !!(email && email.length > 0),
-          hasPhone: !!(phone && phone.length > 0),
-          emailValue: email ? email.substring(0, 3) + '***' : 'пусто',
-          phoneValue: phone ? phone.substring(0, 3) + '***' : 'пусто'
-        });
-
-        if ((email && email.length > 0) || (phone && phone.length > 0)) {
-          this.log('✅ Найдены контакты в полях формы');
-          return { email, phone };
-        }
-
-        this.log('❌ Контактные данные не найдены');
-        return null;
+        return { email, phone };
       } catch (error) {
         this.log('❌ Ошибка получения контактов:', error);
         return null;
@@ -5517,6 +5281,15 @@
 
     // Определение состояния пользователя
     getUserState: function () {
+      // Наличие профиля Tilda Members — обязательный первый уровень доступа.
+      // Контакт из checkout-формы или tilda_user_* авторизацией не считается.
+      if (!this.getUserContact()) {
+        console.log(
+          '❌ getUserState: нет авторизованного профиля Tilda → not_registered'
+        );
+        return 'not_registered';
+      }
+
       // Если проект в режиме WITHOUT_BOT — считаем пользователя активным без Telegram
       if (this.state.operationMode === 'WITHOUT_BOT') {
         console.log(
@@ -5553,6 +5326,9 @@
 
     // Проверка возможности использования бонусов
     canSpendBonuses: function () {
+      if (!this.getUserContact()) {
+        return false;
+      }
       if (this.state.operationMode === 'WITHOUT_BOT') {
         return true;
       }
