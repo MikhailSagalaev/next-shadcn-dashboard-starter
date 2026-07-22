@@ -7,7 +7,7 @@
 
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import type { ProductMarkingStatus } from '@prisma/client';
+import type { Prisma, ProductMarkingStatus } from '@prisma/client';
 
 export interface CreateProductInput {
   projectId: string;
@@ -28,6 +28,53 @@ export interface CreateProductInput {
 }
 
 export class ProductService {
+  private static buildWhere(
+    projectId: string,
+    filters?: {
+      categoryId?: string;
+      isActive?: boolean;
+      markingStatus?: ProductMarkingStatus;
+      needsSetup?: boolean;
+      search?: string;
+    }
+  ): Prisma.ProductWhereInput {
+    const readinessFilter: Prisma.ProductWhereInput | undefined =
+      filters?.needsSetup
+        ? {
+            OR: [
+              { markingStatus: 'UNKNOWN' },
+              { vatCode: null },
+              { markingStatus: 'MARKED_REQUIRED', gtin: null }
+            ]
+          }
+        : undefined;
+    const searchFilter: Prisma.ProductWhereInput | undefined = filters?.search
+      ? {
+          OR: [
+            { name: { contains: filters.search, mode: 'insensitive' } },
+            { sku: { contains: filters.search, mode: 'insensitive' } },
+            {
+              externalId: {
+                contains: filters.search,
+                mode: 'insensitive'
+              }
+            },
+            { gtin: { contains: filters.search } }
+          ]
+        }
+      : undefined;
+
+    return {
+      projectId,
+      categoryId: filters?.categoryId,
+      isActive: filters?.isActive,
+      markingStatus: filters?.markingStatus,
+      AND: [readinessFilter, searchFilter].filter(
+        (condition): condition is Prisma.ProductWhereInput => Boolean(condition)
+      )
+    };
+  }
+
   static async createProduct(data: CreateProductInput) {
     try {
       const product = await db.product.create({ data });
@@ -53,26 +100,75 @@ export class ProductService {
   ) {
     try {
       return await db.product.findMany({
-        where: {
-          projectId,
-          categoryId: filters?.categoryId,
-          isActive: filters?.isActive,
-          markingStatus: filters?.markingStatus,
-          ...(filters?.search
-            ? {
-                OR: [
-                  { name: { contains: filters.search, mode: 'insensitive' } },
-                  { sku: { contains: filters.search, mode: 'insensitive' } },
-                  { gtin: { contains: filters.search } }
-                ]
-              }
-            : {})
-        },
+        where: this.buildWhere(projectId, filters),
         include: { category: true },
         orderBy: { createdAt: 'desc' }
       });
     } catch (error) {
       logger.error('Ошибка получения товаров', { error, projectId });
+      throw error;
+    }
+  }
+
+  static async getProductsPage(
+    projectId: string,
+    options: {
+      page: number;
+      pageSize: number;
+      categoryId?: string;
+      isActive?: boolean;
+      markingStatus?: ProductMarkingStatus;
+      needsSetup?: boolean;
+      search?: string;
+    }
+  ) {
+    const { page, pageSize, ...filters } = options;
+    const where = this.buildWhere(projectId, filters);
+    const needsSetupWhere = this.buildWhere(projectId, { needsSetup: true });
+
+    try {
+      const [products, total, catalogTotal, needsSetup, stock] =
+        await db.$transaction([
+          db.product.findMany({
+            where,
+            include: { category: true },
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * pageSize,
+            take: pageSize
+          }),
+          db.product.count({ where }),
+          db.product.count({ where: { projectId } }),
+          db.product.count({ where: needsSetupWhere }),
+          db.product.aggregate({
+            where: { projectId },
+            _sum: { stockOnHand: true, stockReserved: true }
+          })
+        ]);
+
+      return {
+        products,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize))
+        },
+        summary: {
+          total: catalogTotal,
+          needsSetup,
+          availableUnits: Math.max(
+            0,
+            (stock._sum.stockOnHand ?? 0) - (stock._sum.stockReserved ?? 0)
+          )
+        }
+      };
+    } catch (error) {
+      logger.error('Ошибка постраничной загрузки товаров', {
+        error,
+        projectId,
+        page,
+        pageSize
+      });
       throw error;
     }
   }

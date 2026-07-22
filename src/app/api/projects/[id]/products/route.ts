@@ -49,10 +49,34 @@ export async function GET(
     const isActive =
       url.searchParams.get('isActive') === 'true' ? true : undefined;
     const markingParam = url.searchParams.get('markingStatus');
-    const markingStatus = markingParam
-      ? ProductMarkingStatus[markingParam as keyof typeof ProductMarkingStatus]
-      : undefined;
+    const needsSetup = markingParam === 'NEEDS_SETUP';
+    const markingStatus =
+      markingParam && !needsSetup
+        ? ProductMarkingStatus[
+            markingParam as keyof typeof ProductMarkingStatus
+          ]
+        : undefined;
     const search = url.searchParams.get('search') || undefined;
+
+    const pageParam = url.searchParams.get('page');
+    const pageSizeParam = url.searchParams.get('pageSize');
+    if (pageParam || pageSizeParam) {
+      const page = Math.max(1, Math.floor(Number(pageParam) || 1));
+      const pageSize = Math.min(
+        100,
+        Math.max(1, Math.floor(Number(pageSizeParam) || 25))
+      );
+      const result = await ProductService.getProductsPage(projectId, {
+        page,
+        pageSize,
+        categoryId,
+        isActive,
+        markingStatus,
+        needsSetup,
+        search
+      });
+      return NextResponse.json(result);
+    }
 
     const products = await ProductService.getProducts(projectId, {
       categoryId,

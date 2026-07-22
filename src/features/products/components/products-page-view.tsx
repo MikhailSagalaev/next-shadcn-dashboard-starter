@@ -1,7 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileUp, Package, Save } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileUp,
+  Package,
+  Pencil,
+  Search,
+  SlidersHorizontal
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,314 +30,360 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { YOOKASSA_VAT_CODES } from '@/lib/yookassa/receipt-options';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table';
+import { CatalogImportDialog } from './catalog-import-dialog';
+import {
+  type CatalogPagination,
+  type CatalogSummary,
+  MARKING_STATUS_LABELS,
+  type ProductRow,
+  productNeedsSetup
+} from './product-catalog-types';
+import { ProductEditDialog } from './product-edit-dialog';
 
-type MarkingStatus =
-  | 'UNKNOWN'
-  | 'MARKED_REQUIRED'
-  | 'LEGACY_UNMARKED_ALLOWED'
-  | 'NOT_SUBJECT';
-
-interface ProductRow {
-  id: string;
-  name: string;
-  sku: string | null;
-  externalId: string | null;
-  gtin: string | null;
-  price: string | number;
-  markingStatus: MarkingStatus;
-  vatCode: number | null;
-  paymentSubject: string | null;
-  measure: string;
-  stockOnHand: number;
-  stockReserved: number;
-}
-
-const statusLabels: Record<MarkingStatus, string> = {
-  UNKNOWN: 'Не настроен',
-  MARKED_REQUIRED: 'Маркируемый',
-  LEGACY_UNMARKED_ALLOWED: 'Старый остаток',
-  NOT_SUBJECT: 'Не маркируется'
+const PAGE_SIZE = 25;
+const EMPTY_SUMMARY: CatalogSummary = {
+  total: 0,
+  needsSetup: 0,
+  availableUnits: 0
 };
 
 export function ProductsPageView({ projectId }: { projectId: string }) {
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [summary, setSummary] = useState<CatalogSummary>(EMPTY_SUMMARY);
+  const [pagination, setPagination] = useState<CatalogPagination>({
+    page: 1,
+    pageSize: PAGE_SIZE,
+    total: 0,
+    totalPages: 1
+  });
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [importOpen, setImportOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/projects/${projectId}/products`);
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(PAGE_SIZE)
+      });
+      if (search) params.set('search', search);
+      if (status !== 'ALL') params.set('markingStatus', status);
+      const response = await fetch(
+        `/api/projects/${projectId}/products?${params.toString()}`
+      );
       const data = await response.json();
-      if (!response.ok)
+      if (!response.ok) {
         throw new Error(data.error || 'Не удалось загрузить каталог');
-      setProducts(data.products || []);
+      }
+      setProducts(data.products ?? []);
+      setSummary(data.summary ?? EMPTY_SUMMARY);
+      setPagination(data.pagination);
+      if (page > data.pagination.totalPages)
+        setPage(data.pagination.totalPages);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Ошибка каталога');
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [page, projectId, search, status]);
 
   useEffect(() => void load(), [load]);
 
-  const patchRow = (id: string, values: Partial<ProductRow>) =>
-    setProducts((current) =>
-      current.map((row) => (row.id === id ? { ...row, ...values } : row))
-    );
-
-  async function save(product: ProductRow) {
-    setSavingId(product.id);
-    try {
-      const response = await fetch(
-        `/api/projects/${projectId}/products/${product.id}`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: product.name,
-            sku: product.sku || undefined,
-            externalId: product.externalId || null,
-            gtin: product.gtin || null,
-            price: Number(product.price),
-            markingStatus: product.markingStatus,
-            vatCode: product.vatCode,
-            paymentSubject: product.paymentSubject || null,
-            measure: product.measure,
-            stockOnHand: Number(product.stockOnHand)
-          })
-        }
-      );
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || 'Не удалось сохранить товар');
-      toast.success('Товар сохранён');
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Ошибка сохранения');
-    } finally {
-      setSavingId(null);
-    }
+  function changeStatus(nextStatus: string) {
+    setStatus(nextStatus);
+    setPage(1);
   }
 
-  async function importCsv(file: File) {
-    try {
-      const response = await fetch(
-        `/api/projects/${projectId}/products/import`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/csv; charset=utf-8' },
-          body: await file.text()
-        }
-      );
-      const data = await response.json();
-      if (!response.ok && response.status !== 207)
-        throw new Error(data.error || 'Ошибка импорта');
-      toast.success(
-        `Импорт: создано ${data.created}, обновлено ${data.updated}`
-      );
-      if (data.errors?.length) toast.warning(`Ошибок: ${data.errors.length}`);
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Ошибка импорта');
-    } finally {
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  }
-
-  const unconfigured = products.filter(
-    (product) => product.markingStatus === 'UNKNOWN'
-  ).length;
+  const firstItem = pagination.total
+    ? (pagination.page - 1) * pagination.pageSize + 1
+    : 0;
+  const lastItem = Math.min(
+    pagination.page * pagination.pageSize,
+    pagination.total
+  );
 
   return (
     <div className='flex flex-1 flex-col space-y-6'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <Heading
           title='Каталог и маркировка'
-          description='GTIN, фискальные реквизиты и складские остатки'
+          description='Настройте товары для чеков ЮKassa и работы с кодами маркировки'
         />
-        <div>
-          <input
-            ref={fileRef}
-            type='file'
-            accept='.csv,text/csv'
-            className='hidden'
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void importCsv(file);
-            }}
-          />
-          <Button variant='outline' onClick={() => fileRef.current?.click()}>
-            <FileUp className='mr-2 h-4 w-4' /> Импорт CSV
-          </Button>
-        </div>
+        <Button variant='outline' onClick={() => setImportOpen(true)}>
+          <FileUp /> Импорт CSV
+        </Button>
       </div>
       <Separator />
+
       <div className='grid gap-4 md:grid-cols-3'>
-        <Card>
-          <CardHeader className='pb-2'>
-            <CardDescription>Позиций</CardDescription>
-            <CardTitle>{products.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className='pb-2'>
-            <CardDescription>Требуют настройки</CardDescription>
-            <CardTitle>{unconfigured}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className='pb-2'>
-            <CardDescription>Доступно единиц</CardDescription>
-            <CardTitle>
-              {products.reduce(
-                (sum, product) =>
-                  sum +
-                  Math.max(0, product.stockOnHand - product.stockReserved),
-                0
-              )}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+        <SummaryCard label='Товаров в каталоге' value={summary.total} />
+        <SummaryCard
+          label='Требуют настройки'
+          value={summary.needsSetup}
+          tone={summary.needsSetup ? 'warning' : 'default'}
+        />
+        <SummaryCard label='Доступно единиц' value={summary.availableUnits} />
       </div>
+
       <Card>
-        <CardHeader>
-          <CardTitle className='flex items-center gap-2'>
-            <Package className='h-5 w-5' /> Товары
-          </CardTitle>
-          <CardDescription>
-            Каждая строка — отдельная продаваемая позиция или вариант Tilda.
-          </CardDescription>
+        <CardHeader className='gap-4'>
+          <div>
+            <CardTitle className='flex items-center gap-2'>
+              <Package className='h-5 w-5' /> Товары
+            </CardTitle>
+            <CardDescription className='mt-1'>
+              Tilda создаёт и обновляет коммерческие данные. Здесь вы заполняете
+              только реквизиты для чека и маркировки.
+            </CardDescription>
+          </div>
+          <div className='flex flex-col gap-3 sm:flex-row'>
+            <div className='relative min-w-0 flex-1'>
+              <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
+              <Input
+                value={searchInput}
+                className='pl-9'
+                placeholder='Название, SKU, External ID или GTIN'
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+            </div>
+            <Select value={status} onValueChange={changeStatus}>
+              <SelectTrigger className='w-full sm:w-64'>
+                <SlidersHorizontal className='h-4 w-4' />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='ALL'>Все товары</SelectItem>
+                <SelectItem value='NEEDS_SETUP'>Требуют настройки</SelectItem>
+                <SelectItem value='MARKED_REQUIRED'>Маркируемые</SelectItem>
+                <SelectItem value='NOT_SUBJECT'>
+                  Не подлежат маркировке
+                </SelectItem>
+                <SelectItem value='LEGACY_UNMARKED_ALLOWED'>
+                  Старые остатки
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
-        <CardContent className='space-y-4'>
+        <CardContent className='px-0'>
           {loading ? (
-            <div>Загрузка…</div>
+            <CatalogSkeleton />
           ) : products.length === 0 ? (
-            <div className='text-muted-foreground py-8 text-center'>
-              Каталог пуст. Загрузите CSV из Tilda.
+            <div className='flex flex-col items-center px-6 py-16 text-center'>
+              <Package className='text-muted-foreground/60 mb-4 h-10 w-10' />
+              <div className='font-medium'>Товары не найдены</div>
+              <div className='text-muted-foreground mt-1 max-w-md text-sm'>
+                {search || status !== 'ALL'
+                  ? 'Измените запрос или сбросьте фильтр.'
+                  : 'Товары появятся из заказов Tilda или после импорта CSV.'}
+              </div>
+              {(search || status !== 'ALL') && (
+                <Button
+                  variant='outline'
+                  className='mt-4'
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearch('');
+                    changeStatus('ALL');
+                  }}
+                >
+                  Сбросить фильтры
+                </Button>
+              )}
             </div>
           ) : (
-            products.map((product) => (
-              <div key={product.id} className='space-y-3 rounded-lg border p-4'>
-                <div className='flex flex-wrap items-center justify-between gap-2'>
-                  <div className='font-medium'>{product.name}</div>
-                  <Badge
-                    variant={
-                      product.markingStatus === 'UNKNOWN'
-                        ? 'destructive'
-                        : 'outline'
-                    }
-                  >
-                    {statusLabels[product.markingStatus]}
-                  </Badge>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className='pl-6'>Товар</TableHead>
+                    <TableHead>Готовность</TableHead>
+                    <TableHead>Маркировка</TableHead>
+                    <TableHead>НДС</TableHead>
+                    <TableHead>Остаток</TableHead>
+                    <TableHead className='pr-6 text-right'>Действие</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {products.map((product) => {
+                    const needsSetup = productNeedsSetup(product);
+                    return (
+                      <TableRow key={product.id}>
+                        <TableCell className='max-w-[28rem] py-3 pl-6'>
+                          <div className='truncate font-medium'>
+                            {product.name}
+                          </div>
+                          <div className='text-muted-foreground mt-1 flex gap-3 text-xs'>
+                            {product.sku && <span>SKU: {product.sku}</span>}
+                            {product.externalId && (
+                              <span className='max-w-48 truncate'>
+                                Tilda: {product.externalId}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={needsSetup ? 'destructive' : 'secondary'}
+                          >
+                            {needsSetup ? 'Нужно настроить' : 'Готов'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            {MARKING_STATUS_LABELS[product.markingStatus]}
+                          </div>
+                          {product.gtin && (
+                            <div className='text-muted-foreground mt-1 text-xs'>
+                              GTIN {product.gtin}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {product.vatCode ? `Код ${product.vatCode}` : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            {Math.max(
+                              0,
+                              product.stockOnHand - product.stockReserved
+                            )}{' '}
+                            доступно
+                          </div>
+                          {product.stockReserved > 0 && (
+                            <div className='text-muted-foreground mt-1 text-xs'>
+                              {product.stockReserved} в резерве
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className='pr-6 text-right'>
+                          <Button
+                            variant={needsSetup ? 'default' : 'outline'}
+                            size='sm'
+                            onClick={() => setEditingProduct(product)}
+                          >
+                            <Pencil /> {needsSetup ? 'Настроить' : 'Изменить'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+
+              <div className='flex flex-col gap-3 border-t px-6 py-4 sm:flex-row sm:items-center sm:justify-between'>
+                <div className='text-muted-foreground text-sm'>
+                  Показано {firstItem}–{lastItem} из {pagination.total}
                 </div>
-                <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-                  <Input
-                    value={product.name}
-                    aria-label='Название'
-                    onChange={(e) =>
-                      patchRow(product.id, { name: e.target.value })
-                    }
-                  />
-                  <Input
-                    value={product.sku ?? ''}
-                    placeholder='SKU'
-                    onChange={(e) =>
-                      patchRow(product.id, { sku: e.target.value })
-                    }
-                  />
-                  <Input
-                    value={product.externalId ?? ''}
-                    placeholder='External ID Tilda'
-                    onChange={(e) =>
-                      patchRow(product.id, { externalId: e.target.value })
-                    }
-                  />
-                  <Input
-                    value={product.gtin ?? ''}
-                    placeholder='GTIN (14 цифр)'
-                    inputMode='numeric'
-                    onChange={(e) =>
-                      patchRow(product.id, { gtin: e.target.value })
-                    }
-                  />
-                  <Select
-                    value={product.markingStatus}
-                    onValueChange={(value: MarkingStatus) =>
-                      patchRow(product.id, { markingStatus: value })
+                <div className='flex items-center gap-2'>
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    disabled={pagination.page <= 1}
+                    onClick={() =>
+                      setPage((current) => Math.max(1, current - 1))
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(statusLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={product.vatCode ? String(product.vatCode) : 'unset'}
-                    onValueChange={(value) =>
-                      patchRow(product.id, {
-                        vatCode: value === 'unset' ? null : Number(value)
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder='Ставка НДС' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value='unset'>НДС не настроен</SelectItem>
-                      {YOOKASSA_VAT_CODES.map((item) => (
-                        <SelectItem key={item.value} value={String(item.value)}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    value={product.paymentSubject ?? ''}
-                    placeholder='Предмет расчёта'
-                    onChange={(e) =>
-                      patchRow(product.id, { paymentSubject: e.target.value })
-                    }
-                  />
-                  <Input
-                    type='number'
-                    min={0}
-                    value={product.stockOnHand}
-                    placeholder='Остаток'
-                    onChange={(e) =>
-                      patchRow(product.id, {
-                        stockOnHand: Number(e.target.value)
-                      })
-                    }
-                  />
-                </div>
-                <div className='flex items-center justify-between text-sm'>
-                  <span className='text-muted-foreground'>
-                    Резерв: {product.stockReserved} · Доступно:{' '}
-                    {Math.max(0, product.stockOnHand - product.stockReserved)}
+                    <ChevronLeft /> Назад
+                  </Button>
+                  <span className='min-w-20 text-center text-sm'>
+                    {pagination.page} из {pagination.totalPages}
                   </span>
                   <Button
+                    variant='outline'
                     size='sm'
-                    disabled={savingId === product.id}
-                    onClick={() => void save(product)}
+                    disabled={pagination.page >= pagination.totalPages}
+                    onClick={() =>
+                      setPage((current) =>
+                        Math.min(pagination.totalPages, current + 1)
+                      )
+                    }
                   >
-                    <Save className='mr-2 h-4 w-4' />
-                    Сохранить
+                    Далее <ChevronRight />
                   </Button>
                 </div>
               </div>
-            ))
+            </>
           )}
         </CardContent>
       </Card>
+
+      <CatalogImportDialog
+        projectId={projectId}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={async () => {
+          if (page === 1) await load();
+          else setPage(1);
+        }}
+      />
+      <ProductEditDialog
+        projectId={projectId}
+        product={editingProduct}
+        open={Boolean(editingProduct)}
+        onOpenChange={(open) => {
+          if (!open) setEditingProduct(null);
+        }}
+        onSaved={load}
+      />
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  tone = 'default'
+}: {
+  label: string;
+  value: number;
+  tone?: 'default' | 'warning';
+}) {
+  return (
+    <Card className={tone === 'warning' ? 'border-amber-300/70' : undefined}>
+      <CardHeader className='pb-3'>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className='text-3xl tabular-nums'>{value}</CardTitle>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function CatalogSkeleton() {
+  return (
+    <div className='space-y-1 px-6 pb-5'>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className='flex items-center gap-6 border-b py-4'>
+          <div className='flex-1 space-y-2'>
+            <Skeleton className='h-4 w-2/3' />
+            <Skeleton className='h-3 w-1/3' />
+          </div>
+          <Skeleton className='h-6 w-28' />
+          <Skeleton className='h-8 w-24' />
+        </div>
+      ))}
     </div>
   );
 }
