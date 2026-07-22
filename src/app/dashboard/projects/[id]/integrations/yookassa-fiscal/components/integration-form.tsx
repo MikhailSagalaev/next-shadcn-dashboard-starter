@@ -1,8 +1,17 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Loader2, Save, TestTube2, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  CheckCircle2,
+  Loader2,
+  Save,
+  ShieldCheck,
+  TestTube2,
+  Trash2
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +32,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { YOOKASSA_VAT_CODES } from '@/lib/yookassa/receipt-options';
 
 const YOOKASSA_TIMEZONES = [
   { value: 1, label: '1 — UTC+2 · Калининград' },
@@ -40,6 +50,7 @@ const YOOKASSA_TIMEZONES = [
 
 type Integration = {
   shopId: string;
+  hasSecretKey: boolean;
   isActive: boolean;
   receiptTimezone: number;
   deliveryVatCode: number | null;
@@ -144,155 +155,265 @@ export function YooKassaFiscalForm({
   }
 
   return (
-    <Card className='max-w-3xl'>
-      <CardHeader>
-        <div className='flex items-center justify-between gap-4'>
-          <CardTitle>Касса магазина</CardTitle>
-          <Badge variant={integration?.isActive ? 'default' : 'secondary'}>
-            {integration?.isActive
-              ? 'Активна'
-              : integration
-                ? 'Настроена'
-                : 'Не подключена'}
-          </Badge>
-        </div>
-        <CardDescription>
-          Это реквизиты ЮKassa владельца магазина. Они не связаны с оплатой
-          подписки Gupil и используются только для чеков его покупателей.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className='space-y-5' onSubmit={save}>
-          <div className='space-y-2'>
-            <Label htmlFor='shop-id'>shopId</Label>
-            <Input
-              id='shop-id'
-              value={shopId}
-              onChange={(event) => {
-                setShopId(event.target.value);
-                setIsActive(false);
-              }}
-              required
-              inputMode='numeric'
-              autoComplete='off'
-            />
+    <div className='max-w-3xl space-y-6'>
+      <Card>
+        <CardHeader>
+          <div className='flex items-center justify-between gap-4'>
+            <CardTitle>Касса магазина</CardTitle>
+            <Badge variant={integration?.isActive ? 'default' : 'secondary'}>
+              {integration?.isActive
+                ? 'Активна'
+                : integration?.lastTestedAt
+                  ? 'Проверена, но выключена'
+                  : integration
+                    ? 'Настроена'
+                    : 'Не подключена'}
+            </Badge>
           </div>
-          <div className='space-y-2'>
-            <Label htmlFor='secret-key'>Секретный ключ ЮKassa</Label>
-            <Input
-              id='secret-key'
-              type='password'
-              value={secretKey}
-              onChange={(event) => {
-                setSecretKey(event.target.value);
-                setIsActive(false);
-              }}
-              required={!integration}
-              autoComplete='new-password'
-              placeholder={
-                integration ? 'Оставьте пустым, чтобы не менять' : ''
-              }
-            />
-            <p className='text-muted-foreground text-xs'>
-              Ключ хранится зашифрованным и после сохранения не показывается.
-            </p>
-          </div>
-          <div className='grid gap-4 sm:grid-cols-2'>
+          <CardDescription>
+            Это реквизиты ЮKassa владельца магазина. Они не связаны с оплатой
+            подписки Gupil и используются только для чеков его покупателей.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className='space-y-5' onSubmit={save}>
             <div className='space-y-2'>
-              <Label htmlFor='timezone'>Часовая зона кассы</Label>
-              <Select
-                value={String(timezone)}
-                onValueChange={(value) => setTimezone(Number(value))}
-              >
-                <SelectTrigger id='timezone' className='w-full'>
-                  <SelectValue placeholder='Выберите часовую зону' />
-                </SelectTrigger>
-                <SelectContent>
-                  {YOOKASSA_TIMEZONES.map((item) => (
-                    <SelectItem key={item.value} value={String(item.value)}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className='text-muted-foreground text-xs'>
-                Это номер зоны из справочника ЮKassa, а не смещение UTC. Для
-                Москвы ЮKassa использует номер 2.
-              </p>
-            </div>
-            <div className='space-y-2'>
-              <Label htmlFor='delivery-vat'>Код НДС доставки</Label>
+              <Label htmlFor='shop-id'>shopId</Label>
               <Input
-                id='delivery-vat'
-                type='number'
-                min={1}
-                max={12}
-                value={deliveryVatCode}
-                onChange={(event) => setDeliveryVatCode(event.target.value)}
-                placeholder='Если доставка бесплатная — не заполняйте'
+                id='shop-id'
+                value={shopId}
+                onChange={(event) => {
+                  setShopId(event.target.value);
+                  setIsActive(false);
+                }}
+                required
+                inputMode='numeric'
+                autoComplete='off'
               />
             </div>
-          </div>
-          <div className='flex items-center justify-between rounded-lg border p-4'>
-            <div>
-              <Label htmlFor='active'>Отправлять маркировочные чеки</Label>
+            <div className='space-y-2'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <Label htmlFor='secret-key'>Секретный ключ ЮKassa</Label>
+                {integration?.hasSecretKey && (
+                  <Badge variant='outline' className='text-green-700'>
+                    <ShieldCheck className='mr-1 h-3 w-3' />
+                    Ключ сохранён
+                  </Badge>
+                )}
+              </div>
+              <Input
+                id='secret-key'
+                type='password'
+                value={secretKey}
+                onChange={(event) => {
+                  setSecretKey(event.target.value);
+                  setIsActive(false);
+                }}
+                required={!integration}
+                autoComplete='new-password'
+                placeholder={
+                  integration
+                    ? 'Сохранён — введите новый только для замены'
+                    : ''
+                }
+              />
               <p className='text-muted-foreground text-xs'>
-                Включение доступно после успешной проверки подключения.
+                В целях безопасности сохранённый ключ нельзя посмотреть или
+                скопировать. Поле остаётся пустым; это не означает, что ключ
+                потерян.
               </p>
             </div>
-            <Switch
-              id='active'
-              checked={isActive}
-              disabled={!integration?.lastTestedAt}
-              onCheckedChange={setIsActive}
-            />
-          </div>
-          {integration?.lastTestedAt && (
-            <p className='flex items-center gap-2 text-sm text-green-700'>
-              <CheckCircle2 className='h-4 w-4' />
-              Проверено{' '}
-              {new Date(integration.lastTestedAt).toLocaleString('ru-RU')}
-            </p>
-          )}
-          {integration?.lastError && (
-            <p className='text-destructive text-sm'>{integration.lastError}</p>
-          )}
-          <div className='flex flex-wrap gap-2'>
-            <Button type='submit' disabled={action !== null}>
-              {action === 'save' ? (
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-              ) : (
-                <Save className='mr-2 h-4 w-4' />
-              )}
-              Сохранить
-            </Button>
-            <Button
-              type='button'
-              variant='outline'
-              disabled={!integration || action !== null}
-              onClick={testConnection}
-            >
-              {action === 'test' ? (
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-              ) : (
-                <TestTube2 className='mr-2 h-4 w-4' />
-              )}
-              Проверить подключение
-            </Button>
-            {integration && (
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <div className='space-y-2'>
+                <Label htmlFor='timezone'>Часовая зона кассы</Label>
+                <Select
+                  value={String(timezone)}
+                  onValueChange={(value) => setTimezone(Number(value))}
+                >
+                  <SelectTrigger id='timezone' className='w-full'>
+                    <SelectValue placeholder='Выберите часовую зону' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YOOKASSA_TIMEZONES.map((item) => (
+                      <SelectItem key={item.value} value={String(item.value)}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className='text-muted-foreground text-xs'>
+                  Это номер зоны из справочника ЮKassa, а не смещение UTC. Для
+                  Москвы ЮKassa использует номер 2.
+                </p>
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='delivery-vat'>Код НДС доставки</Label>
+                <Select
+                  value={deliveryVatCode || 'not-applicable'}
+                  onValueChange={(value) =>
+                    setDeliveryVatCode(value === 'not-applicable' ? '' : value)
+                  }
+                >
+                  <SelectTrigger id='delivery-vat' className='w-full'>
+                    <SelectValue placeholder='Выберите ставку' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='not-applicable'>
+                      Не указывать — платной доставки нет
+                    </SelectItem>
+                    {YOOKASSA_VAT_CODES.map((item) => (
+                      <SelectItem key={item.value} value={String(item.value)}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className='text-muted-foreground text-xs'>
+                  Ставка относится именно к отдельной платной строке «Доставка»
+                  в чеке. Код 1 — без НДС, код 2 — ставка 0%: это разные режимы.
+                  Выберите ставку продавца по данным бухгалтера или настройкам
+                  кассы. Если доставка бесплатная либо включена в цену товаров,
+                  оставьте «Не указывать».
+                </p>
+              </div>
+            </div>
+            <div className='flex items-center justify-between rounded-lg border p-4'>
+              <div>
+                <Label htmlFor='active'>Отправлять маркировочные чеки</Label>
+                <p className='text-muted-foreground text-xs'>
+                  Включение доступно после успешной проверки подключения.
+                </p>
+              </div>
+              <Switch
+                id='active'
+                checked={isActive}
+                disabled={!integration?.lastTestedAt}
+                onCheckedChange={setIsActive}
+              />
+            </div>
+            {integration?.lastTestedAt && (
+              <p className='flex items-center gap-2 text-sm text-green-700'>
+                <CheckCircle2 className='h-4 w-4' />
+                Проверено{' '}
+                {new Date(integration.lastTestedAt).toLocaleString('ru-RU')}
+              </p>
+            )}
+            {integration?.lastError && (
+              <p className='text-destructive text-sm'>
+                {integration.lastError}
+              </p>
+            )}
+            <div className='flex flex-wrap gap-2'>
+              <Button type='submit' disabled={action !== null}>
+                {action === 'save' ? (
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                ) : (
+                  <Save className='mr-2 h-4 w-4' />
+                )}
+                Сохранить
+              </Button>
               <Button
                 type='button'
-                variant='destructive'
-                disabled={action !== null}
-                onClick={remove}
+                variant='outline'
+                disabled={!integration || action !== null}
+                onClick={testConnection}
               >
-                <Trash2 className='mr-2 h-4 w-4' />
-                Удалить
+                {action === 'test' ? (
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                ) : (
+                  <TestTube2 className='mr-2 h-4 w-4' />
+                )}
+                Проверить подключение
               </Button>
-            )}
+              {integration && (
+                <Button
+                  type='button'
+                  variant='destructive'
+                  disabled={action !== null}
+                  onClick={remove}
+                >
+                  <Trash2 className='mr-2 h-4 w-4' />
+                  Удалить
+                </Button>
+              )}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Что делать после подключения</CardTitle>
+          <CardDescription>
+            Проверка подтверждает реквизиты, но отправка чеков начинается только
+            после отдельного включения.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className='space-y-4 text-sm'>
+          <div className='flex gap-3'>
+            <span className='bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-medium'>
+              1
+            </span>
+            <div>
+              <p className='font-medium'>Активируйте интеграцию</p>
+              <p className='text-muted-foreground'>
+                {integration?.isActive
+                  ? 'Интеграция включена и готова ставить маркировочные чеки в очередь.'
+                  : 'Включите «Отправлять маркировочные чеки» выше и нажмите «Сохранить». Сейчас проверенная, но выключенная интеграция чеки не отправляет.'}
+              </p>
+            </div>
           </div>
-        </form>
-      </CardContent>
-    </Card>
+          <div className='flex gap-3'>
+            <span className='bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-medium'>
+              2
+            </span>
+            <div>
+              <p className='font-medium'>Настройте каталог</p>
+              <p className='text-muted-foreground'>
+                Для каждого товара задайте соответствие позиции Tilda, статус
+                маркировки, GTIN и ставку НДС.
+              </p>
+              <Link
+                href={`/dashboard/projects/${projectId}/products`}
+                className='text-primary mt-1 inline-flex items-center hover:underline'
+              >
+                Перейти в каталог <ArrowRight className='ml-1 h-3 w-3' />
+              </Link>
+            </div>
+          </div>
+          <div className='flex gap-3'>
+            <span className='bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-medium'>
+              3
+            </span>
+            <div>
+              <p className='font-medium'>Обработайте тестовый заказ</p>
+              <p className='text-muted-foreground'>
+                Проведите минимальную реальную оплату через Tilda, откройте
+                заказ, отсканируйте Data Matrix каждой упаковки и сформируйте
+                чек полного расчёта.
+              </p>
+              <Link
+                href={`/dashboard/projects/${projectId}/orders`}
+                className='text-primary mt-1 inline-flex items-center hover:underline'
+              >
+                Перейти к заказам <ArrowRight className='ml-1 h-3 w-3' />
+              </Link>
+            </div>
+          </div>
+          <div className='flex gap-3'>
+            <span className='bg-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-medium'>
+              4
+            </span>
+            <div>
+              <p className='font-medium'>Дождитесь регистрации чека</p>
+              <p className='text-muted-foreground'>
+                Отгружайте заказ только после статуса чека SUCCEEDED и
+                фискального статуса заказа SETTLED.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

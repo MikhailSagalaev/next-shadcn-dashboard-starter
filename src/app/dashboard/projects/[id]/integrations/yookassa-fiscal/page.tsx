@@ -34,6 +34,7 @@ export default async function YooKassaFiscalPage({
       isActive: true,
       receiptTimezone: true,
       deliveryVatCode: true,
+      secretKeyEncrypted: true,
       lastTestedAt: true,
       lastError: true
     }
@@ -58,8 +59,13 @@ export default async function YooKassaFiscalPage({
         integration={
           integration
             ? {
-                ...integration,
-                lastTestedAt: integration.lastTestedAt?.toISOString() ?? null
+                shopId: integration.shopId,
+                isActive: integration.isActive,
+                receiptTimezone: integration.receiptTimezone,
+                deliveryVatCode: integration.deliveryVatCode,
+                hasSecretKey: Boolean(integration.secretKeyEncrypted),
+                lastTestedAt: integration.lastTestedAt?.toISOString() ?? null,
+                lastError: integration.lastError
               }
             : null
         }

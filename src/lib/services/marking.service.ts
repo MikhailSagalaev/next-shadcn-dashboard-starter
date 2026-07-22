@@ -266,8 +266,7 @@ export class MarkingService {
       await tx.order.update({
         where: { id: order.id },
         data: {
-          fiscalState: 'SETTLEMENT_PENDING',
-          fulfillmentState: 'READY_TO_SHIP'
+          fiscalState: 'SETTLEMENT_PENDING'
         }
       });
       return receipt;

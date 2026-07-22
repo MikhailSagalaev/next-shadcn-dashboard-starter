@@ -22,6 +22,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { YOOKASSA_VAT_CODES } from '@/lib/yookassa/receipt-options';
 
 type MarkingStatus =
   | 'UNKNOWN'
@@ -271,18 +272,26 @@ export function ProductsPageView({ projectId }: { projectId: string }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input
-                    type='number'
-                    min={1}
-                    max={12}
-                    value={product.vatCode ?? ''}
-                    placeholder='Код НДС'
-                    onChange={(e) =>
+                  <Select
+                    value={product.vatCode ? String(product.vatCode) : 'unset'}
+                    onValueChange={(value) =>
                       patchRow(product.id, {
-                        vatCode: e.target.value ? Number(e.target.value) : null
+                        vatCode: value === 'unset' ? null : Number(value)
                       })
                     }
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder='Ставка НДС' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='unset'>НДС не настроен</SelectItem>
+                      {YOOKASSA_VAT_CODES.map((item) => (
+                        <SelectItem key={item.value} value={String(item.value)}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
                     value={product.paymentSubject ?? ''}
                     placeholder='Предмет расчёта'
