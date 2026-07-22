@@ -14,8 +14,29 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+
+const YOOKASSA_TIMEZONES = [
+  { value: 1, label: '1 — UTC+2 · Калининград' },
+  { value: 2, label: '2 — UTC+3 · Москва, Санкт-Петербург' },
+  { value: 3, label: '3 — UTC+4 · Астрахань, Самара, Ульяновск' },
+  { value: 4, label: '4 — UTC+5 · Екатеринбург, Челябинск, Уфа' },
+  { value: 5, label: '5 — UTC+6 · Омск' },
+  { value: 6, label: '6 — UTC+7 · Красноярск, Новосибирск, Томск' },
+  { value: 7, label: '7 — UTC+8 · Иркутск, Улан-Удэ' },
+  { value: 8, label: '8 — UTC+9 · Чита, Якутск' },
+  { value: 9, label: '9 — UTC+10 · Хабаровск, Владивосток' },
+  { value: 10, label: '10 — UTC+11 · Магадан, Южно-Сахалинск' },
+  { value: 11, label: '11 — UTC+12 · Петропавловск-Камчатский' }
+] as const;
 
 type Integration = {
   shopId: string;
@@ -178,18 +199,25 @@ export function YooKassaFiscalForm({
           </div>
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-2'>
-              <Label htmlFor='timezone'>Код часовой зоны ЮKassa</Label>
-              <Input
-                id='timezone'
-                type='number'
-                min={1}
-                max={11}
-                value={timezone}
-                onChange={(event) => setTimezone(Number(event.target.value))}
-              />
+              <Label htmlFor='timezone'>Часовая зона кассы</Label>
+              <Select
+                value={String(timezone)}
+                onValueChange={(value) => setTimezone(Number(value))}
+              >
+                <SelectTrigger id='timezone' className='w-full'>
+                  <SelectValue placeholder='Выберите часовую зону' />
+                </SelectTrigger>
+                <SelectContent>
+                  {YOOKASSA_TIMEZONES.map((item) => (
+                    <SelectItem key={item.value} value={String(item.value)}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className='text-muted-foreground text-xs'>
-                Для Москвы — 2. Значение должно соответствовать настройкам
-                кассы.
+                Это номер зоны из справочника ЮKassa, а не смещение UTC. Для
+                Москвы ЮKassa использует номер 2.
               </p>
             </div>
             <div className='space-y-2'>

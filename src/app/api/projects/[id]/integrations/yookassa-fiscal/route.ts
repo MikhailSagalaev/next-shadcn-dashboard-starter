@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCurrentAdmin } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { encryptIntegrationSecret } from '@/lib/integrations/credential-encryption';
+import {
+  encryptIntegrationSecret,
+  IntegrationCredentialConfigurationError
+} from '@/lib/integrations/credential-encryption';
 import { logger } from '@/lib/logger';
 
 const settingsSchema = z.object({
@@ -130,11 +133,28 @@ export async function PUT(
 
     return NextResponse.json({ integration: safeIntegration(integration) });
   } catch (error) {
+    const errorDetails =
+      error instanceof Error
+        ? {
+            errorName: error.name,
+            errorMessage: error.message,
+            errorStack: error.stack
+          }
+        : { errorMessage: String(error) };
     logger.error(
       'Failed to save YooKassa fiscal integration',
-      { error },
+      errorDetails,
       'yookassa-fiscal-api'
     );
+    if (error instanceof IntegrationCredentialConfigurationError) {
+      return NextResponse.json(
+        {
+          error:
+            'На сервере не настроен технический ключ шифрования интеграций. Обратитесь к администратору Gupil.'
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { error: 'Не удалось сохранить настройки' },
       { status: 500 }

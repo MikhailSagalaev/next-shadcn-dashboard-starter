@@ -5,12 +5,20 @@ import {
   randomBytes
 } from 'crypto';
 
+export class IntegrationCredentialConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IntegrationCredentialConfigurationError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 function masterKey(): Buffer {
   const value =
     process.env.INTEGRATION_CREDENTIALS_ENCRYPTION_KEY ||
     process.env.ENCRYPTION_KEY;
   if (!value || value.length < 32) {
-    throw new Error(
+    throw new IntegrationCredentialConfigurationError(
       'INTEGRATION_CREDENTIALS_ENCRYPTION_KEY or ENCRYPTION_KEY must contain at least 32 characters'
     );
   }

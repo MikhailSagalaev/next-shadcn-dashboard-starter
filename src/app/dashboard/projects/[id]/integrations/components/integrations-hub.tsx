@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element -- official integration logos are served as SVG by the vendors */
+
 import Link from 'next/link';
 import { Plug, ExternalLink, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,7 +54,9 @@ interface IntegrationsHubProps {
 }
 
 interface IntegrationCardProps {
-  icon: string;
+  logoSrc: string;
+  logoAlt: string;
+  logoCrop?: 'honest-sign-mark';
   name: string;
   description: string;
   status: 'connected' | 'disconnected' | 'configured';
@@ -102,7 +106,9 @@ function StatusBadge({
 }
 
 function IntegrationCard({
-  icon,
+  logoSrc,
+  logoAlt,
+  logoCrop,
   name,
   description,
   status,
@@ -115,8 +121,16 @@ function IntegrationCard({
       <CardHeader className='pb-3'>
         <div className='flex items-start justify-between'>
           <div className='flex items-center gap-3'>
-            <div className='bg-muted flex h-12 w-12 items-center justify-center rounded-xl text-2xl'>
-              {icon}
+            <div className='bg-muted flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl p-1.5'>
+              <img
+                src={logoSrc}
+                alt={logoAlt}
+                className={
+                  logoCrop === 'honest-sign-mark'
+                    ? 'h-9 w-auto max-w-none translate-x-[68px]'
+                    : 'h-full w-full object-contain'
+                }
+              />
             </div>
             <div>
               <CardTitle className='text-lg'>{name}</CardTitle>
@@ -157,7 +171,8 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
 
   const integrations: IntegrationCardProps[] = [
     {
-      icon: '✈️',
+      logoSrc: 'https://telegram.org/img/website_icon.svg?4',
+      logoAlt: 'Логотип Telegram',
       name: 'Telegram Bot',
       description:
         'Интеграция с Telegram. Регистрация пользователей, выпуск электронных карт, начисление и списание бонусов через бота.',
@@ -177,7 +192,8 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
       href: `/dashboard/projects/${projectId}/bot`
     },
     {
-      icon: '🤖',
+      logoSrc: 'https://go.max.ru/favicon.svg',
+      logoAlt: 'Логотип MAX',
       name: 'MAX Bot',
       description:
         'Интеграция с мессенджером MAX. Запуск сценариев лояльности, регистрация пользователей и проверка баланса в экосистеме MAX.',
@@ -197,7 +213,9 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
       href: `/dashboard/projects/${projectId}/integrations/max-bot`
     },
     {
-      icon: '🎨',
+      logoSrc:
+        'https://static.tildacdn.net/tild3063-6363-4339-a138-336166373032/logo___1.svg',
+      logoAlt: 'Логотип Tilda',
       name: 'Tilda',
       description:
         'Встройте виджет бонусной программы в ваш сайт на Tilda. Клиенты смогут видеть баланс, применять бонусы при оформлении заказа и регистрироваться в программе прямо на сайте.',
@@ -207,7 +225,8 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
       href: `/dashboard/projects/${projectId}/integration`
     },
     {
-      icon: '🏪',
+      logoSrc: 'https://www.moysklad.ru/favicon.svg',
+      logoAlt: 'Логотип МойСклад',
       name: 'МойСклад',
       description:
         'Прямая синхронизация клиентов и бонусных балансов с МойСклад. Изменения в МойСклад автоматически отражаются в бонусной системе, МойСклад является источником истины.',
@@ -227,7 +246,9 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
       href: `/dashboard/projects/${projectId}/integrations/moysklad-direct`
     },
     {
-      icon: '🛒',
+      logoSrc: 'https://www.crpt.ru/static/img/content/materials/chz-logo.svg',
+      logoAlt: 'Логотип «Честный ЗНАК»',
+      logoCrop: 'honest-sign-mark',
       name: 'ЮKassa и маркировка',
       description:
         'Касса конкретного магазина для автоматической отправки чеков полного расчёта с кодами маркировки после сборки заказа.',
@@ -251,7 +272,9 @@ export function IntegrationsHub({ projectId, data }: IntegrationsHubProps) {
       href: `/dashboard/projects/${projectId}/integrations/yookassa-fiscal`
     },
     {
-      icon: '🛒',
+      logoSrc:
+        'https://static.insales-cdn.com/assets/1/57/11280441/1784275513/favicon.svg',
+      logoAlt: 'Логотип InSales',
       name: 'InSales',
       description:
         'Автоматическое начисление бонусов за заказы из InSales. Webhooks в реальном времени обрабатывают новые заказы, начисляют бонусы и ведут историю. Виджет на сайте позволяет тратить бонусы.',
