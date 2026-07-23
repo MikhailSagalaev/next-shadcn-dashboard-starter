@@ -98,8 +98,20 @@ export class MarkingService {
     }
     const duplicate = await db.markedUnit.findUnique({
       where: { codeHash: hashMarkCode(parsed.raw) },
-      select: { id: true }
+      select: { id: true, orderId: true, orderItemId: true, status: true }
     });
+    if (
+      duplicate?.orderId === params.orderId &&
+      duplicate.orderItemId === params.orderItemId &&
+      duplicate.status === 'RESERVED'
+    ) {
+      return {
+        gtin: parsed.gtin,
+        serial: parsed.serial,
+        productName: item.name,
+        rawLength: parsed.raw.length
+      };
+    }
     if (duplicate) throw new MarkingConflictError('Этот код уже использован');
     return {
       gtin: parsed.gtin,
@@ -152,6 +164,30 @@ export class MarkingService {
         );
       }
       const duplicate = await tx.markedUnit.findUnique({ where: { codeHash } });
+      if (
+        duplicate?.orderId === params.orderId &&
+        duplicate.orderItemId === item.id &&
+        duplicate.status === 'RESERVED'
+      ) {
+        const unit = await tx.markedUnit.update({
+          where: { id: duplicate.id },
+          data: { status: 'ASSIGNED', scannedBy: params.scannedBy }
+        });
+        await tx.stockUnitEvent.create({
+          data: {
+            projectId: params.projectId,
+            markedUnitId: unit.id,
+            productId: unit.productId,
+            orderId: params.orderId,
+            fromStatus: 'RESERVED',
+            toStatus: 'ASSIGNED',
+            reason: 'Подтверждено сканированием при сборке',
+            actorId: params.scannedBy
+          }
+        });
+        await this.refreshMarkingState(tx, params.orderId);
+        return { ...unit, codeEncrypted: undefined, codeHash: undefined };
+      }
       if (duplicate) throw new MarkingConflictError('Этот код уже использован');
 
       const unit = await tx.markedUnit.create({
@@ -193,7 +229,30 @@ export class MarkingService {
           'Код уже передан в чек и не может быть удалён'
         );
       }
-      await tx.markedUnit.delete({ where: { id: unit.id } });
+      if (unit.goodsReceiptItemId) {
+        await tx.markedUnit.update({
+          where: { id: unit.id },
+          data: {
+            status: 'AVAILABLE',
+            orderId: null,
+            orderItemId: null,
+            reservedAt: null
+          }
+        });
+        await tx.stockUnitEvent.create({
+          data: {
+            projectId: params.projectId,
+            markedUnitId: unit.id,
+            productId: unit.productId,
+            orderId: params.orderId,
+            fromStatus: unit.status,
+            toStatus: 'AVAILABLE',
+            reason: 'Упаковка исключена из сборки'
+          }
+        });
+      } else {
+        await tx.markedUnit.delete({ where: { id: unit.id } });
+      }
       await this.refreshMarkingState(tx, params.orderId);
     });
   }

@@ -1,11 +1,14 @@
 import { db } from '@/lib/db';
 import { MarkingService } from '@/lib/services/marking.service';
 import {
+  createYooKassaRefund,
   createYooKassaReceipt,
   getMerchantYooKassaPayment,
+  getYooKassaRefund,
   getYooKassaReceipt
 } from '@/lib/yookassa/client';
 import { getActiveYooKassaFiscalIntegration } from '@/lib/services/yookassa-fiscal-integration.service';
+import { RefundService } from '@/lib/services/refund.service';
 
 const MAX_ATTEMPTS = 10;
 
@@ -33,21 +36,78 @@ async function applyReceiptStatus(receiptId: string, status: string) {
   const receipt = await db.fiscalReceipt.findUniqueOrThrow({
     where: { id: receiptId }
   });
+  if (receipt.type === 'REFUND') {
+    await RefundService.applyStatus(receiptId, status);
+    return;
+  }
   if (status === 'succeeded') {
-    await db.$transaction([
-      db.fiscalReceipt.update({
+    if (receipt.status === 'SUCCEEDED' && receipt.succeededAt) return;
+    await db.$transaction(async (tx) => {
+      const units = await tx.markedUnit.findMany({
+        where: { orderId: receipt.orderId, status: 'ASSIGNED' }
+      });
+      await tx.fiscalReceipt.update({
         where: { id: receipt.id },
         data: { status: 'SUCCEEDED', succeededAt: new Date(), lastError: null }
-      }),
-      db.order.update({
+      });
+      await tx.order.update({
         where: { id: receipt.orderId },
         data: { fiscalState: 'SETTLED', fulfillmentState: 'READY_TO_SHIP' }
-      }),
-      db.markedUnit.updateMany({
+      });
+      await tx.markedUnit.updateMany({
         where: { orderId: receipt.orderId, status: 'ASSIGNED' },
         data: { status: 'SOLD', soldAt: new Date(), receiptId: receipt.id }
-      })
-    ]);
+      });
+      const stockUnits = units.filter(
+        (unit) => unit.goodsReceiptItemId && unit.productId
+      );
+      for (const productId of new Set(
+        stockUnits.map((unit) => unit.productId!)
+      )) {
+        const quantity = stockUnits.filter(
+          (unit) => unit.productId === productId
+        ).length;
+        const current = await tx.product.findUniqueOrThrow({
+          where: { id: productId }
+        });
+        const product = await tx.product.update({
+          where: { id: productId },
+          data: {
+            stockOnHand: Math.max(0, current.stockOnHand - quantity),
+            stockReserved: Math.max(0, current.stockReserved - quantity)
+          }
+        });
+        await tx.inventoryMovement.upsert({
+          where: {
+            idempotencyKey: `sale:${receipt.id}:${productId}`
+          },
+          create: {
+            projectId: receipt.projectId,
+            productId,
+            orderId: receipt.orderId,
+            type: 'SALE',
+            quantity: -quantity,
+            balanceAfter: product.stockOnHand,
+            reason: 'Успешный чек полного расчёта',
+            idempotencyKey: `sale:${receipt.id}:${productId}`
+          },
+          update: {}
+        });
+      }
+      if (units.length) {
+        await tx.stockUnitEvent.createMany({
+          data: units.map((unit) => ({
+            projectId: receipt.projectId,
+            markedUnitId: unit.id,
+            productId: unit.productId,
+            orderId: receipt.orderId,
+            fromStatus: 'ASSIGNED' as const,
+            toStatus: 'SOLD' as const,
+            reason: 'Успешный чек полного расчёта'
+          }))
+        });
+      }
+    });
   } else if (status === 'canceled') {
     await db.$transaction([
       db.fiscalReceipt.update({
@@ -82,7 +142,80 @@ async function processEntry(entry: {
   const { credentials } = await getActiveYooKassaFiscalIntegration(
     entry.projectId
   );
-  if (entry.type === 'CREATE_SETTLEMENT_RECEIPT') {
+  if (entry.type === 'CREATE_REFUND') {
+    const payload = await RefundService.buildPayload(entry.receiptId);
+    const response = await createYooKassaRefund(
+      payload,
+      entry.idempotencyKey,
+      credentials
+    );
+    if ('status' in response) {
+      throw new Error(`ЮKassa ${response.status}: ${response.body}`);
+    }
+    await db.fiscalReceipt.update({
+      where: { id: entry.receiptId },
+      data: {
+        providerRefundId: response.data.id,
+        status:
+          response.data.status === 'succeeded'
+            ? 'SUCCEEDED'
+            : response.data.status === 'canceled'
+              ? 'CANCELED'
+              : 'PENDING',
+        responsePayload: JSON.parse(JSON.stringify(response.data)),
+        submittedAt: new Date(),
+        attemptCount: { increment: 1 }
+      }
+    });
+    await applyReceiptStatus(entry.receiptId, response.data.status);
+    if (response.data.status === 'pending') {
+      const receipt = await db.fiscalReceipt.findUniqueOrThrow({
+        where: { id: entry.receiptId }
+      });
+      await db.fiscalOutbox.upsert({
+        where: { idempotencyKey: `sync-refund:${entry.receiptId}` },
+        create: {
+          projectId: receipt.projectId,
+          orderId: receipt.orderId,
+          receiptId: receipt.id,
+          type: 'SYNC_REFUND',
+          idempotencyKey: `sync-refund:${entry.receiptId}`,
+          payload: { receiptId: receipt.id },
+          nextAttemptAt: new Date(Date.now() + 30_000)
+        },
+        update: {
+          status: 'PENDING',
+          nextAttemptAt: new Date(Date.now() + 30_000)
+        }
+      });
+    }
+  } else if (entry.type === 'SYNC_REFUND') {
+    const receipt = await db.fiscalReceipt.findUniqueOrThrow({
+      where: { id: entry.receiptId }
+    });
+    if (!receipt.providerRefundId)
+      throw new Error('Provider refund id missing');
+    const response = await getYooKassaRefund(
+      receipt.providerRefundId,
+      credentials
+    );
+    if ('status' in response) {
+      throw new Error(`ЮKassa ${response.status}: ${response.body}`);
+    }
+    await applyReceiptStatus(receipt.id, response.data.status);
+    if (response.data.status === 'pending') {
+      await db.fiscalOutbox.update({
+        where: { id: entry.id },
+        data: {
+          status: 'PENDING',
+          attemptCount: { increment: 1 },
+          nextAttemptAt: retryAt(entry.attemptCount + 1),
+          lockedAt: null
+        }
+      });
+      return false;
+    }
+  } else if (entry.type === 'CREATE_SETTLEMENT_RECEIPT') {
     const payload = await MarkingService.buildSettlementPayload(
       entry.receiptId
     );

@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { YooKassaFiscalForm } from './components/integration-form';
+import { ComplianceIntegrationForm } from './components/compliance-integration-form';
 import { MarkingWorkspaceNav } from '@/features/marking/components/marking-workspace-nav';
 
 export const metadata = {
@@ -40,6 +41,15 @@ export default async function YooKassaFiscalPage({
       lastError: true
     }
   });
+  const complianceIntegration = await db.complianceIntegration.findUnique({
+    where: { projectId },
+    select: {
+      provider: true,
+      isActive: true,
+      gatewayUrl: true,
+      credentialEncrypted: true
+    }
+  });
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
@@ -68,6 +78,21 @@ export default async function YooKassaFiscalPage({
                 hasSecretKey: Boolean(integration.secretKeyEncrypted),
                 lastTestedAt: integration.lastTestedAt?.toISOString() ?? null,
                 lastError: integration.lastError
+              }
+            : null
+        }
+      />
+      <ComplianceIntegrationForm
+        projectId={projectId}
+        integration={
+          complianceIntegration
+            ? {
+                provider: complianceIntegration.provider,
+                isActive: complianceIntegration.isActive,
+                gatewayUrl: complianceIntegration.gatewayUrl,
+                hasCredential: Boolean(
+                  complianceIntegration.credentialEncrypted
+                )
               }
             : null
         }

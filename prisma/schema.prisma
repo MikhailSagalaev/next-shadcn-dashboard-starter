@@ -54,6 +54,14 @@ model Project {
   inventoryMovements           InventoryMovement[]
   fiscalReceipts               FiscalReceipt[]
   markedUnits                  MarkedUnit[]
+  goodsReceipts                GoodsReceipt[]
+  receiptDiscrepancies         GoodsReceiptDiscrepancy[]
+  stockUnitEvents              StockUnitEvent[]
+  complianceIntegration        ComplianceIntegration?
+  complianceDocuments          ComplianceDocument[]
+  complianceOutbox             ComplianceOutbox[]
+  reconciliationRuns           ReconciliationRun[]
+  reconciliationIssues         ReconciliationIssue[]
   fiscalOutbox                 FiscalOutbox[]
   analyticsEvents              AnalyticsEvent[]
   analyticsMetrics             AnalyticsMetric[]
@@ -965,11 +973,103 @@ enum InventoryMovementType {
 }
 
 enum MarkedUnitStatus {
+  EXPECTED
   SCANNED
+  AVAILABLE
+  QUARANTINED
+  RESERVED
   ASSIGNED
+  SALE_PENDING
   SOLD
+  RETURN_PENDING
   RETURNED
+  WRITE_OFF_PENDING
+  WRITTEN_OFF
   VOID
+}
+
+enum GoodsReceiptStatus {
+  DRAFT
+  SCANNING
+  DISCREPANCY
+  READY
+  ACCEPTANCE_PENDING
+  ACCEPTED
+  REJECTED
+  FAILED
+}
+
+enum GoodsReceiptSource {
+  MANUAL
+  UPD_XML
+  EDO
+}
+
+enum ReceiptDiscrepancyType {
+  MISSING
+  EXTRA
+  WRONG_GTIN
+  DAMAGED
+  DUPLICATE
+  INVALID_CODE
+  INVALID_EXTERNAL_STATUS
+}
+
+enum ReceiptDiscrepancyResolution {
+  ACCEPTED
+  RETURN_TO_SUPPLIER
+  CORRECTED_DOCUMENT
+  WRITE_OFF
+  IGNORED
+}
+
+enum ComplianceProvider {
+  MANUAL
+  CUSTOM_GATEWAY
+}
+
+enum ComplianceDocumentKind {
+  UPD_RECEIPT
+  WRITE_OFF
+  RETURN_TO_CIRCULATION
+}
+
+enum ComplianceDocumentStatus {
+  DRAFT
+  READY_TO_SIGN
+  SUBMITTED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum WriteOffReason {
+  DAMAGE
+  LOSS
+  DESTRUCTION
+  EXPIRED
+  OWN_USE
+  PRODUCTION_USE
+  OTHER
+}
+
+enum ReconciliationRunStatus {
+  RUNNING
+  MATCHED
+  MISMATCH
+  PARTIAL
+  FAILED
+}
+
+enum ReconciliationIssueType {
+  LOCAL_STOCK_MISMATCH
+  UNIT_WITHOUT_RECEIPT
+  RECEIPT_STATUS_MISMATCH
+  YOOKASSA_UNAVAILABLE
+  GIS_MT_UNAVAILABLE
+  GIS_MT_STATUS_MISMATCH
+  COMPLIANCE_DOCUMENT_FAILED
 }
 
 enum FiscalReceiptType {
@@ -1199,32 +1299,32 @@ model Payment {
 }
 
 model Order {
-  id                        String               @id @default(cuid())
-  projectId                 String               @map("project_id")
-  userId                    String?              @map("user_id")
-  orderNumber               String               @unique @map("order_number")
-  externalOrderId           String?              @map("external_order_id")
-  paymentProvider           String?              @map("payment_provider")
-  providerPaymentId         String?              @unique @map("provider_payment_id")
-  paymentStatus             StorePaymentStatus   @default(UNPAID) @map("payment_status")
-  paidAt                    DateTime?            @map("paid_at")
-  fiscalState               FiscalState          @default(NOT_STARTED) @map("fiscal_state")
-  markingState              MarkingState         @default(NOT_REQUIRED) @map("marking_state")
-  fulfillmentState          FulfillmentState     @default(NEW) @map("fulfillment_state")
-  status                    OrderStatus          @default(PENDING)
-  accountingState           OrderAccountingState @default(NOT_APPLIED) @map("accounting_state")
-  totalAmount               Decimal              @map("total_amount") @db.Decimal(10, 2)
-  paidAmount                Decimal              @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  bonusAmount               Decimal              @default(0) @map("bonus_amount") @db.Decimal(10, 2)
-  accountedPurchaseAmount   Decimal              @default(0) @map("accounted_purchase_amount") @db.Decimal(10, 2)
-  accountedEarnBase         Decimal              @default(0) @map("accounted_earn_base") @db.Decimal(10, 2)
-  accountedSpentBonusAmount Decimal              @default(0) @map("accounted_spent_bonus_amount") @db.Decimal(10, 2)
-  accountedAt               DateTime?            @map("accounted_at")
-  reversedAt                DateTime?            @map("reversed_at")
-  reversalShortfall         Decimal              @default(0) @map("reversal_shortfall") @db.Decimal(10, 2)
-  deliveryAddress           String?              @map("delivery_address") @db.Text
-  paymentMethod             String?              @map("payment_method")
-  deliveryMethod            String?              @map("delivery_method")
+  id                        String                @id @default(cuid())
+  projectId                 String                @map("project_id")
+  userId                    String?               @map("user_id")
+  orderNumber               String                @unique @map("order_number")
+  externalOrderId           String?               @map("external_order_id")
+  paymentProvider           String?               @map("payment_provider")
+  providerPaymentId         String?               @unique @map("provider_payment_id")
+  paymentStatus             StorePaymentStatus    @default(UNPAID) @map("payment_status")
+  paidAt                    DateTime?             @map("paid_at")
+  fiscalState               FiscalState           @default(NOT_STARTED) @map("fiscal_state")
+  markingState              MarkingState          @default(NOT_REQUIRED) @map("marking_state")
+  fulfillmentState          FulfillmentState      @default(NEW) @map("fulfillment_state")
+  status                    OrderStatus           @default(PENDING)
+  accountingState           OrderAccountingState  @default(NOT_APPLIED) @map("accounting_state")
+  totalAmount               Decimal               @map("total_amount") @db.Decimal(10, 2)
+  paidAmount                Decimal               @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  bonusAmount               Decimal               @default(0) @map("bonus_amount") @db.Decimal(10, 2)
+  accountedPurchaseAmount   Decimal               @default(0) @map("accounted_purchase_amount") @db.Decimal(10, 2)
+  accountedEarnBase         Decimal               @default(0) @map("accounted_earn_base") @db.Decimal(10, 2)
+  accountedSpentBonusAmount Decimal               @default(0) @map("accounted_spent_bonus_amount") @db.Decimal(10, 2)
+  accountedAt               DateTime?             @map("accounted_at")
+  reversedAt                DateTime?             @map("reversed_at")
+  reversalShortfall         Decimal               @default(0) @map("reversal_shortfall") @db.Decimal(10, 2)
+  deliveryAddress           String?               @map("delivery_address") @db.Text
+  paymentMethod             String?               @map("payment_method")
+  deliveryMethod            String?               @map("delivery_method")
   metadata                  Json?
   history                   OrderHistory[]
   items                     OrderItem[]
@@ -1232,11 +1332,13 @@ model Order {
   inventoryMovements        InventoryMovement[]
   fiscalReceipts            FiscalReceipt[]
   markedUnits               MarkedUnit[]
+  stockUnitEvents           StockUnitEvent[]
+  reconciliationIssues      ReconciliationIssue[]
   fiscalOutbox              FiscalOutbox[]
-  createdAt                 DateTime             @default(now()) @map("created_at")
-  updatedAt                 DateTime             @updatedAt @map("updated_at")
-  project                   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user                      User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt                 DateTime              @default(now()) @map("created_at")
+  updatedAt                 DateTime              @updatedAt @map("updated_at")
+  project                   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                      User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
   @@index([projectId, createdAt])
@@ -1331,6 +1433,8 @@ model Product {
   items              OrderItem[]
   inventoryMovements InventoryMovement[]
   markedUnits        MarkedUnit[]
+  goodsReceiptItems  GoodsReceiptItem[]
+  stockUnitEvents    StockUnitEvent[]
   project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, sku])
@@ -1366,26 +1470,28 @@ model InventoryMovement {
 }
 
 model FiscalReceipt {
-  id                String              @id @default(cuid())
-  projectId         String              @map("project_id")
-  orderId           String              @map("order_id")
-  providerReceiptId String?             @unique @map("provider_receipt_id")
-  providerPaymentId String              @map("provider_payment_id")
-  type              FiscalReceiptType
-  status            FiscalReceiptStatus @default(NEW)
-  idempotencyKey    String              @unique @map("idempotency_key")
-  requestPayload    Json?               @map("request_payload")
-  responsePayload   Json?               @map("response_payload")
-  attemptCount      Int                 @default(0) @map("attempt_count")
-  lastError         String?             @map("last_error") @db.Text
-  submittedAt       DateTime?           @map("submitted_at")
-  succeededAt       DateTime?           @map("succeeded_at")
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
-  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  order             Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  markedUnits       MarkedUnit[]
-  outboxEntries     FiscalOutbox[]
+  id                   String                @id @default(cuid())
+  projectId            String                @map("project_id")
+  orderId              String                @map("order_id")
+  providerReceiptId    String?               @unique @map("provider_receipt_id")
+  providerRefundId     String?               @unique @map("provider_refund_id")
+  providerPaymentId    String                @map("provider_payment_id")
+  type                 FiscalReceiptType
+  status               FiscalReceiptStatus   @default(NEW)
+  idempotencyKey       String                @unique @map("idempotency_key")
+  requestPayload       Json?                 @map("request_payload")
+  responsePayload      Json?                 @map("response_payload")
+  attemptCount         Int                   @default(0) @map("attempt_count")
+  lastError            String?               @map("last_error") @db.Text
+  submittedAt          DateTime?             @map("submitted_at")
+  succeededAt          DateTime?             @map("succeeded_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  project              Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  markedUnits          MarkedUnit[]
+  outboxEntries        FiscalOutbox[]
+  reconciliationIssues ReconciliationIssue[]
 
   @@index([projectId, status, createdAt])
   @@index([orderId, type])
@@ -1393,32 +1499,260 @@ model FiscalReceipt {
 }
 
 model MarkedUnit {
-  id            String           @id @default(cuid())
-  projectId     String           @map("project_id")
-  orderId       String           @map("order_id")
-  orderItemId   String           @map("order_item_id")
-  productId     String?          @map("product_id")
-  receiptId     String?          @map("receipt_id")
-  codeHash      String           @unique @map("code_hash")
-  codeEncrypted String           @map("code_encrypted") @db.Text
-  gtin          String
-  serial        String?
-  status        MarkedUnitStatus @default(ASSIGNED)
-  scannedBy     String?          @map("scanned_by")
-  scannedAt     DateTime         @default(now()) @map("scanned_at")
-  soldAt        DateTime?        @map("sold_at")
-  returnedAt    DateTime?        @map("returned_at")
-  metadata      Json?
-  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  order         Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderItem     OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  product       Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
-  receipt       FiscalReceipt?   @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  id                   String                    @id @default(cuid())
+  projectId            String                    @map("project_id")
+  orderId              String?                   @map("order_id")
+  orderItemId          String?                   @map("order_item_id")
+  productId            String?                   @map("product_id")
+  receiptId            String?                   @map("receipt_id")
+  goodsReceiptItemId   String?                   @map("goods_receipt_item_id")
+  codeHash             String                    @unique @map("code_hash")
+  codeEncrypted        String                    @map("code_encrypted") @db.Text
+  gtin                 String
+  serial               String?
+  status               MarkedUnitStatus          @default(ASSIGNED)
+  scannedBy            String?                   @map("scanned_by")
+  scannedAt            DateTime                  @default(now()) @map("scanned_at")
+  soldAt               DateTime?                 @map("sold_at")
+  returnedAt           DateTime?                 @map("returned_at")
+  reservedAt           DateTime?                 @map("reserved_at")
+  availableAt          DateTime?                 @map("available_at")
+  quarantinedAt        DateTime?                 @map("quarantined_at")
+  writtenOffAt         DateTime?                 @map("written_off_at")
+  externalStatus       String?                   @map("external_status")
+  externalCheckedAt    DateTime?                 @map("external_checked_at")
+  metadata             Json?
+  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order                Order?                    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderItem            OrderItem?                @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  product              Product?                  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  receipt              FiscalReceipt?            @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  goodsReceiptItem     GoodsReceiptItem?         @relation(fields: [goodsReceiptItemId], references: [id], onDelete: SetNull)
+  events               StockUnitEvent[]
+  discrepancies        GoodsReceiptDiscrepancy[]
+  complianceDocuments  ComplianceDocumentUnit[]
+  reconciliationIssues ReconciliationIssue[]
 
   @@index([projectId, status])
   @@index([orderId, orderItemId])
+  @@index([goodsReceiptItemId])
+  @@index([productId, status])
   @@index([gtin])
   @@map("marked_units")
+}
+
+model GoodsReceipt {
+  id                  String                    @id @default(cuid())
+  projectId           String                    @map("project_id")
+  supplierName        String                    @map("supplier_name")
+  supplierInn         String?                   @map("supplier_inn")
+  documentNumber      String                    @map("document_number")
+  documentDate        DateTime                  @map("document_date")
+  source              GoodsReceiptSource        @default(MANUAL)
+  status              GoodsReceiptStatus        @default(DRAFT)
+  externalDocumentId  String?                   @map("external_document_id")
+  externalStatus      String?                   @map("external_status")
+  acceptedAt          DateTime?                 @map("accepted_at")
+  acceptedBy          String?                   @map("accepted_by")
+  metadata            Json?
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
+  project             Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items               GoodsReceiptItem[]
+  discrepancies       GoodsReceiptDiscrepancy[]
+  complianceDocuments ComplianceDocument[]
+
+  @@unique([projectId, documentNumber, supplierInn])
+  @@index([projectId, status, createdAt])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptItem {
+  id               String                    @id @default(cuid())
+  goodsReceiptId   String                    @map("goods_receipt_id")
+  productId        String?                   @map("product_id")
+  name             String
+  gtin             String
+  expectedQuantity Int                       @map("expected_quantity")
+  acceptedQuantity Int                       @default(0) @map("accepted_quantity")
+  unitCost         Decimal?                  @map("unit_cost") @db.Decimal(10, 2)
+  metadata         Json?
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  goodsReceipt     GoodsReceipt              @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  product          Product?                  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  units            MarkedUnit[]
+  discrepancies    GoodsReceiptDiscrepancy[]
+
+  @@index([goodsReceiptId])
+  @@index([productId])
+  @@index([gtin])
+  @@map("goods_receipt_items")
+}
+
+model GoodsReceiptDiscrepancy {
+  id                 String                        @id @default(cuid())
+  projectId          String                        @map("project_id")
+  goodsReceiptId     String                        @map("goods_receipt_id")
+  goodsReceiptItemId String?                       @map("goods_receipt_item_id")
+  markedUnitId       String?                       @map("marked_unit_id")
+  type               ReceiptDiscrepancyType
+  message            String                        @db.Text
+  resolution         ReceiptDiscrepancyResolution?
+  resolutionComment  String?                       @map("resolution_comment") @db.Text
+  resolvedAt         DateTime?                     @map("resolved_at")
+  resolvedBy         String?                       @map("resolved_by")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+  project            Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  goodsReceipt       GoodsReceipt                  @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  goodsReceiptItem   GoodsReceiptItem?             @relation(fields: [goodsReceiptItemId], references: [id], onDelete: SetNull)
+  markedUnit         MarkedUnit?                   @relation(fields: [markedUnitId], references: [id], onDelete: SetNull)
+
+  @@index([goodsReceiptId, resolvedAt])
+  @@index([projectId, type])
+  @@map("goods_receipt_discrepancies")
+}
+
+model StockUnitEvent {
+  id           String            @id @default(cuid())
+  projectId    String            @map("project_id")
+  markedUnitId String            @map("marked_unit_id")
+  productId    String?           @map("product_id")
+  orderId      String?           @map("order_id")
+  fromStatus   MarkedUnitStatus? @map("from_status")
+  toStatus     MarkedUnitStatus  @map("to_status")
+  reason       String?
+  actorId      String?           @map("actor_id")
+  metadata     Json?
+  createdAt    DateTime          @default(now()) @map("created_at")
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  markedUnit   MarkedUnit        @relation(fields: [markedUnitId], references: [id], onDelete: Cascade)
+  product      Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  order        Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([markedUnitId, createdAt])
+  @@index([projectId, createdAt])
+  @@map("stock_unit_events")
+}
+
+model ComplianceIntegration {
+  id                  String             @id @default(cuid())
+  projectId           String             @unique @map("project_id")
+  provider            ComplianceProvider @default(MANUAL)
+  isActive            Boolean            @default(false) @map("is_active")
+  gatewayUrl          String?            @map("gateway_url")
+  credentialEncrypted String?            @map("credential_encrypted") @db.Text
+  lastTestedAt        DateTime?          @map("last_tested_at")
+  lastError           String?            @map("last_error") @db.Text
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  project             Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("compliance_integrations")
+}
+
+model ComplianceDocument {
+  id              String                   @id @default(cuid())
+  projectId       String                   @map("project_id")
+  goodsReceiptId  String?                  @map("goods_receipt_id")
+  kind            ComplianceDocumentKind
+  status          ComplianceDocumentStatus @default(DRAFT)
+  provider        ComplianceProvider       @default(MANUAL)
+  reason          WriteOffReason?
+  documentNumber  String?                  @map("document_number")
+  externalId      String?                  @map("external_id")
+  payload         Json?
+  responsePayload Json?                    @map("response_payload")
+  lastError       String?                  @map("last_error") @db.Text
+  submittedAt     DateTime?                @map("submitted_at")
+  succeededAt     DateTime?                @map("succeeded_at")
+  createdBy       String?                  @map("created_by")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  goodsReceipt    GoodsReceipt?            @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
+  units           ComplianceDocumentUnit[]
+  outboxEntries   ComplianceOutbox[]
+
+  @@index([projectId, kind, status, createdAt])
+  @@index([externalId])
+  @@map("compliance_documents")
+}
+
+model ComplianceDocumentUnit {
+  documentId   String             @map("document_id")
+  markedUnitId String             @map("marked_unit_id")
+  document     ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  markedUnit   MarkedUnit         @relation(fields: [markedUnitId], references: [id], onDelete: Restrict)
+
+  @@id([documentId, markedUnitId])
+  @@index([markedUnitId])
+  @@map("compliance_document_units")
+}
+
+model ComplianceOutbox {
+  id             String             @id @default(cuid())
+  projectId      String             @map("project_id")
+  documentId     String             @map("document_id")
+  type           String
+  status         FiscalOutboxStatus @default(PENDING)
+  idempotencyKey String             @unique @map("idempotency_key")
+  payload        Json
+  attemptCount   Int                @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime           @default(now()) @map("next_attempt_at")
+  lockedAt       DateTime?          @map("locked_at")
+  lastError      String?            @map("last_error") @db.Text
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document       ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([projectId, createdAt])
+  @@map("compliance_outbox")
+}
+
+model ReconciliationRun {
+  id          String                  @id @default(cuid())
+  projectId   String                  @map("project_id")
+  status      ReconciliationRunStatus @default(RUNNING)
+  periodFrom  DateTime?               @map("period_from")
+  periodTo    DateTime?               @map("period_to")
+  summary     Json?
+  lastError   String?                 @map("last_error") @db.Text
+  startedAt   DateTime                @default(now()) @map("started_at")
+  completedAt DateTime?               @map("completed_at")
+  createdBy   String?                 @map("created_by")
+  project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues      ReconciliationIssue[]
+
+  @@index([projectId, startedAt])
+  @@map("reconciliation_runs")
+}
+
+model ReconciliationIssue {
+  id              String                  @id @default(cuid())
+  projectId       String                  @map("project_id")
+  runId           String                  @map("run_id")
+  markedUnitId    String?                 @map("marked_unit_id")
+  orderId         String?                 @map("order_id")
+  fiscalReceiptId String?                 @map("fiscal_receipt_id")
+  type            ReconciliationIssueType
+  message         String                  @db.Text
+  expected        Json?
+  actual          Json?
+  resolvedAt      DateTime?               @map("resolved_at")
+  resolution      String?                 @db.Text
+  createdAt       DateTime                @default(now()) @map("created_at")
+  project         Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run             ReconciliationRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  markedUnit      MarkedUnit?             @relation(fields: [markedUnitId], references: [id], onDelete: SetNull)
+  order           Order?                  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  fiscalReceipt   FiscalReceipt?          @relation(fields: [fiscalReceiptId], references: [id], onDelete: SetNull)
+
+  @@index([runId, type])
+  @@index([projectId, resolvedAt])
+  @@map("reconciliation_issues")
 }
 
 model FiscalOutbox {

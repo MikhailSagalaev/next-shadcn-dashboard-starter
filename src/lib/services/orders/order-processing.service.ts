@@ -6,6 +6,7 @@ import { OrderAccountingService } from './order-accounting.service';
 import { splitFullName } from '@/lib/user-display';
 import { logger } from '@/lib/logger';
 import { AdminNotificationService } from '@/lib/services/admin-notification.service';
+import { StockReservationService } from '@/lib/services/stock-reservation.service';
 
 export interface OrderProcessingResult {
   success: boolean;
@@ -399,6 +400,25 @@ export class OrderProcessingService {
         where: { id: savedOrder.id },
         data: { markingState }
       });
+
+      // A paid Tilda order is the reservation trigger. Failure to reserve must
+      // not lose the order/webhook: the order remains visible for operator
+      // action and the reason is recorded in logs.
+      if (!isCashPayment) {
+        try {
+          await StockReservationService.reserveOrder(
+            projectId,
+            savedOrder.id,
+            'system:tilda'
+          );
+        } catch (error) {
+          logger.warn('Automatic stock reservation failed', {
+            projectId,
+            orderId: savedOrder.id,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
 
       // Create analytics event
       await db.analyticsEvent.create({

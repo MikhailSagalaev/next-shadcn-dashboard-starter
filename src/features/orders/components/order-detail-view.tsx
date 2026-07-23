@@ -55,6 +55,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { MarkingWorkspaceNav } from '@/features/marking/components/marking-workspace-nav';
 import type { OrderWithRelations } from '@/types/orders';
 import { OrderMarkingCard } from './order-marking-card';
+import { ReturnReceiptCard } from './return-receipt-card';
 import {
   FISCAL_STATE_LABELS,
   ORDER_STATUS_LABELS,
@@ -197,6 +198,13 @@ export function OrderDetailView({
       )}
 
       <OrderMarkingCard
+        projectId={projectId}
+        orderId={orderId}
+        order={order}
+        onChanged={() => fetchOrder(true)}
+      />
+
+      <ReturnReceiptCard
         projectId={projectId}
         orderId={orderId}
         order={order}

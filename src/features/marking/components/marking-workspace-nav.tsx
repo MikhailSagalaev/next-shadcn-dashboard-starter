@@ -4,9 +4,12 @@ import Link from 'next/link';
 import {
   BookOpenCheck,
   ChevronRight,
+  ClipboardCheck,
+  ClipboardMinus,
   Package,
   ReceiptText,
   Route,
+  Scale,
   Settings2,
   Warehouse
 } from 'lucide-react';
@@ -21,7 +24,14 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
-type WorkspaceSection = 'integration' | 'catalog' | 'orders';
+type WorkspaceSection =
+  | 'integration'
+  | 'catalog'
+  | 'receipts'
+  | 'stock'
+  | 'orders'
+  | 'write-offs'
+  | 'reconciliation';
 
 const sections = [
   {
@@ -37,10 +47,34 @@ const sections = [
     href: 'products'
   },
   {
+    id: 'receipts' as const,
+    label: 'Приёмки',
+    icon: ClipboardCheck,
+    href: 'receipts'
+  },
+  {
+    id: 'stock' as const,
+    label: 'Склад',
+    icon: Warehouse,
+    href: 'stock'
+  },
+  {
     id: 'orders' as const,
     label: 'Заказы',
     icon: ReceiptText,
     href: 'orders'
+  },
+  {
+    id: 'write-offs' as const,
+    label: 'Списания',
+    icon: ClipboardMinus,
+    href: 'write-offs'
+  },
+  {
+    id: 'reconciliation' as const,
+    label: 'Сверка',
+    icon: Scale,
+    href: 'reconciliation'
   }
 ];
 
