@@ -247,7 +247,7 @@ export class OrderProcessingService {
 
             // Данные оплаты
             paymentSystem: order.raw?.payment?.sys,
-            paymentTransactionId: order.raw?.payment?.systranid,
+            paymentTransactionId: order.providerTransactionId,
             subtotal: order.raw?.payment?.subtotal,
 
             // UTM метки

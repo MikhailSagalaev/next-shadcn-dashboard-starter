@@ -364,9 +364,31 @@ export class MarkingService {
       include: { fiscalReceipts: true }
     });
     if (!order) throw new MarkingConflictError('Заказ не найден');
-    if (order.paymentStatus !== 'PAID' || !order.providerPaymentId) {
+    const metadata = (order.metadata ?? {}) as Record<string, any>;
+    const rawPayment = metadata.raw?.payment ?? {};
+    const recoveredPaymentId = String(
+      metadata.paymentTransactionId ??
+        rawPayment.systranid ??
+        rawPayment.payment_id ??
+        rawPayment.paymentId ??
+        metadata.raw?.systranid ??
+        metadata.raw?.payment_id ??
+        ''
+    ).trim();
+    const providerPaymentId =
+      order.providerPaymentId || recoveredPaymentId || null;
+    if (!order.providerPaymentId && providerPaymentId) {
+      await db.order.update({
+        where: { id: order.id },
+        data: { providerPaymentId }
+      });
+    }
+    if (order.paymentStatus !== 'PAID') {
+      throw new MarkingConflictError('Оплата заказа ещё не подтверждена Tilda');
+    }
+    if (!providerPaymentId) {
       throw new MarkingConflictError(
-        'У заказа нет подтверждённого платежа ЮKassa'
+        'Оплата подтверждена Tilda, но в заказе нет payment_id ЮKassa. Tilda должна передать его в поле payment.systranid; без этого идентификатора ЮKassa не сможет привязать чек полного расчёта к платежу.'
       );
     }
     if (!['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState)) {
@@ -429,7 +451,7 @@ export class MarkingService {
           id: receiptId,
           projectId: params.projectId,
           orderId: order.id,
-          providerPaymentId: order.providerPaymentId!,
+          providerPaymentId,
           type: 'SETTLEMENT',
           status: 'NEW',
           idempotencyKey,

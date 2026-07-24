@@ -169,7 +169,12 @@ export class TildaParserService {
     const isSignupForm = isSignupOnlyPayload(out);
     const externalOrderId =
       optionalString(out.payment?.orderid) ?? optionalString(out.orderid);
-    const providerTransactionId = optionalString(out.payment?.systranid);
+    const providerTransactionId =
+      optionalString(out.payment?.systranid) ??
+      optionalString(out.payment?.payment_id) ??
+      optionalString(out.payment?.paymentId) ??
+      optionalString(out.systranid) ??
+      optionalString(out.payment_id);
     const paymentSystem = optionalString(out.payment?.sys);
     const normalizedPaymentSystem = paymentSystem?.toLocaleLowerCase('ru-RU');
     const isCashPayment =

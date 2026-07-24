@@ -8,6 +8,36 @@ const mockDb = db as any;
 describe('receiving lifecycle', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it('validates a manually entered Data Matrix without changing stock', async () => {
+    mockDb.goodsReceipt = {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'receipt-1',
+        items: [
+          {
+            id: 'item-1',
+            name: 'Marked cream',
+            gtin: '04601234567890'
+          }
+        ]
+      })
+    };
+
+    const result = await ReceivingService.validateCode({
+      projectId: 'project-1',
+      receiptId: 'receipt-1',
+      code: '(01)04601234567890(21)TEST123'
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        gtin: '04601234567890',
+        serial: 'TEST123',
+        productName: 'Marked cream'
+      })
+    );
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
   it('does not release units to available stock before the UPD is confirmed', async () => {
     const tx = {
       goodsReceipt: {

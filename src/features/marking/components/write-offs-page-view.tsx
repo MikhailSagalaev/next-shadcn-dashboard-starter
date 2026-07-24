@@ -45,7 +45,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { MarkingOperationsLinks } from './marking-operations-links';
+import { MarkingWorkspaceNav } from './marking-workspace-nav';
 
 interface WriteOffDocument {
   id: string;
@@ -181,7 +181,7 @@ export function WriteOffsPageView({ projectId }: { projectId: string }) {
         </Button>
       </div>
       <Separator />
-      <MarkingOperationsLinks projectId={projectId} active='write-offs' />
+      <MarkingWorkspaceNav projectId={projectId} active='write-offs' />
 
       <Alert>
         <FileSignature />

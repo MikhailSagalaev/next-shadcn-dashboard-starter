@@ -133,6 +133,40 @@ export class ReceivingService {
     });
   }
 
+  static async validateCode(params: {
+    projectId: string;
+    receiptId: string;
+    code: string;
+  }) {
+    let parsed: ReturnType<typeof parseGs1DataMatrix>;
+    try {
+      parsed = parseGs1DataMatrix(params.code);
+    } catch (error) {
+      throw new ReceivingConflictError(
+        error instanceof Error ? error.message : 'Некорректный Data Matrix'
+      );
+    }
+    const receipt = await db.goodsReceipt.findFirst({
+      where: { id: params.receiptId, projectId: params.projectId },
+      include: { items: true }
+    });
+    if (!receipt) throw new ReceivingConflictError('Приёмка не найдена');
+    const item = receipt.items.find(
+      (candidate) => candidate.gtin === parsed.gtin
+    );
+    if (!item) {
+      throw new ReceivingConflictError(
+        `В Data Matrix указан GTIN ${parsed.gtin}, которого нет в этой приёмке`
+      );
+    }
+    return {
+      gtin: parsed.gtin,
+      serial: parsed.serial,
+      productName: item.name,
+      rawLength: parsed.raw.length
+    };
+  }
+
   static async scan(params: {
     projectId: string;
     receiptId: string;

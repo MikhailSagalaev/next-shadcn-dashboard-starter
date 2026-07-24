@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  CircleHelp,
   Loader2,
   PackageCheck,
   ScanLine,
@@ -23,6 +24,15 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from '@/components/ui/dialog';
 import { Heading } from '@/components/ui/heading';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -257,7 +267,7 @@ export function ReceiptDetailView({
 
       {!completed && (
         <Card>
-          <CardHeader className='gap-3 md:flex-row md:items-start md:justify-between'>
+          <CardHeader className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,32rem)]'>
             <div>
               <CardTitle className='flex items-center gap-2'>
                 <ScanLine className='h-5 w-5' /> Сканирование упаковок
@@ -267,7 +277,7 @@ export function ReceiptDetailView({
                 физической упаковке.
               </CardDescription>
             </div>
-            <div className='flex flex-col items-stretch gap-3'>
+            <div className='flex min-w-0 flex-col items-stretch gap-3'>
               <label className='flex max-w-sm cursor-pointer items-start gap-2 text-sm'>
                 <Checkbox
                   checked={documentConfirmed}
@@ -310,7 +320,16 @@ export function ReceiptDetailView({
               className='grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]'
             >
               <div className='space-y-2'>
-                <Label htmlFor='receiving-code'>Data Matrix с упаковки</Label>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <Label htmlFor='receiving-code'>Data Matrix с упаковки</Label>
+                  <ReceiptCodeDiagnostic
+                    projectId={projectId}
+                    receiptId={receiptId}
+                    expectedGtin={
+                      receipt.items?.find((item) => item.gtin)?.gtin
+                    }
+                  />
+                </div>
                 <Input
                   ref={inputRef}
                   id='receiving-code'
@@ -417,6 +436,164 @@ export function ReceiptDetailView({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ReceiptCodeDiagnostic({
+  projectId,
+  receiptId,
+  expectedGtin
+}: {
+  projectId: string;
+  receiptId: string;
+  expectedGtin?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{
+    gtin: string;
+    serial: string;
+    productName: string;
+    rawLength: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const example =
+    expectedGtin && /^\d{8,14}$/.test(expectedGtin)
+      ? `(01)${expectedGtin.padStart(14, '0')}(21)TEST${Date.now().toString(36).toUpperCase()}`
+      : '';
+
+  async function validate() {
+    if (!value.trim()) return;
+    setTesting(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/receipts/${receiptId}/scan`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: value.trim(), validateOnly: true })
+        }
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Код не удалось распознать');
+      setResult(data.validation);
+    } catch (validationError) {
+      setError(
+        validationError instanceof Error
+          ? validationError.message
+          : 'Код не удалось распознать'
+      );
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type='button' variant='outline' size='sm'>
+          <CircleHelp /> Проверить без сканера
+        </Button>
+      </DialogTrigger>
+      <DialogContent className='sm:max-w-xl'>
+        <DialogHeader>
+          <DialogTitle>Проверка Data Matrix без сканера</DialogTitle>
+          <DialogDescription>
+            Сканер только вводит символы как клавиатура. Здесь можно вставить
+            полный код вручную или проверить учебный пример. Проверка ничего не
+            добавляет в приёмку и не меняет склад.
+          </DialogDescription>
+        </DialogHeader>
+        <div className='space-y-4'>
+          <Alert>
+            <CircleHelp />
+            <AlertTitle>Почему случайные цифры не подходят</AlertTitle>
+            <AlertDescription>
+              Полный GS1 Data Matrix содержит как минимум идентификатор товара
+              <code className='mx-1'>(01)</code>с 14 цифрами GTIN и серийный
+              номер
+              <code className='mx-1'>(21)</code>. Обычный штрихкод содержит
+              только GTIN и не идентифицирует конкретную упаковку.
+            </AlertDescription>
+          </Alert>
+          <div className='space-y-2'>
+            <Label htmlFor='receipt-code-test'>
+              Код для безопасной проверки
+            </Label>
+            <Input
+              id='receipt-code-test'
+              className='font-mono'
+              value={value}
+              autoFocus
+              onChange={(event) => {
+                setValue(event.target.value);
+                setError(null);
+                setResult(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void validate();
+                }
+              }}
+              placeholder='Например: (01)04601234567890(21)ABC123'
+            />
+          </div>
+          {example && (
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={() => {
+                setValue(example);
+                setError(null);
+                setResult(null);
+              }}
+            >
+              Подставить учебный код для GTIN {expectedGtin}
+            </Button>
+          )}
+          {result && (
+            <Alert className='border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20'>
+              <CheckCircle2 className='text-emerald-700' />
+              <AlertTitle>Формат распознан, товар совпадает</AlertTitle>
+              <AlertDescription>
+                {result.productName}: GTIN {result.gtin}, серийный номер{' '}
+                {result.serial}. Код не сохранён.
+              </AlertDescription>
+            </Alert>
+          )}
+          {error && (
+            <Alert variant='destructive'>
+              <AlertTriangle />
+              <AlertTitle>Проверка не пройдена</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => setOpen(false)}
+          >
+            Закрыть
+          </Button>
+          <Button
+            type='button'
+            disabled={!value.trim() || testing}
+            onClick={() => void validate()}
+          >
+            {testing ? <Loader2 className='animate-spin' /> : <ScanLine />}
+            Проверить, не сохраняя
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

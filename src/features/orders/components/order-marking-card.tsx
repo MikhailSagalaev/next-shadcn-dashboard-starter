@@ -449,7 +449,19 @@ export function OrderMarkingCard({
         )}
 
         {['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState) && (
-          <div className='rounded-xl border p-4'>
+          <div className='space-y-3 rounded-xl border p-4'>
+            {order.paymentStatus === 'PAID' && !order.providerPaymentId && (
+              <Alert>
+                <AlertCircle />
+                <AlertTitle>Не получен payment_id ЮKassa</AlertTitle>
+                <AlertDescription>
+                  Tilda подтвердила оплату, но не передала идентификатор платежа
+                  в поле <code>payment.systranid</code>. Без него нельзя
+                  сформировать чек полного расчёта через API ЮKassa. Проверьте
+                  передачу платежных данных в webhook Tilda для этого заказа.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
               <div className='flex items-start gap-3'>
                 <CheckCircle2 className='mt-0.5 h-5 w-5 text-green-600' />
@@ -463,7 +475,11 @@ export function OrderMarkingCard({
                 </div>
               </div>
               <Button
-                disabled={busy || Boolean(receiptLocked)}
+                disabled={
+                  busy ||
+                  Boolean(receiptLocked) ||
+                  (order.paymentStatus === 'PAID' && !order.providerPaymentId)
+                }
                 onClick={() => void fiscalize()}
               >
                 {busy ? (

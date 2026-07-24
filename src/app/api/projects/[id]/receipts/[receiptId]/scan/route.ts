@@ -9,7 +9,8 @@ import {
 
 const schema = z.object({
   code: z.string().min(16).max(512),
-  productId: z.string().optional()
+  productId: z.string().optional(),
+  validateOnly: z.boolean().optional()
 });
 
 export async function POST(
@@ -23,17 +24,31 @@ export async function POST(
     const { id, receiptId } = await params;
     await ProjectService.verifyProjectAccess(id, admin.sub);
     const data = schema.parse(await request.json());
+    if (data.validateOnly) {
+      const validation = await ReceivingService.validateCode({
+        projectId: id,
+        receiptId,
+        code: data.code
+      });
+      return NextResponse.json({ validation });
+    }
     const unit = await ReceivingService.scan({
       projectId: id,
       receiptId,
       actorId: admin.sub,
-      code: data.code!,
+      code: data.code,
       productId: data.productId
     });
     return NextResponse.json({ unit }, { status: 201 });
   } catch (error) {
+    const message =
+      error instanceof z.ZodError
+        ? 'Нужен полный Data Matrix: не менее 16 символов, с GTIN (01) и серийным номером (21). Обычный штрихкод или случайные цифры не подойдут.'
+        : error instanceof Error
+          ? error.message
+          : 'Код не принят';
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Код не принят' },
+      { error: message },
       {
         status:
           error instanceof z.ZodError

@@ -54,6 +54,22 @@ describe('TildaParserService commercial identifiers', () => {
     ).toThrow(TildaPaymentIdRequiredError);
   });
 
+  it('accepts payment_id aliases used by some Tilda payload variants', () => {
+    const order = TildaParserService.normalizeOrder({
+      payment: {
+        amount: '500',
+        orderid: 'ORDER-102',
+        payment_id: '2f3f15d0-000f-5000-9000-1e1d7d5f5678',
+        sys: 'yookassa',
+        products: [{ name: 'Cream', price: '500', quantity: '1' }]
+      }
+    });
+
+    expect(order.providerTransactionId).toBe(
+      '2f3f15d0-000f-5000-9000-1e1d7d5f5678'
+    );
+  });
+
   it('preserves signup-only forms without requiring a commercial orderid', () => {
     const order = TildaParserService.normalizeOrder({
       Email: 'NEW@EXAMPLE.COM',
