@@ -16,7 +16,8 @@ const resolutionSchema = z.object({
     'WRITE_OFF',
     'IGNORED'
   ]),
-  comment: z.string().max(2000).optional()
+  comment: z.string().max(2000).optional(),
+  productId: z.string().min(1).optional()
 });
 
 export async function GET(
@@ -57,7 +58,8 @@ export async function POST(
       actorId: admin.sub,
       discrepancyId: data.discrepancyId!,
       resolution: data.resolution!,
-      comment: data.comment
+      comment: data.comment,
+      productId: data.productId
     });
     return NextResponse.json({ discrepancy });
   } catch (error) {

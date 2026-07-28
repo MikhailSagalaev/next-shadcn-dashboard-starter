@@ -18,8 +18,34 @@ export interface ReceivingRecord {
   items?: ReceivingItem[];
   discrepancies?: Array<{
     id: string;
+    type?: string | null;
     message?: string | null;
+    resolution?: string | null;
+    resolutionComment?: string | null;
     resolvedAt?: string | null;
+    markedUnit?: {
+      id: string;
+      gtin: string;
+      serial?: string | null;
+      status: string;
+      productId?: string | null;
+      goodsReceiptItemId?: string | null;
+      product?: {
+        id: string;
+        name: string;
+        sku?: string | null;
+        gtin?: string | null;
+      } | null;
+    } | null;
+  }>;
+  complianceDocuments?: Array<{
+    id: string;
+    kind: string;
+    status: string;
+    provider: string;
+    documentNumber?: string | null;
+    externalId?: string | null;
+    lastError?: string | null;
   }>;
 }
 

@@ -396,9 +396,21 @@ export class OrderProcessingService {
         : itemStates.some((item) => item.markingStatus === 'MARKED_REQUIRED')
           ? 'PENDING'
           : 'NOT_REQUIRED';
+      const complianceIntegration = await db.complianceIntegration.findUnique({
+        where: { projectId },
+        select: { distanceSaleMode: true }
+      });
       await db.order.update({
         where: { id: savedOrder.id },
-        data: { markingState }
+        data: {
+          markingState,
+          withdrawalMode:
+            markingState === 'NOT_REQUIRED'
+              ? 'UNCONFIGURED'
+              : (complianceIntegration?.distanceSaleMode ?? 'UNCONFIGURED'),
+          withdrawalState:
+            markingState === 'NOT_REQUIRED' ? 'NOT_REQUIRED' : 'NOT_STARTED'
+        }
       });
 
       // A paid Tilda order is the reservation trigger. Failure to reserve must

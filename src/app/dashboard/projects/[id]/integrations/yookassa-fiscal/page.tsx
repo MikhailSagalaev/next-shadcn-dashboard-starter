@@ -46,8 +46,11 @@ export default async function YooKassaFiscalPage({
     select: {
       provider: true,
       isActive: true,
+      distanceSaleMode: true,
       gatewayUrl: true,
-      credentialEncrypted: true
+      credentialEncrypted: true,
+      lastTestedAt: true,
+      lastError: true
     }
   });
 
@@ -89,10 +92,14 @@ export default async function YooKassaFiscalPage({
             ? {
                 provider: complianceIntegration.provider,
                 isActive: complianceIntegration.isActive,
+                distanceSaleMode: complianceIntegration.distanceSaleMode,
                 gatewayUrl: complianceIntegration.gatewayUrl,
                 hasCredential: Boolean(
                   complianceIntegration.credentialEncrypted
-                )
+                ),
+                lastTestedAt:
+                  complianceIntegration.lastTestedAt?.toISOString() ?? null,
+                lastError: complianceIntegration.lastError
               }
             : null
         }

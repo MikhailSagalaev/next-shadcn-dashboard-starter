@@ -9,7 +9,9 @@ import {
   ChevronRight,
   PackageCheck,
   Search,
-  ShieldAlert
+  ShieldAlert,
+  Loader2,
+  Wrench
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +25,16 @@ import {
 } from '@/components/ui/card';
 import { Heading } from '@/components/ui/heading';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -41,6 +53,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { MarkingWorkspaceNav } from '@/features/marking/components/marking-workspace-nav';
+import { ManualComplianceConfirmDialog } from '@/features/marking/components/manual-compliance-confirm-dialog';
 import {
   formatReceivingDate,
   unitStatusLabel
@@ -71,6 +84,25 @@ interface StockUnit {
   receivedAt?: string | null;
   createdAt?: string | null;
   quarantineReason?: string | null;
+  hold?: {
+    id: string;
+    status: string;
+    resolution?: string | null;
+    reason: string;
+    complianceDocument?: {
+      id: string;
+      kind: string;
+      status: string;
+      documentNumber?: string | null;
+      externalId?: string | null;
+      lastError?: string | null;
+      outboxEntries?: Array<{
+        id: string;
+        status: string;
+        lastError?: string | null;
+      }>;
+    } | null;
+  } | null;
 }
 
 const PAGE_SIZE = 25;
@@ -263,6 +295,7 @@ export function StockPageView({ projectId }: { projectId: string }) {
                         key={unit.id}
                         unit={unit}
                         projectId={projectId}
+                        onChanged={load}
                       />
                     ))}
                   </TableBody>
@@ -302,7 +335,15 @@ export function StockPageView({ projectId }: { projectId: string }) {
   );
 }
 
-function StockRow({ unit, projectId }: { unit: StockUnit; projectId: string }) {
+function StockRow({
+  unit,
+  projectId,
+  onChanged
+}: {
+  unit: StockUnit;
+  projectId: string;
+  onChanged: () => Promise<void>;
+}) {
   const warning = ['QUARANTINED', 'QUARANTINE', 'DISCREPANCY'].includes(
     unit.status
   );
@@ -364,9 +405,260 @@ function StockRow({ unit, projectId }: { unit: StockUnit; projectId: string }) {
         )}
       </TableCell>
       <TableCell className='text-muted-foreground pr-6 text-sm'>
-        {formatReceivingDate(unit.receivedAt || unit.createdAt)}
+        <div className='flex items-center justify-between gap-2'>
+          <span>{formatReceivingDate(unit.receivedAt || unit.createdAt)}</span>
+          {unit.status === 'QUARANTINED' && (
+            <StockResolutionDialog
+              projectId={projectId}
+              unit={unit}
+              onChanged={onChanged}
+            />
+          )}
+        </div>
       </TableCell>
     </TableRow>
+  );
+}
+
+function StockResolutionDialog({
+  projectId,
+  unit,
+  onChanged
+}: {
+  projectId: string;
+  unit: StockUnit;
+  onChanged: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [action, setAction] = useState('RELEASE_TO_STOCK');
+  const [comment, setComment] = useState('');
+  const [newCode, setNewCode] = useState('');
+  const [writeOffReason, setWriteOffReason] = useState('DAMAGE');
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    setSaving(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/stock-units/${unit.id}/resolve`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action,
+            comment,
+            ...(action === 'REMARK' ? { newCode } : {}),
+            ...(action === 'WRITE_OFF' ? { writeOffReason } : {})
+          })
+        }
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Не удалось создать документ');
+      toast.success(
+        'Решение сохранено. Упаковка останется заблокированной до подтверждения документа.'
+      );
+      setOpen(false);
+      setComment('');
+      setNewCode('');
+      await onChanged();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось сохранить решение'
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <Button size='sm' variant='outline' onClick={() => setOpen(true)}>
+        <Wrench /> Разобрать
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className='sm:max-w-xl'>
+          <DialogHeader>
+            <DialogTitle>Разобрать карантин</DialogTitle>
+            <DialogDescription>
+              {unit.product?.name || 'Упаковка'} · GTIN {unit.gtin}. Склад
+              изменится только после подтверждения внешнего документа.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4'>
+            {unit.hold?.complianceDocument ? (
+              <div className='rounded-lg border p-4 text-sm'>
+                <div className='font-medium'>
+                  Уже создан документ{' '}
+                  {unit.hold.complianceDocument.documentNumber}
+                </div>
+                <div className='text-muted-foreground mt-1'>
+                  Статус: {unit.hold.complianceDocument.status}
+                </div>
+                {unit.hold.complianceDocument.lastError && (
+                  <div className='text-destructive mt-2'>
+                    {unit.hold.complianceDocument.lastError}
+                  </div>
+                )}
+                {unit.hold.complianceDocument.status === 'READY_TO_SIGN' && (
+                  <div className='mt-4'>
+                    <ManualComplianceConfirmDialog
+                      projectId={projectId}
+                      documentId={unit.hold.complianceDocument.id}
+                      documentNumber={
+                        unit.hold.complianceDocument.documentNumber
+                      }
+                      onConfirmed={async () => {
+                        setOpen(false);
+                        await onChanged();
+                      }}
+                    />
+                  </div>
+                )}
+                {unit.hold.complianceDocument.outboxEntries?.[0]?.status ===
+                  'FAILED' && (
+                  <RetryComplianceButton
+                    projectId={projectId}
+                    entryId={unit.hold.complianceDocument.outboxEntries[0].id}
+                    onRetried={onChanged}
+                  />
+                )}
+              </div>
+            ) : (
+              <>
+                <div className='space-y-2'>
+                  <Label>Решение</Label>
+                  <Select value={action} onValueChange={setAction}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='RELEASE_TO_STOCK'>
+                        Вернуть в оборот после проверки
+                      </SelectItem>
+                      <SelectItem value='RETURN_TO_SUPPLIER'>
+                        Вернуть поставщику
+                      </SelectItem>
+                      <SelectItem value='WRITE_OFF'>Списать</SelectItem>
+                      <SelectItem value='REMARK'>Перемаркировать</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {action === 'WRITE_OFF' && (
+                  <div className='space-y-2'>
+                    <Label>Причина списания</Label>
+                    <Select
+                      value={writeOffReason}
+                      onValueChange={setWriteOffReason}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='DAMAGE'>Брак</SelectItem>
+                        <SelectItem value='EXPIRED'>
+                          Истёк срок годности
+                        </SelectItem>
+                        <SelectItem value='LOSS'>Утрата</SelectItem>
+                        <SelectItem value='DESTRUCTION'>Уничтожение</SelectItem>
+                        <SelectItem value='OWN_USE'>
+                          Собственные нужды
+                        </SelectItem>
+                        <SelectItem value='OTHER'>Другое</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {action === 'REMARK' && (
+                  <div className='space-y-2'>
+                    <Label>Новый Data Matrix</Label>
+                    <Input
+                      className='font-mono'
+                      value={newCode}
+                      onChange={(event) => setNewCode(event.target.value)}
+                      placeholder='Отсканируйте новый код'
+                    />
+                  </div>
+                )}
+                <div className='space-y-2'>
+                  <Label>Результат проверки и основание</Label>
+                  <Textarea
+                    value={comment}
+                    onChange={(event) => setComment(event.target.value)}
+                    placeholder='Например: упаковка не вскрыта, код читается'
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setOpen(false)}>
+              Закрыть
+            </Button>
+            {!unit.hold?.complianceDocument && (
+              <Button
+                disabled={
+                  saving ||
+                  comment.trim().length < 3 ||
+                  (action === 'REMARK' && !newCode.trim())
+                }
+                onClick={() => void submit()}
+              >
+                {saving ? <Loader2 className='animate-spin' /> : <Wrench />}
+                Создать документ
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function RetryComplianceButton({
+  projectId,
+  entryId,
+  onRetried
+}: {
+  projectId: string;
+  entryId: string;
+  onRetried: () => Promise<void>;
+}) {
+  const [retrying, setRetrying] = useState(false);
+
+  async function retry() {
+    setRetrying(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/compliance-outbox/${entryId}/retry`,
+        { method: 'POST' }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Не удалось повторить отправку');
+      }
+      toast.success('Документ возвращён в очередь отправки');
+      await onRetried();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось повторить отправку'
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <Button
+      className='mt-3'
+      size='sm'
+      variant='outline'
+      onClick={() => void retry()}
+      disabled={retrying}
+    >
+      {retrying ? <Loader2 className='animate-spin' /> : <Wrench />}
+      Повторить отправку
+    </Button>
   );
 }
 

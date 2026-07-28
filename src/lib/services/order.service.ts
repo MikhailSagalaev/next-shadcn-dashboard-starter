@@ -157,6 +157,31 @@ export class OrderService {
             },
             orderBy: { createdAt: 'desc' }
           },
+          complianceDocuments: {
+            where: { kind: 'DISTANCE_SALE' },
+            select: {
+              id: true,
+              kind: true,
+              status: true,
+              documentNumber: true,
+              externalId: true,
+              lastError: true,
+              submittedAt: true,
+              succeededAt: true,
+              createdAt: true,
+              outboxEntries: {
+                select: {
+                  id: true,
+                  status: true,
+                  attemptCount: true,
+                  lastError: true
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 1
+              }
+            },
+            orderBy: { createdAt: 'desc' }
+          },
           history: {
             orderBy: {
               createdAt: 'desc'
@@ -165,7 +190,14 @@ export class OrderService {
           project: {
             select: {
               id: true,
-              name: true
+              name: true,
+              complianceIntegration: {
+                select: {
+                  provider: true,
+                  isActive: true,
+                  distanceSaleMode: true
+                }
+              }
             }
           }
         }
@@ -627,7 +659,9 @@ export class OrderService {
           select: {
             markingState: true,
             fiscalState: true,
-            paymentStatus: true
+            paymentStatus: true,
+            withdrawalState: true,
+            fulfillmentState: true
           }
         });
         if (!readiness) throw new Error('Заказ не найден');
@@ -644,6 +678,18 @@ export class OrderService {
         if (readiness.fiscalState !== 'SETTLED') {
           throw new OrderAccountingConflictError(
             'Закрывающий чек ещё не зарегистрирован'
+          );
+        }
+        if (
+          !['SUCCEEDED', 'NOT_REQUIRED'].includes(readiness.withdrawalState)
+        ) {
+          throw new OrderAccountingConflictError(
+            'Вывод Data Matrix из оборота ещё не подтверждён'
+          );
+        }
+        if (readiness.fulfillmentState !== 'READY_TO_SHIP') {
+          throw new OrderAccountingConflictError(
+            'Система ещё не разрешила отгрузку заказа'
           );
         }
       }

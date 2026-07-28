@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { processFiscalOutboxBatch } from '@/lib/services/fiscal-outbox.service';
+import { processComplianceOutboxBatch } from '@/lib/services/compliance-gateway.service';
 
 let stopping = false;
 
@@ -9,7 +10,11 @@ async function run() {
   logger.info('Fiscal worker started', { component: 'fiscal-worker' });
   while (!stopping) {
     try {
-      const processed = await processFiscalOutboxBatch();
+      const [fiscalProcessed, complianceProcessed] = await Promise.all([
+        processFiscalOutboxBatch(),
+        processComplianceOutboxBatch()
+      ]);
+      const processed = fiscalProcessed + complianceProcessed;
       await new Promise((resolve) =>
         setTimeout(resolve, processed ? 250 : 3000)
       );

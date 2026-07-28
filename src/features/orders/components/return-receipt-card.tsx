@@ -7,7 +7,8 @@ import {
   Loader2,
   PackageCheck,
   ReceiptText,
-  RotateCcw
+  RotateCcw,
+  ScanLine
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -20,7 +21,6 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import type { OrderWithRelations } from '@/types/orders';
@@ -55,13 +56,21 @@ export function ReturnReceiptCard({
   const [mode, setMode] = useState<RefundMode>('FULL');
   const [reason, setReason] = useState('');
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [returnCode, setReturnCode] = useState('');
+  const [scanning, setScanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const settlement = order.fiscalReceipts?.find(
     (receipt) => receipt.type === 'SETTLEMENT'
   );
-  const refund = order.fiscalReceipts?.find(
+  const refunds = (order.fiscalReceipts ?? []).filter(
     (receipt) => receipt.type === 'REFUND'
+  );
+  const activeRefund = refunds.find((receipt) =>
+    ['NEW', 'PENDING'].includes(receipt.status)
+  );
+  const successfulRefunds = refunds.filter(
+    (receipt) => receipt.status === 'SUCCEEDED'
   );
   const markedUnits = useMemo(
     () =>
@@ -76,7 +85,8 @@ export function ReturnReceiptCard({
     [order.items]
   );
   const settlementSucceeded = settlement?.status === 'SUCCEEDED';
-  const canCreateRefund = settlementSucceeded && !refund;
+  const canCreateRefund =
+    settlementSucceeded && !activeRefund && markedUnits.length > 0;
   const selectedModeUnavailable = markedUnits.length === 0;
   const selectedUnitsInvalid =
     mode === 'SELECTED' && selectedUnitIds.length === 0;
@@ -84,17 +94,40 @@ export function ReturnReceiptCard({
     submitting || !reason.trim() || selectedUnitsInvalid || !canCreateRefund;
 
   useEffect(() => {
-    if (!refund || !['NEW', 'PENDING'].includes(refund.status)) return;
+    if (!activeRefund) return;
     const timer = window.setInterval(() => void onChanged(), 4000);
     return () => window.clearInterval(timer);
-  }, [onChanged, refund]);
+  }, [activeRefund, onChanged]);
 
-  function toggleUnit(unitId: string, checked: boolean) {
-    setSelectedUnitIds((current) =>
-      checked
-        ? [...new Set([...current, unitId])]
-        : current.filter((id) => id !== unitId)
-    );
+  useEffect(() => {
+    if (successfulRefunds.length) setMode('SELECTED');
+  }, [successfulRefunds.length]);
+
+  async function scanReturnedUnit() {
+    if (!returnCode.trim()) return;
+    setScanning(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/orders/${orderId}/refund/validate-code`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: returnCode })
+        }
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Упаковка не найдена в заказе');
+      setSelectedUnitIds((current) => [...new Set([...current, data.unit.id])]);
+      setReturnCode('');
+      toast.success(`Добавлено к возврату: ${data.unit.itemName}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось проверить код'
+      );
+    } finally {
+      setScanning(false);
+    }
   }
 
   async function createRefund() {
@@ -152,19 +185,16 @@ export function ReturnReceiptCard({
                 расчёта.
               </CardDescription>
             </div>
-            {refund && (
-              <Badge
-                variant={refund.status === 'FAILED' ? 'destructive' : 'outline'}
-              >
-                {RECEIPT_STATUS_LABELS[refund.status] || refund.status}
+            {activeRefund && (
+              <Badge variant='outline'>
+                {RECEIPT_STATUS_LABELS[activeRefund.status] ||
+                  activeRefund.status}
               </Badge>
             )}
           </div>
         </CardHeader>
         <CardContent className='space-y-4'>
-          {refund ? (
-            <RefundReceiptState refund={refund} />
-          ) : !settlementSucceeded ? (
+          {!settlementSucceeded ? (
             <Alert>
               <ReceiptText />
               <AlertTitle>Возврат пока недоступен</AlertTitle>
@@ -174,19 +204,57 @@ export function ReturnReceiptCard({
                 сценарий.
               </AlertDescription>
             </Alert>
-          ) : (
+          ) : activeRefund ? (
+            <RefundReceiptState refund={activeRefund} />
+          ) : markedUnits.length ? (
             <div className='flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between'>
               <div>
-                <div className='font-medium'>Чек продажи зарегистрирован</div>
+                <div className='font-medium'>
+                  {successfulRefunds.length
+                    ? 'Можно оформить следующий частичный возврат'
+                    : 'Чек продажи зарегистрирован'}
+                </div>
                 <div className='text-muted-foreground mt-1 text-sm'>
-                  Можно оформить один полный или частичный возврат по этому
-                  заказу.
+                  Осталось проданных упаковок: {markedUnits.length}.
+                  Одновременно обрабатывается только один возврат.
                 </div>
               </div>
               <Button onClick={() => setOpen(true)}>
                 <RotateCcw />
                 Оформить возврат
               </Button>
+            </div>
+          ) : (
+            <Alert>
+              <CheckCircle2 />
+              <AlertTitle>Возвращаемых упаковок не осталось</AlertTitle>
+              <AlertDescription>
+                Все маркированные упаковки заказа уже возвращены или ожидают
+                проверки.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {refunds.length > 0 && !activeRefund && (
+            <div className='space-y-2'>
+              <div className='text-sm font-medium'>История возвратов</div>
+              {refunds.map((item, index) => (
+                <div
+                  key={item.id}
+                  className='flex items-center justify-between rounded-md border px-3 py-2 text-sm'
+                >
+                  <span>Возврат № {refunds.length - index}</span>
+                  <Badge
+                    variant={
+                      ['FAILED', 'CANCELED'].includes(item.status)
+                        ? 'destructive'
+                        : 'secondary'
+                    }
+                  >
+                    {RECEIPT_STATUS_LABELS[item.status] || item.status}
+                  </Badge>
+                </div>
+              ))}
             </div>
           )}
 
@@ -207,8 +275,9 @@ export function ReturnReceiptCard({
           <DialogHeader>
             <DialogTitle>Оформить возвратный чек</DialogTitle>
             <DialogDescription>
-              Проверьте состав возврата. После отправки создать второй
-              возвратный чек для этого заказа будет нельзя.
+              Проверьте состав возврата. Следующий частичный возврат можно
+              оформить только после завершения текущего и только для оставшихся
+              проданных упаковок.
             </DialogDescription>
           </DialogHeader>
 
@@ -222,7 +291,11 @@ export function ReturnReceiptCard({
                 htmlFor='refund-full'
                 className='flex cursor-pointer items-start gap-3 rounded-lg border p-4'
               >
-                <RadioGroupItem id='refund-full' value='FULL' />
+                <RadioGroupItem
+                  id='refund-full'
+                  value='FULL'
+                  disabled={successfulRefunds.length > 0}
+                />
                 <span>
                   <span className='block font-medium'>Весь заказ</span>
                   <span className='text-muted-foreground mt-1 block text-sm font-normal'>
@@ -248,6 +321,17 @@ export function ReturnReceiptCard({
               </Label>
             </RadioGroup>
 
+            {successfulRefunds.length > 0 && (
+              <Alert>
+                <AlertCircle />
+                <AlertTitle>Ранее уже был частичный возврат</AlertTitle>
+                <AlertDescription>
+                  Выберите конкретные оставшиеся упаковки. Это защищает от
+                  повторного возврата уже выплаченной суммы.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {mode === 'SELECTED' && (
               <div className='space-y-3'>
                 <div>
@@ -256,20 +340,39 @@ export function ReturnReceiptCard({
                     Выбрано {selectedUnitIds.length} из {markedUnits.length}
                   </div>
                 </div>
+                <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]'>
+                  <Input
+                    className='font-mono'
+                    value={returnCode}
+                    onChange={(event) => setReturnCode(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void scanReturnedUnit();
+                      }
+                    }}
+                    placeholder='Отсканируйте Data Matrix возвращённой упаковки'
+                  />
+                  <Button
+                    type='button'
+                    variant='outline'
+                    disabled={scanning || !returnCode.trim()}
+                    onClick={() => void scanReturnedUnit()}
+                  >
+                    {scanning ? (
+                      <Loader2 className='animate-spin' />
+                    ) : (
+                      <ScanLine />
+                    )}
+                    Проверить
+                  </Button>
+                </div>
                 <div className='max-h-64 space-y-2 overflow-y-auto rounded-lg border p-3'>
                   {markedUnits.map((unit) => (
-                    <Label
+                    <div
                       key={unit.id}
-                      htmlFor={`refund-unit-${unit.id}`}
-                      className='hover:bg-muted flex cursor-pointer items-start gap-3 rounded-md p-2'
+                      className='flex items-start justify-between gap-3 rounded-md p-2'
                     >
-                      <Checkbox
-                        id={`refund-unit-${unit.id}`}
-                        checked={selectedUnitIds.includes(unit.id)}
-                        onCheckedChange={(checked) =>
-                          toggleUnit(unit.id, checked === true)
-                        }
-                      />
                       <span className='min-w-0'>
                         <span className='block truncate text-sm font-medium'>
                           {unit.itemName}
@@ -279,7 +382,26 @@ export function ReturnReceiptCard({
                           {unit.serial ? ` · серийный № ${unit.serial}` : ''}
                         </span>
                       </span>
-                    </Label>
+                      {selectedUnitIds.includes(unit.id) ? (
+                        <div className='flex items-center gap-2'>
+                          <Badge variant='secondary'>Отсканирована</Badge>
+                          <Button
+                            type='button'
+                            size='sm'
+                            variant='ghost'
+                            onClick={() =>
+                              setSelectedUnitIds((current) =>
+                                current.filter((id) => id !== unit.id)
+                              )
+                            }
+                          >
+                            Убрать
+                          </Button>
+                        </div>
+                      ) : (
+                        <Badge variant='outline'>Ожидает сканирования</Badge>
+                      )}
+                    </div>
                   ))}
                 </div>
                 {selectedUnitsInvalid && (
@@ -307,10 +429,11 @@ export function ReturnReceiptCard({
 
             <Alert variant='destructive'>
               <AlertCircle />
-              <AlertTitle>Действие нельзя повторить</AlertTitle>
+              <AlertTitle>Проверьте физические упаковки</AlertTitle>
               <AlertDescription>
-                После подтверждения система создаст единственный возвратный чек
-                для заказа. Проверьте причину и выбранные упаковки.
+                Отсканируйте или сверьте Data Matrix фактически полученной
+                упаковки. После успеха можно создать следующий возврат только
+                для оставшихся проданных упаковок.
               </AlertDescription>
             </Alert>
           </div>
@@ -353,8 +476,9 @@ function RefundReceiptState({
         <CheckCircle2 />
         <AlertTitle>Возврат зарегистрирован</AlertTitle>
         <AlertDescription>
-          Повторный возвратный чек для этого заказа создать нельзя.
-          Маркированные упаковки ожидают проверки в карантине.
+          Маркированные упаковки ожидают проверки в карантине. Если в заказе
+          остались другие проданные упаковки, для них можно оформить следующий
+          частичный возврат.
           {refund.succeededAt && (
             <span className='mt-1 block'>
               Завершён {formatDate(refund.succeededAt)}.

@@ -10,6 +10,11 @@ import { ProjectService } from '@/lib/services/project.service';
 const schema = z.object({
   provider: z.enum(['MANUAL', 'CUSTOM_GATEWAY']),
   isActive: z.boolean(),
+  distanceSaleMode: z.enum([
+    'UNCONFIGURED',
+    'KKT_MARKED_RECEIPT',
+    'GIS_MT_DISTANCE_SALE'
+  ]),
   gatewayUrl: z.string().url().optional(),
   credential: z.string().min(8).optional()
 });
@@ -44,6 +49,7 @@ export async function POST(
         projectId: id,
         provider: data.provider!,
         isActive: data.isActive!,
+        distanceSaleMode: data.distanceSaleMode!,
         gatewayUrl: data.gatewayUrl,
         credential: data.credential
       })

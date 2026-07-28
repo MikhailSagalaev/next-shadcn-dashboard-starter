@@ -350,7 +350,11 @@ export class MarkingService {
     });
   }
 
-  static async queueSettlement(params: { projectId: string; orderId: string }) {
+  static async queueSettlement(params: {
+    projectId: string;
+    orderId: string;
+    allowGisMtMode?: boolean;
+  }) {
     try {
       await getActiveYooKassaFiscalIntegration(params.projectId);
     } catch (error) {
@@ -359,10 +363,16 @@ export class MarkingService {
       }
       throw error;
     }
-    const order = await db.order.findFirst({
-      where: { id: params.orderId, projectId: params.projectId },
-      include: { fiscalReceipts: true }
-    });
+    const [order, complianceIntegration] = await Promise.all([
+      db.order.findFirst({
+        where: { id: params.orderId, projectId: params.projectId },
+        include: { fiscalReceipts: true, items: true }
+      }),
+      db.complianceIntegration.findUnique({
+        where: { projectId: params.projectId },
+        select: { distanceSaleMode: true }
+      })
+    ]);
     if (!order) throw new MarkingConflictError('Заказ не найден');
     const metadata = (order.metadata ?? {}) as Record<string, any>;
     const rawPayment = metadata.raw?.payment ?? {};
@@ -396,6 +406,25 @@ export class MarkingService {
         'Сначала завершите маркировку всех позиций'
       );
     }
+    const hasMarkedItems = order.items.some(
+      (item) => item.markingStatus === 'MARKED_REQUIRED'
+    );
+    const distanceSaleMode =
+      complianceIntegration?.distanceSaleMode ?? 'UNCONFIGURED';
+    if (hasMarkedItems && distanceSaleMode === 'UNCONFIGURED') {
+      throw new MarkingConflictError(
+        'Сначала выберите способ вывода Data Matrix в настройках ЭДО/ГИС МТ проекта'
+      );
+    }
+    if (
+      hasMarkedItems &&
+      distanceSaleMode === 'GIS_MT_DISTANCE_SALE' &&
+      !params.allowGisMtMode
+    ) {
+      throw new MarkingConflictError(
+        'Для проекта выбран вывод через ГИС МТ. Отправьте документ «Дистанционная торговля» — маркировочный чек ЮKassa заблокирован, чтобы не вывести код повторно.'
+      );
+    }
     const existing = order.fiscalReceipts.find(
       (receipt) =>
         receipt.type === 'SETTLEMENT' && receipt.status !== 'CANCELED'
@@ -405,7 +434,12 @@ export class MarkingService {
       return db.$transaction(async (tx) => {
         const receipt = await tx.fiscalReceipt.update({
           where: { id: existing.id },
-          data: { status: 'NEW', lastError: null }
+          data: {
+            status: 'NEW',
+            lastError: null,
+            includesMarkCodes:
+              hasMarkedItems && distanceSaleMode === 'KKT_MARKED_RECEIPT'
+          }
         });
         await tx.fiscalOutbox.upsert({
           where: { idempotencyKey: existing.idempotencyKey },
@@ -427,7 +461,13 @@ export class MarkingService {
         });
         await tx.order.update({
           where: { id: order.id },
-          data: { fiscalState: 'SETTLEMENT_PENDING' }
+          data: {
+            fiscalState: 'SETTLEMENT_PENDING',
+            withdrawalMode: hasMarkedItems
+              ? 'KKT_MARKED_RECEIPT'
+              : 'UNCONFIGURED',
+            withdrawalState: hasMarkedItems ? 'PENDING' : 'NOT_REQUIRED'
+          }
         });
         return receipt;
       });
@@ -455,7 +495,15 @@ export class MarkingService {
           type: 'SETTLEMENT',
           status: 'NEW',
           idempotencyKey,
-          requestPayload: { orderId: order.id, codeStorage: 'encrypted' }
+          requestPayload: {
+            orderId: order.id,
+            codeStorage: 'encrypted',
+            withdrawalMode: hasMarkedItems
+              ? 'KKT_MARKED_RECEIPT'
+              : 'NOT_REQUIRED'
+          },
+          includesMarkCodes:
+            hasMarkedItems && distanceSaleMode === 'KKT_MARKED_RECEIPT'
         }
       });
       await tx.fiscalOutbox.create({
@@ -471,7 +519,14 @@ export class MarkingService {
       await tx.order.update({
         where: { id: order.id },
         data: {
-          fiscalState: 'SETTLEMENT_PENDING'
+          fiscalState: 'SETTLEMENT_PENDING',
+          withdrawalMode: hasMarkedItems ? distanceSaleMode : 'UNCONFIGURED',
+          withdrawalState:
+            hasMarkedItems && distanceSaleMode === 'KKT_MARKED_RECEIPT'
+              ? 'PENDING'
+              : hasMarkedItems
+                ? order.withdrawalState
+                : 'NOT_REQUIRED'
         }
       });
       return receipt;
@@ -519,8 +574,11 @@ export class MarkingService {
       itemTotal += Number(item.total);
       for (let index = 0; index < item.quantity; index += 1) {
         const marked = item.markingStatus === 'MARKED_REQUIRED';
-        const unit = marked ? item.markedUnits[index] : undefined;
-        if (marked && !unit)
+        const unit =
+          marked && receipt.includesMarkCodes
+            ? item.markedUnits[index]
+            : undefined;
+        if (marked && receipt.includesMarkCodes && !unit)
           throw new Error(`Mark code missing for ${item.name}`);
         items.push({
           description: item.name.slice(0, 128),

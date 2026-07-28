@@ -57,6 +57,7 @@ model Project {
   goodsReceipts                GoodsReceipt[]
   receiptDiscrepancies         GoodsReceiptDiscrepancy[]
   stockUnitEvents              StockUnitEvent[]
+  stockUnitHolds               StockUnitHold[]
   complianceIntegration        ComplianceIntegration?
   complianceDocuments          ComplianceDocument[]
   complianceOutbox             ComplianceOutbox[]
@@ -955,6 +956,20 @@ enum FulfillmentState {
   RETURNED
 }
 
+enum DistanceSaleMode {
+  UNCONFIGURED
+  KKT_MARKED_RECEIPT
+  GIS_MT_DISTANCE_SALE
+}
+
+enum WithdrawalState {
+  NOT_REQUIRED
+  NOT_STARTED
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
 enum ProductMarkingStatus {
   UNKNOWN
   MARKED_REQUIRED
@@ -983,6 +998,7 @@ enum MarkedUnitStatus {
   SOLD
   RETURN_PENDING
   RETURNED
+  RETURNED_TO_SUPPLIER
   WRITE_OFF_PENDING
   WRITTEN_OFF
   VOID
@@ -1023,6 +1039,28 @@ enum ReceiptDiscrepancyResolution {
   IGNORED
 }
 
+enum StockUnitHoldSource {
+  RECEIVING
+  CUSTOMER_RETURN
+  MANUAL_REVIEW
+  RECONCILIATION
+}
+
+enum StockUnitHoldStatus {
+  OPEN
+  PENDING_EXTERNAL
+  RESOLVED
+  CANCELED
+}
+
+enum StockUnitHoldResolution {
+  RELEASE_TO_STOCK
+  RETURN_TO_SUPPLIER
+  WRITE_OFF
+  REMARK
+  KEEP_QUARANTINED
+}
+
 enum ComplianceProvider {
   MANUAL
   CUSTOM_GATEWAY
@@ -1032,6 +1070,9 @@ enum ComplianceDocumentKind {
   UPD_RECEIPT
   WRITE_OFF
   RETURN_TO_CIRCULATION
+  DISTANCE_SALE
+  RETURN_TO_SUPPLIER
+  REMARKING
 }
 
 enum ComplianceDocumentStatus {
@@ -1311,6 +1352,8 @@ model Order {
   fiscalState               FiscalState           @default(NOT_STARTED) @map("fiscal_state")
   markingState              MarkingState          @default(NOT_REQUIRED) @map("marking_state")
   fulfillmentState          FulfillmentState      @default(NEW) @map("fulfillment_state")
+  withdrawalMode            DistanceSaleMode      @default(UNCONFIGURED) @map("withdrawal_mode")
+  withdrawalState           WithdrawalState       @default(NOT_STARTED) @map("withdrawal_state")
   status                    OrderStatus           @default(PENDING)
   accountingState           OrderAccountingState  @default(NOT_APPLIED) @map("accounting_state")
   totalAmount               Decimal               @map("total_amount") @db.Decimal(10, 2)
@@ -1335,6 +1378,7 @@ model Order {
   stockUnitEvents           StockUnitEvent[]
   reconciliationIssues      ReconciliationIssue[]
   fiscalOutbox              FiscalOutbox[]
+  complianceDocuments       ComplianceDocument[]
   createdAt                 DateTime              @default(now()) @map("created_at")
   updatedAt                 DateTime              @updatedAt @map("updated_at")
   project                   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1476,6 +1520,7 @@ model FiscalReceipt {
   providerReceiptId    String?               @unique @map("provider_receipt_id")
   providerRefundId     String?               @unique @map("provider_refund_id")
   providerPaymentId    String                @map("provider_payment_id")
+  includesMarkCodes    Boolean               @default(false) @map("includes_mark_codes")
   type                 FiscalReceiptType
   status               FiscalReceiptStatus   @default(NEW)
   idempotencyKey       String                @unique @map("idempotency_key")
@@ -1532,6 +1577,7 @@ model MarkedUnit {
   discrepancies        GoodsReceiptDiscrepancy[]
   complianceDocuments  ComplianceDocumentUnit[]
   reconciliationIssues ReconciliationIssue[]
+  holds                StockUnitHold[]
 
   @@index([projectId, status])
   @@index([orderId, orderItemId])
@@ -1635,14 +1681,39 @@ model StockUnitEvent {
   @@map("stock_unit_events")
 }
 
+model StockUnitHold {
+  id                   String                   @id @default(cuid())
+  projectId            String                   @map("project_id")
+  markedUnitId         String                   @map("marked_unit_id")
+  complianceDocumentId String?                  @map("compliance_document_id")
+  source               StockUnitHoldSource
+  status               StockUnitHoldStatus      @default(OPEN)
+  resolution           StockUnitHoldResolution?
+  reason               String                   @db.Text
+  resolutionComment    String?                  @map("resolution_comment") @db.Text
+  openedBy             String?                  @map("opened_by")
+  resolvedBy           String?                  @map("resolved_by")
+  openedAt             DateTime                 @default(now()) @map("opened_at")
+  resolvedAt           DateTime?                @map("resolved_at")
+  project              Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  markedUnit           MarkedUnit               @relation(fields: [markedUnitId], references: [id], onDelete: Cascade)
+  complianceDocument   ComplianceDocument?      @relation(fields: [complianceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status, openedAt])
+  @@index([markedUnitId, status])
+  @@map("stock_unit_holds")
+}
+
 model ComplianceIntegration {
   id                  String             @id @default(cuid())
   projectId           String             @unique @map("project_id")
   provider            ComplianceProvider @default(MANUAL)
   isActive            Boolean            @default(false) @map("is_active")
+  distanceSaleMode    DistanceSaleMode   @default(UNCONFIGURED) @map("distance_sale_mode")
   gatewayUrl          String?            @map("gateway_url")
   credentialEncrypted String?            @map("credential_encrypted") @db.Text
   lastTestedAt        DateTime?          @map("last_tested_at")
+  lastSyncAt          DateTime?          @map("last_sync_at")
   lastError           String?            @map("last_error") @db.Text
   createdAt           DateTime           @default(now()) @map("created_at")
   updatedAt           DateTime           @updatedAt @map("updated_at")
@@ -1655,11 +1726,13 @@ model ComplianceDocument {
   id              String                   @id @default(cuid())
   projectId       String                   @map("project_id")
   goodsReceiptId  String?                  @map("goods_receipt_id")
+  orderId         String?                  @map("order_id")
   kind            ComplianceDocumentKind
   status          ComplianceDocumentStatus @default(DRAFT)
   provider        ComplianceProvider       @default(MANUAL)
   reason          WriteOffReason?
   documentNumber  String?                  @map("document_number")
+  idempotencyKey  String?                  @unique @map("idempotency_key")
   externalId      String?                  @map("external_id")
   payload         Json?
   responsePayload Json?                    @map("response_payload")
@@ -1671,19 +1744,24 @@ model ComplianceDocument {
   updatedAt       DateTime                 @updatedAt @map("updated_at")
   project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   goodsReceipt    GoodsReceipt?            @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
+  order           Order?                   @relation(fields: [orderId], references: [id], onDelete: SetNull)
   units           ComplianceDocumentUnit[]
   outboxEntries   ComplianceOutbox[]
+  holds           StockUnitHold[]
 
+  @@unique([orderId, kind])
   @@index([projectId, kind, status, createdAt])
+  @@index([orderId, kind, status])
   @@index([externalId])
   @@map("compliance_documents")
 }
 
 model ComplianceDocumentUnit {
-  documentId   String             @map("document_id")
-  markedUnitId String             @map("marked_unit_id")
-  document     ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  markedUnit   MarkedUnit         @relation(fields: [markedUnitId], references: [id], onDelete: Restrict)
+  documentId     String             @map("document_id")
+  markedUnitId   String             @map("marked_unit_id")
+  previousStatus MarkedUnitStatus?  @map("previous_status")
+  document       ComplianceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  markedUnit     MarkedUnit         @relation(fields: [markedUnitId], references: [id], onDelete: Restrict)
 
   @@id([documentId, markedUnitId])
   @@index([markedUnitId])

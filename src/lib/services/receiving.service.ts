@@ -31,12 +31,21 @@ const receiptInclude = {
       }
     }
   },
-  discrepancies: { orderBy: { createdAt: 'desc' as const } },
+  discrepancies: {
+    include: {
+      markedUnit: {
+        include: {
+          product: { select: { id: true, name: true, sku: true, gtin: true } }
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' as const }
+  },
   complianceDocuments: { orderBy: { createdAt: 'desc' as const } }
 };
 
 function presentReceipt(receipt: any) {
-  const units = receipt.items.flatMap((item: any) =>
+  const itemUnits = receipt.items.flatMap((item: any) =>
     item.units.map((unit: any) => ({
       ...unit,
       itemId: item.id,
@@ -48,9 +57,43 @@ function presentReceipt(receipt: any) {
         : 'Код сохранён'
     }))
   );
+  const knownIds = new Set(itemUnits.map((unit: any) => unit.id));
+  const detachedUnits = receipt.discrepancies
+    .map((item: any) => item.markedUnit)
+    .filter((unit: any) => unit && !knownIds.has(unit.id))
+    .map((unit: any) => ({
+      ...unit,
+      product: unit.product,
+      productName: unit.product?.name,
+      createdAt: unit.scannedAt,
+      maskedCode: unit.serial
+        ? `••••${String(unit.serial).slice(-6)}`
+        : 'Код сохранён'
+    }));
+  const units = [...itemUnits, ...detachedUnits];
   const metadata = (receipt.metadata ?? {}) as Record<string, unknown>;
   return {
     ...receipt,
+    discrepancies: receipt.discrepancies.map((discrepancy: any) => ({
+      id: discrepancy.id,
+      type: discrepancy.type,
+      message: discrepancy.message,
+      resolution: discrepancy.resolution,
+      resolutionComment: discrepancy.resolutionComment,
+      resolvedAt: discrepancy.resolvedAt,
+      createdAt: discrepancy.createdAt,
+      markedUnit: discrepancy.markedUnit
+        ? {
+            id: discrepancy.markedUnit.id,
+            gtin: discrepancy.markedUnit.gtin,
+            serial: discrepancy.markedUnit.serial,
+            status: discrepancy.markedUnit.status,
+            productId: discrepancy.markedUnit.productId,
+            goodsReceiptItemId: discrepancy.markedUnit.goodsReceiptItemId,
+            product: discrepancy.markedUnit.product
+          }
+        : null
+    })),
     units,
     expectedUnits:
       receipt.items.reduce(
@@ -183,6 +226,34 @@ export class ReceivingService {
       );
     }
     const codeHash = hashMarkCode(parsed.raw);
+    const [existingReceipt, duplicate] = await Promise.all([
+      db.goodsReceipt.findFirst({
+        where: { id: params.receiptId, projectId: params.projectId },
+        select: { id: true, status: true }
+      }),
+      db.markedUnit.findUnique({ where: { codeHash }, select: { id: true } })
+    ]);
+    if (!existingReceipt)
+      throw new ReceivingConflictError('Приёмка не найдена');
+    if (duplicate) {
+      await db.$transaction([
+        db.goodsReceiptDiscrepancy.create({
+          data: {
+            projectId: params.projectId,
+            goodsReceiptId: existingReceipt.id,
+            type: 'DUPLICATE',
+            message: 'Этот Data Matrix уже есть в складском реестре'
+          }
+        }),
+        db.goodsReceipt.update({
+          where: { id: existingReceipt.id },
+          data: { status: 'DISCREPANCY' }
+        })
+      ]);
+      throw new ReceivingConflictError(
+        'Этот Data Matrix уже есть в складском реестре'
+      );
+    }
     return db.$transaction(async (tx) => {
       const receipt = await tx.goodsReceipt.findFirst({
         where: { id: params.receiptId, projectId: params.projectId },
@@ -192,25 +263,6 @@ export class ReceivingService {
       if (['ACCEPTED', 'REJECTED'].includes(receipt.status)) {
         throw new ReceivingConflictError('Завершённую приёмку нельзя изменять');
       }
-      const duplicate = await tx.markedUnit.findUnique({ where: { codeHash } });
-      if (duplicate) {
-        await tx.goodsReceiptDiscrepancy.create({
-          data: {
-            projectId: params.projectId,
-            goodsReceiptId: receipt.id,
-            type: 'DUPLICATE',
-            message: 'Этот Data Matrix уже есть в складском реестре'
-          }
-        });
-        await tx.goodsReceipt.update({
-          where: { id: receipt.id },
-          data: { status: 'DISCREPANCY' }
-        });
-        throw new ReceivingConflictError(
-          'Этот Data Matrix уже есть в складском реестре'
-        );
-      }
-
       let item = receipt.items.find(
         (candidate) => candidate.gtin === parsed.gtin
       );
@@ -270,6 +322,15 @@ export class ReceivingService {
             message: `GTIN ${parsed.gtin} отсутствует в документе и каталоге`
           }
         });
+        await tx.stockUnitHold.create({
+          data: {
+            projectId: params.projectId,
+            markedUnitId: unit.id,
+            source: 'RECEIVING',
+            reason: `GTIN ${parsed.gtin} отсутствует в документе и каталоге`,
+            openedBy: params.actorId
+          }
+        });
       }
       await tx.goodsReceipt.update({
         where: { id: receipt.id },
@@ -291,24 +352,169 @@ export class ReceivingService {
       | 'IGNORED';
     comment?: string;
     actorId: string;
+    productId?: string;
   }) {
     const discrepancy = await db.goodsReceiptDiscrepancy.findFirst({
       where: {
         id: params.discrepancyId,
         goodsReceiptId: params.receiptId,
         projectId: params.projectId
-      }
+      },
+      include: { markedUnit: true }
     });
     if (!discrepancy)
       throw new ReceivingConflictError('Расхождение не найдено');
-    return db.goodsReceiptDiscrepancy.update({
-      where: { id: discrepancy.id },
-      data: {
-        resolution: params.resolution,
-        resolutionComment: params.comment,
-        resolvedAt: new Date(),
-        resolvedBy: params.actorId
+    if (discrepancy.resolvedAt) return discrepancy;
+    if (params.resolution === 'IGNORED' && discrepancy.markedUnitId) {
+      throw new ReceivingConflictError(
+        'Физическую упаковку нельзя просто проигнорировать — выберите решение'
+      );
+    }
+    return db.$transaction(async (tx) => {
+      const now = new Date();
+      let unit = discrepancy.markedUnit;
+      if (
+        unit &&
+        ['ACCEPTED', 'CORRECTED_DOCUMENT'].includes(params.resolution)
+      ) {
+        if ((!unit.productId || !unit.goodsReceiptItemId) && params.productId) {
+          const product = await tx.product.findFirst({
+            where: { id: params.productId, projectId: params.projectId }
+          });
+          if (!product || product.gtin !== unit.gtin) {
+            throw new ReceivingConflictError(
+              'Выбранный товар не найден или его GTIN не совпадает'
+            );
+          }
+          let item = await tx.goodsReceiptItem.findFirst({
+            where: {
+              goodsReceiptId: params.receiptId,
+              productId: product.id,
+              gtin: unit.gtin
+            }
+          });
+          item ??= await tx.goodsReceiptItem.create({
+            data: {
+              goodsReceiptId: params.receiptId,
+              productId: product.id,
+              name: product.name,
+              gtin: unit.gtin,
+              expectedQuantity: 1
+            }
+          });
+          unit = await tx.markedUnit.update({
+            where: { id: unit.id },
+            data: {
+              productId: product.id,
+              goodsReceiptItemId: item.id
+            }
+          });
+        }
+        if (!unit.productId || !unit.goodsReceiptItemId) {
+          throw new ReceivingConflictError(
+            'Сначала сопоставьте упаковку с товаром каталога'
+          );
+        }
+        await tx.markedUnit.update({
+          where: { id: unit.id },
+          data: { status: 'SCANNED', quarantinedAt: null }
+        });
+        await tx.stockUnitEvent.create({
+          data: {
+            projectId: params.projectId,
+            markedUnitId: unit.id,
+            productId: unit.productId,
+            fromStatus: unit.status,
+            toStatus: 'SCANNED',
+            reason: 'Расхождение приёмки разрешено',
+            actorId: params.actorId
+          }
+        });
+      } else if (unit && params.resolution === 'RETURN_TO_SUPPLIER') {
+        await tx.markedUnit.update({
+          where: { id: unit.id },
+          data: { status: 'RETURNED_TO_SUPPLIER' }
+        });
+        await tx.stockUnitEvent.create({
+          data: {
+            projectId: params.projectId,
+            markedUnitId: unit.id,
+            productId: unit.productId,
+            fromStatus: unit.status,
+            toStatus: 'RETURNED_TO_SUPPLIER',
+            reason: params.comment || 'Возврат поставщику при приёмке',
+            actorId: params.actorId
+          }
+        });
+      } else if (unit && params.resolution === 'WRITE_OFF') {
+        const document = await tx.complianceDocument.create({
+          data: {
+            projectId: params.projectId,
+            kind: 'WRITE_OFF',
+            reason: 'DAMAGE',
+            status: 'DRAFT',
+            provider: 'MANUAL',
+            documentNumber: `WO-${Date.now()}`,
+            idempotencyKey: `receiving-write-off:${discrepancy.id}`,
+            createdBy: params.actorId,
+            payload: {
+              comment: params.comment ?? discrepancy.message,
+              source: 'RECEIVING_DISCREPANCY'
+            },
+            units: {
+              create: {
+                markedUnitId: unit.id,
+                previousStatus: unit.status
+              }
+            }
+          }
+        });
+        await tx.markedUnit.update({
+          where: { id: unit.id },
+          data: { status: 'WRITE_OFF_PENDING' }
+        });
+        await tx.stockUnitHold.updateMany({
+          where: { markedUnitId: unit.id, status: 'OPEN' },
+          data: {
+            status: 'PENDING_EXTERNAL',
+            resolution: 'WRITE_OFF',
+            resolutionComment: params.comment,
+            complianceDocumentId: document.id
+          }
+        });
       }
+      const resolved = await tx.goodsReceiptDiscrepancy.update({
+        where: { id: discrepancy.id },
+        data: {
+          resolution: params.resolution,
+          resolutionComment: params.comment,
+          resolvedAt: now,
+          resolvedBy: params.actorId
+        }
+      });
+      if (unit && params.resolution !== 'WRITE_OFF') {
+        await tx.stockUnitHold.updateMany({
+          where: { markedUnitId: unit.id, status: 'OPEN' },
+          data: {
+            status: 'RESOLVED',
+            resolution:
+              params.resolution === 'RETURN_TO_SUPPLIER'
+                ? 'RETURN_TO_SUPPLIER'
+                : 'RELEASE_TO_STOCK',
+            resolutionComment: params.comment,
+            resolvedAt: now,
+            resolvedBy: params.actorId
+          }
+        });
+      }
+      const unresolved = await tx.goodsReceiptDiscrepancy.count({
+        where: { goodsReceiptId: params.receiptId, resolvedAt: null }
+      });
+      await tx.goodsReceipt.update({
+        where: { id: params.receiptId },
+        data: { status: unresolved ? 'DISCREPANCY' : 'SCANNING' }
+      });
+      return resolved;
     });
   }
 
@@ -316,7 +522,6 @@ export class ReceivingService {
     projectId: string;
     receiptId: string;
     actorId: string;
-    documentConfirmed?: boolean;
   }) {
     return db.$transaction(async (tx) => {
       const receipt = await tx.goodsReceipt.findFirst({
@@ -325,7 +530,8 @@ export class ReceivingService {
           items: { include: { units: true } },
           discrepancies: { where: { resolvedAt: null } },
           complianceDocuments: {
-            where: { kind: 'UPD_RECEIPT', status: 'SUCCEEDED' }
+            where: { kind: 'UPD_RECEIPT' },
+            orderBy: { createdAt: 'desc' }
           }
         }
       });
@@ -335,22 +541,35 @@ export class ReceivingService {
           'Сначала разберите все расхождения и карантин'
         );
       }
-      const signed =
-        Boolean(params.documentConfirmed) ||
-        receipt.complianceDocuments.length > 0;
+      const quarantined = receipt.items.some((item) =>
+        item.units.some((unit) => unit.status === 'QUARANTINED')
+      );
+      if (quarantined) {
+        throw new ReceivingConflictError(
+          'В приёмке остались упаковки в карантине'
+        );
+      }
+      const signed = receipt.complianceDocuments.some(
+        (document) => document.status === 'SUCCEEDED'
+      );
       if (!signed) {
-        const document = await tx.complianceDocument.create({
-          data: {
-            projectId: params.projectId,
-            goodsReceiptId: receipt.id,
-            kind: 'UPD_RECEIPT',
-            status: 'READY_TO_SIGN',
-            provider: 'MANUAL',
-            documentNumber: receipt.documentNumber,
-            createdBy: params.actorId,
-            payload: { source: receipt.source }
-          }
-        });
+        const document =
+          receipt.complianceDocuments.find((item) =>
+            ['READY_TO_SIGN', 'SUBMITTED', 'PROCESSING'].includes(item.status)
+          ) ??
+          (await tx.complianceDocument.create({
+            data: {
+              projectId: params.projectId,
+              goodsReceiptId: receipt.id,
+              kind: 'UPD_RECEIPT',
+              status: 'READY_TO_SIGN',
+              provider: 'MANUAL',
+              documentNumber: receipt.documentNumber,
+              idempotencyKey: `upd-receipt:${receipt.id}`,
+              createdBy: params.actorId,
+              payload: { source: receipt.source }
+            }
+          }));
         await tx.goodsReceipt.update({
           where: { id: receipt.id },
           data: { status: 'ACCEPTANCE_PENDING' }
@@ -435,9 +654,12 @@ export class ReceivingService {
           status: 'ACCEPTED',
           acceptedAt: new Date(),
           acceptedBy: params.actorId,
-          externalStatus: params.documentConfirmed
-            ? 'CONFIRMED_MANUALLY'
-            : 'CONFIRMED_BY_EDO'
+          externalStatus:
+            receipt.complianceDocuments.find(
+              (document) => document.status === 'SUCCEEDED'
+            )?.provider === 'CUSTOM_GATEWAY'
+              ? 'CONFIRMED_BY_EDO'
+              : 'CONFIRMED_MANUALLY'
         }
       });
       return { accepted: true, requiresSignature: false, receipt: accepted };

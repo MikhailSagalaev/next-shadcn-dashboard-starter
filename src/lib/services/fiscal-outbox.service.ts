@@ -9,6 +9,7 @@ import {
 } from '@/lib/yookassa/client';
 import { getActiveYooKassaFiscalIntegration } from '@/lib/services/yookassa-fiscal-integration.service';
 import { RefundService } from '@/lib/services/refund.service';
+import { OrderReleaseService } from '@/lib/services/order-release.service';
 
 const MAX_ATTEMPTS = 10;
 
@@ -43,71 +44,21 @@ async function applyReceiptStatus(receiptId: string, status: string) {
   if (status === 'succeeded') {
     if (receipt.status === 'SUCCEEDED' && receipt.succeededAt) return;
     await db.$transaction(async (tx) => {
-      const units = await tx.markedUnit.findMany({
-        where: { orderId: receipt.orderId, status: 'ASSIGNED' }
-      });
       await tx.fiscalReceipt.update({
         where: { id: receipt.id },
         data: { status: 'SUCCEEDED', succeededAt: new Date(), lastError: null }
       });
       await tx.order.update({
         where: { id: receipt.orderId },
-        data: { fiscalState: 'SETTLED', fulfillmentState: 'READY_TO_SHIP' }
+        data: {
+          fiscalState: 'SETTLED',
+          ...(receipt.includesMarkCodes
+            ? { withdrawalState: 'SUCCEEDED' as const }
+            : {})
+        }
       });
-      await tx.markedUnit.updateMany({
-        where: { orderId: receipt.orderId, status: 'ASSIGNED' },
-        data: { status: 'SOLD', soldAt: new Date(), receiptId: receipt.id }
-      });
-      const stockUnits = units.filter(
-        (unit) => unit.goodsReceiptItemId && unit.productId
-      );
-      for (const productId of new Set(
-        stockUnits.map((unit) => unit.productId!)
-      )) {
-        const quantity = stockUnits.filter(
-          (unit) => unit.productId === productId
-        ).length;
-        const current = await tx.product.findUniqueOrThrow({
-          where: { id: productId }
-        });
-        const product = await tx.product.update({
-          where: { id: productId },
-          data: {
-            stockOnHand: Math.max(0, current.stockOnHand - quantity),
-            stockReserved: Math.max(0, current.stockReserved - quantity)
-          }
-        });
-        await tx.inventoryMovement.upsert({
-          where: {
-            idempotencyKey: `sale:${receipt.id}:${productId}`
-          },
-          create: {
-            projectId: receipt.projectId,
-            productId,
-            orderId: receipt.orderId,
-            type: 'SALE',
-            quantity: -quantity,
-            balanceAfter: product.stockOnHand,
-            reason: 'Успешный чек полного расчёта',
-            idempotencyKey: `sale:${receipt.id}:${productId}`
-          },
-          update: {}
-        });
-      }
-      if (units.length) {
-        await tx.stockUnitEvent.createMany({
-          data: units.map((unit) => ({
-            projectId: receipt.projectId,
-            markedUnitId: unit.id,
-            productId: unit.productId,
-            orderId: receipt.orderId,
-            fromStatus: 'ASSIGNED' as const,
-            toStatus: 'SOLD' as const,
-            reason: 'Успешный чек полного расчёта'
-          }))
-        });
-      }
     });
+    await OrderReleaseService.reconcile(receipt.projectId, receipt.orderId);
   } else if (status === 'canceled') {
     await db.$transaction([
       db.fiscalReceipt.update({
@@ -119,7 +70,10 @@ async function applyReceiptStatus(receiptId: string, status: string) {
       }),
       db.order.update({
         where: { id: receipt.orderId },
-        data: { fiscalState: 'FAILED' }
+        data: {
+          fiscalState: 'FAILED',
+          withdrawalState: 'FAILED'
+        }
       })
     ]);
   } else {
@@ -382,13 +336,20 @@ export async function processFiscalOutboxBatch(limit = 20): Promise<number> {
             lastError: message,
             attemptCount: { increment: 1 }
           },
-          select: { orderId: true }
+          select: { orderId: true, type: true }
         });
         if (exhausted) {
-          await db.order.update({
-            where: { id: receipt.orderId },
-            data: { fiscalState: 'FAILED' }
-          });
+          if (receipt.type === 'REFUND') {
+            await RefundService.fail(entry.receiptId, message);
+          } else {
+            await db.order.update({
+              where: { id: receipt.orderId },
+              data: {
+                fiscalState: 'FAILED',
+                withdrawalState: 'FAILED'
+              }
+            });
+          }
         }
       }
     }

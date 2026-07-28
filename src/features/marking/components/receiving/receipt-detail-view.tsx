@@ -23,7 +23,6 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +36,13 @@ import { Heading } from '@/components/ui/heading';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -48,6 +54,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { MarkingWorkspaceNav } from '@/features/marking/components/marking-workspace-nav';
+import { ManualComplianceConfirmDialog } from '@/features/marking/components/manual-compliance-confirm-dialog';
 import {
   type ReceivingRecord,
   type ReceivingUnit,
@@ -56,6 +63,7 @@ import {
   receivingStatusLabel,
   unitStatusLabel
 } from './receiving-types';
+import { Textarea } from '@/components/ui/textarea';
 
 export function ReceiptDetailView({
   projectId,
@@ -71,7 +79,6 @@ export function ReceiptDetailView({
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [accepting, setAccepting] = useState(false);
-  const [documentConfirmed, setDocumentConfirmed] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -125,6 +132,10 @@ export function ReceiptDetailView({
     receipt?.status === 'ACCEPTED' || receipt?.status === 'COMPLETED';
   const progress = expected ? Math.min(100, (scanned / expected) * 100) : 0;
   const canAccept = !completed && scanned > 0 && quarantined === 0;
+  const updDocument = receipt?.complianceDocuments?.find(
+    (document) => document.kind === 'UPD_RECEIPT'
+  );
+  const updConfirmed = updDocument?.status === 'SUCCEEDED';
 
   async function scan(event: React.FormEvent) {
     event.preventDefault();
@@ -180,7 +191,7 @@ export function ReceiptDetailView({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentConfirmed })
+          body: JSON.stringify({})
         }
       );
       const data = await response.json();
@@ -188,7 +199,7 @@ export function ReceiptDetailView({
         throw new Error(data.error || 'Не удалось завершить приёмку');
       await load();
       toast.success(
-        documentConfirmed
+        updConfirmed
           ? 'Приёмка завершена, упаковки доступны на складе'
           : 'Сверка завершена. Приёмка ожидает подтверждения УПД'
       );
@@ -278,29 +289,28 @@ export function ReceiptDetailView({
               </CardDescription>
             </div>
             <div className='flex min-w-0 flex-col items-stretch gap-3'>
-              <label className='flex max-w-sm cursor-pointer items-start gap-2 text-sm'>
-                <Checkbox
-                  checked={documentConfirmed}
-                  onCheckedChange={(checked) =>
-                    setDocumentConfirmed(checked === true)
-                  }
+              {updDocument?.status === 'READY_TO_SIGN' ? (
+                <ManualComplianceConfirmDialog
+                  projectId={projectId}
+                  documentId={updDocument.id}
+                  documentNumber={updDocument.documentNumber}
+                  triggerLabel='Подтвердить принятый УПД'
+                  onConfirmed={load}
                 />
-                <span>
-                  УПД подписан, переход товара от поставщика подтверждён
-                </span>
-              </label>
-              <Button
-                disabled={!canAccept || accepting}
-                onClick={accept}
-                className='shrink-0'
-              >
-                {accepting ? (
-                  <Loader2 className='animate-spin' />
-                ) : (
-                  <PackageCheck />
-                )}
-                {documentConfirmed ? 'Принять на склад' : 'Завершить сверку'}
-              </Button>
+              ) : (
+                <Button
+                  disabled={!canAccept || accepting}
+                  onClick={accept}
+                  className='shrink-0'
+                >
+                  {accepting ? (
+                    <Loader2 className='animate-spin' />
+                  ) : (
+                    <PackageCheck />
+                  )}
+                  {updConfirmed ? 'Принять на склад' : 'Завершить сверку'}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className='space-y-4'>
@@ -399,6 +409,15 @@ export function ReceiptDetailView({
           </AlertDescription>
         </Alert>
       )}
+
+      {receipt.discrepancies?.length ? (
+        <DiscrepanciesCard
+          projectId={projectId}
+          receiptId={receiptId}
+          discrepancies={receipt.discrepancies}
+          onChanged={load}
+        />
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -594,6 +613,225 @@ function ReceiptCodeDiagnostic({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DiscrepanciesCard({
+  projectId,
+  receiptId,
+  discrepancies,
+  onChanged
+}: {
+  projectId: string;
+  receiptId: string;
+  discrepancies: NonNullable<ReceivingRecord['discrepancies']>;
+  onChanged: () => Promise<void>;
+}) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [resolution, setResolution] = useState('CORRECTED_DOCUMENT');
+  const [comment, setComment] = useState('');
+  const [productId, setProductId] = useState('');
+  const [products, setProducts] = useState<
+    Array<{ id: string; name: string; gtin?: string | null }>
+  >([]);
+  const [saving, setSaving] = useState(false);
+  const active = discrepancies.find((item) => item.id === activeId);
+  const openItems = discrepancies.filter((item) => !item.resolvedAt);
+
+  useEffect(() => {
+    if (!active?.markedUnit?.gtin) return;
+    void fetch(
+      `/api/projects/${projectId}/products?search=${encodeURIComponent(active.markedUnit.gtin)}`
+    )
+      .then((response) => response.json())
+      .then((data) => {
+        const matched = (data.products ?? []).filter(
+          (product: { gtin?: string | null }) =>
+            product.gtin === active.markedUnit?.gtin
+        );
+        setProducts(matched);
+        if (matched.length === 1) setProductId(matched[0].id);
+      })
+      .catch(() => setProducts([]));
+  }, [active?.markedUnit?.gtin, projectId]);
+
+  async function resolve() {
+    if (!activeId) return;
+    setSaving(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/receipts/${receiptId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            discrepancyId: activeId,
+            resolution,
+            comment: comment.trim() || undefined,
+            productId: productId || undefined
+          })
+        }
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Не удалось разобрать расхождение');
+      toast.success('Решение сохранено');
+      setActiveId(null);
+      setComment('');
+      setProductId('');
+      await onChanged();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Не удалось сохранить решение'
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className={openItems.length ? 'border-amber-300/70' : undefined}>
+      <CardHeader>
+        <CardTitle className='flex items-center gap-2'>
+          <AlertTriangle className='h-5 w-5' /> Расхождения и карантин
+        </CardTitle>
+        <CardDescription>
+          Открыто {openItems.length} из {discrepancies.length}. Каждое
+          расхождение требует явного решения и сохраняется в журнале.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-3'>
+        {discrepancies.map((item) => (
+          <div
+            key={item.id}
+            className='flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-start sm:justify-between'
+          >
+            <div className='min-w-0'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <Badge variant={item.resolvedAt ? 'secondary' : 'destructive'}>
+                  {item.resolvedAt ? 'Разобрано' : 'Требует решения'}
+                </Badge>
+                <span className='text-muted-foreground text-xs'>
+                  {item.type || 'Расхождение'}
+                </span>
+              </div>
+              <div className='mt-2 text-sm'>{item.message}</div>
+              {item.markedUnit && (
+                <div className='text-muted-foreground mt-1 font-mono text-xs'>
+                  GTIN {item.markedUnit.gtin}
+                  {item.markedUnit.serial
+                    ? ` · серийный № …${item.markedUnit.serial.slice(-6)}`
+                    : ''}
+                </div>
+              )}
+              {item.resolutionComment && (
+                <div className='text-muted-foreground mt-2 text-xs'>
+                  Решение: {item.resolutionComment}
+                </div>
+              )}
+            </div>
+            {!item.resolvedAt && (
+              <Button
+                variant='outline'
+                onClick={() => {
+                  setActiveId(item.id);
+                  setResolution('CORRECTED_DOCUMENT');
+                  setComment('');
+                  setProductId(item.markedUnit?.productId ?? '');
+                }}
+              >
+                Разобрать
+              </Button>
+            )}
+          </div>
+        ))}
+      </CardContent>
+
+      <Dialog
+        open={Boolean(activeId)}
+        onOpenChange={(open) => !open && setActiveId(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Решение по расхождению</DialogTitle>
+            <DialogDescription>
+              Упаковка останется недоступной, пока выбранное действие не будет
+              выполнено полностью.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label>Действие</Label>
+              <Select value={resolution} onValueChange={setResolution}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='CORRECTED_DOCUMENT'>
+                    УПД исправлен — принять
+                  </SelectItem>
+                  <SelectItem value='RETURN_TO_SUPPLIER'>
+                    Вернуть поставщику
+                  </SelectItem>
+                  <SelectItem value='WRITE_OFF'>Передать в списание</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {['CORRECTED_DOCUMENT', 'ACCEPTED'].includes(resolution) &&
+              active?.markedUnit &&
+              !active.markedUnit.productId && (
+                <div className='space-y-2'>
+                  <Label>Товар каталога с таким GTIN</Label>
+                  <Select value={productId} onValueChange={setProductId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder='Выберите товар' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name} · {product.gtin}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!products.length && (
+                    <p className='text-destructive text-xs'>
+                      В каталоге нет товара с GTIN {active.markedUnit.gtin}.
+                      Сначала настройте каталог.
+                    </p>
+                  )}
+                </div>
+              )}
+            <div className='space-y-2'>
+              <Label>Комментарий</Label>
+              <Textarea
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+                placeholder='Основание решения или номер исправленного документа'
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setActiveId(null)}>
+              Отмена
+            </Button>
+            <Button
+              disabled={
+                saving ||
+                (resolution === 'CORRECTED_DOCUMENT' &&
+                  Boolean(active?.markedUnit) &&
+                  !active?.markedUnit?.productId &&
+                  !productId)
+              }
+              onClick={() => void resolve()}
+            >
+              {saving ? <Loader2 className='animate-spin' /> : <PackageCheck />}
+              Подтвердить решение
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
 

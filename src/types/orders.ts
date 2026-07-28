@@ -16,7 +16,9 @@ import type {
   Product,
   ProductCategory,
   MarkedUnit,
-  FiscalReceipt
+  FiscalReceipt,
+  ComplianceDocument,
+  ComplianceOutbox
 } from '@prisma/client';
 
 export type {
@@ -93,9 +95,32 @@ export interface OrderWithRelations extends Order {
       | 'succeededAt'
     >
   >;
+  complianceDocuments?: Array<
+    Pick<
+      ComplianceDocument,
+      | 'id'
+      | 'kind'
+      | 'status'
+      | 'documentNumber'
+      | 'externalId'
+      | 'lastError'
+      | 'submittedAt'
+      | 'succeededAt'
+      | 'createdAt'
+    > & {
+      outboxEntries: Array<
+        Pick<ComplianceOutbox, 'id' | 'status' | 'attemptCount' | 'lastError'>
+      >;
+    }
+  >;
   project?: {
     id: string;
     name: string;
+    complianceIntegration?: {
+      provider: string;
+      isActive: boolean;
+      distanceSaleMode: string;
+    } | null;
   };
 }
 

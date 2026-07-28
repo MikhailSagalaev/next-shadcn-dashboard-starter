@@ -1,11 +1,12 @@
 import { db } from '@/lib/db';
-import {
-  decryptIntegrationSecret,
-  encryptIntegrationSecret
-} from '@/lib/integrations/credential-encryption';
-import { decryptMarkCode, hashMarkCode } from '@/lib/marking/code-crypto';
+import { encryptIntegrationSecret } from '@/lib/integrations/credential-encryption';
+import { hashMarkCode } from '@/lib/marking/code-crypto';
 import { parseGs1DataMatrix } from '@/lib/marking/gs1';
-import type { ComplianceProvider, WriteOffReason } from '@prisma/client';
+import type {
+  ComplianceProvider,
+  DistanceSaleMode,
+  WriteOffReason
+} from '@prisma/client';
 
 export class ComplianceConflictError extends Error {}
 
@@ -46,7 +47,11 @@ export class ComplianceService {
       where: { projectId }
     });
     return integration
-      ? { ...integration, credentialEncrypted: undefined, hasCredential: true }
+      ? {
+          ...integration,
+          credentialEncrypted: undefined,
+          hasCredential: Boolean(integration.credentialEncrypted)
+        }
       : null;
   }
 
@@ -54,6 +59,7 @@ export class ComplianceService {
     projectId: string;
     provider: ComplianceProvider;
     isActive: boolean;
+    distanceSaleMode: DistanceSaleMode;
     gatewayUrl?: string;
     credential?: string;
   }) {
@@ -80,12 +86,14 @@ export class ComplianceService {
         projectId: params.projectId,
         provider: params.provider,
         isActive: params.isActive,
+        distanceSaleMode: params.distanceSaleMode,
         gatewayUrl,
         credentialEncrypted
       },
       update: {
         provider: params.provider,
         isActive: params.isActive,
+        distanceSaleMode: params.distanceSaleMode,
         gatewayUrl,
         ...(params.credential ? { credentialEncrypted } : {})
       }
@@ -185,13 +193,32 @@ export class ComplianceService {
           status: 'DRAFT',
           reason,
           documentNumber: `WO-${Date.now()}`,
+          idempotencyKey: `write-off:${params.projectId}:${Date.now()}`,
           createdBy: params.actorId,
           payload: { comment: params.comment ?? null },
           units: {
-            create: units.map((unit) => ({ markedUnitId: unit.id }))
+            create: units.map((unit) => ({
+              markedUnitId: unit.id,
+              previousStatus: unit.status
+            }))
           }
         },
         include: { _count: { select: { units: true } } }
+      });
+      await tx.markedUnit.updateMany({
+        where: { id: { in: units.map((unit) => unit.id) } },
+        data: { status: 'WRITE_OFF_PENDING' }
+      });
+      await tx.stockUnitEvent.createMany({
+        data: units.map((unit) => ({
+          projectId: params.projectId,
+          markedUnitId: unit.id,
+          productId: unit.productId,
+          fromStatus: unit.status,
+          toStatus: 'WRITE_OFF_PENDING' as const,
+          reason: `Добавлено в документ ${document.documentNumber}`,
+          actorId: params.actorId
+        }))
       });
       return document;
     });
@@ -218,60 +245,40 @@ export class ComplianceService {
         where: { id: document.id },
         data: {
           status: 'READY_TO_SIGN',
-          provider: integration?.provider ?? 'MANUAL',
+          provider: 'MANUAL',
           lastError:
             'Документ подготовлен. Подпишите его УКЭП и отправьте через оператора ЭДО/ГИС МТ.'
         }
       });
     }
 
-    const response = await fetch(integration.gatewayUrl, {
-      method: 'POST',
-      signal: AbortSignal.timeout(15_000),
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${decryptIntegrationSecret(
-          integration.credentialEncrypted
-        )}`,
-        'Idempotency-Key': `write-off:${document.id}`
-      },
-      body: JSON.stringify({
-        kind: 'WRITE_OFF',
-        documentId: document.id,
-        documentNumber: document.documentNumber,
-        reason: document.reason,
-        codes: document.units.map(({ markedUnit }) =>
-          decryptMarkCode(markedUnit.codeEncrypted)
-        )
-      })
-    });
-    const body = (await response.json().catch(() => ({}))) as Record<
-      string,
-      unknown
-    >;
-    if (!response.ok) {
-      return db.complianceDocument.update({
-        where: { id: document.id },
-        data: {
-          status: 'FAILED',
-          lastError: String(body.error ?? `Gateway HTTP ${response.status}`),
-          responsePayload: body as any
+    return db.$transaction(async (tx) => {
+      await tx.complianceOutbox.upsert({
+        where: { idempotencyKey: `write-off:${document.id}` },
+        create: {
+          projectId,
+          documentId: document.id,
+          type: 'SUBMIT_DOCUMENT',
+          idempotencyKey: `write-off:${document.id}`,
+          payload: { documentId: document.id }
+        },
+        update: {
+          status: 'PENDING',
+          attemptCount: 0,
+          nextAttemptAt: new Date(),
+          lockedAt: null,
+          lastError: null
         }
       });
-    }
-    const succeeded = ['SUCCEEDED', 'ACCEPTED'].includes(
-      String(body.status ?? '').toUpperCase()
-    );
-    if (succeeded) return this.completeWriteOff(document.id, body);
-    return db.complianceDocument.update({
-      where: { id: document.id },
-      data: {
-        status: 'SUBMITTED',
-        externalId: body.id ? String(body.id) : null,
-        submittedAt: new Date(),
-        responsePayload: body as any,
-        lastError: null
-      }
+      return tx.complianceDocument.update({
+        where: { id: document.id },
+        data: {
+          status: 'SUBMITTED',
+          provider: integration.provider,
+          submittedAt: document.submittedAt ?? new Date(),
+          lastError: null
+        }
+      });
     });
   }
 
@@ -287,8 +294,8 @@ export class ComplianceService {
       if (!document) throw new ComplianceConflictError('Документ не найден');
       if (document.status === 'SUCCEEDED') return document;
       const now = new Date();
-      for (const { markedUnit: unit } of document.units) {
-        if (unit.productId && unit.status !== 'QUARANTINED') {
+      for (const { markedUnit: unit, previousStatus } of document.units) {
+        if (unit.productId && previousStatus === 'AVAILABLE') {
           const product = await tx.product.update({
             where: { id: unit.productId },
             data: { stockOnHand: { decrement: 1 } }
@@ -320,6 +327,16 @@ export class ComplianceService {
           }
         });
       }
+      await tx.stockUnitHold.updateMany({
+        where: {
+          complianceDocumentId: document.id,
+          status: { in: ['OPEN', 'PENDING_EXTERNAL'] }
+        },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: now
+        }
+      });
       return tx.complianceDocument.update({
         where: { id: document.id },
         data: {

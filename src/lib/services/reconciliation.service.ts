@@ -15,9 +15,11 @@ function presentRun(run: any) {
       type:
         issue.type === 'RECEIPT_STATUS_MISMATCH'
           ? 'FISCAL_MISMATCH'
-          : issue.type === 'LOCAL_STOCK_MISMATCH'
-            ? 'QUANTITY_MISMATCH'
-            : issue.type,
+          : issue.type === 'GIS_MT_STATUS_MISMATCH'
+            ? 'STATUS_MISMATCH'
+            : issue.type === 'LOCAL_STOCK_MISMATCH'
+              ? 'QUANTITY_MISMATCH'
+              : issue.type,
       severity: ['GIS_MT_UNAVAILABLE', 'YOOKASSA_UNAVAILABLE'].includes(
         issue.type
       )
@@ -27,9 +29,25 @@ function presentRun(run: any) {
       code: null,
       gtin: issue.markedUnit?.gtin,
       productName: issue.markedUnit?.product?.name,
-      gupilStatus: (issue.expected as any)?.status,
-      externalStatus: (issue.actual as any)?.status,
-      source: issue.type.includes('GIS_MT') ? 'GIS_MT' : 'YOOKASSA_OFD',
+      gupilStatus: String(
+        (issue.expected as any)?.status ??
+          (issue.expected as any)?.quantity ??
+          (issue.expected as any)?.goodsReceipt ??
+          'Нет данных'
+      ),
+      externalStatus: String(
+        (issue.actual as any)?.status ??
+          (issue.actual as any)?.quantity ??
+          (issue.actual as any)?.goodsReceipt ??
+          'Нет данных'
+      ),
+      source: issue.type.includes('GIS_MT')
+        ? 'ГИС МТ'
+        : issue.type.includes('RECEIPT') || issue.type.includes('YOOKASSA')
+          ? 'ЮKassa'
+          : issue.type.includes('COMPLIANCE')
+            ? 'ЭДО/ГИС МТ'
+            : 'Gupil',
       details: issue.message,
       orderId: issue.orderId,
       detectedAt: issue.createdAt
@@ -61,12 +79,17 @@ export class ReconciliationService {
       data: { projectId, createdBy: actorId }
     });
     try {
-      const [products, receipts, integration] = await Promise.all([
+      const [
+        products,
+        receipts,
+        integration,
+        failedDocuments,
+        unitsWithoutReceipt
+      ] = await Promise.all([
         db.product.findMany({
           where: {
             projectId,
-            markingStatus: 'MARKED_REQUIRED',
-            markedUnits: { some: {} }
+            markingStatus: 'MARKED_REQUIRED'
           },
           select: {
             id: true,
@@ -75,7 +98,7 @@ export class ReconciliationService {
             markedUnits: {
               where: {
                 status: {
-                  in: ['AVAILABLE', 'RESERVED', 'ASSIGNED', 'QUARANTINED']
+                  in: ['AVAILABLE', 'RESERVED', 'ASSIGNED']
                 }
               },
               select: { id: true }
@@ -89,9 +112,37 @@ export class ReconciliationService {
             status: { in: ['PENDING', 'SUCCEEDED'] }
           },
           orderBy: { createdAt: 'desc' },
-          take: 50
+          take: 500
         }),
-        db.complianceIntegration.findUnique({ where: { projectId } })
+        db.complianceIntegration.findUnique({ where: { projectId } }),
+        db.complianceDocument.findMany({
+          where: {
+            projectId,
+            OR: [
+              { status: 'FAILED' },
+              {
+                status: { in: ['SUBMITTED', 'PROCESSING'] },
+                updatedAt: { lt: new Date(Date.now() - 60 * 60 * 1000) }
+              }
+            ]
+          },
+          select: {
+            id: true,
+            orderId: true,
+            documentNumber: true,
+            kind: true,
+            status: true,
+            lastError: true
+          }
+        }),
+        db.markedUnit.findMany({
+          where: {
+            projectId,
+            status: { in: ['AVAILABLE', 'RESERVED', 'ASSIGNED', 'SOLD'] },
+            goodsReceiptItemId: null
+          },
+          select: { id: true, orderId: true, gtin: true, status: true }
+        })
       ]);
       const issues: Array<any> = [];
       for (const product of products) {
@@ -107,30 +158,68 @@ export class ReconciliationService {
         }
       }
 
+      for (const unit of unitsWithoutReceipt) {
+        issues.push({
+          projectId,
+          runId: run.id,
+          markedUnitId: unit.id,
+          orderId: unit.orderId,
+          type: 'UNIT_WITHOUT_RECEIPT',
+          message: `Упаковка GTIN ${unit.gtin} имеет статус ${unit.status}, но не связана с приёмкой`,
+          expected: { goodsReceipt: 'PRESENT' },
+          actual: { goodsReceipt: 'MISSING', status: unit.status }
+        });
+      }
+
+      for (const document of failedDocuments) {
+        issues.push({
+          projectId,
+          runId: run.id,
+          orderId: document.orderId,
+          type: 'COMPLIANCE_DOCUMENT_FAILED',
+          message: `Документ ${document.documentNumber || document.id} (${document.kind}) имеет статус ${document.status}: ${document.lastError || 'нет квитанции оператора'}`,
+          expected: { status: 'SUCCEEDED' },
+          actual: { status: document.status }
+        });
+      }
+
       try {
         const { credentials } =
           await getActiveYooKassaFiscalIntegration(projectId);
         for (const receipt of receipts) {
-          const remote = await getYooKassaReceipt(
-            receipt.providerReceiptId!,
-            credentials
-          );
-          if ('status' in remote) {
-            throw new Error(`ЮKassa ${remote.status}: ${remote.body}`);
-          }
-          const remoteStatus = remote.data.status.toUpperCase();
-          const localStatus =
-            receipt.status === 'CANCELED' ? 'CANCELED' : receipt.status;
-          if (remoteStatus !== localStatus) {
+          try {
+            const remote = await getYooKassaReceipt(
+              receipt.providerReceiptId!,
+              credentials
+            );
+            if ('status' in remote) {
+              throw new Error(`ЮKassa ${remote.status}: ${remote.body}`);
+            }
+            const remoteStatus = remote.data.status.toUpperCase();
+            const localStatus =
+              receipt.status === 'CANCELED' ? 'CANCELED' : receipt.status;
+            if (remoteStatus !== localStatus) {
+              issues.push({
+                projectId,
+                runId: run.id,
+                fiscalReceiptId: receipt.id,
+                orderId: receipt.orderId,
+                type: 'RECEIPT_STATUS_MISMATCH',
+                message: `Статус чека в Gupil (${localStatus}) не совпадает с ЮKassa (${remoteStatus})`,
+                expected: { status: localStatus },
+                actual: { status: remoteStatus }
+              });
+            }
+          } catch (error) {
             issues.push({
               projectId,
               runId: run.id,
               fiscalReceiptId: receipt.id,
               orderId: receipt.orderId,
-              type: 'RECEIPT_STATUS_MISMATCH',
-              message: `Статус чека в Gupil (${localStatus}) не совпадает с ЮKassa/ОФД (${remoteStatus})`,
-              expected: { status: localStatus },
-              actual: { status: remoteStatus }
+              type: 'YOOKASSA_UNAVAILABLE',
+              message: `Чек ${receipt.providerReceiptId} не удалось проверить в ЮKassa: ${
+                error instanceof Error ? error.message : 'неизвестная ошибка'
+              }`
             });
           }
         }
@@ -282,7 +371,10 @@ export class ReconciliationService {
               products.reduce(
                 (sum, product) => sum + product.markedUnits.length,
                 0
-              ) + receipts.length,
+              ) +
+              receipts.length +
+              failedDocuments.length +
+              unitsWithoutReceipt.length,
             productsChecked: products.length,
             fiscalReceiptsChecked: receipts.length,
             issues: issues.length

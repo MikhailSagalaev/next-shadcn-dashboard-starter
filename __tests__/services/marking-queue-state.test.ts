@@ -20,8 +20,14 @@ describe('marking settlement queue state', () => {
       paymentStatus: 'PAID',
       providerPaymentId: 'payment-1',
       markingState: 'COMPLETE',
-      fiscalReceipts: []
+      fiscalReceipts: [],
+      items: [{ markingStatus: 'NOT_REQUIRED' }]
     });
+    mockDb.complianceIntegration = {
+      findUnique: jest.fn().mockResolvedValue({
+        distanceSaleMode: 'UNCONFIGURED'
+      })
+    };
   });
 
   it('does not release an order for shipping before the receipt succeeds', async () => {
@@ -39,9 +45,14 @@ describe('marking settlement queue state', () => {
       orderId: 'order-1'
     });
 
-    expect(tx.order.update).toHaveBeenCalledWith({
-      where: { id: 'order-1' },
-      data: { fiscalState: 'SETTLEMENT_PENDING' }
-    });
+    expect(tx.order.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'order-1' },
+        data: expect.objectContaining({
+          fiscalState: 'SETTLEMENT_PENDING',
+          withdrawalState: 'NOT_REQUIRED'
+        })
+      })
+    );
   });
 });

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
-import { decryptMarkCode } from '@/lib/marking/code-crypto';
-import { markCodeToGs1m } from '@/lib/marking/gs1';
+import { decryptMarkCode, hashMarkCode } from '@/lib/marking/code-crypto';
+import { markCodeToGs1m, parseGs1DataMatrix } from '@/lib/marking/gs1';
 import type {
   YooKassaCreateRefundPayload,
   YooKassaMeasure,
@@ -16,6 +16,43 @@ export class RefundConflictError extends Error {}
 const money = (value: number) => value.toFixed(2);
 
 export class RefundService {
+  static async identifyReturnedUnit(params: {
+    projectId: string;
+    orderId: string;
+    code: string;
+  }) {
+    let codeHash: string;
+    try {
+      codeHash = hashMarkCode(parseGs1DataMatrix(params.code).raw);
+    } catch (error) {
+      throw new RefundConflictError(
+        error instanceof Error ? error.message : 'Некорректный Data Matrix'
+      );
+    }
+    const unit = await db.markedUnit.findFirst({
+      where: {
+        projectId: params.projectId,
+        orderId: params.orderId,
+        codeHash,
+        status: 'SOLD'
+      },
+      include: {
+        orderItem: { select: { name: true } }
+      }
+    });
+    if (!unit) {
+      throw new RefundConflictError(
+        'Эта упаковка не числится проданной в выбранном заказе или уже возвращена'
+      );
+    }
+    return {
+      id: unit.id,
+      gtin: unit.gtin,
+      serial: unit.serial,
+      itemName: unit.orderItem?.name ?? 'Товар'
+    };
+  }
+
   static async queue(params: {
     projectId: string;
     orderId: string;
@@ -46,10 +83,18 @@ export class RefundService {
       order.fiscalReceipts.some(
         (receipt) =>
           receipt.type === 'REFUND' &&
-          !['FAILED', 'CANCELED'].includes(receipt.status)
+          ['NEW', 'PENDING'].includes(receipt.status)
       )
     ) {
-      throw new RefundConflictError('Возврат по заказу уже создан');
+      throw new RefundConflictError('Предыдущий возврат ещё обрабатывается');
+    }
+    const successfulRefundExists = order.fiscalReceipts.some(
+      (receipt) => receipt.type === 'REFUND' && receipt.status === 'SUCCEEDED'
+    );
+    if (successfulRefundExists && !params.unitIds?.length) {
+      throw new RefundConflictError(
+        'После частичного возврата выбирайте оставшиеся упаковки отдельно'
+      );
     }
     const selectedIds = params.unitIds?.length
       ? [...new Set(params.unitIds)]
@@ -66,30 +111,55 @@ export class RefundService {
     const id = randomUUID();
     const idempotencyKey = `refund:${order.id}:${selectedIds.sort().join(',') || 'full'}`;
     return db.$transaction(async (tx) => {
-      const receipt = await tx.fiscalReceipt.create({
-        data: {
-          id,
-          projectId: params.projectId,
-          orderId: order.id,
-          providerPaymentId: order.providerPaymentId!,
-          type: 'REFUND',
-          status: 'NEW',
-          idempotencyKey,
-          requestPayload: {
-            reason: params.reason,
-            unitIds: selectedIds,
-            full: !params.unitIds?.length
-          }
-        }
+      const previous = await tx.fiscalReceipt.findUnique({
+        where: { idempotencyKey }
       });
-      await tx.fiscalOutbox.create({
-        data: {
+      const receipt = previous
+        ? await tx.fiscalReceipt.update({
+            where: { id: previous.id },
+            data: {
+              status: 'NEW',
+              lastError: null,
+              requestPayload: {
+                reason: params.reason,
+                unitIds: selectedIds,
+                full: !params.unitIds?.length
+              }
+            }
+          })
+        : await tx.fiscalReceipt.create({
+            data: {
+              id,
+              projectId: params.projectId,
+              orderId: order.id,
+              providerPaymentId: order.providerPaymentId!,
+              type: 'REFUND',
+              status: 'NEW',
+              idempotencyKey,
+              requestPayload: {
+                reason: params.reason,
+                unitIds: selectedIds,
+                full: !params.unitIds?.length
+              }
+            }
+          });
+      await tx.fiscalOutbox.upsert({
+        where: { idempotencyKey },
+        create: {
           projectId: params.projectId,
           orderId: order.id,
           receiptId: receipt.id,
           type: 'CREATE_REFUND',
           idempotencyKey,
           payload: { receiptId: receipt.id }
+        },
+        update: {
+          receiptId: receipt.id,
+          status: 'PENDING',
+          attemptCount: 0,
+          nextAttemptAt: new Date(),
+          lockedAt: null,
+          lastError: null
         }
       });
       if (selectedIds.length) {
@@ -208,6 +278,7 @@ export class RefundService {
     };
     const unitIds = request.unitIds ?? [];
     if (status === 'succeeded') {
+      if (receipt.status === 'SUCCEEDED' && receipt.succeededAt) return;
       await db.$transaction(async (tx) => {
         const now = new Date();
         await tx.fiscalReceipt.update({
@@ -247,6 +318,14 @@ export class RefundService {
               reason: 'Возврат покупателя: требуется проверка упаковки'
             }))
           });
+          await tx.stockUnitHold.createMany({
+            data: units.map((unit) => ({
+              projectId: receipt.projectId,
+              markedUnitId: unit.id,
+              source: 'CUSTOMER_RETURN' as const,
+              reason: 'Возврат покупателя: требуется проверка упаковки и кода'
+            }))
+          });
         }
       });
     } else if (status === 'canceled') {
@@ -266,5 +345,24 @@ export class RefundService {
         data: { status: 'PENDING' }
       });
     }
+  }
+
+  static async fail(receiptId: string, message: string) {
+    const receipt = await db.fiscalReceipt.findUnique({
+      where: { id: receiptId }
+    });
+    if (!receipt || receipt.type !== 'REFUND') return;
+    const request = (receipt.requestPayload ?? {}) as { unitIds?: string[] };
+    const unitIds = request.unitIds ?? [];
+    await db.$transaction([
+      db.fiscalReceipt.update({
+        where: { id: receipt.id },
+        data: { status: 'FAILED', lastError: message }
+      }),
+      db.markedUnit.updateMany({
+        where: { id: { in: unitIds }, status: 'RETURN_PENDING' },
+        data: { status: 'SOLD' }
+      })
+    ]);
   }
 }

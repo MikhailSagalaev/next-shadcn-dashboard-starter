@@ -8,7 +8,8 @@ import {
   ChevronRight,
   ClipboardCheck,
   PackageSearch,
-  Search
+  Search,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,7 @@ export function ReceivingPageView({ projectId }: { projectId: string }) {
   const [receipts, setReceipts] = useState<ReceivingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +76,29 @@ export function ReceivingPageView({ projectId }: { projectId: string }) {
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  async function syncEdo() {
+    setSyncing(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/compliance-integration/sync`,
+        { method: 'POST' }
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Не удалось получить входящие УПД');
+      toast.success(
+        `ЭДО синхронизирован: новых ${data.created}, обновлено ${data.updated}`
+      );
+      await load();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Ошибка синхронизации ЭДО'
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   const active = receipts.filter((item) =>
     [
       'DRAFT',
@@ -100,14 +125,24 @@ export function ReceivingPageView({ projectId }: { projectId: string }) {
           title='Приёмки'
           description='Сверяйте поставку с УПД и принимайте на склад каждую маркированную упаковку'
         />
-        <CreateReceiptDialog
-          projectId={projectId}
-          onCreated={(id) =>
-            id
-              ? router.push(`/dashboard/projects/${projectId}/receipts/${id}`)
-              : load()
-          }
-        />
+        <div className='flex flex-wrap gap-2'>
+          <Button
+            variant='outline'
+            disabled={syncing}
+            onClick={() => void syncEdo()}
+          >
+            <RefreshCw className={syncing ? 'animate-spin' : ''} />
+            Получить УПД из ЭДО
+          </Button>
+          <CreateReceiptDialog
+            projectId={projectId}
+            onCreated={(id) =>
+              id
+                ? router.push(`/dashboard/projects/${projectId}/receipts/${id}`)
+                : load()
+            }
+          />
+        </div>
       </div>
       <Separator />
       <MarkingWorkspaceNav projectId={projectId} active='receipts' />

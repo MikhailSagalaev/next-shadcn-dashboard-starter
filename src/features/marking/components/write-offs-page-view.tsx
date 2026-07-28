@@ -46,6 +46,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { MarkingWorkspaceNav } from './marking-workspace-nav';
+import { ManualComplianceConfirmDialog } from './manual-compliance-confirm-dialog';
 
 interface WriteOffDocument {
   id: string;
@@ -278,9 +279,11 @@ export function WriteOffsPageView({ projectId }: { projectId: string }) {
               {filtered.map((document) => (
                 <WriteOffCard
                   key={document.id}
+                  projectId={projectId}
                   document={document}
                   submitting={submittingId === document.id}
                   onSubmit={() => submitDocument(document.id)}
+                  onChanged={loadDocuments}
                 />
               ))}
             </div>
@@ -331,19 +334,23 @@ function MetricCard({
 }
 
 function WriteOffCard({
+  projectId,
   document,
   submitting,
-  onSubmit
+  onSubmit,
+  onChanged
 }: {
+  projectId: string;
   document: WriteOffDocument;
   submitting: boolean;
   onSubmit: () => void;
+  onChanged: () => Promise<void>;
 }) {
   const status = STATUSES[document.status ?? 'DRAFT'] ?? {
     label: document.status || 'Черновик',
     variant: 'outline' as const
   };
-  const canSubmit = ['DRAFT', 'READY', 'FAILED', 'REJECTED'].includes(
+  const canSubmit = ['DRAFT', 'FAILED', 'REJECTED'].includes(
     document.status ?? 'DRAFT'
   );
 
@@ -391,6 +398,14 @@ function WriteOffCard({
             ? 'Отправить повторно'
             : 'Передать на подпись'}
         </Button>
+      )}
+      {document.status === 'READY' && (
+        <ManualComplianceConfirmDialog
+          projectId={projectId}
+          documentId={document.id}
+          documentNumber={document.number}
+          onConfirmed={onChanged}
+        />
       )}
     </div>
   );

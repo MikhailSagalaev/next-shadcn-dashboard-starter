@@ -105,7 +105,12 @@ export function OrderDetailView({
   useEffect(() => void fetchOrder(), [fetchOrder]);
 
   useEffect(() => {
-    if (!order || order.fiscalState !== 'SETTLEMENT_PENDING') return;
+    if (
+      !order ||
+      (order.fiscalState !== 'SETTLEMENT_PENDING' &&
+        order.withdrawalState !== 'PENDING')
+    )
+      return;
     const timer = window.setInterval(() => void fetchOrder(true), 4000);
     return () => window.clearInterval(timer);
   }, [fetchOrder, order]);
@@ -142,9 +147,8 @@ export function OrderDetailView({
   if (!order) return <div className='py-16 text-center'>Заказ не найден</div>;
 
   const readyToShip =
-    order.paymentStatus === 'PAID' &&
-    ['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState) &&
-    order.fiscalState === 'SETTLED';
+    order.fulfillmentState === 'READY_TO_SHIP' &&
+    ['SUCCEEDED', 'NOT_REQUIRED'].includes(order.withdrawalState);
   const shippingBlocked =
     !readyToShip && ['SHIPPED', 'DELIVERED'].includes(newStatus);
 
@@ -475,24 +479,39 @@ function OrderWorkflow({ order }: { order: OrderWithRelations }) {
       error: order.fiscalState === 'FAILED'
     },
     {
+      label: 'Вывод из оборота',
+      value:
+        order.withdrawalState === 'NOT_REQUIRED'
+          ? 'Не требуется'
+          : order.withdrawalState === 'SUCCEEDED'
+            ? order.withdrawalMode === 'GIS_MT_DISTANCE_SALE'
+              ? 'ГИС МТ подтвердил'
+              : 'Передан через чек'
+            : order.withdrawalState === 'PENDING'
+              ? 'Ожидает подтверждения'
+              : order.withdrawalState === 'FAILED'
+                ? 'Ошибка'
+                : 'Не начат',
+      complete: ['SUCCEEDED', 'NOT_REQUIRED'].includes(order.withdrawalState),
+      error: order.withdrawalState === 'FAILED'
+    },
+    {
       label: 'Отгрузка',
       value:
-        order.paymentStatus === 'PAID' &&
-        ['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState) &&
-        order.fiscalState === 'SETTLED'
+        order.fulfillmentState === 'READY_TO_SHIP' &&
+        ['SUCCEEDED', 'NOT_REQUIRED'].includes(order.withdrawalState)
           ? 'Можно отправлять'
           : 'Заблокирована',
       complete:
-        order.paymentStatus === 'PAID' &&
-        ['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState) &&
-        order.fiscalState === 'SETTLED',
+        order.fulfillmentState === 'READY_TO_SHIP' &&
+        ['SUCCEEDED', 'NOT_REQUIRED'].includes(order.withdrawalState),
       error: false
     }
   ];
 
   return (
     <Card>
-      <CardContent className='grid gap-2 pt-6 sm:grid-cols-5'>
+      <CardContent className='grid gap-2 pt-6 sm:grid-cols-6'>
         {steps.map((step, index) => (
           <div
             key={step.label}
@@ -541,6 +560,8 @@ function shippingBlockers(order: OrderWithRelations) {
   else if (!['COMPLETE', 'NOT_REQUIRED'].includes(order.markingState))
     blockers.push('Не завершено сканирование Data Matrix.');
   if (order.fiscalState !== 'SETTLED') blockers.push('Чек не зарегистрирован.');
+  if (!['SUCCEEDED', 'NOT_REQUIRED'].includes(order.withdrawalState))
+    blockers.push('Вывод Data Matrix из оборота не подтверждён.');
   return blockers;
 }
 

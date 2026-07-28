@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Card,
   CardContent,
@@ -75,6 +76,8 @@ interface MarkingOrderView {
   fiscalState: string;
   paymentStatus: string;
   providerPaymentId: string | null;
+  withdrawalMode: string;
+  withdrawalState: string;
   items: MarkingItemView[];
   fiscalReceipts?: Array<{
     id: string;
@@ -82,6 +85,26 @@ interface MarkingOrderView {
     status: string;
     lastError: string | null;
   }>;
+  complianceDocuments?: Array<{
+    id: string;
+    status: string;
+    documentNumber: string | null;
+    externalId: string | null;
+    lastError: string | null;
+    outboxEntries: Array<{
+      id: string;
+      status: string;
+      attemptCount: number;
+      lastError: string | null;
+    }>;
+  }>;
+  project?: {
+    complianceIntegration?: {
+      provider: string;
+      isActive: boolean;
+      distanceSaleMode: string;
+    } | null;
+  };
 }
 
 export function OrderMarkingCard({
@@ -131,6 +154,12 @@ export function OrderMarkingCard({
   const settlement = order.fiscalReceipts?.find(
     (receipt) => receipt.type === 'SETTLEMENT'
   );
+  const distanceDocument = order.complianceDocuments?.[0];
+  const configuredMode =
+    order.withdrawalMode !== 'UNCONFIGURED'
+      ? order.withdrawalMode
+      : (order.project?.complianceIntegration?.distanceSaleMode ??
+        'UNCONFIGURED');
 
   async function scan() {
     if (!itemId || !code || busy) return;
@@ -197,20 +226,22 @@ export function OrderMarkingCard({
     }
   }
 
-  async function fiscalize() {
+  async function completeSale() {
     setBusy(true);
     try {
       const response = await fetch(
-        `/api/projects/${projectId}/orders/${orderId}/fiscalize`,
+        `/api/projects/${projectId}/orders/${orderId}/complete-sale`,
         { method: 'POST' }
       );
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || 'Чек не поставлен в очередь');
       toast.success(
-        settlement?.status === 'FAILED'
-          ? 'Повторная отправка чека запущена'
-          : 'Чек поставлен в очередь'
+        settlement?.status === 'FAILED' || distanceDocument?.status === 'FAILED'
+          ? 'Повторная отправка документов запущена'
+          : configuredMode === 'GIS_MT_DISTANCE_SALE'
+            ? 'Чек и документ дистанционной продажи поставлены в очередь'
+            : 'Чек поставлен в очередь'
       );
       await onChanged();
     } catch (error) {
@@ -225,6 +256,10 @@ export function OrderMarkingCard({
   const receiptLocked =
     settlement &&
     ['NEW', 'PENDING', 'SUCCEEDED', 'CANCELED'].includes(settlement.status);
+  const complianceLocked =
+    configuredMode === 'GIS_MT_DISTANCE_SALE' &&
+    distanceDocument &&
+    ['SUBMITTED', 'PROCESSING'].includes(distanceDocument.status);
 
   return (
     <Card className='border-primary/30'>
@@ -468,9 +503,20 @@ export function OrderMarkingCard({
                 <div>
                   <div className='font-medium'>Комплектация готова</div>
                   <div className='text-muted-foreground text-sm'>
-                    {settlement
-                      ? `Чек: ${RECEIPT_STATUS_LABELS[settlement.status] || settlement.status}`
-                      : 'Теперь отправьте чек полного расчёта в ЮKassa.'}
+                    {configuredMode === 'GIS_MT_DISTANCE_SALE'
+                      ? distanceDocument
+                        ? `ГИС МТ: ${distanceDocument.status} · чек: ${
+                            settlement
+                              ? RECEIPT_STATUS_LABELS[settlement.status] ||
+                                settlement.status
+                              : 'не создан'
+                          }`
+                        : 'Будут созданы чек без повторной передачи кода и документ «Дистанционная торговля».'
+                      : configuredMode === 'KKT_MARKED_RECEIPT'
+                        ? settlement
+                          ? `Маркировочный чек: ${RECEIPT_STATUS_LABELS[settlement.status] || settlement.status}`
+                          : 'Data Matrix будет передан через чек полного расчёта.'
+                        : 'Сначала выберите способ вывода Data Matrix в настройках проекта.'}
                   </div>
                 </div>
               </div>
@@ -478,9 +524,11 @@ export function OrderMarkingCard({
                 disabled={
                   busy ||
                   Boolean(receiptLocked) ||
+                  Boolean(complianceLocked) ||
+                  configuredMode === 'UNCONFIGURED' ||
                   (order.paymentStatus === 'PAID' && !order.providerPaymentId)
                 }
-                onClick={() => void fiscalize()}
+                onClick={() => void completeSale()}
               >
                 {busy ? (
                   <Loader2 className='animate-spin' />
@@ -494,9 +542,28 @@ export function OrderMarkingCard({
                   : settlement
                     ? RECEIPT_STATUS_LABELS[settlement.status] ||
                       settlement.status
-                    : 'Сформировать чек'}
+                    : configuredMode === 'GIS_MT_DISTANCE_SALE'
+                      ? 'Оформить продажу через ГИС МТ'
+                      : 'Сформировать маркировочный чек'}
               </Button>
             </div>
+            {configuredMode === 'GIS_MT_DISTANCE_SALE' &&
+              distanceDocument?.status === 'READY_TO_SIGN' && (
+                <ManualDistanceSaleConfirmation
+                  projectId={projectId}
+                  orderId={orderId}
+                  onChanged={onChanged}
+                />
+              )}
+            {distanceDocument?.lastError && (
+              <Alert variant='destructive'>
+                <AlertCircle />
+                <AlertTitle>Ошибка документа ГИС МТ</AlertTitle>
+                <AlertDescription>
+                  {distanceDocument.lastError}
+                </AlertDescription>
+              </Alert>
+            )}
             {settlement?.status === 'CANCELED' && (
               <p className='text-destructive mt-3 text-sm'>
                 ЮKassa окончательно отклонила этот чек. Исправьте причину и
@@ -525,6 +592,104 @@ export function OrderMarkingCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function ManualDistanceSaleConfirmation({
+  projectId,
+  orderId,
+  onChanged
+}: {
+  projectId: string;
+  orderId: string;
+  onChanged: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [externalId, setExternalId] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function confirm() {
+    setSaving(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/orders/${orderId}/distance-sale-confirm`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            externalId,
+            confirmed
+          })
+        }
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || 'Не удалось подтвердить документы');
+      toast.success('Документ ГИС МТ подтверждён');
+      setOpen(false);
+      await onChanged();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Ошибка подтверждения'
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className='rounded-lg border border-amber-300 p-4'>
+      <div className='font-medium'>Требуется ручная отправка</div>
+      <p className='text-muted-foreground mt-1 text-sm'>
+        Отправьте документ «Дистанционная торговля» в ГИС МТ. Закрывающий чек
+        ЮKassa обрабатывается отдельной защищённой очередью.
+      </p>
+      <Button className='mt-3' variant='outline' onClick={() => setOpen(true)}>
+        Подтвердить внешние документы
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Подтверждение ручной операции</DialogTitle>
+            <DialogDescription>
+              Gupil разблокирует отгрузку только когда ГИС МТ примет документ, а
+              ЮKassa отдельно подтвердит закрывающий чек.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4'>
+            <div className='space-y-2'>
+              <Label>Номер или ID документа ГИС МТ</Label>
+              <Input
+                value={externalId}
+                onChange={(event) => setExternalId(event.target.value)}
+              />
+            </div>
+            <Label className='flex items-start gap-2'>
+              <Checkbox
+                checked={confirmed}
+                onCheckedChange={(value) => setConfirmed(value === true)}
+              />
+              <span className='font-normal'>
+                Я проверил положительную квитанцию ГИС МТ
+              </span>
+            </Label>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              disabled={saving || !confirmed || externalId.trim().length < 3}
+              onClick={() => void confirm()}
+            >
+              {saving ? <Loader2 className='animate-spin' /> : <CheckCircle2 />}
+              Подтвердить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

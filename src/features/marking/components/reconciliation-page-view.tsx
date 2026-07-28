@@ -71,7 +71,11 @@ const TYPE_LABELS: Record<string, string> = {
   STATUS_MISMATCH: 'Не совпадает статус кода',
   FISCAL_MISMATCH: 'Не совпадает чек или выбытие',
   RESERVATION_MISMATCH: 'Не совпадает резерв',
-  QUANTITY_MISMATCH: 'Не совпадает количество'
+  QUANTITY_MISMATCH: 'Не совпадает количество',
+  UNIT_WITHOUT_RECEIPT: 'Упаковка без приёмки',
+  COMPLIANCE_DOCUMENT_FAILED: 'Ошибка документа ЭДО/ГИС МТ',
+  YOOKASSA_UNAVAILABLE: 'ЮKassa недоступна',
+  GIS_MT_UNAVAILABLE: 'ГИС МТ недоступна'
 };
 
 export function ReconciliationPageView({ projectId }: { projectId: string }) {
@@ -132,7 +136,7 @@ export function ReconciliationPageView({ projectId }: { projectId: string }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sources: ['GUPIL', 'YOOKASSA_OFD', 'GIS_MT']
+            sources: ['GUPIL', 'YOOKASSA', 'GIS_MT']
           })
         }
       );
@@ -182,7 +186,7 @@ export function ReconciliationPageView({ projectId }: { projectId: string }) {
       <div className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'>
         <Heading
           title='Сверка маркировки'
-          description='Сопоставляйте склад Gupil, чеки ЮKassa/ОФД и статусы кодов в «Честном знаке»'
+          description='Сопоставляйте склад Gupil, чеки ЮKassa и статусы кодов в «Честном знаке»'
         />
         <Button
           onClick={start}
@@ -212,9 +216,9 @@ export function ReconciliationPageView({ projectId }: { projectId: string }) {
         </AlertTitle>
         <AlertDescription>
           Для полной сверки требуется действующее подключение к ГИС МТ и
-          авторизация подписанта. Без него можно сопоставить Gupil и ЮKassa/ОФД,
-          но статус кода в «Честном знаке» останется непроверенным. Сверка
-          ничего не списывает и не исправляет автоматически.
+          авторизация подписанта. Без него можно сопоставить Gupil и ЮKassa, но
+          статус кода в «Честном знаке» останется непроверенным. Сверка ничего
+          не списывает и не исправляет автоматически.
         </AlertDescription>
       </Alert>
 
@@ -497,7 +501,15 @@ function getResolution(type?: string | null) {
     case 'STATUS_MISMATCH':
       return 'приостановите продажу упаковки, проверьте последний принятый документ ГИС МТ и затем синхронизируйте статус.';
     case 'FISCAL_MISMATCH':
-      return 'сопоставьте payment_id, фискальный чек и ответ ОФД. При необходимости повторите проверку, но не создавайте второй чек вслепую.';
+      return 'сопоставьте payment_id и статус чека ЮKassa. Квитанцию ОФД проверьте в кабинете кассового/ОФД-провайдера: Gupil не выдаёт ответ ЮKassa за отдельную проверку ОФД.';
+    case 'UNIT_WITHOUT_RECEIPT':
+      return 'найдите исходный УПД или акт ввода остатков. До восстановления основания не переводите упаковку в доступный склад.';
+    case 'COMPLIANCE_DOCUMENT_FAILED':
+      return 'откройте связанный заказ, карантин или списание, устраните причину и повторите отправку документа. Не создавайте второй документ с теми же кодами.';
+    case 'YOOKASSA_UNAVAILABLE':
+      return 'проверьте реквизиты магазина и повторите сверку. Состояние чека пока не подтверждено.';
+    case 'GIS_MT_UNAVAILABLE':
+      return 'проверьте шлюз оператора и УКЭП, затем повторите сверку. Локальная сверка не заменяет ответ ГИС МТ.';
     case 'RESERVATION_MISMATCH':
       return 'откройте связанный заказ и проверьте, не зарезервирована ли упаковка одновременно в другом процессе.';
     default:
