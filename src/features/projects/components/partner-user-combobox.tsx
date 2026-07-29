@@ -50,6 +50,8 @@ interface PartnerUserComboboxProps {
   value: string;
   /** Уже известные данные выбранного пользователя (без лишнего запроса). */
   initialUser?: PartnerUser | null;
+  /** Ограниченный локальный список, например участники одной организации. */
+  options?: PartnerUser[];
   /** Колбэк при выборе/очистке (передаёт обогащённого пользователя для UI). */
   onChange: (user: PartnerUser | null) => void;
   /** Включить роль-фильтр (только партнёры). По умолчанию true. */
@@ -111,6 +113,7 @@ export function PartnerUserCombobox({
   projectId,
   value,
   initialUser,
+  options,
   onChange,
   partnerRolesOnly = true,
   planNameById,
@@ -154,6 +157,29 @@ export function PartnerUserCombobox({
           : requestId === searchRequestIdRef.current);
 
       try {
+        if (options) {
+          const normalizedQuery = normalizedSearch.toLocaleLowerCase('ru-RU');
+          const filtered = options.filter((user) =>
+            [user.name, user.email, user.phone, user.id].some((value) =>
+              value?.toLocaleLowerCase('ru-RU').includes(normalizedQuery)
+            )
+          );
+          const start = (requestedPage - 1) * FETCH_LIMIT;
+          const users = filtered.slice(start, start + FETCH_LIMIT);
+          if (!isCurrentRequest()) return;
+          setItems((current) => {
+            if (!append) return users;
+            const byId = new Map(current.map((user) => [user.id, user]));
+            users.forEach((user) => byId.set(user.id, user));
+            return Array.from(byId.values());
+          });
+          setPage(requestedPage);
+          setTotal(filtered.length);
+          setTotalPages(Math.max(1, Math.ceil(filtered.length / FETCH_LIMIT)));
+          setHasMore(start + users.length < filtered.length);
+          return;
+        }
+
         const params = new URLSearchParams({
           includeStats: 'false',
           limit: String(FETCH_LIMIT),
@@ -202,7 +228,7 @@ export function PartnerUserCombobox({
         else setLoading(false);
       }
     },
-    [projectId, partnerRolesOnly]
+    [options, projectId, partnerRolesOnly]
   );
 
   const debouncedFetch = useDebouncedCallback(
@@ -317,14 +343,17 @@ export function PartnerUserCombobox({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className='w-[360px] p-0' align='start'>
+      <PopoverContent
+        className='max-h-[min(50dvh,24rem)] w-[min(360px,calc(100vw-2rem))] overflow-hidden p-0'
+        align='start'
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder='Поиск по имени, email, телефону…'
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList>
+          <CommandList className='max-h-[min(50dvh,22rem)] overflow-y-auto'>
             {loading && (
               <div className='text-muted-foreground flex items-center justify-center gap-2 py-4 text-sm'>
                 <Loader2 className='h-4 w-4 animate-spin' />

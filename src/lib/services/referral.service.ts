@@ -22,7 +22,7 @@ import type {
   CreateBonusInput
 } from '@/types/bonus';
 import { BonusService } from './user.service';
-import { PartnerTeamService } from './partner-team.service';
+import { PartnerReferralGraphService } from './partner-referral-graph.service';
 // Crypto импорт только для server-side
 
 type ReferralProgramEntity = Prisma.ReferralProgramGetPayload<{
@@ -408,7 +408,7 @@ export class ReferralService {
 
       if (useCommissionPlan && attribution?.commissionPlan) {
         const plan = attribution.commissionPlan;
-        maxPayoutDepth = Math.min(Math.max(1, plan.maxPayoutDepth), 10);
+        maxPayoutDepth = Math.max(1, Math.trunc(plan.maxPayoutDepth));
         plan.levels
           .filter(
             (level) =>
@@ -424,10 +424,7 @@ export class ReferralService {
         (referralProgram.levels || [])
           .filter(
             (level) =>
-              level.level >= 1 &&
-              level.level <= 3 &&
-              level.isActive &&
-              Number(level.percent) > 0
+              level.level >= 1 && level.isActive && Number(level.percent) > 0
           )
           .forEach((level) => {
             levelMap.set(level.level, Number(level.percent));
@@ -442,34 +439,36 @@ export class ReferralService {
         return { bonusAwarded: false };
       }
 
-      const chainDepth = Math.min(
-        maxPayoutDepth,
-        levelMap.size || maxPayoutDepth
-      );
+      const chainDepth = Math.min(maxPayoutDepth, Math.max(...levelMap.keys()));
 
       const projectFlags = await db.project.findUnique({
         where: { id: user.projectId },
         select: { enablePartnerRoles: true }
       });
 
-      const chain = projectFlags?.enablePartnerRoles
-        ? await PartnerTeamService.resolvePayoutChain(
-            user.referredBy,
-            user.projectId,
-            chainDepth
-          )
-        : await this.resolveReferrerChain(
-            user.referredBy,
-            user.projectId,
-            chainDepth
-          );
+      const payoutLevels = projectFlags?.enablePartnerRoles
+        ? await PartnerReferralGraphService.resolvePayoutLevels({
+            projectId: user.projectId,
+            organizationId:
+              user.referralAttribution?.organizationId ??
+              user.organizationId ??
+              null,
+            childUserId: user.id,
+            depth: chainDepth
+          })
+        : (
+            await this.resolveReferrerChain(
+              user.referredBy,
+              user.projectId,
+              chainDepth
+            )
+          ).map((referrer) => [{ ...referrer, weight: 1 }]);
 
-      if (!chain.length) {
+      if (!payoutLevels.length) {
         return { bonusAwarded: false };
       }
 
-      for (let index = 0; index < chain.length; index++) {
-        const referrer = chain[index];
+      for (let index = 0; index < payoutLevels.length; index++) {
         const level = index + 1;
         const percent =
           levelMap.get(level) ??
@@ -477,77 +476,90 @@ export class ReferralService {
 
         if (!percent || percent <= 0) continue;
 
-        const bonusAmount = (purchaseAmount * percent) / 100;
+        for (const referrer of payoutLevels[index]) {
+          const bonusAmount =
+            (purchaseAmount * percent * referrer.weight) / 100;
 
-        if (bonusAmount <= 0) continue;
+          if (bonusAmount <= 0) continue;
 
-        // Идемпотентность: детерминированный externalId на каждую выплату по
-        // цепочке, чтобы ретрай вебхука не выплатил повторно ни одному предку.
-        const referralExternalId = orderId
-          ? `referral_${orderId}_${referrer.id}_L${level}`
-          : undefined;
+          // Идемпотентность: детерминированный externalId на каждую выплату по
+          // цепочке, чтобы ретрай вебхука не выплатил повторно ни одному предку.
+          const referralExternalId = orderId
+            ? `referral_${orderId}_${referrer.id}_L${level}`
+            : undefined;
 
-        let bonus;
-        try {
-          bonus = await BonusService.awardBonus({
-            userId: referrer.id,
-            amount: bonusAmount,
-            type: 'REFERRAL',
-            description: `Реферальный бонус ${level}-го уровня за покупку пользователя ${
-              user.firstName || user.lastName
-                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                : user.email || user.phone || user.id
-            }`,
-            metadata: {
-              source: 'referral_bonus',
-              referredUserId: userId,
+          let bonus;
+          try {
+            bonus = await BonusService.awardBonus({
+              userId: referrer.id,
+              amount: bonusAmount,
+              type: 'REFERRAL',
+              description: `Реферальный бонус ${level}-го уровня за покупку пользователя ${
+                user.firstName || user.lastName
+                  ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                  : user.email || user.phone || user.id
+              }`,
+              metadata: {
+                source: 'referral_bonus',
+                referredUserId: userId,
+                referralLevel: level,
+                referralSharePercent: referrer.weight * 100,
+                purchaseAmount,
+                ...(user.referralAttribution?.organizationId && {
+                  referralOrganizationId:
+                    user.referralAttribution.organizationId
+                }),
+                ...(orderId ? { orderId } : {}),
+                ...(user.referralAttribution?.commissionPlanId && {
+                  referralCommissionPlanId:
+                    user.referralAttribution.commissionPlanId
+                })
+              },
               referralLevel: level,
-              purchaseAmount,
-              ...(orderId ? { orderId } : {}),
-              ...(user.referralAttribution?.commissionPlanId && {
-                referralCommissionPlanId:
-                  user.referralAttribution.commissionPlanId
-              })
-            },
-            referralLevel: level,
-            isReferralBonus: true,
-            referralUserId: userId,
-            ...(referralExternalId ? { externalId: referralExternalId } : {})
-          } as CreateBonusInput & { externalId?: string });
-        } catch (error) {
-          // P2002: этот предок уже получил выплату по данному заказу — пропускаем.
-          if (
-            referralExternalId &&
-            error instanceof Object &&
-            (error as { code?: string }).code === 'P2002'
-          ) {
-            logger.info(
-              'Реферальная выплата по этому заказу уже произведена, пропускаем',
-              {
-                referrerId: referrer.id,
-                level,
-                externalId: referralExternalId,
-                component: 'referral-service'
-              }
-            );
-            continue;
+              isReferralBonus: true,
+              referralUserId: userId,
+              ...(referralExternalId ? { externalId: referralExternalId } : {})
+            } as CreateBonusInput & { externalId?: string });
+          } catch (error) {
+            // P2002: этот предок уже получил выплату по данному заказу — пропускаем.
+            if (
+              referralExternalId &&
+              error instanceof Object &&
+              (error as { code?: string }).code === 'P2002'
+            ) {
+              logger.info(
+                'Реферальная выплата по этому заказу уже произведена, пропускаем',
+                {
+                  referrerId: referrer.id,
+                  level,
+                  externalId: referralExternalId,
+                  component: 'referral-service'
+                }
+              );
+              continue;
+            }
+            // Не-P2002 сбой: прерываем оставшиеся уровни. Помечаем ошибку уровнем,
+            // на котором она произошла, чтобы внешний catch мог сообщить о
+            // частичной выплате (paidPayouts уже содержит выплаченные уровни).
+            (error as { failedAtLevel?: number }).failedAtLevel = level;
+            throw error;
           }
-          // Не-P2002 сбой: прерываем оставшиеся уровни. Помечаем ошибку уровнем,
-          // на котором она произошла, чтобы внешний catch мог сообщить о
-          // частичной выплате (paidPayouts уже содержит выплаченные уровни).
-          (error as { failedAtLevel?: number }).failedAtLevel = level;
-          throw error;
+
+          const referrerDetails = {
+            id: referrer.id,
+            firstName: referrer.firstName,
+            lastName: referrer.lastName,
+            email: referrer.email,
+            phone: referrer.phone
+          };
+          paidPayouts.push({
+            level,
+            amount: bonusAmount,
+            referrerId: referrer.id,
+            referrer: referrerDetails,
+            bonusId: bonus.id
+          });
         }
-
-        const { referredBy, ...referrerDetails } = referrer;
-
-        paidPayouts.push({
-          level,
-          amount: bonusAmount,
-          referrerId: referrer.id,
-          referrer: referrerDetails,
-          bonusId: bonus.id
-        });
       }
 
       if (!paidPayouts.length) {

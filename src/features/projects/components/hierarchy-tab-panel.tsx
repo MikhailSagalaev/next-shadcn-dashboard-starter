@@ -52,6 +52,7 @@ interface TreeResponse {
     trainers: number;
     managers: number;
     directors: number;
+    levels: Array<{ level: number; count: number }>;
     commissionTotal: number;
   };
 }
@@ -136,6 +137,14 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
   }
 
   if (!data) return null;
+  const levelSummaries =
+    data.totals.levels.length > 0
+      ? data.totals.levels
+      : [
+          { level: 1, count: data.totals.trainers },
+          { level: 2, count: data.totals.managers },
+          { level: 3, count: data.totals.directors }
+        ];
 
   return (
     <div className='space-y-4'>
@@ -184,27 +193,20 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
 
       <JoinRequestsPanel projectId={projectId} />
 
-      <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-5'>
+      <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
         <SummaryCard
           label='Всего в дереве'
           value={data.totals.members}
           accent='zinc'
         />
-        <SummaryCard
-          label='Уровень 1'
-          value={data.totals.trainers}
-          accent='blue'
-        />
-        <SummaryCard
-          label='Уровень 2'
-          value={data.totals.managers}
-          accent='purple'
-        />
-        <SummaryCard
-          label='Уровень 3'
-          value={data.totals.directors}
-          accent='amber'
-        />
+        {levelSummaries.map(({ level, count }, index) => (
+          <SummaryCard
+            key={level}
+            label={`Уровень ${level}`}
+            value={count}
+            accent={index % 2 === 0 ? 'blue' : 'purple'}
+          />
+        ))}
         <SummaryCard
           label='Вознаграждение за период'
           value={formatRub(data.totals.commissionTotal)}
@@ -215,8 +217,8 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
       {data.nodes.length === 0 ? (
         <EmptyState
           icon={Users}
-          title='Партнёров пока нет'
-          description='Назначьте пользователям роль «Уровень 1», «Уровень 2» или «Уровень 3» в разделе «Пользователи». Они начнут появляться в дереве сразу же.'
+          title='Участников пока нет'
+          description='Добавьте участников в организацию, задайте уровни и реферальные связи — они появятся в дереве сразу.'
           action={
             <Link
               href={`/dashboard/projects/${projectId}/users`}
@@ -232,6 +234,7 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
           nodes={data.nodes}
           rootIds={data.rootIds}
           period={period}
+          organizationId={organizationId}
           onPeriodChange={setPeriod}
         />
       )}

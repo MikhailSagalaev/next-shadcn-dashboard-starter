@@ -25,23 +25,28 @@ export const GET = withProjectAccess(async (_request, { projectId }) => {
     return NextResponse.json({ enabled: false, organizations: [] });
   }
 
-  // Организации проекта + пользователи с организацией.
+  // Организации проекта + независимые членства (пользователь может быть в
+  // нескольких организациях одновременно).
   const [orgs, members] = await Promise.all([
     db.partnerOrganization.findMany({
       where: { projectId },
       select: { id: true, name: true, slug: true, isActive: true },
       orderBy: { name: 'asc' }
     }),
-    db.user.findMany({
-      where: { projectId, organizationId: { not: null } },
-      select: { id: true, organizationId: true }
+    db.partnerOrganizationMembership.findMany({
+      where: { projectId },
+      select: { userId: true, organizationId: true }
     })
   ]);
 
-  const memberIds = members.map((m) => m.id);
-  const userToOrg = new Map<string, string>();
-  for (const m of members) {
-    if (m.organizationId) userToOrg.set(m.id, m.organizationId);
+  const memberIds = [
+    ...new Set(members.map((membership) => membership.userId))
+  ];
+  const userToOrganizations = new Map<string, string[]>();
+  for (const membership of members) {
+    const organizationIds = userToOrganizations.get(membership.userId) ?? [];
+    organizationIds.push(membership.organizationId);
+    userToOrganizations.set(membership.userId, organizationIds);
   }
 
   // Агрегаты по пользователям организаций (один проход на тип метрики).
@@ -75,18 +80,20 @@ export const GET = withProjectAccess(async (_request, { projectId }) => {
     acc.set(org.id, { usersCount: 0, activeBonuses: 0, totalEarned: 0 });
   }
   for (const m of members) {
-    const bucket = m.organizationId && acc.get(m.organizationId);
+    const bucket = acc.get(m.organizationId);
     if (bucket) bucket.usersCount += 1;
   }
   for (const row of txByUser) {
-    const orgId = userToOrg.get(row.userId);
-    const bucket = orgId && acc.get(orgId);
-    if (bucket) bucket.totalEarned += Number(row._sum?.amount || 0);
+    for (const organizationId of userToOrganizations.get(row.userId) ?? []) {
+      const bucket = acc.get(organizationId);
+      if (bucket) bucket.totalEarned += Number(row._sum?.amount || 0);
+    }
   }
   for (const row of activeBonusByUser) {
-    const orgId = userToOrg.get(row.userId);
-    const bucket = orgId && acc.get(orgId);
-    if (bucket) bucket.activeBonuses += Number(row._sum?.amount || 0);
+    for (const organizationId of userToOrganizations.get(row.userId) ?? []) {
+      const bucket = acc.get(organizationId);
+      if (bucket) bucket.activeBonuses += Number(row._sum?.amount || 0);
+    }
   }
 
   const organizations = orgs.map((org) => {

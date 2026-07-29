@@ -102,7 +102,7 @@ export const BonusLevelSchema = z.object({
 });
 
 const ReferralLevelSettingsSchema = z.object({
-  level: z.number().int().min(1).max(3),
+  level: z.number().int().min(1),
   percent: z.number().min(0).max(100),
   isActive: z.boolean().optional()
 });
@@ -118,7 +118,7 @@ export const ReferralProgramSchema = z.object({
   welcomeRewardType: z.enum(['BONUS', 'DISCOUNT']).optional(),
   firstPurchaseDiscountPercent: z.number().int().min(0).max(100).optional(),
   description: z.string().max(500).optional(),
-  levels: z.array(ReferralLevelSettingsSchema).max(3).optional()
+  levels: z.array(ReferralLevelSettingsSchema).optional()
 });
 
 // Схема массовой рассылки

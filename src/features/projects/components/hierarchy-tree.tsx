@@ -64,6 +64,7 @@ interface HierarchyTreeProps {
   nodes: HierarchyNode[];
   rootIds: string[];
   period: HierarchyPeriod;
+  organizationId?: string | null;
   onPeriodChange: (period: HierarchyPeriod) => void;
 }
 
@@ -177,7 +178,16 @@ function NodeRow({
             <span className='truncate font-medium'>
               <Highlight text={node.name} query={query} />
             </span>
-            <PartnerRoleBadge role={node.partnerRole} />
+            {node.organizationTitle ? (
+              <Badge variant='outline'>{node.organizationTitle}</Badge>
+            ) : node.organizationLevel ? (
+              <Badge variant='outline'>Уровень {node.organizationLevel}</Badge>
+            ) : (
+              <PartnerRoleBadge role={node.partnerRole} />
+            )}
+            {node.canManageOrganization && (
+              <Badge variant='secondary'>Управляющий</Badge>
+            )}
           </div>
           <div className='text-muted-foreground mt-0.5 flex flex-wrap gap-3 text-xs'>
             {node.email && (
@@ -196,6 +206,17 @@ function NodeRow({
               c {new Date(node.registeredAt).toLocaleDateString('ru-RU')}
             </span>
           </div>
+          {node.referrerLinks.length > 0 && (
+            <div className='text-muted-foreground mt-1 text-xs'>
+              Рефереры:{' '}
+              {node.referrerLinks
+                .map(
+                  (link) =>
+                    `${link.referrerName} ${link.sharePercent}%${link.isPrimary ? ' (основной)' : ''}`
+                )
+                .join(' · ')}
+            </div>
+          )}
         </div>
       </div>
       <div className='flex flex-wrap items-center gap-3 sm:flex-nowrap'>
@@ -218,6 +239,7 @@ export function HierarchyTree({
   nodes,
   rootIds,
   period,
+  organizationId,
   onPeriodChange
 }: HierarchyTreeProps) {
   const [search, setSearch] = React.useState('');
@@ -281,6 +303,7 @@ export function HierarchyTree({
   const handleExport = () => {
     const params = new URLSearchParams();
     params.set('period', period);
+    if (organizationId) params.set('organizationId', organizationId);
     const url = `/api/projects/${projectId}/hierarchy/export?${params.toString()}`;
     window.location.href = url;
   };
@@ -315,7 +338,7 @@ export function HierarchyTree({
       <EmptyState
         icon={Users}
         title='Партнёров пока нет'
-        description='Назначьте пользователям роль (TRAINER / MANAGER / DIRECTOR) в разделе «Пользователи». Они начнут появляться в дереве сразу же.'
+        description='Добавьте участников в организацию, задайте уровни и реферальные связи — они появятся в дереве сразу.'
         action={
           <Link
             href={`/dashboard/projects/${projectId}/users`}
@@ -380,7 +403,7 @@ export function HierarchyTree({
           <EmptyState
             icon={Users}
             title='Корней дерева не найдено'
-            description='Все партнёры в проекте ссылаются на родителя. Проверьте поле referredBy в базе.'
+            description='У всех участников задан основной реферер. Проверьте связи, если ожидался отдельный корень.'
             size='sm'
           />
         )}

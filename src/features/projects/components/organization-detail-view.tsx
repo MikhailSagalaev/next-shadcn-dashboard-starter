@@ -19,6 +19,8 @@ import {
   Network,
   Pencil,
   Plus,
+  Search,
+  Trash2,
   UserMinus
 } from 'lucide-react';
 
@@ -125,13 +127,30 @@ type Member = {
   email: string | null;
   phone: string | null;
   partnerRole: string;
+  level: number | null;
+  title: string | null;
+  canManage: boolean;
   referredBy: string | null;
   referrerName: string | null;
+  referrerLinks: Array<{
+    referrerId: string;
+    referrerName: string;
+    sharePercent: number;
+    isPrimary: boolean;
+  }>;
   outboundReferralPlanId: string | null;
   outboundPlanName: string | null;
+  attributionPlanName: string | null;
   registeredAt: string;
   totalPurchases: number;
   isActive: boolean;
+};
+
+type ReferralLinkDraft = {
+  draftId: string;
+  referrerId: string;
+  sharePercent: number;
+  isPrimary: boolean;
 };
 
 type HierarchyWarning = {
@@ -140,21 +159,6 @@ type HierarchyWarning = {
   userId?: string;
   userName?: string;
 };
-
-function resolveDefaultReferrerForRole(
-  role: 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR',
-  members: Member[],
-  directorUserId: string | null
-): string {
-  if (role === 'DIRECTOR') return '';
-  if (role === 'MANAGER' && directorUserId) return directorUserId;
-  if (role === 'TRAINER' || role === 'CLIENT') {
-    const manager = members.find((member) => member.partnerRole === 'MANAGER');
-    if (manager) return manager.id;
-    if (directorUserId) return directorUserId;
-  }
-  return '';
-}
 
 function memberToPartnerUser(member: Member | undefined): PartnerUser | null {
   if (!member) return null;
@@ -166,6 +170,185 @@ function memberToPartnerUser(member: Member | undefined): PartnerUser | null {
     partnerRole: member.partnerRole,
     outboundReferralPlanId: member.outboundReferralPlanId
   };
+}
+
+function newReferralLink(
+  values: Partial<Omit<ReferralLinkDraft, 'draftId'>> = {}
+): ReferralLinkDraft {
+  return {
+    draftId: `${Date.now()}-${Math.random()}`,
+    referrerId: '',
+    sharePercent: 100,
+    isPrimary: true,
+    ...values
+  };
+}
+
+function ReferralLinksEditor({
+  projectId,
+  members,
+  childUserId,
+  value,
+  onChange
+}: {
+  projectId: string;
+  members: Member[];
+  childUserId?: string;
+  value: ReferralLinkDraft[];
+  onChange: (value: ReferralLinkDraft[]) => void;
+}) {
+  const options = members
+    .filter((member) => member.id !== childUserId)
+    .map((member) => memberToPartnerUser(member)!)
+    .filter(Boolean);
+  const totalShare = value.reduce(
+    (sum, link) => sum + Number(link.sharePercent || 0),
+    0
+  );
+
+  return (
+    <Field>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <FieldLabel>Рефереры и доли</FieldLabel>
+        <div className='flex items-center gap-2'>
+          <Badge variant={totalShare > 100 ? 'destructive' : 'secondary'}>
+            Всего {totalShare}%
+          </Badge>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() =>
+              onChange([
+                ...value,
+                newReferralLink({
+                  sharePercent: 0,
+                  isPrimary: value.length === 0
+                })
+              ])
+            }
+          >
+            <Plus data-icon='inline-start' />
+            Добавить
+          </Button>
+        </div>
+      </div>
+      <FieldDescription>
+        Доля участвует в выплате на каждом уровне. 0% — только связь для
+        просмотра команды. Сумма не должна превышать 100%.
+      </FieldDescription>
+      <div className='space-y-2'>
+        {value.length === 0 ? (
+          <p className='text-muted-foreground rounded-lg border border-dashed p-3 text-sm'>
+            Рефереры не назначены — покупки этого участника не создают выплату
+            вверх по организации.
+          </p>
+        ) : (
+          value.map((link, index) => {
+            const initialUser = memberToPartnerUser(
+              members.find((member) => member.id === link.referrerId)
+            );
+            return (
+              <div
+                key={link.draftId}
+                className='grid gap-3 rounded-lg border p-3'
+              >
+                <PartnerUserCombobox
+                  projectId={projectId}
+                  value={link.referrerId}
+                  initialUser={initialUser}
+                  options={options}
+                  onChange={(user) =>
+                    onChange(
+                      value.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, referrerId: user?.id ?? '' }
+                          : item
+                      )
+                    )
+                  }
+                  partnerRolesOnly={false}
+                  className='w-full'
+                  placeholder='Выберите участника этой организации'
+                />
+                <div className='grid grid-cols-[1fr_auto_auto] items-end gap-3'>
+                  <Field>
+                    <FieldLabel htmlFor={`referrer-share-${link.draftId}`}>
+                      Доля, %
+                    </FieldLabel>
+                    <Input
+                      id={`referrer-share-${link.draftId}`}
+                      type='number'
+                      min={0}
+                      max={100}
+                      step='0.01'
+                      value={link.sharePercent}
+                      onChange={(event) =>
+                        onChange(
+                          value.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  sharePercent: Number(event.target.value)
+                                }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field className='pb-2'>
+                    <div className='flex items-center gap-2'>
+                      <Switch
+                        id={`referrer-primary-${link.draftId}`}
+                        checked={link.isPrimary}
+                        onCheckedChange={(checked) =>
+                          onChange(
+                            value.map((item, itemIndex) => ({
+                              ...item,
+                              isPrimary: checked ? itemIndex === index : false
+                            }))
+                          )
+                        }
+                      />
+                      <FieldLabel htmlFor={`referrer-primary-${link.draftId}`}>
+                        Основной
+                      </FieldLabel>
+                    </div>
+                  </Field>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    aria-label='Удалить реферера'
+                    onClick={() =>
+                      onChange(
+                        value
+                          .filter((_, itemIndex) => itemIndex !== index)
+                          .map((item, itemIndex) => ({
+                            ...item,
+                            isPrimary:
+                              item.isPrimary ||
+                              (itemIndex === 0 &&
+                                !value.some(
+                                  (candidate, candidateIndex) =>
+                                    candidateIndex !== index &&
+                                    candidate.isPrimary
+                                ))
+                          }))
+                      )
+                    }
+                  >
+                    <Trash2 data-icon='icon-only' />
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </Field>
+  );
 }
 
 interface Props {
@@ -224,13 +407,24 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [newRole, setNewRole] = useState<
     'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
   >('TRAINER');
-  const [newReferrerId, setNewReferrerId] = useState('');
+  const [newLevel, setNewLevel] = useState('1');
+  const [newTitle, setNewTitle] = useState('');
+  const [newCanManage, setNewCanManage] = useState(false);
+  const [newReferrerLinks, setNewReferrerLinks] = useState<ReferralLinkDraft[]>(
+    []
+  );
   const [newPlanId, setNewPlanId] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
 
   const [memberRole, setMemberRole] = useState<
     'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
   >('TRAINER');
-  const [memberReferrerId, setMemberReferrerId] = useState('');
+  const [memberLevel, setMemberLevel] = useState('');
+  const [memberTitle, setMemberTitle] = useState('');
+  const [memberCanManage, setMemberCanManage] = useState(false);
+  const [memberReferrerLinks, setMemberReferrerLinks] = useState<
+    ReferralLinkDraft[]
+  >([]);
   const [memberPlanId, setMemberPlanId] = useState('');
 
   const load = useCallback(
@@ -309,6 +503,17 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
     setEditOpen(true);
   };
 
+  const openAddMember = () => {
+    setNewUserId('');
+    setNewRole('TRAINER');
+    setNewLevel('1');
+    setNewTitle('');
+    setNewCanManage(false);
+    setNewReferrerLinks([]);
+    setNewPlanId('');
+    setAddMemberOpen(true);
+  };
+
   const saveOrg = async () => {
     const firstPurchaseDiscountPercent = parseDiscountPercent(
       editFirstPurchaseDiscountPercent
@@ -353,6 +558,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       toast.error('Выберите пользователя');
       return;
     }
+    if (newReferrerLinks.some((link) => !link.referrerId)) {
+      toast.error('Выберите пользователя во всех строках рефереров');
+      return;
+    }
+    if (
+      newReferrerLinks.reduce(
+        (sum, link) => sum + Number(link.sharePercent || 0),
+        0
+      ) > 100
+    ) {
+      toast.error('Сумма долей рефереров не может превышать 100%');
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(
@@ -363,7 +581,16 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           body: JSON.stringify({
             userId: newUserId,
             partnerRole: newRole,
-            ...(newReferrerId ? { referredBy: newReferrerId } : {}),
+            level: newLevel ? Number(newLevel) : null,
+            title: newTitle.trim() || null,
+            canManage: newCanManage,
+            referrerLinks: newReferrerLinks.map(
+              ({ referrerId, sharePercent, isPrimary }) => ({
+                referrerId,
+                sharePercent,
+                isPrimary
+              })
+            ),
             outboundReferralPlanId: newPlanId || null
           })
         }
@@ -371,16 +598,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось добавить');
       if (data.attributionLocked) {
-        toast.warning('Участник добавлен, но комиссия не изменена', {
+        toast.warning('Участник добавлен', {
           description:
-            'У пользователя уже зафиксирована выплата другому рефереру — новая связь только отображается.'
+            'План регистрации уже зафиксирован. Новые реферальные доли применятся к следующим выплатам.'
         });
       } else {
         toast.success('Участник добавлен');
       }
       setAddMemberOpen(false);
       setNewUserId('');
-      setNewReferrerId('');
+      setNewLevel('1');
+      setNewTitle('');
+      setNewCanManage(false);
+      setNewReferrerLinks([]);
       setNewPlanId('');
       await load({ silent: true });
     } catch (error) {
@@ -395,12 +625,36 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
     setMemberRole(
       member.partnerRole as 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
     );
-    setMemberReferrerId(member.referredBy ?? '');
+    setMemberLevel(member.level ? String(member.level) : '');
+    setMemberTitle(member.title ?? '');
+    setMemberCanManage(member.canManage);
+    setMemberReferrerLinks(
+      member.referrerLinks.map((link) =>
+        newReferralLink({
+          referrerId: link.referrerId,
+          sharePercent: link.sharePercent,
+          isPrimary: link.isPrimary
+        })
+      )
+    );
     setMemberPlanId(member.outboundReferralPlanId ?? '');
   };
 
   const saveMember = async () => {
     if (!editMember) return;
+    if (memberReferrerLinks.some((link) => !link.referrerId)) {
+      toast.error('Выберите пользователя во всех строках рефереров');
+      return;
+    }
+    if (
+      memberReferrerLinks.reduce(
+        (sum, link) => sum + Number(link.sharePercent || 0),
+        0
+      ) > 100
+    ) {
+      toast.error('Сумма долей рефереров не может превышать 100%');
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(
@@ -410,7 +664,16 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             partnerRole: memberRole,
-            referredBy: memberReferrerId || null,
+            level: memberLevel ? Number(memberLevel) : null,
+            title: memberTitle.trim() || null,
+            canManage: memberCanManage,
+            referrerLinks: memberReferrerLinks.map(
+              ({ referrerId, sharePercent, isPrimary }) => ({
+                referrerId,
+                sharePercent,
+                isPrimary
+              })
+            ),
             outboundReferralPlanId: memberPlanId || null
           })
         }
@@ -418,9 +681,9 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Не удалось сохранить');
       if (data.attributionLocked) {
-        toast.warning('Связь обновлена, но комиссия не изменена', {
+        toast.warning('Связи обновлены', {
           description:
-            'За пользователем уже зафиксирована комиссия предыдущего реферера.'
+            'План регистрации остаётся прежним, а новые доли применятся к следующим выплатам.'
         });
       } else {
         toast.success('Участник обновлён');
@@ -549,12 +812,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         outboundReferralPlanId: null
       }
     : null;
-  const newReferrerInitialUser = memberToPartnerUser(
-    members.find((member) => member.id === newReferrerId)
-  );
-  const memberReferrerInitialUser = memberToPartnerUser(
-    members.find((member) => member.id === memberReferrerId)
-  );
+  const query = memberSearch.trim().toLocaleLowerCase('ru-RU');
+  const filteredMembers = query
+    ? members.filter((member) =>
+        [
+          member.name,
+          member.email,
+          member.phone,
+          member.referrerName,
+          member.outboundPlanName,
+          member.attributionPlanName
+        ].some((value) => value?.toLocaleLowerCase('ru-RU').includes(query))
+      )
+    : members;
 
   return (
     <div className='space-y-6'>
@@ -568,9 +838,8 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               ))}
             </ul>
             <p className='mt-2 text-sm'>
-              Без корректных связей referredBy выплаты L2/L3 могут не
-              начисляться. Назначьте реферера участникам или добавляйте их с
-              автозаполнением.
+              Проверьте реферальные связи и доли участников. Управляющий доступ
+              не создаёт выплату автоматически.
             </p>
           </AlertDescription>
         </Alert>
@@ -609,7 +878,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             {directorName && (
               <>
                 {' · '}
-                руководитель уровня 3: {directorName}
+                основной управляющий: {directorName}
               </>
             )}
           </p>
@@ -682,10 +951,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         <TabsContent value='members' className='mt-4 space-y-4'>
           <div className='flex items-center justify-between gap-4'>
             <p className='text-muted-foreground text-xs'>
-              В «Иерархию партнёров» попадают только уровни 1, 2 и 3 — Клиенты
-              видны только здесь, в списке сети.
+              Участник может состоять в нескольких организациях. Уровень,
+              управляющий доступ и реферальные выплаты настраиваются независимо.
             </p>
-            <Button onClick={() => setAddMemberOpen(true)}>
+            <Button onClick={openAddMember}>
               <Plus className='mr-2 h-4 w-4' />
               Добавить участника
             </Button>
@@ -699,93 +968,156 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                   сеть.
                 </p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Имя</TableHead>
-                      <TableHead>Роль</TableHead>
-                      <TableHead>Приведён</TableHead>
-                      <TableHead>План</TableHead>
-                      <TableHead className='text-right'>Покупки</TableHead>
-                      <TableHead className='w-[100px]' />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {members.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell>
-                          <div className='font-medium'>{m.name}</div>
-                          <div className='text-muted-foreground text-xs'>
-                            {m.email || m.phone}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <PartnerRoleBadge role={m.partnerRole} />
-                        </TableCell>
-                        <TableCell className='text-sm'>
-                          {m.referrerName ?? '—'}
-                        </TableCell>
-                        <TableCell className='text-sm'>
-                          {m.outboundPlanName ?? '—'}
-                        </TableCell>
-                        <TableCell className='text-right text-sm'>
-                          {formatRub(m.totalPurchases)}
-                        </TableCell>
-                        <TableCell>
-                          <div className='flex justify-end'>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant='ghost'
-                                  size='icon'
-                                  aria-label={`Действия: ${m.name}`}
-                                >
-                                  <MoreHorizontal />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align='end'>
-                                <DropdownMenuGroup>
-                                  <DropdownMenuItem
-                                    onSelect={() => openEditMember(m)}
-                                  >
-                                    <Pencil />
-                                    Редактировать
-                                  </DropdownMenuItem>
-                                  {m.partnerRole !== 'CLIENT' && (
-                                    <DropdownMenuItem
-                                      onSelect={() =>
-                                        void copyMemberReferralLink(m)
-                                      }
-                                    >
-                                      <Copy />
-                                      Копировать реферальную ссылку
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem
-                                    onSelect={() => openTransferMember(m)}
-                                  >
-                                    <ArrowRightLeft />
-                                    Перенести
-                                  </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuGroup>
-                                  <DropdownMenuItem
-                                    variant='destructive'
-                                    onSelect={() => setRemoveMemberTarget(m)}
-                                  >
-                                    <UserMinus />
-                                    Убрать из организации
-                                  </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
+                <>
+                  <div className='border-b p-4'>
+                    <div className='relative max-w-sm'>
+                      <Search className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
+                      <Input
+                        value={memberSearch}
+                        onChange={(event) =>
+                          setMemberSearch(event.target.value)
+                        }
+                        placeholder='Поиск по имени, email или телефону…'
+                        className='pl-9'
+                      />
+                    </div>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Имя</TableHead>
+                        <TableHead>Уровень и доступ</TableHead>
+                        <TableHead>Рефереры</TableHead>
+                        <TableHead>План комиссии</TableHead>
+                        <TableHead className='text-right'>Покупки</TableHead>
+                        <TableHead className='w-[100px]' />
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredMembers.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell>
+                            <div className='font-medium'>{m.name}</div>
+                            <div className='text-muted-foreground text-xs'>
+                              {m.email || m.phone}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className='flex flex-wrap items-center gap-1.5'>
+                              {m.level ? (
+                                <Badge variant='outline'>
+                                  Уровень {m.level}
+                                </Badge>
+                              ) : (
+                                <PartnerRoleBadge role={m.partnerRole} />
+                              )}
+                              {m.canManage && (
+                                <Badge variant='secondary'>Управляющий</Badge>
+                              )}
+                            </div>
+                            {m.title && (
+                              <div className='text-muted-foreground mt-1 text-xs'>
+                                {m.title}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className='text-sm'>
+                            {m.referrerLinks.length > 0 ? (
+                              <div className='space-y-1'>
+                                {m.referrerLinks.map((link) => (
+                                  <div key={link.referrerId}>
+                                    {link.referrerName} · {link.sharePercent}%
+                                    {link.isPrimary ? ' · основной' : ''}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className='text-sm'>
+                            {m.outboundPlanName ? (
+                              <>
+                                <div>{m.outboundPlanName}</div>
+                                <div className='text-muted-foreground text-xs'>
+                                  для приглашений
+                                </div>
+                              </>
+                            ) : m.attributionPlanName ? (
+                              <>
+                                <div>{m.attributionPlanName}</div>
+                                <div className='text-muted-foreground text-xs'>
+                                  по регистрации
+                                </div>
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className='text-right text-sm'>
+                            {formatRub(m.totalPurchases)}
+                          </TableCell>
+                          <TableCell>
+                            <div className='flex justify-end'>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    aria-label={`Действия: ${m.name}`}
+                                  >
+                                    <MoreHorizontal />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align='end'>
+                                  <DropdownMenuGroup>
+                                    <DropdownMenuItem
+                                      onSelect={() => openEditMember(m)}
+                                    >
+                                      <Pencil />
+                                      Редактировать
+                                    </DropdownMenuItem>
+                                    {m.partnerRole !== 'CLIENT' && (
+                                      <DropdownMenuItem
+                                        onSelect={() =>
+                                          void copyMemberReferralLink(m)
+                                        }
+                                      >
+                                        <Copy />
+                                        Копировать реферальную ссылку
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem
+                                      onSelect={() => openTransferMember(m)}
+                                    >
+                                      <ArrowRightLeft />
+                                      Перенести
+                                    </DropdownMenuItem>
+                                  </DropdownMenuGroup>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuGroup>
+                                    <DropdownMenuItem
+                                      variant='destructive'
+                                      onSelect={() => setRemoveMemberTarget(m)}
+                                    >
+                                      <UserMinus />
+                                      Убрать из организации
+                                    </DropdownMenuItem>
+                                  </DropdownMenuGroup>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {filteredMembers.length === 0 && (
+                    <p className='text-muted-foreground p-6 text-center text-sm'>
+                      По этому запросу участников не найдено.
+                    </p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -823,7 +1155,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
       {/* Edit org dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className='max-w-lg'>
+        <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Настройки организации</DialogTitle>
             <DialogDescription>
@@ -905,14 +1237,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Select>
             </div>
             <div className='space-y-2'>
-              <Label>Уровень 3 сети</Label>
+              <Label>Основной управляющий</Label>
+              <p className='text-muted-foreground text-xs'>
+                Получает доступ к участникам этой организации, но не участвует в
+                выплатах автоматически. Один пользователь может управлять
+                несколькими организациями.
+              </p>
               <PartnerUserCombobox
                 projectId={projectId}
                 value={editDirectorId}
                 initialUser={directorInitialUser}
                 onChange={(u) => setEditDirectorId(u?.id ?? '')}
                 partnerRolesOnly={false}
-                placeholder='Выберите партнёра уровня 3…'
+                placeholder='Выберите управляющего…'
                 className='w-full max-w-none'
               />
             </div>
@@ -939,11 +1276,12 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
       {/* Add member dialog */}
       <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
-        <DialogContent className='max-w-lg'>
+        <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Добавить в организацию</DialogTitle>
             <DialogDescription>
-              Пользователь будет привязан к сети «{organization.name}»
+              Пользователь останется в других организациях, если уже состоит в
+              них.
             </DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-2'>
@@ -958,20 +1296,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               />
             </div>
             <div className='space-y-2'>
-              <Label>Роль в сети</Label>
+              <Label>Системная роль для меню бота</Label>
               <Select
                 value={newRole}
                 onValueChange={(v) => {
                   const role = v as typeof newRole;
                   setNewRole(role);
-                  if (role === 'CLIENT') setNewPlanId('');
-                  setNewReferrerId(
-                    resolveDefaultReferrerForRole(
-                      role,
-                      members,
-                      organization.directorUserId
-                    )
-                  );
+                  const suggestedLevel = {
+                    CLIENT: '',
+                    TRAINER: '1',
+                    MANAGER: '2',
+                    DIRECTOR: '3'
+                  }[role];
+                  setNewLevel(suggestedLevel);
                 }}
               >
                 <SelectTrigger className='w-full'>
@@ -988,22 +1325,66 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 </SelectContent>
               </Select>
             </div>
-            <div className='space-y-2'>
-              <Label>Приведён (кто пригласил)</Label>
-              <PartnerUserCombobox
-                projectId={projectId}
-                value={newReferrerId}
-                initialUser={newReferrerInitialUser}
-                onChange={(u) => setNewReferrerId(u?.id ?? '')}
-                partnerRolesOnly
-                placeholder='Необязательно'
-              />
-            </div>
+            <FieldGroup className='gap-4'>
+              <Field>
+                <FieldLabel htmlFor='new-member-level'>
+                  Уровень в организации
+                </FieldLabel>
+                <Input
+                  id='new-member-level'
+                  type='number'
+                  min={1}
+                  step={1}
+                  value={newLevel}
+                  onChange={(event) => setNewLevel(event.target.value)}
+                  placeholder='Не задан'
+                />
+                <FieldDescription>
+                  Любое целое число от 1. Количество уровней не ограничено.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor='new-member-title'>
+                  Название роли
+                </FieldLabel>
+                <Input
+                  id='new-member-title'
+                  value={newTitle}
+                  maxLength={120}
+                  onChange={(event) => setNewTitle(event.target.value)}
+                  placeholder='Например, региональный куратор'
+                />
+              </Field>
+              <Field>
+                <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
+                  <div>
+                    <FieldLabel htmlFor='new-member-manage'>
+                      Управляющий доступ
+                    </FieldLabel>
+                    <FieldDescription>
+                      Видит и редактирует участников без автоматической
+                      комиссии.
+                    </FieldDescription>
+                  </div>
+                  <Switch
+                    id='new-member-manage'
+                    checked={newCanManage}
+                    onCheckedChange={setNewCanManage}
+                  />
+                </div>
+              </Field>
+            </FieldGroup>
+            <ReferralLinksEditor
+              projectId={projectId}
+              members={members}
+              childUserId={newUserId}
+              value={newReferrerLinks}
+              onChange={setNewReferrerLinks}
+            />
             <div className='space-y-2'>
               <Label>Партнёрский план (outbound)</Label>
               <Select
                 value={newPlanId || '__none__'}
-                disabled={newRole === 'CLIENT'}
                 onValueChange={(v) => setNewPlanId(v === '__none__' ? '' : v)}
               >
                 <SelectTrigger>
@@ -1037,22 +1418,21 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         open={Boolean(editMember)}
         onOpenChange={(open) => !open && setEditMember(null)}
       >
-        <DialogContent className='max-w-lg'>
+        <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Участник: {editMember?.name}</DialogTitle>
             <DialogDescription>
-              Роль, реферер и партнёрский план для этой сети
+              Уровень, управляющий доступ, рефереры и план этой организации
             </DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-2'>
             <div className='space-y-2'>
-              <Label>Роль</Label>
+              <Label>Системная роль для меню бота</Label>
               <Select
                 value={memberRole}
                 onValueChange={(v) => {
                   const role = v as typeof memberRole;
                   setMemberRole(role);
-                  if (role === 'CLIENT') setMemberPlanId('');
                 }}
               >
                 <SelectTrigger className='w-full'>
@@ -1069,22 +1449,61 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 </SelectContent>
               </Select>
             </div>
-            <div className='space-y-2'>
-              <Label>Приведён</Label>
-              <PartnerUserCombobox
-                projectId={projectId}
-                value={memberReferrerId}
-                initialUser={memberReferrerInitialUser}
-                onChange={(u) => setMemberReferrerId(u?.id ?? '')}
-                partnerRolesOnly
-                placeholder='Не задан'
-              />
-            </div>
+            <FieldGroup className='gap-4'>
+              <Field>
+                <FieldLabel htmlFor='edit-member-level'>
+                  Уровень в организации
+                </FieldLabel>
+                <Input
+                  id='edit-member-level'
+                  type='number'
+                  min={1}
+                  step={1}
+                  value={memberLevel}
+                  onChange={(event) => setMemberLevel(event.target.value)}
+                  placeholder='Не задан'
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor='edit-member-title'>
+                  Название роли
+                </FieldLabel>
+                <Input
+                  id='edit-member-title'
+                  value={memberTitle}
+                  maxLength={120}
+                  onChange={(event) => setMemberTitle(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
+                  <div>
+                    <FieldLabel htmlFor='edit-member-manage'>
+                      Управляющий доступ
+                    </FieldLabel>
+                    <FieldDescription>
+                      Не добавляет процент к выплатам.
+                    </FieldDescription>
+                  </div>
+                  <Switch
+                    id='edit-member-manage'
+                    checked={memberCanManage}
+                    onCheckedChange={setMemberCanManage}
+                  />
+                </div>
+              </Field>
+            </FieldGroup>
+            <ReferralLinksEditor
+              projectId={projectId}
+              members={members}
+              childUserId={editMember?.id}
+              value={memberReferrerLinks}
+              onChange={setMemberReferrerLinks}
+            />
             <div className='space-y-2'>
               <Label>Партнёрский план</Label>
               <Select
                 value={memberPlanId || '__none__'}
-                disabled={memberRole === 'CLIENT'}
                 onValueChange={(v) =>
                   setMemberPlanId(v === '__none__' ? '' : v)
                 }

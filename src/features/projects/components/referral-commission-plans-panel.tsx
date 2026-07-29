@@ -7,7 +7,7 @@
  *                       /api/projects/{id}/users?search=&role=TRAINER,MANAGER,DIRECTOR
  *                 6.3 — роль badge + текущий outbound-план в результатах
  *                 6.4 — кнопка «Назначить всем тренерам» с диалогом подтверждения
- *                 6.5 — слайдер `maxPayoutDepth` 1..3 с подсказкой
+ *                 6.5 — произвольное количество уровней выплат
  *                 6.6 — баннер «Используются персональные планы» когда
  *                       `referralPlansEnabled = true` (legacy ReferralLevel
  *                       editor спрятан в этом случае на уровне родителя)
@@ -57,7 +57,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ConfirmDialog } from '@/components/composite/confirm-dialog';
@@ -98,13 +97,6 @@ interface Props {
   enablePartnerRoles?: boolean;
 }
 
-// Слайдер 1..3 — рекомендованная глубина для b2b (Phase 6.5).
-// Большие значения (до 10) убраны из UI как малополезные. Старые планы с
-// depth > 3 продолжат корректно работать на бэкенде, но при редактировании
-// будут отображаться с предупреждением и предложением понизить.
-const SLIDER_MIN = 1;
-const SLIDER_MAX = 3;
-
 function formatPlanLevels(levels: PlanLevel[]): string {
   return [...levels]
     .sort((a, b) => a.level - b.level)
@@ -131,9 +123,11 @@ export function ReferralCommissionPlansPanel({
   const [plans, setPlans] = useState<Plan[]>([]);
 
   const [newName, setNewName] = useState('Инфлюенсер');
-  const [l1, setL1] = useState(10);
-  const [l2, setL2] = useState(3);
-  const [l3, setL3] = useState(1);
+  const [newLevels, setNewLevels] = useState<PlanLevel[]>([
+    { level: 1, percent: 10, isActive: true },
+    { level: 2, percent: 3, isActive: true },
+    { level: 3, percent: 1, isActive: true }
+  ]);
   const [maxDepth, setMaxDepth] = useState(3);
 
   // Единый диалог назначения плана
@@ -292,11 +286,11 @@ export function ReferralCommissionPlansPanel({
           body: JSON.stringify({
             name: newName,
             maxPayoutDepth: maxDepth,
-            levels: [
-              { level: 1, percent: l1, isActive: l1 > 0 },
-              { level: 2, percent: l2, isActive: l2 > 0 },
-              { level: 3, percent: l3, isActive: l3 > 0 }
-            ]
+            levels: newLevels.map((level) => ({
+              level: level.level,
+              percent: level.percent,
+              isActive: level.percent > 0
+            }))
           })
         }
       );
@@ -467,10 +461,11 @@ export function ReferralCommissionPlansPanel({
           <AlertCircle className='h-4 w-4' />
           <AlertTitle>Партнёрские планы ≠ бонусы клиентам</AlertTitle>
           <AlertDescription className='text-sm'>
-            Здесь задаётся, сколько % от покупки выплачивается на уровнях
-            «Уровень 1», «Уровень 2» и «Уровень 3». Бонусы для клиентов — во
-            вкладке «Настройки». Приоритет плана: персональный outbound → план
-            организации → план по умолчанию.
+            Здесь задаётся, сколько % от покупки выплачивается на каждом уровне
+            реферальной цепочки. Количество уровней не ограничено
+            бизнес-логикой. Бонусы для клиентов — во вкладке «Настройки».
+            Приоритет плана: персональный outbound → план организации → план по
+            умолчанию.
           </AlertDescription>
         </Alert>
       )}
@@ -634,11 +629,11 @@ export function ReferralCommissionPlansPanel({
 
       {/* Create plan dialog */}
       <Dialog open={createPlanOpen} onOpenChange={setCreatePlanOpen}>
-        <DialogContent className='max-w-lg'>
+        <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Новый партнёрский план</DialogTitle>
             <DialogDescription>
-              До 3 уровней выплат в процентах от суммы покупки
+              Добавьте нужное количество уровней выплат
             </DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-2'>
@@ -651,41 +646,116 @@ export function ReferralCommissionPlansPanel({
               />
             </div>
             <div className='space-y-2'>
-              <Label>
-                Глубина выплат:{' '}
-                <Badge variant='secondary' className='font-mono'>
-                  {maxDepth}
-                </Badge>
-              </Label>
-              <Slider
-                min={SLIDER_MIN}
-                max={SLIDER_MAX}
+              <Label htmlFor='new-plan-depth'>Глубина выплат</Label>
+              <Input
+                id='new-plan-depth'
+                type='number'
+                min={1}
                 step={1}
-                value={[maxDepth]}
-                onValueChange={(v) => setMaxDepth(v[0] ?? 3)}
-                className='py-2'
+                value={maxDepth}
+                onChange={(event) =>
+                  setMaxDepth(
+                    Math.max(1, Math.trunc(Number(event.target.value)))
+                  )
+                }
               />
+              <p className='text-muted-foreground text-xs'>
+                Максимальный уровень, до которого рассчитывается цепочка.
+              </p>
             </div>
-            <div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
-              {[l1, l2, l3].map((value, index) => {
-                const levelNum = index + 1;
-                if (levelNum > maxDepth) return null;
-                return (
-                  <div key={index} className='space-y-2'>
-                    <Label>Уровень {levelNum}</Label>
-                    <Input
-                      type='number'
-                      value={value}
-                      onChange={(e) => {
-                        const n = Number(e.target.value);
-                        if (index === 0) setL1(n);
-                        else if (index === 1) setL2(n);
-                        else setL3(n);
-                      }}
-                    />
+            <div className='space-y-3'>
+              <div className='flex items-center justify-between gap-3'>
+                <Label>Проценты по уровням</Label>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={() => {
+                    const nextLevel =
+                      Math.max(0, ...newLevels.map((level) => level.level)) + 1;
+                    setNewLevels((levels) => [
+                      ...levels,
+                      { level: nextLevel, percent: 0, isActive: false }
+                    ]);
+                    setMaxDepth((depth) => Math.max(depth, nextLevel));
+                  }}
+                >
+                  <Plus data-icon='inline-start' />
+                  Добавить уровень
+                </Button>
+              </div>
+              <div className='space-y-2'>
+                {newLevels.map((level, index) => (
+                  <div
+                    key={`${level.level}-${index}`}
+                    className='grid grid-cols-[1fr_1fr_auto] items-end gap-2 rounded-lg border p-3'
+                  >
+                    <div className='space-y-2'>
+                      <Label htmlFor={`new-level-number-${index}`}>
+                        Уровень
+                      </Label>
+                      <Input
+                        id={`new-level-number-${index}`}
+                        type='number'
+                        min={1}
+                        step={1}
+                        value={level.level}
+                        onChange={(event) => {
+                          const value = Math.max(
+                            1,
+                            Math.trunc(Number(event.target.value))
+                          );
+                          setNewLevels((levels) =>
+                            levels.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, level: value }
+                                : item
+                            )
+                          );
+                          setMaxDepth((depth) => Math.max(depth, value));
+                        }}
+                      />
+                    </div>
+                    <div className='space-y-2'>
+                      <Label htmlFor={`new-level-percent-${index}`}>
+                        Процент
+                      </Label>
+                      <Input
+                        id={`new-level-percent-${index}`}
+                        type='number'
+                        min={0}
+                        max={100}
+                        step='0.01'
+                        value={level.percent}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          setNewLevels((levels) =>
+                            levels.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, percent: value }
+                                : item
+                            )
+                          );
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      aria-label={`Удалить уровень ${level.level}`}
+                      disabled={newLevels.length === 1}
+                      onClick={() =>
+                        setNewLevels((levels) =>
+                          levels.filter((_, itemIndex) => itemIndex !== index)
+                        )
+                      }
+                    >
+                      <Trash2 data-icon='icon-only' />
+                    </Button>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -706,8 +776,8 @@ export function ReferralCommissionPlansPanel({
           <DialogHeader>
             <DialogTitle>Назначить партнёрский план</DialogTitle>
             <DialogDescription>
-              План определяет проценты для уровней «Уровень 1», «Уровень 2» и
-              «Уровень 3» клиентов, которых пригласил партнёр
+              План определяет проценты на каждом уровне цепочки клиентов,
+              которых пригласил партнёр
             </DialogDescription>
           </DialogHeader>
           <div className='grid gap-5 py-2'>

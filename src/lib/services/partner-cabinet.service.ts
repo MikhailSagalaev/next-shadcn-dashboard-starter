@@ -279,7 +279,14 @@ export class PartnerCabinetService {
   ) {
     const me = await db.user.findFirst({
       where: { id: userId, projectId },
-      select: { partnerRole: true }
+      select: {
+        partnerRole: true,
+        organizationMemberships: {
+          where: { projectId, canManage: true },
+          select: { id: true },
+          take: 1
+        }
+      }
     });
 
     const result = await PartnerTeamService.listTeam({
@@ -307,12 +314,19 @@ export class PartnerCabinetService {
     ];
 
     result.items.forEach((u, idx) => {
+      const memberLabel =
+        u.organizationTitle ||
+        (u.organizationLevel
+          ? `Уровень ${u.organizationLevel}`
+          : roleLabel(u.partnerRole));
       lines.push(
-        `${idx + 1 + page * pageSize}. <b>${u.name}</b> · ${roleLabel(u.partnerRole)}\n   💼 ${formatRub(u.totalPurchases)} · 💰 ${formatRub(u.commissionEarned)}`
+        `${idx + 1 + page * pageSize}. <b>${u.name}</b> · ${memberLabel}\n   💼 Оборот: ${formatRub(u.totalPurchases)} · 💰 Ваша комиссия: ${formatRub(u.commissionEarned)}`
       );
     });
 
-    const canManage = me && me.partnerRole !== 'CLIENT';
+    const canManage =
+      me &&
+      (me.partnerRole !== 'CLIENT' || me.organizationMemberships.length > 0);
 
     const detailButtons = result.items.map((u) => {
       const row: Array<{ text: string; callback_data: string }> = [

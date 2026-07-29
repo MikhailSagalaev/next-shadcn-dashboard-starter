@@ -208,7 +208,7 @@ describe('PartnerNotificationService.notifyAncestorsAboutNewMember (Phase 5)', (
       messages.some((m) => m.includes('🎉 Новый клиент в вашей команде'))
     ).toBe(true);
     expect(
-      messages.some((m) => m.includes('📈 У вашего тренера новый клиент'))
+      messages.some((m) => m.includes('📈 У партнёра уровня 1 новый клиент'))
     ).toBe(true);
     expect(
       messages.some((m) =>

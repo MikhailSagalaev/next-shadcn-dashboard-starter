@@ -34,6 +34,15 @@ export interface HierarchyNode {
   email: string | null;
   phone: string | null;
   partnerRole: string;
+  organizationLevel: number | null;
+  organizationTitle: string | null;
+  canManageOrganization: boolean;
+  referrerLinks: Array<{
+    referrerId: string;
+    referrerName: string;
+    sharePercent: number;
+    isPrimary: boolean;
+  }>;
   registeredAt: string; // ISO
   /** Сколько прямых рефералов у этого узла (depth=1). */
   directCount: number;
@@ -54,6 +63,7 @@ export interface HierarchyTreeResult {
     trainers: number;
     managers: number;
     directors: number;
+    levels: Array<{ level: number; count: number }>;
     commissionTotal: number;
   };
 }
@@ -104,34 +114,116 @@ export async function getHierarchyTree(
   });
   const enablePartnerRoles = Boolean(project?.enablePartnerRoles);
 
-  // Базовый набор партнёров (или вообще всех, если фича выключена).
-  // Мы не строим дерево «всё подряд» — берём только пользователей с
-  // partnerRole != CLIENT, чтобы не утонуть в десятках тысяч клиентов.
-  // Клиенты, прикреплённые к тренеру, отображаются как агрегат
-  // `directCount` родителя.
-  const partnerWhere: Parameters<typeof db.user.findMany>[0]['where'] = {
-    projectId,
-    ...(organizationId ? { organizationId } : {}),
-    ...(enablePartnerRoles
-      ? { partnerRole: { in: ['TRAINER', 'MANAGER', 'DIRECTOR'] } }
-      : {})
+  type PartnerRow = {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+    partnerRole: string;
+    referredBy: string | null;
+    registeredAt: Date;
+    totalPurchases: unknown;
+    organizationLevel: number | null;
+    organizationTitle: string | null;
+    canManageOrganization: boolean;
   };
 
-  const partners = await db.user.findMany({
-    where: partnerWhere,
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phone: true,
-      partnerRole: true,
-      referredBy: true,
-      registeredAt: true,
-      totalPurchases: true
-    },
-    orderBy: [{ partnerRole: 'desc' }, { registeredAt: 'asc' }]
-  });
+  let partners: PartnerRow[];
+  let organizationLinks: Array<{
+    childUserId: string;
+    referrerUserId: string;
+    sharePercent: unknown;
+    isPrimary: boolean;
+    referrer: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+      phone: string | null;
+    };
+  }> = [];
+
+  if (organizationId) {
+    const [memberships, links] = await Promise.all([
+      db.partnerOrganizationMembership.findMany({
+        where: { projectId, organizationId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              partnerRole: true,
+              referredBy: true,
+              registeredAt: true,
+              totalPurchases: true
+            }
+          }
+        },
+        orderBy: [{ level: 'desc' }, { createdAt: 'asc' }]
+      }),
+      db.partnerReferralLink.findMany({
+        where: { projectId, organizationId },
+        include: {
+          referrer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true
+            }
+          }
+        }
+      })
+    ]);
+    organizationLinks = links;
+    const primaryByChild = new Map(
+      links
+        .filter((link) => link.isPrimary)
+        .map((link) => [link.childUserId, link.referrerUserId])
+    );
+    partners = memberships.map((membership) => ({
+      ...membership.user,
+      referredBy:
+        primaryByChild.get(membership.userId) ??
+        membership.user.referredBy ??
+        null,
+      organizationLevel: membership.level,
+      organizationTitle: membership.title,
+      canManageOrganization: membership.canManage
+    }));
+  } else {
+    const users = await db.user.findMany({
+      where: {
+        projectId,
+        ...(enablePartnerRoles
+          ? { partnerRole: { in: ['TRAINER', 'MANAGER', 'DIRECTOR'] } }
+          : {})
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        partnerRole: true,
+        referredBy: true,
+        registeredAt: true,
+        totalPurchases: true
+      },
+      orderBy: [{ partnerRole: 'desc' }, { registeredAt: 'asc' }]
+    });
+    partners = users.map((user) => ({
+      ...user,
+      organizationLevel: null,
+      organizationTitle: null,
+      canManageOrganization: false
+    }));
+  }
 
   if (partners.length === 0) {
     return {
@@ -143,6 +235,7 @@ export async function getHierarchyTree(
         trainers: 0,
         managers: 0,
         directors: 0,
+        levels: [],
         commissionTotal: 0
       }
     };
@@ -150,34 +243,64 @@ export async function getHierarchyTree(
 
   const partnerIdSet = new Set(partners.map((p) => p.id));
 
-  // Прямые counts клиентов (referredBy = partner.id) — отдельным groupBy.
-  const directCounts = await db.user.groupBy({
-    by: ['referredBy'],
-    where: {
-      projectId,
-      ...(organizationId ? { organizationId } : {}),
-      referredBy: { in: partners.map((p) => p.id) }
-    },
-    _count: { _all: true }
-  });
   const directCountByParent = new Map<string, number>();
-  for (const row of directCounts) {
-    if (row.referredBy) {
-      directCountByParent.set(row.referredBy, row._count._all);
+  if (organizationId) {
+    const childrenByParent = new Map<string, Set<string>>();
+    for (const link of organizationLinks) {
+      const children =
+        childrenByParent.get(link.referrerUserId) ?? new Set<string>();
+      children.add(link.childUserId);
+      childrenByParent.set(link.referrerUserId, children);
+    }
+    for (const [parentId, children] of childrenByParent) {
+      directCountByParent.set(parentId, children.size);
+    }
+  } else {
+    const directCounts = await db.user.groupBy({
+      by: ['referredBy'],
+      where: {
+        projectId,
+        referredBy: { in: partners.map((partner) => partner.id) }
+      },
+      _count: { _all: true }
+    });
+    for (const row of directCounts) {
+      if (row.referredBy) {
+        directCountByParent.set(row.referredBy, row._count._all);
+      }
     }
   }
 
-  // Размер поддерева каждого партнёра — через `cachedGetDescendantTree`
-  // Phase 3 (один раз на корень — мы зовём для каждого партнёра, но
-  // CTE настолько лёгкий что это ок до ~1000 узлов; более крупные
-  // деревья всё равно не помещаются в один экран).
   const subtreeSizeById = new Map<string, number>();
-  await Promise.all(
-    partners.map(async (p) => {
-      const ds = await cachedGetDescendantTree(p.id, projectId);
-      subtreeSizeById.set(p.id, ds.length);
-    })
-  );
+  if (organizationId) {
+    const childrenByParent = new Map<string, string[]>();
+    for (const link of organizationLinks) {
+      const children = childrenByParent.get(link.referrerUserId) ?? [];
+      children.push(link.childUserId);
+      childrenByParent.set(link.referrerUserId, children);
+    }
+    for (const partner of partners) {
+      const visited = new Set<string>([partner.id]);
+      const frontier = [...(childrenByParent.get(partner.id) ?? [])];
+      while (frontier.length > 0) {
+        const childId = frontier.shift()!;
+        if (visited.has(childId)) continue;
+        visited.add(childId);
+        frontier.push(...(childrenByParent.get(childId) ?? []));
+      }
+      subtreeSizeById.set(partner.id, visited.size - 1);
+    }
+  } else {
+    await Promise.all(
+      partners.map(async (partner) => {
+        const descendants = await cachedGetDescendantTree(
+          partner.id,
+          projectId
+        );
+        subtreeSizeById.set(partner.id, descendants.length);
+      })
+    );
+  }
 
   // Комиссия за период по каждому партнёру.
   const commissionAgg = await db.transaction.groupBy({
@@ -197,6 +320,13 @@ export async function getHierarchyTree(
 
   // Превращаем в HierarchyNode. parentId привязываем только если родитель —
   // тоже партнёр в этом списке (иначе считаем корнем).
+  const linksByChild = new Map<string, typeof organizationLinks>();
+  for (const link of organizationLinks) {
+    const childLinks = linksByChild.get(link.childUserId) ?? [];
+    childLinks.push(link);
+    linksByChild.set(link.childUserId, childLinks);
+  }
+
   const nodes: HierarchyNode[] = partners.map((p) => {
     const parentInTree = p.referredBy && partnerIdSet.has(p.referredBy);
     const fullName = [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
@@ -207,6 +337,25 @@ export async function getHierarchyTree(
       email: p.email,
       phone: p.phone,
       partnerRole: p.partnerRole,
+      organizationLevel: p.organizationLevel,
+      organizationTitle: p.organizationTitle,
+      canManageOrganization: p.canManageOrganization,
+      referrerLinks: (linksByChild.get(p.id) ?? []).map((link) => {
+        const referrerName =
+          [link.referrer.firstName, link.referrer.lastName]
+            .filter(Boolean)
+            .join(' ')
+            .trim() ||
+          link.referrer.email ||
+          link.referrer.phone ||
+          link.referrer.id.slice(0, 8);
+        return {
+          referrerId: link.referrerUserId,
+          referrerName,
+          sharePercent: Number(link.sharePercent),
+          isPrimary: link.isPrimary
+        };
+      }),
       registeredAt: p.registeredAt.toISOString(),
       directCount: directCountByParent.get(p.id) ?? 0,
       subtreeSize: subtreeSizeById.get(p.id) ?? 0,
@@ -236,6 +385,17 @@ export async function getHierarchyTree(
     (s, v) => s + v,
     0
   );
+  const levelCounts = new Map<number, number>();
+  for (const node of nodes) {
+    if (!node.organizationLevel) continue;
+    levelCounts.set(
+      node.organizationLevel,
+      (levelCounts.get(node.organizationLevel) ?? 0) + 1
+    );
+  }
+  const levels = [...levelCounts.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([level, count]) => ({ level, count }));
 
   return {
     enablePartnerRoles,
@@ -244,6 +404,7 @@ export async function getHierarchyTree(
     totals: {
       members: nodes.length,
       ...totalsByRole,
+      levels,
       commissionTotal
     }
   };
@@ -274,6 +435,7 @@ export async function getHierarchyTreeSafe(
         trainers: 0,
         managers: 0,
         directors: 0,
+        levels: [],
         commissionTotal: 0
       }
     };

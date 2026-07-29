@@ -17,15 +17,15 @@ import {
 } from '@/lib/services/referral-commission.service';
 
 const LevelSchema = z.object({
-  level: z.number().int().min(1).max(3),
+  level: z.number().int().min(1),
   percent: z.number().min(0).max(100),
   isActive: z.boolean().optional()
 });
 
 const PatchPlanSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  maxPayoutDepth: z.number().int().min(1).max(10).optional(),
-  levels: z.array(LevelSchema).min(1).max(3).optional()
+  maxPayoutDepth: z.number().int().min(1).optional(),
+  levels: z.array(LevelSchema).min(1).optional()
 });
 
 export async function PATCH(

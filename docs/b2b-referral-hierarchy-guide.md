@@ -1,11 +1,10 @@
 # 🏢 B2B Реферальная иерархия — полный гайд
 
-> **Статус:** ✅ Обновлено 2026-07-18
-> **Применимость:** опт-ин per project через `Project.enablePartnerRoles`
-> **Совместимость:** обратная — старые c2c-проекты продолжают работать без изменений
+> **Статус:** ✅ Обновлено 2026-07-29
+> **Применимость:** опт-ин per project через `Project.enablePartnerRoles` > **Совместимость:** обратная — старые c2c-проекты продолжают работать без изменений
 > **Связанные документы:** [database-schema.md](./database-schema.md), [b2b-referral-readiness.md](./b2b-referral-readiness.md), [changelog.md](./changelog.md)
 >
-> **Текущие пользовательские названия:** `CLIENT` — «Клиент», `TRAINER` — «Уровень 1», `MANAGER` — «Уровень 2», `DIRECTOR` — «Уровень 3». Prisma enum не изменён. Один проект поддерживает несколько независимых `PartnerOrganization`; фиксированная модель выплат рассчитана на 1–3 уровня, а произвольная пирамида 100+ уровней отложена в отдельную архитектурную задачу.
+> **Совместимость ролей:** `CLIENT`, `TRAINER`, `MANAGER`, `DIRECTOR` сохранены для меню бота и старых интеграций. Фактический уровень теперь хранится в `PartnerOrganizationMembership.level` и не ограничен тремя значениями. Пользователь может состоять и управлять несколькими организациями; несколько рефереров задаются через `PartnerReferralLink`.
 
 ## 🎯 Содержание
 
@@ -38,10 +37,10 @@
 
 Расширение реализует это через два новых поля в БД:
 
-| Поле | Где | Назначение |
-|---|---|---|
-| `Project.enablePartnerRoles` | `projects` | Опт-ин: включает b2b-логику для проекта |
-| `User.partnerRole` | `users` | Роль пользователя: `CLIENT / TRAINER / MANAGER / DIRECTOR` |
+| Поле                         | Где        | Назначение                                                 |
+| ---------------------------- | ---------- | ---------------------------------------------------------- |
+| `Project.enablePartnerRoles` | `projects` | Опт-ин: включает b2b-логику для проекта                    |
+| `User.partnerRole`           | `users`    | Роль пользователя: `CLIENT / TRAINER / MANAGER / DIRECTOR` |
 
 Когда флаг **выключен** — система ведёт себя точно как раньше. Когда **включён** — `findReferrer` пропускает CLIENT'ов, бот показывает партнёрское меню, начинают работать уведомления о новых членах команды.
 
@@ -50,12 +49,14 @@
 ## Когда использовать
 
 ✅ **Подходит:**
+
 - Производитель БАДов через спортклубы (директор клуба → менеджеры → тренеры → клиенты)
 - Страховой брокер (агентство → менеджеры → агенты → клиенты)
-- Сетевой маркетинг с фиксированной структурой (без бесконечной глубины)
+- Партнёрские сети с произвольной глубиной и несколькими реферерами
 - Любая b2b-сеть с несколькими уровнями партнёрства
 
 ❌ **Не подходит:**
+
 - Просто реферальная программа «приведи друга, получи бонус» → используйте обычный c2c-режим
 - Многоуровневый MLM с глубиной 5+ → требует юридической экспертизы и кастомизации
 - Сценарии с несколькими независимыми клубами в одном проекте → используйте отдельную `PartnerOrganization` для каждого клуба
@@ -72,6 +73,7 @@
 4. Сохраните настройки
 
 После сохранения:
+
 - В таблице пользователей появляется колонка «Роль»
 - В диалоге профиля появляется селектор роли + outbound-плана
 - В боте начинает работать партнёрское меню (если импортирован шаблон)
@@ -154,7 +156,7 @@ npx tsx scripts/migrate-partner-roles.ts --projectId=<id> --auto-trainers
 
 На вкладке **«Планы %»** нажмите **«Назначить план»**. Можно выбрать одного партнёра через поиск или массово назначить план всем партнёрам роли «Уровень 1», «Уровень 2» либо «Уровень 3». Перед перезаписью существующих назначений показывается подтверждение.
 
-⚠️ **Важно:** уже зафиксированная комиссия (`ReferralAttribution.locked = true`) **не пересчитывается**. План применяется только к новым приглашениям после изменения.
+⚠️ **Важно:** `ReferralAttribution.locked = true` фиксирует комиссионный план и организацию регистрации. Отредактированные доли рефереров применяются только к будущим покупкам; завершённые начисления не пересчитываются.
 
 ### Удаление и архивирование плана
 
@@ -180,12 +182,12 @@ npx tsx scripts/migrate-partner-roles.ts --projectId=<id> --auto-trainers
 
 Главное меню бота показывается при `/start` и адаптируется по `user.partnerRole`:
 
-| Роль | Меню |
-|---|---|
-| Клиент (`CLIENT`) | 💰 Баланс · 📜 История · 👥 Реферальная программа · 🎯 Уровень · ❓ Помощь |
-| Уровень 1 (`TRAINER`) | + `👉 МОЯ ССЫЛКА 👈` · 👤 Мои клиенты · 💵 Мои выплаты |
-| Уровень 2 (`MANAGER`) | + 👥 Моя команда |
-| Уровень 3 (`DIRECTOR`) | + 📊 Сводка по организации |
+| Роль                   | Меню                                                                       |
+| ---------------------- | -------------------------------------------------------------------------- |
+| Клиент (`CLIENT`)      | 💰 Баланс · 📜 История · 👥 Реферальная программа · 🎯 Уровень · ❓ Помощь |
+| Уровень 1 (`TRAINER`)  | + `👉 МОЯ ССЫЛКА 👈` · 👤 Мои клиенты · 💵 Мои выплаты                     |
+| Уровень 2 (`MANAGER`)  | + 👥 Моя команда                                                           |
+| Уровень 3 (`DIRECTOR`) | + 📊 Сводка по организации                                                 |
 
 Ответ action `partner_link` начинается с жирного HTML-заголовка `<b>👉 ВАША РЕФЕРАЛЬНАЯ ССЫЛКА 👈</b>`. Для уже созданных workflow используйте идемпотентный скрипт:
 
@@ -198,13 +200,13 @@ npx tsx scripts/update-b2b-partner-workflows.ts --projectId=<id>
 
 ### Партнёрские action-handlers
 
-| Action | Назначение |
-|---|---|
-| `partner_team` | Список direct referrals с агрегатами (totalPurchases + комиссия) и пагинацией |
-| `partner_subject_stats` | Детали конкретного подопечного с проверкой `canViewSubject` |
-| `partner_payouts` | Последние 20 транзакций REFERRAL EARN с именем клиента и уровнем |
-| `partner_link` | Реферальная ссылка (только если `canRefer = true`) |
-| `partner_org_summary` | DIRECTOR-only сводка |
+| Action                  | Назначение                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `partner_team`          | Список direct referrals с агрегатами (totalPurchases + комиссия) и пагинацией |
+| `partner_subject_stats` | Детали конкретного подопечного с проверкой `canViewSubject`                   |
+| `partner_payouts`       | Последние 20 транзакций REFERRAL EARN с именем клиента и уровнем              |
+| `partner_link`          | Реферальная ссылка (только если `canRefer = true`)                            |
+| `partner_org_summary`   | DIRECTOR-only сводка                                                          |
 
 Реализация: `src/lib/services/workflow/handlers/action-handlers.ts`.
 
@@ -230,11 +232,11 @@ npx tsx scripts/update-b2b-partner-workflows.ts --projectId=<id>
 
 Когда новый пользователь регистрируется по реф-ссылке партнёра, система отправляет уведомления **всему дереву предков** до глубины `maxPayoutDepth` (по умолчанию 3):
 
-| Уровень | Шаблон |
-|---|---|
-| L1 (прямой рекрутер) | 🎉 Новый клиент в вашей команде: {имя} |
-| L2 | 📈 У вашего тренера новый клиент: {имя} |
-| L3+ | 📊 В вашей организации новая регистрация: {имя} |
+| Уровень              | Шаблон                                          |
+| -------------------- | ----------------------------------------------- |
+| L1 (прямой рекрутер) | 🎉 Новый клиент в вашей команде: {имя}          |
+| L2                   | 📈 У вашего тренера новый клиент: {имя}         |
+| L3+                  | 📊 В вашей организации новая регистрация: {имя} |
 
 Сервис: `PartnerNotificationService.notifyAncestorsAboutNewMember`. Вызывается неблокирующим `void`-вызовом из `UserService.createUser` после `syncAttributionForInvitedUser`.
 
@@ -400,6 +402,7 @@ UPDATE projects SET enable_partner_roles = false WHERE id = '<projectId>';
 Этого достаточно — все проверки ролей перестают работать, поведение возвращается к c2c. Роли в БД остаются, но не применяются.
 
 Полный откат миграции (последняя крайность):
+
 ```powershell
 npx prisma migrate resolve --rolled-back 20260524_add_partner_role
 # + дроп колонок и enum (требует SQL)
@@ -422,6 +425,7 @@ npx tsx scripts/migrate-partner-roles.ts --projectId=<id> --auto-trainers
 ```
 
 Что произойдёт:
+
 - `enablePartnerRoles = true` для проекта
 - Все CLIENT с `outboundReferralPlanId != null` получат `partnerRole = TRAINER`
 - Уже назначенные TRAINER/MANAGER/DIRECTOR не будут изменены
@@ -448,6 +452,7 @@ npx tsx scripts/migrate-partner-roles.ts --projectId=<id> --auto-trainers
 ### Шаг 5: передача клиенту
 
 Передайте клиенту:
+
 1. Этот гайд (ссылка на `docs/b2b-referral-hierarchy-guide.md`)
 2. Доступ к hierarchy page для контроля
 3. Инструкцию по добавлению новых партнёров через UI
@@ -478,7 +483,7 @@ A: Да. Разные тренеры могут иметь разные outbound
 
 **Q: Что если нужна глубина 5, 10 или 100+ уровней?**
 
-A: Текущая пользовательская модель и UI поддерживают фиксированные «Уровень 1/2/3» (`maxPayoutDepth` до 3). Произвольная per-organization пирамида до 100+ уровней — отдельная будущая архитектурная задача; не расширяйте Prisma enum для этого сценария.
+A: Добавьте нужные уровни в плане и укажите `PartnerOrganizationMembership.level`. Бизнес-ограничения на глубину нет. Для многоуровневых коммерческих схем отдельно проверьте юридические требования.
 
 **Q: Как добавить нового тренера в существующую сеть?**
 
@@ -490,7 +495,11 @@ A: Установите ему `metadata.notifications.referralEvents = false` �
 
 **Q: Несколько клубов в одном проекте — поддерживается?**
 
-A: Да. Создайте отдельную `PartnerOrganization` для каждого клуба. Пользователей можно искать с серверной пагинацией и переносить между организациями через row menu; default-план и руководитель задаются отдельно для каждой сети.
+A: Да. Создайте отдельную `PartnerOrganization` для каждого клуба. Один пользователь может одновременно состоять в нескольких организациях, а `canManage` даёт управляющий доступ независимо от выплат.
+
+**Q: Можно назначить несколько рефереров?**
+
+A: Да. У каждой связи задаётся доля от 0 до 100%, сумма долей одного участника не может превышать 100%. Доля 0% используется только для видимости команды; основной реферер нужен для совместимости со старыми интеграциями.
 
 **Q: Где посмотреть список всех начислений по партнёру?**
 
@@ -504,65 +513,65 @@ A: В боте: `/start → 💵 Мои выплаты` — последние 2
 
 ### Слой данных
 
-| Файл | Что |
-|---|---|
-| `prisma/schema.prisma` | `PartnerRole`, `PartnerOrganization`, `ReferralCommissionPlan.isActive`, order accounting fields, `Project.enablePartnerRoles` |
-| `prisma/migrations/20260524_add_partner_role/migration.sql` | Базовые партнёрские роли |
-| `prisma/migrations/20260718190000_b2b_orders_accounting/migration.sql` | Состояния и суммы идемпотентного учёта заказов |
-| `prisma/migrations/20260718200000_archive_referral_plans/migration.sql` | Архивирование используемых комиссионных планов |
+| Файл                                                                    | Что                                                                                                                            |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `prisma/schema.prisma`                                                  | `PartnerRole`, `PartnerOrganization`, `ReferralCommissionPlan.isActive`, order accounting fields, `Project.enablePartnerRoles` |
+| `prisma/migrations/20260524_add_partner_role/migration.sql`             | Базовые партнёрские роли                                                                                                       |
+| `prisma/migrations/20260718190000_b2b_orders_accounting/migration.sql`  | Состояния и суммы идемпотентного учёта заказов                                                                                 |
+| `prisma/migrations/20260718200000_archive_referral_plans/migration.sql` | Архивирование используемых комиссионных планов                                                                                 |
 
 ### Сервисы
 
-| Файл | Что |
-|---|---|
-| `src/lib/services/referral-commission.service.ts` | `canViewSubject`, `getViewableSubjects`, `getAncestorChain`, `getDescendantTree` через рекурсивные CTE с fallback |
-| `src/lib/services/referral.service.ts` | `findReferrer` (фильтр по роли), `generateReferralLink` (валидация CLIENT) |
-| `src/lib/services/partner-notification.service.ts` | `notifyAncestorsAboutNewMember` — рассылка уведомлений по дереву предков |
-| `src/lib/services/user.service.ts` | Триггер уведомлений в `createUser` после `syncAttributionForInvitedUser` |
-| `src/lib/services/workflow/user-variables.service.ts` | Партнёрские переменные (`user.partnerRole`, `user.canRefer`, `user.directReferralsCount`, …) |
+| Файл                                                    | Что                                                                                                                           |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/services/referral-commission.service.ts`       | `canViewSubject`, `getViewableSubjects`, `getAncestorChain`, `getDescendantTree` через рекурсивные CTE с fallback             |
+| `src/lib/services/referral.service.ts`                  | `findReferrer` (фильтр по роли), `generateReferralLink` (валидация CLIENT)                                                    |
+| `src/lib/services/partner-notification.service.ts`      | `notifyAncestorsAboutNewMember` — рассылка уведомлений по дереву предков                                                      |
+| `src/lib/services/user.service.ts`                      | Триггер уведомлений в `createUser` после `syncAttributionForInvitedUser`                                                      |
+| `src/lib/services/workflow/user-variables.service.ts`   | Партнёрские переменные (`user.partnerRole`, `user.canRefer`, `user.directReferralsCount`, …)                                  |
 | `src/lib/services/workflow/handlers/action-handlers.ts` | `PartnerTeamHandler`, `PartnerSubjectStatsHandler`, `PartnerPayoutsHandler`, `PartnerLinkHandler`, `PartnerOrgSummaryHandler` |
-| `src/lib/telegram/notifications.ts` | `sendBonusNotification` с обогащённой веткой для `BonusType.REFERRAL` |
+| `src/lib/telegram/notifications.ts`                     | `sendBonusNotification` с обогащённой веткой для `BonusType.REFERRAL`                                                         |
 
 ### Workflow
 
-| Файл | Что |
-|---|---|
+| Файл                                                  | Что                                         |
+| ----------------------------------------------------- | ------------------------------------------- |
 | `src/lib/workflow-templates/b2b-partner-cabinet.json` | JSON-шаблон workflow «B2B Кабинет партнёра» |
-| `src/lib/services/bot-templates.service.ts` | Регистрация шаблона в библиотеке |
+| `src/lib/services/bot-templates.service.ts`           | Регистрация шаблона в библиотеке            |
 
 ### API
 
-| Endpoint | Назначение |
-|---|---|
-| `PATCH /api/projects/[id]` | Включить/выключить `enablePartnerRoles` |
-| `PATCH /api/projects/[id]/users/[userId]` | Сменить `partnerRole` |
-| `PATCH /api/projects/[id]/users/[userId]/referral-outbound-plan` | Назначить outbound-план |
-| `GET /api/projects/[id]/users?role=TRAINER,MANAGER` | Фильтр по ролям |
-| `GET /api/projects/[id]/users/[userId]/team` | Direct + indirect referrals для бота |
-| `GET /api/projects/[id]/users/[userId]/team/[subjectUserId]` | Детали подопечного с проверкой `canViewSubject` |
-| `GET /api/projects/[id]/users/[userId]/payouts` | История REFERRAL EARN |
-| `GET /api/projects/[id]/hierarchy` | Дерево всех партнёров |
-| `GET /api/projects/[id]/hierarchy/export` | CSV экспорт |
-| `GET/POST /api/projects/[id]/organizations` | Список и создание организаций |
-| `PATCH/DELETE /api/projects/[id]/organizations/[organizationId]` | Изменение и удаление организации |
-| `POST /api/projects/[id]/organizations/[organizationId]/members/[userId]/transfer` | Перенос участника между организациями |
-| `PATCH /api/projects/[id]/orders/[orderId]/status` | Ручное подтверждение и идемпотентная отмена/возврат заказа |
-| `GET /api/projects/[id]/referral-insights/[subjectUserId]?viewerUserId=...` | Stats с проверкой доступа |
+| Endpoint                                                                           | Назначение                                                 |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `PATCH /api/projects/[id]`                                                         | Включить/выключить `enablePartnerRoles`                    |
+| `PATCH /api/projects/[id]/users/[userId]`                                          | Сменить `partnerRole`                                      |
+| `PATCH /api/projects/[id]/users/[userId]/referral-outbound-plan`                   | Назначить outbound-план                                    |
+| `GET /api/projects/[id]/users?role=TRAINER,MANAGER`                                | Фильтр по ролям                                            |
+| `GET /api/projects/[id]/users/[userId]/team`                                       | Direct + indirect referrals для бота                       |
+| `GET /api/projects/[id]/users/[userId]/team/[subjectUserId]`                       | Детали подопечного с проверкой `canViewSubject`            |
+| `GET /api/projects/[id]/users/[userId]/payouts`                                    | История REFERRAL EARN                                      |
+| `GET /api/projects/[id]/hierarchy`                                                 | Дерево всех партнёров                                      |
+| `GET /api/projects/[id]/hierarchy/export`                                          | CSV экспорт                                                |
+| `GET/POST /api/projects/[id]/organizations`                                        | Список и создание организаций                              |
+| `PATCH/DELETE /api/projects/[id]/organizations/[organizationId]`                   | Изменение и удаление организации                           |
+| `POST /api/projects/[id]/organizations/[organizationId]/members/[userId]/transfer` | Перенос участника между организациями                      |
+| `PATCH /api/projects/[id]/orders/[orderId]/status`                                 | Ручное подтверждение и идемпотентная отмена/возврат заказа |
+| `GET /api/projects/[id]/referral-insights/[subjectUserId]?viewerUserId=...`        | Stats с проверкой доступа                                  |
 
 ### UI
 
-| Страница / компонент | Что |
-|---|---|
-| `/dashboard/projects/[id]/users/page.tsx` | Колонка «Роль», фильтр, селекторы в диалоге профиля |
-| `/dashboard/projects/[id]/referral/hierarchy/page.tsx` | Дерево с поиском, period selector, CSV-экспорт |
-| `/dashboard/projects/[id]/settings` | Switch «B2B Иерархия» + кнопка импорта workflow |
-| `referral-commission-plans-panel.tsx` | Searchable user combobox, bulk-assign, slider maxPayoutDepth 1..3 |
+| Страница / компонент                                   | Что                                                                              |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `/dashboard/projects/[id]/users/page.tsx`              | Колонка «Роль», фильтр, селекторы в диалоге профиля                              |
+| `/dashboard/projects/[id]/referral/hierarchy/page.tsx` | Дерево с поиском, period selector, CSV-экспорт                                   |
+| `/dashboard/projects/[id]/settings`                    | Switch «B2B Иерархия» + кнопка импорта workflow                                  |
+| `referral-commission-plans-panel.tsx`                  | Searchable user combobox, bulk-assign, редактор произвольного количества уровней |
 
 ### Скрипты
 
-| Файл | Что |
-|---|---|
-| `scripts/migrate-partner-roles.ts` | Активация b2b + auto-trainers (идемпотентно) |
+| Файл                                      | Что                                                                                                   |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `scripts/migrate-partner-roles.ts`        | Активация b2b + auto-trainers (идемпотентно)                                                          |
 | `scripts/update-b2b-partner-workflows.ts` | Обновление существующих B2B workflow; поддерживает `--dry-run` и создаёт версию только при изменениях |
 
 ### Тесты

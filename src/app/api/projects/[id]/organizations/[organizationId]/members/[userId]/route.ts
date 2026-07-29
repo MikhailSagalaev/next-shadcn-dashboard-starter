@@ -11,9 +11,19 @@ import { z } from 'zod';
 import { withProjectAccess } from '@/lib/with-project-access';
 import { PartnerOrganizationService } from '@/lib/services/partner-organization.service';
 
+const ReferrerLinkSchema = z.object({
+  referrerId: z.string().min(1),
+  sharePercent: z.number().min(0).max(100).optional(),
+  isPrimary: z.boolean().optional()
+});
+
 const UpdateMemberSchema = z.object({
   partnerRole: z.enum(['CLIENT', 'TRAINER', 'MANAGER', 'DIRECTOR']).optional(),
+  level: z.number().int().min(1).nullable().optional(),
+  title: z.string().max(120).nullable().optional(),
+  canManage: z.boolean().optional(),
   referredBy: z.string().nullable().optional(),
+  referrerLinks: z.array(ReferrerLinkSchema).optional(),
   outboundReferralPlanId: z.string().nullable().optional()
 });
 
@@ -44,9 +54,18 @@ export const PATCH = withProjectAccess<MemberParams>(
           projectId,
           organizationId,
           userId,
-          parsed.data
+          {
+            ...parsed.data,
+            referrerLinks: parsed.data.referrerLinks?.map((link) => ({
+              referrerId: link.referrerId as string,
+              sharePercent: link.sharePercent,
+              isPrimary: link.isPrimary
+            }))
+          }
         );
-      return NextResponse.json({ user, attributionLocked });
+      // Do not expose the raw Prisma User here: it can contain a BigInt
+      // telegramId, which NextResponse JSON cannot serialize.
+      return NextResponse.json({ user: { id: user.id }, attributionLocked });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Server error';
       return NextResponse.json({ error: msg }, { status: 400 });

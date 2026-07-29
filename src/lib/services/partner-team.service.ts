@@ -13,6 +13,7 @@ import { PartnerOrganizationService } from './partner-organization.service';
 import { PartnerNotificationService } from './partner-notification.service';
 import { AdminNotificationService } from './admin-notification.service';
 import { ReferralCommissionService } from './referral-commission.service';
+import { PartnerReferralGraphService } from './partner-referral-graph.service';
 
 export type TeamListFilter = 'direct' | 'clients' | 'partners' | 'all';
 
@@ -29,6 +30,9 @@ export type TeamMemberRow = {
   email: string | null;
   phone: string | null;
   partnerRole: string;
+  organizationLevel: number | null;
+  organizationTitle: string | null;
+  canManageOrganization: boolean;
   registeredAt: string;
   isDirect: boolean;
   totalPurchases: number;
@@ -78,6 +82,19 @@ export class PartnerTeamService {
       return false;
     }
 
+    const managedMembership = await db.partnerOrganizationMembership.findFirst({
+      where: {
+        projectId,
+        userId: viewerUserId,
+        canManage: true,
+        organization: {
+          memberships: { some: { userId: subjectUserId } }
+        }
+      },
+      select: { id: true }
+    });
+    if (managedMembership) return true;
+
     const [viewer, subject] = await Promise.all([
       db.user.findFirst({
         where: { id: viewerUserId, projectId },
@@ -121,6 +138,24 @@ export class PartnerTeamService {
     const project = await this.getProjectPartnerFlags(projectId);
     if (!project?.enablePartnerRoles || !project.enablePartnerTeamManagement) {
       return false;
+    }
+
+    const managedMembership = await db.partnerOrganizationMembership.findFirst({
+      where: { projectId, userId: viewerUserId, canManage: true },
+      select: { organizationId: true }
+    });
+    if (managedMembership) {
+      const targetMembership =
+        await db.partnerOrganizationMembership.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId: managedMembership.organizationId,
+              userId: targetUserId
+            }
+          },
+          select: { id: true }
+        });
+      return !targetMembership;
     }
 
     const [viewer, target] = await Promise.all([
@@ -174,11 +209,26 @@ export class PartnerTeamService {
         select: { partnerRole: true, organizationId: true, referredBy: true }
       })
     ]);
-    if (!reviewer || reviewer.partnerRole === 'CLIENT') return false;
+    if (!reviewer) return false;
+
+    if (organizationId) {
+      const managedMembership =
+        await db.partnerOrganizationMembership.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId: reviewerUserId
+            }
+          },
+          select: { canManage: true }
+        });
+      if (managedMembership?.canManage) return true;
+    }
 
     // A referrer can review only if they are an actual B2B partner.
     if (reviewerUserId === referrerId)
       return referrer?.partnerRole !== 'CLIENT';
+    if (reviewer.partnerRole === 'CLIENT') return false;
 
     if (
       reviewer.partnerRole === 'DIRECTOR' &&
@@ -210,16 +260,15 @@ export class PartnerTeamService {
       pageSize = 10
     } = params;
 
+    const { directIds, allIds: allDescendantIds } =
+      await PartnerReferralGraphService.getVisibleTeamIds(
+        projectId,
+        viewerUserId
+      );
     const directRows = await db.user.findMany({
-      where: { projectId, referredBy: viewerUserId },
+      where: { projectId, id: { in: directIds } },
       select: { id: true, partnerRole: true }
     });
-    const directIds = directRows.map((u) => u.id);
-
-    const allDescendantIds = await ReferralCommissionService.getDescendantTree(
-      viewerUserId,
-      projectId
-    );
 
     let targetIds: string[];
     switch (filter) {
@@ -258,19 +307,31 @@ export class PartnerTeamService {
       return { items: [] as TeamMemberRow[], total, page, pageSize };
     }
 
-    const profiles = await db.user.findMany({
-      where: { projectId, id: { in: pageIds } },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        partnerRole: true,
-        registeredAt: true,
-        totalPurchases: true
-      }
-    });
+    const [profiles, memberships] = await Promise.all([
+      db.user.findMany({
+        where: { projectId, id: { in: pageIds } },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          partnerRole: true,
+          registeredAt: true,
+          totalPurchases: true
+        }
+      }),
+      db.partnerOrganizationMembership.findMany({
+        where: { projectId, userId: { in: pageIds } },
+        orderBy: [{ canManage: 'desc' }, { level: 'desc' }],
+        select: {
+          userId: true,
+          level: true,
+          title: true,
+          canManage: true
+        }
+      })
+    ]);
 
     const commissionAgg = await db.transaction.groupBy({
       by: ['referralUserId'],
@@ -293,16 +354,26 @@ export class PartnerTeamService {
     }
 
     const profileById = new Map(profiles.map((p) => [p.id, p]));
+    const membershipByUserId = new Map<string, (typeof memberships)[number]>();
+    for (const membership of memberships) {
+      if (!membershipByUserId.has(membership.userId)) {
+        membershipByUserId.set(membership.userId, membership);
+      }
+    }
     const items: TeamMemberRow[] = [];
     for (const id of pageIds) {
       const p = profileById.get(id);
       if (!p) continue;
+      const membership = membershipByUserId.get(id);
       items.push({
         id: p.id,
         name: displayName(p),
         email: p.email,
         phone: p.phone,
         partnerRole: p.partnerRole,
+        organizationLevel: membership?.level ?? null,
+        organizationTitle: membership?.title ?? null,
+        canManageOrganization: membership?.canManage ?? false,
         registeredAt: p.registeredAt.toISOString(),
         isDirect: directSet.has(p.id),
         totalPurchases: Number(p.totalPurchases ?? 0),
@@ -330,28 +401,55 @@ export class PartnerTeamService {
       throw new Error('Нет прав добавить этого пользователя в команду');
     }
 
-    const manager = await db.user.findFirst({
-      where: { id: params.managerUserId, projectId: params.projectId },
-      select: { organizationId: true }
-    });
+    const [manager, managedMembership] = await Promise.all([
+      db.user.findFirst({
+        where: { id: params.managerUserId, projectId: params.projectId },
+        select: { organizationId: true }
+      }),
+      db.partnerOrganizationMembership.findFirst({
+        where: {
+          projectId: params.projectId,
+          userId: params.managerUserId,
+          canManage: true
+        },
+        select: { organizationId: true }
+      })
+    ]);
+    const organizationId =
+      managedMembership?.organizationId ?? manager?.organizationId ?? null;
 
-    const updated = await db.user.update({
-      where: { id: params.targetUserId },
-      data: {
-        referredBy: params.managerUserId,
-        partnerRole,
-        ...(manager?.organizationId
-          ? { organizationId: manager.organizationId }
-          : {})
-      }
-    });
+    const updated = organizationId
+      ? (
+          await PartnerOrganizationService.addMember(
+            params.projectId,
+            organizationId,
+            {
+              userId: params.targetUserId,
+              partnerRole,
+              referrerLinks: [
+                {
+                  referrerId: params.managerUserId,
+                  sharePercent: 100,
+                  isPrimary: true
+                }
+              ]
+            }
+          )
+        ).user
+      : await db.user.update({
+          where: { id: params.targetUserId },
+          data: {
+            referredBy: params.managerUserId,
+            partnerRole
+          }
+        });
 
     try {
       await ReferralCommissionService.syncAttributionForInvitedUser({
         invitedUserId: params.targetUserId,
         projectId: params.projectId,
         referrerId: params.managerUserId,
-        organizationId: manager?.organizationId ?? null
+        organizationId
       });
     } catch (err) {
       logger.warn('addToTeam: attribution sync failed', { err });
@@ -379,9 +477,49 @@ export class PartnerTeamService {
       throw new Error('Нет прав убрать этого участника из команды');
     }
 
-    return db.user.update({
-      where: { id: params.subjectUserId },
-      data: { referredBy: null }
+    const links = await db.partnerReferralLink.findMany({
+      where: {
+        projectId: params.projectId,
+        childUserId: params.subjectUserId,
+        referrerUserId: params.managerUserId
+      },
+      select: { organizationId: true }
+    });
+
+    for (const link of links) {
+      const remaining = await db.partnerReferralLink.findMany({
+        where: {
+          projectId: params.projectId,
+          organizationId: link.organizationId,
+          childUserId: params.subjectUserId,
+          referrerUserId: { not: params.managerUserId }
+        },
+        select: {
+          referrerUserId: true,
+          sharePercent: true,
+          isPrimary: true
+        }
+      });
+      await PartnerReferralGraphService.replaceLinks({
+        projectId: params.projectId,
+        organizationId: link.organizationId,
+        childUserId: params.subjectUserId,
+        links: remaining.map((remainingLink) => ({
+          referrerId: remainingLink.referrerUserId,
+          sharePercent: Number(remainingLink.sharePercent),
+          isPrimary: remainingLink.isPrimary
+        }))
+      });
+    }
+
+    if (links.length === 0) {
+      return db.user.update({
+        where: { id: params.subjectUserId },
+        data: { referredBy: null, partnerParentId: null }
+      });
+    }
+    return db.user.findUniqueOrThrow({
+      where: { id: params.subjectUserId }
     });
   }
 
@@ -610,7 +748,7 @@ export class PartnerTeamService {
       }),
       db.user.findFirst({
         where: { id: request.userId, projectId: params.projectId },
-        select: { partnerRole: true }
+        select: { partnerRole: true, organizationId: true }
       }),
       db.project.findUnique({
         where: { id: params.projectId },
@@ -662,12 +800,62 @@ export class PartnerTeamService {
         where: { id: request.userId },
         data: {
           referredBy: request.referrerId,
+          partnerParentId: request.referrerId,
           partnerRole,
-          ...(request.organizationId
+          ...(request.organizationId && !applicant.organizationId
             ? { organizationId: request.organizationId }
             : {})
         }
       });
+
+      if (request.organizationId) {
+        await tx.partnerOrganizationMembership.upsert({
+          where: {
+            organizationId_userId: {
+              organizationId: request.organizationId,
+              userId: request.referrerId
+            }
+          },
+          update: {},
+          create: {
+            projectId: params.projectId,
+            organizationId: request.organizationId,
+            userId: request.referrerId
+          }
+        });
+        await tx.partnerOrganizationMembership.upsert({
+          where: {
+            organizationId_userId: {
+              organizationId: request.organizationId,
+              userId: request.userId
+            }
+          },
+          update: { level: ROLE_RANK[partnerRole] || null },
+          create: {
+            projectId: params.projectId,
+            organizationId: request.organizationId,
+            userId: request.userId,
+            level: ROLE_RANK[partnerRole] || null
+          }
+        });
+        await tx.partnerReferralLink.deleteMany({
+          where: {
+            projectId: params.projectId,
+            organizationId: request.organizationId,
+            childUserId: request.userId
+          }
+        });
+        await tx.partnerReferralLink.create({
+          data: {
+            projectId: params.projectId,
+            organizationId: request.organizationId,
+            childUserId: request.userId,
+            referrerUserId: request.referrerId,
+            sharePercent: 100,
+            isPrimary: true
+          }
+        });
+      }
 
       if (commissionPlanId) {
         await tx.referralAttribution.upsert({
@@ -780,29 +968,17 @@ export class PartnerTeamService {
       organizationId
     );
     const warnings: OrgHierarchyWarning[] = [];
-
-    if (!org.directorUserId) {
-      warnings.push({
-        code: 'NO_DIRECTOR',
-        message: 'Не назначен руководитель сети — L3 может не начисляться'
-      });
-    }
-
-    for (const m of members) {
-      if (m.partnerRole === 'MANAGER' && !m.referredBy) {
+    for (const member of members) {
+      const totalShare = member.referrerLinks.reduce(
+        (sum, link) => sum + link.sharePercent,
+        0
+      );
+      if (totalShare > 100.001) {
         warnings.push({
-          code: 'MANAGER_NO_REFERRER',
-          message: `Менеджер «${m.name}» без реферера`,
-          userId: m.id,
-          userName: m.name
-        });
-      }
-      if (m.partnerRole === 'TRAINER' && !m.referredBy) {
-        warnings.push({
-          code: 'TRAINER_NO_REFERRER',
-          message: `Тренер «${m.name}» без реферера`,
-          userId: m.id,
-          userName: m.name
+          code: 'REFERRER_SHARE_OVERFLOW',
+          message: `У участника «${member.name}» сумма долей рефереров больше 100%`,
+          userId: member.id,
+          userName: member.name
         });
       }
     }
@@ -911,15 +1087,68 @@ export class PartnerTeamService {
       return { linked: false, pending: true, referrerId: params.referrerId };
     }
 
-    await db.user.update({
-      where: { id: params.userId },
-      data: {
-        referredBy: params.referrerId,
-        ...(params.organizationId
-          ? { organizationId: params.organizationId }
-          : {})
+    if (params.organizationId) {
+      const user = await db.user.findFirst({
+        where: { id: params.userId, projectId: params.projectId },
+        select: { organizationId: true, partnerRole: true }
+      });
+      if (!user) throw new Error('Пользователь не найден');
+      await db.partnerOrganizationMembership.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: params.organizationId,
+            userId: params.referrerId
+          }
+        },
+        update: {},
+        create: {
+          projectId: params.projectId,
+          organizationId: params.organizationId,
+          userId: params.referrerId
+        }
+      });
+      await db.partnerOrganizationMembership.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: params.organizationId,
+            userId: params.userId
+          }
+        },
+        update: {},
+        create: {
+          projectId: params.projectId,
+          organizationId: params.organizationId,
+          userId: params.userId,
+          level: ROLE_RANK[user.partnerRole] || null
+        }
+      });
+      await PartnerReferralGraphService.replaceLinks({
+        projectId: params.projectId,
+        organizationId: params.organizationId,
+        childUserId: params.userId,
+        links: [
+          {
+            referrerId: params.referrerId,
+            sharePercent: 100,
+            isPrimary: true
+          }
+        ]
+      });
+      if (!user.organizationId) {
+        await db.user.update({
+          where: { id: params.userId },
+          data: { organizationId: params.organizationId }
+        });
       }
-    });
+    } else {
+      await db.user.update({
+        where: { id: params.userId },
+        data: {
+          referredBy: params.referrerId,
+          partnerParentId: params.referrerId
+        }
+      });
+    }
 
     await ReferralCommissionService.syncAttributionForInvitedUser({
       invitedUserId: params.userId,

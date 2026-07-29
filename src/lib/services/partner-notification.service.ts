@@ -406,10 +406,7 @@ export class PartnerNotificationService {
     }
   }
 
-  /**
-   * Уведомить руководителя организации о новой заявке на вывод от партнёра
-   * (план 007). Если руководителя нет или он сам заявитель — тихо пропускаем.
-   */
+  /** Уведомить управляющих всех организаций партнёра о запросе на вывод. */
   static async notifyDirectorAboutPayoutRequest(
     payoutId: string,
     projectId: string
@@ -423,22 +420,46 @@ export class PartnerNotificationService {
               id: true,
               firstName: true,
               lastName: true,
-              phone: true,
-              organizationId: true
+              phone: true
             }
           }
         }
       });
-      if (!payout?.user.organizationId) return;
+      if (!payout) return;
 
-      const org = await db.partnerOrganization.findFirst({
-        where: { id: payout.user.organizationId, projectId },
-        select: { directorUserId: true }
+      const memberships = await db.partnerOrganizationMembership.findMany({
+        where: { projectId, userId: payout.userId },
+        select: {
+          organization: {
+            select: {
+              directorUserId: true,
+              memberships: {
+                where: { canManage: true },
+                select: { userId: true }
+              }
+            }
+          }
+        }
       });
-      if (!org?.directorUserId || org.directorUserId === payout.userId) return;
+      const managerIds = [
+        ...new Set(
+          memberships
+            .flatMap((membership) => [
+              membership.organization.directorUserId,
+              ...membership.organization.memberships.map(
+                (manager) => manager.userId
+              )
+            ])
+            .filter(
+              (userId): userId is string =>
+                Boolean(userId) && userId !== payout.userId
+            )
+        )
+      ];
+      if (managerIds.length === 0) return;
 
-      const director = await db.user.findFirst({
-        where: { id: org.directorUserId, projectId },
+      const managers = await db.user.findMany({
+        where: { id: { in: managerIds }, projectId },
         select: {
           id: true,
           telegramId: true,
@@ -447,13 +468,14 @@ export class PartnerNotificationService {
           metadata: true
         }
       });
-      if (!director || isOptedOut(director.metadata)) return;
-      if (!director.telegramId && !director.maxId) return;
 
       const amount = formatAmount(Number(payout.amount));
       const message = `📤 <b>Запрос на вывод</b>\n${formatName(payout.user)} запросил вывод ${amount}.`;
-
-      await this.dispatchPartnerNotification(projectId, director, message);
+      for (const manager of managers) {
+        if (isOptedOut(manager.metadata)) continue;
+        if (!manager.telegramId && !manager.maxId) continue;
+        await this.dispatchPartnerNotification(projectId, manager, message);
+      }
     } catch (error) {
       logger.error('notifyDirectorAboutPayoutRequest failed', {
         payoutId,

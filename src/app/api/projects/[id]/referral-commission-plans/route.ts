@@ -15,15 +15,15 @@ import { ProjectService } from '@/lib/services/project.service';
 import { ReferralCommissionService } from '@/lib/services/referral-commission.service';
 
 const LevelSchema = z.object({
-  level: z.number().int().min(1).max(3),
+  level: z.number().int().min(1),
   percent: z.number().min(0).max(100),
   isActive: z.boolean().optional()
 });
 
 const CreatePlanSchema = z.object({
   name: z.string().min(1).max(120),
-  maxPayoutDepth: z.number().int().min(1).max(10).optional(),
-  levels: z.array(LevelSchema).min(1).max(3)
+  maxPayoutDepth: z.number().int().min(1).optional(),
+  levels: z.array(LevelSchema).min(1)
 });
 
 export async function GET(
@@ -94,8 +94,13 @@ export async function POST(
     const plan = await ReferralCommissionService.createPlan(
       projectId,
       parsed.data.name,
-      parsed.data.levels,
-      parsed.data.maxPayoutDepth ?? 3
+      parsed.data.levels.map((level) => ({
+        level: level.level as number,
+        percent: level.percent as number,
+        isActive: level.isActive
+      })),
+      parsed.data.maxPayoutDepth ??
+        Math.max(...parsed.data.levels.map((level) => level.level as number))
     );
     return NextResponse.json(
       {

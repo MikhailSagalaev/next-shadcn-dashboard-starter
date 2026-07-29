@@ -8,6 +8,7 @@ import { ReferralService } from '@/lib/services/referral.service';
 import { BonusService } from '@/lib/services/user.service';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { PartnerReferralGraphService } from '@/lib/services/partner-referral-graph.service';
 
 jest.mock('@/lib/db');
 jest.mock('@/lib/logger');
@@ -310,5 +311,79 @@ describe('ReferralService.processReferralBonus (atomic + observable payout)', ()
         component: 'referral-service'
       })
     );
+  });
+});
+
+describe('ReferralService.processReferralBonus (multi-referrer shares)', () => {
+  const mockDb = db as jest.Mocked<typeof db>;
+  const mockAwardBonus = BonusService.awardBonus as jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+    mockDb.user.findUnique = jest.fn().mockResolvedValue({
+      id: 'buyer',
+      projectId: 'project',
+      firstName: 'Buyer',
+      lastName: null,
+      email: null,
+      phone: null,
+      referredBy: 'first',
+      organizationId: 'organization',
+      project: { referralPlansEnabled: false },
+      referralAttribution: null
+    } as any);
+    mockDb.project.findUnique = jest
+      .fn()
+      .mockResolvedValue({ enablePartnerRoles: true } as any);
+    jest.spyOn(ReferralService, 'getReferralProgram').mockResolvedValue({
+      isActive: true,
+      minPurchaseAmount: 0,
+      referrerBonus: 0,
+      levels: [{ level: 1, percent: 10, isActive: true }]
+    } as any);
+    jest
+      .spyOn(PartnerReferralGraphService, 'resolvePayoutLevels')
+      .mockResolvedValue([
+        [
+          {
+            id: 'first',
+            firstName: 'First',
+            lastName: null,
+            email: null,
+            phone: null,
+            weight: 0.6
+          },
+          {
+            id: 'second',
+            firstName: 'Second',
+            lastName: null,
+            email: null,
+            phone: null,
+            weight: 0.4
+          }
+        ]
+      ]);
+    mockAwardBonus
+      .mockResolvedValueOnce({ id: 'bonus-first' })
+      .mockResolvedValueOnce({ id: 'bonus-second' });
+  });
+
+  it('делит 10% уровня в пропорции 60/40', async () => {
+    const result = await ReferralService.processReferralBonus(
+      'buyer',
+      1000,
+      'order'
+    );
+
+    expect(mockAwardBonus).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ userId: 'first', amount: 60 })
+    );
+    expect(mockAwardBonus).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ userId: 'second', amount: 40 })
+    );
+    expect(result.totalBonus).toBe(100);
   });
 });

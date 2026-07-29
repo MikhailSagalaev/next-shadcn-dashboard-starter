@@ -95,8 +95,10 @@ model Project {
   /// Регистрация по реф-ссылке создаёт заявку вместо мгновенной привязки referredBy
   referralJoinRequiresApproval Boolean @default(false) @map("referral_join_requires_approval")
 
-  partnerOrganizations PartnerOrganization[]
-  partnerJoinRequests  PartnerJoinRequest[]
+  partnerOrganizations           PartnerOrganization[]
+  partnerOrganizationMemberships PartnerOrganizationMembership[]
+  partnerReferralLinks           PartnerReferralLink[]
+  partnerJoinRequests            PartnerJoinRequest[]
 
   @@map("projects")
 }
@@ -174,14 +176,64 @@ model PartnerOrganization {
   createdAt                       DateTime @default(now()) @map("created_at")
   updatedAt                       DateTime @updatedAt @map("updated_at")
 
-  project                       Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  defaultReferralCommissionPlan ReferralCommissionPlan? @relation("OrganizationDefaultPlan", fields: [defaultReferralCommissionPlanId], references: [id], onDelete: SetNull)
-  members                       User[]                  @relation("UserOrganization")
+  project                       Project                         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  defaultReferralCommissionPlan ReferralCommissionPlan?         @relation("OrganizationDefaultPlan", fields: [defaultReferralCommissionPlanId], references: [id], onDelete: SetNull)
+  members                       User[]                          @relation("UserOrganization")
+  memberships                   PartnerOrganizationMembership[]
+  referralLinks                 PartnerReferralLink[]
   referralAttributions          ReferralAttribution[]
 
   @@unique([projectId, slug])
   @@index([projectId])
   @@map("partner_organizations")
+}
+
+/// Membership is organization-scoped. A user may belong to and manage any
+/// number of B2B organizations without being moved between them.
+model PartnerOrganizationMembership {
+  id             String   @id @default(cuid())
+  projectId      String   @map("project_id")
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  level          Int?
+  title          String?
+  canManage      Boolean  @default(false) @map("can_manage")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization PartnerOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([projectId, userId])
+  @@index([organizationId, canManage])
+  @@map("partner_organization_memberships")
+}
+
+/// Organization-scoped multi-parent referral edge. Positive sharePercent
+/// participates in payouts; a zero share is a visibility/management link.
+model PartnerReferralLink {
+  id             String   @id @default(cuid())
+  projectId      String   @map("project_id")
+  organizationId String   @map("organization_id")
+  childUserId    String   @map("child_user_id")
+  referrerUserId String   @map("referrer_user_id")
+  sharePercent   Decimal  @default(0) @map("share_percent") @db.Decimal(5, 2)
+  isPrimary      Boolean  @default(false) @map("is_primary")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization PartnerOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  child        User                @relation("PartnerReferralChild", fields: [childUserId], references: [id], onDelete: Cascade)
+  referrer     User                @relation("PartnerReferralParent", fields: [referrerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, childUserId, referrerUserId])
+  @@index([projectId, childUserId])
+  @@index([projectId, referrerUserId])
+  @@index([organizationId, referrerUserId])
+  @@map("partner_referral_links")
 }
 
 /// Право смотреть реферальную статистику subjectUserId (блогер + руководитель / партнёр)
@@ -509,9 +561,12 @@ model User {
   /// уровень выше. Отдельно от `referredBy` ("кто пригласил"), потому что
   /// пригласивший не всегда совпадает с тем, кто получает выплату выше.
   /// SetNull при удалении родителя — цепочка прерывается, а не падает.
-  partnerParentId String? @map("partner_parent_id")
-  partnerParent   User?   @relation("PartnerParent", fields: [partnerParentId], references: [id], onDelete: SetNull)
-  partnerChildren User[]  @relation("PartnerParent")
+  partnerParentId         String?                         @map("partner_parent_id")
+  partnerParent           User?                           @relation("PartnerParent", fields: [partnerParentId], references: [id], onDelete: SetNull)
+  partnerChildren         User[]                          @relation("PartnerParent")
+  organizationMemberships PartnerOrganizationMembership[]
+  referralParents         PartnerReferralLink[]           @relation("PartnerReferralChild")
+  referralChildren        PartnerReferralLink[]           @relation("PartnerReferralParent")
 
   payouts Payout[]
 

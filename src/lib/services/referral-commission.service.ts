@@ -13,23 +13,13 @@ import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { PartnerTeamService } from './partner-team.service';
+import { PartnerReferralGraphService } from './partner-referral-graph.service';
 
-/** Безопасная глубина обхода реферальных цепочек (защита от циклов / runaway-запросов). */
-const MAX_TREE_DEPTH = 10;
 const DEFAULT_TREE_DEPTH = 3;
-
-/**
- * Максимум комиссионных уровней, которые план может определить и выплатить
- * (тренер → менеджер → руководитель). Единый источник правды: держать в синхроне
- * клампы plan-level, maxPayoutDepth и слайдер в админке. Глубже 3 — зона
- * MLM-регулирования (см. docs/b2b-referral-hierarchy-guide.md). НЕ путать с
- * MAX_TREE_DEPTH, который governs обход для access-control, а не выплаты.
- */
-const MAX_COMMISSION_LEVELS = 3;
 
 function clampDepth(depth: number): number {
   if (!Number.isFinite(depth)) return DEFAULT_TREE_DEPTH;
-  return Math.min(Math.max(Math.trunc(depth), 1), MAX_TREE_DEPTH);
+  return Math.max(Math.trunc(depth), 1);
 }
 
 export type PlanLevelInput = {
@@ -182,17 +172,15 @@ export class ReferralCommissionService {
     return null;
   }
 
-  /**
-   * Создать план и уровни (1–3).
-   */
+  /** Создать план с произвольным количеством уровней. */
   static async createPlan(
     projectId: string,
     name: string,
     levels: PlanLevelInput[],
-    maxPayoutDepth = MAX_COMMISSION_LEVELS
+    maxPayoutDepth = Math.max(1, ...levels.map((level) => level.level))
   ) {
     const prepared = this.normalizeLevels(levels);
-    const depth = Math.min(Math.max(1, maxPayoutDepth), MAX_COMMISSION_LEVELS);
+    const depth = Math.max(1, Math.trunc(maxPayoutDepth));
 
     return db.$transaction(async (tx) => {
       const plan = await tx.referralCommissionPlan.create({
@@ -251,10 +239,7 @@ export class ReferralCommissionService {
         data: {
           ...(data.name !== undefined && { name: data.name.trim() }),
           ...(data.maxPayoutDepth !== undefined && {
-            maxPayoutDepth: Math.min(
-              Math.max(1, data.maxPayoutDepth),
-              MAX_COMMISSION_LEVELS
-            )
+            maxPayoutDepth: Math.max(1, Math.trunc(data.maxPayoutDepth))
           })
         }
       });
@@ -657,6 +642,14 @@ export class ReferralCommissionService {
     });
     if (grant) return true;
 
+    if ((db as { partnerReferralLink?: unknown }).partnerReferralLink) {
+      const team = await PartnerReferralGraphService.getVisibleTeamIds(
+        projectId,
+        viewerUserId
+      );
+      return team.allIds.includes(subjectUserId);
+    }
+
     const maxDepth = await this.resolveMaxPayoutDepth(projectId);
     const ancestors = await this.getAncestorChain(
       subjectUserId,
@@ -678,10 +671,19 @@ export class ReferralCommissionService {
   ): Promise<string[]> {
     if (!projectId || !viewerUserId) return [];
 
-    const maxDepth = await this.resolveMaxPayoutDepth(projectId);
-
+    const graphEnabled = Boolean(
+      (db as { partnerReferralLink?: unknown }).partnerReferralLink
+    );
+    const maxDepth = graphEnabled
+      ? DEFAULT_TREE_DEPTH
+      : await this.resolveMaxPayoutDepth(projectId);
     const [descendants, grants] = await Promise.all([
-      this.getDescendantTree(viewerUserId, projectId, maxDepth),
+      graphEnabled
+        ? PartnerReferralGraphService.getVisibleTeamIds(
+            projectId,
+            viewerUserId
+          ).then((team) => team.allIds)
+        : this.getDescendantTree(viewerUserId, projectId, maxDepth),
       db.referralStatsGrant.findMany({
         where: { projectId, viewerUserId },
         select: { subjectUserId: true }
@@ -790,10 +792,10 @@ export class ReferralCommissionService {
   private static normalizeLevels(levels: PlanLevelInput[]): PlanLevelInput[] {
     const by = new Map<number, PlanLevelInput>();
     for (const l of levels) {
-      const level = Math.min(
-        Math.max(Math.trunc(l.level), 1),
-        MAX_COMMISSION_LEVELS
-      );
+      const level = Math.max(Math.trunc(l.level), 1);
+      if (by.has(level)) {
+        throw new Error(`Уровень ${level} указан в плане дважды`);
+      }
       by.set(level, {
         level,
         percent: Math.max(0, Math.min(100, Number(l.percent))),

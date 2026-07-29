@@ -13,7 +13,7 @@ import { QueryExecutor } from './query-executor';
 import { logger } from '@/lib/logger';
 import { ReferralService } from '../referral.service';
 import { BonusLevelService } from '../bonus-level.service';
-import { cachedGetDescendantTree } from '../referral-commission.service';
+import { PartnerReferralGraphService } from '../partner-referral-graph.service';
 
 export interface UserProfileData {
   // Основная информация
@@ -511,7 +511,12 @@ export class UserVariablesService {
         where: { id: userId },
         select: {
           partnerRole: true,
-          project: { select: { enablePartnerRoles: true } }
+          project: { select: { enablePartnerRoles: true } },
+          organizationMemberships: {
+            where: { projectId, canManage: true },
+            select: { id: true },
+            take: 1
+          }
         }
       });
 
@@ -532,12 +537,12 @@ export class UserVariablesService {
         };
       }
 
-      const canRefer = partnerRole !== 'CLIENT';
+      const canRefer =
+        partnerRole !== 'CLIENT' || user.organizationMemberships.length > 0;
 
       // Считаем direct + descendants и комиссии параллельно.
-      const [directCount, descendants, totalAgg, monthAgg] = await Promise.all([
-        db.user.count({ where: { projectId, referredBy: userId } }),
-        cachedGetDescendantTree(userId, projectId),
+      const [team, totalAgg, monthAgg] = await Promise.all([
+        PartnerReferralGraphService.getVisibleTeamIds(projectId, userId),
         db.transaction.aggregate({
           where: { userId, type: 'EARN', isReferralBonus: true },
           _sum: { amount: true }
@@ -553,7 +558,8 @@ export class UserVariablesService {
         })
       ]);
 
-      const teamSize = descendants.length;
+      const directCount = team.directIds.length;
+      const teamSize = team.allIds.length;
       const indirectCount = Math.max(0, teamSize - directCount);
       const totalCommission = Number(totalAgg._sum.amount ?? 0);
       const monthCommission = Number(monthAgg._sum.amount ?? 0);

@@ -42,7 +42,7 @@ import type {
 import { getReferralLinkExample } from '@/lib/utils/referral-link';
 
 const referralLevelSchema = z.object({
-  level: z.number().int().min(1).max(3),
+  level: z.number().int().min(1),
   percent: z
     .number()
     .min(0, 'Процент не может быть отрицательным')

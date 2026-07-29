@@ -70,9 +70,13 @@ export async function GET(
   const period: HierarchyPeriod = VALID_PERIODS.includes(periodParam)
     ? periodParam
     : '30d';
+  const organizationId = url.searchParams.get('organizationId') || undefined;
 
   try {
-    const tree = await getHierarchyTree(projectId, { period });
+    const tree = await getHierarchyTree(projectId, {
+      period,
+      organizationId
+    });
 
     // Маппинг id → name для подстановки parent_name.
     const nameById = new Map(tree.nodes.map((n) => [n.id, n.name]));
@@ -81,6 +85,8 @@ export async function GET(
       'id',
       'Имя',
       'Роль',
+      'Уровень организации',
+      'Рефереры и доли',
       'Родитель',
       'Дата регистрации',
       'Сумма покупок',
@@ -90,7 +96,14 @@ export async function GET(
     const rows = tree.nodes.map((n) => [
       n.id,
       n.name,
-      ROLE_LABEL[n.partnerRole] ?? n.partnerRole,
+      n.organizationTitle ?? ROLE_LABEL[n.partnerRole] ?? n.partnerRole,
+      n.organizationLevel,
+      n.referrerLinks
+        .map(
+          (link) =>
+            `${link.referrerName} ${link.sharePercent}%${link.isPrimary ? ' (основной)' : ''}`
+        )
+        .join(' | '),
       n.parentId ? (nameById.get(n.parentId) ?? n.parentId) : '',
       // YYYY-MM-DD HH:mm — компактно для отчёта
       new Date(n.registeredAt).toISOString().replace('T', ' ').slice(0, 16),

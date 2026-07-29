@@ -1661,11 +1661,10 @@ ${userVariables['user.progressBar']} (${userVariables['user.progressPercent']}%)
           break;
 
         case 'menu_referrals':
-          // B2B-режим: ссылка доступна партнёрам уровней 1–3 (см. тот же
-          // гейт в PartnerLinkHandler); CLIENT получает понятное ограничение.
+          // B2B-режим: ссылка доступна партнёрам и управляющим.
           if (userVariables['user.canRefer'] === false) {
             messageText =
-              '🔒 Реферальная ссылка доступна только партнёрам уровней 1–3. Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
+              '🔒 Реферальная ссылка доступна партнёрам и управляющим организации.';
             break;
           }
           messageText = `<b>👥 Реферальная программа</b>
@@ -1685,7 +1684,7 @@ ${userVariables['user.referralLink']}
         case 'menu_invite':
           if (userVariables['user.canRefer'] === false) {
             messageText =
-              '🔒 Реферальная ссылка доступна только партнёрам уровней 1–3. Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.';
+              '🔒 Реферальная ссылка доступна партнёрам и управляющим организации.';
             break;
           }
           messageText = `<b>🔗 Пригласить друга</b>
@@ -1916,7 +1915,14 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       const db: PrismaClient = context.services.db as PrismaClient;
       const me = await db.user.findFirst({
         where: { id: userId, projectId: context.projectId },
-        select: { partnerRole: true }
+        select: {
+          partnerRole: true,
+          organizationMemberships: {
+            where: { projectId: context.projectId, canManage: true },
+            select: { id: true },
+            take: 1
+          }
+        }
       });
 
       const filter: TeamListFilter =
@@ -1962,15 +1968,21 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       ];
 
       result.items.forEach((u, idx) => {
-        const roleLabel = partnerRoleLabel(u.partnerRole);
+        const roleLabel =
+          u.organizationTitle ||
+          (u.organizationLevel
+            ? `Уровень ${u.organizationLevel}`
+            : partnerRoleLabel(u.partnerRole));
         const purchases = formatRub(u.totalPurchases);
         const earned = formatRub(u.commissionEarned);
         lines.push(
-          `${idx + 1 + page * pageSize}. <b>${u.name}</b> · ${roleLabel}\n   💼 Оборот: ${purchases} · 💰 Комиссия: ${earned}`
+          `${idx + 1 + page * pageSize}. <b>${u.name}</b> · ${roleLabel}\n   💼 Оборот: ${purchases} · 💰 Ваша комиссия: ${earned}`
         );
       });
 
-      const canManage = me && me.partnerRole !== 'CLIENT';
+      const canManage =
+        me &&
+        (me.partnerRole !== 'CLIENT' || me.organizationMemberships.length > 0);
 
       const detailButtons = result.items.map((u) => {
         const row: Array<{ text: string; callback_data: string }> = [
@@ -2343,7 +2355,7 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
 }
 
 /**
- * action.partner_link — реферальная ссылка для партнёров уровней 1–3.
+ * action.partner_link — реферальная ссылка для партнёров и управляющих.
  *
  * @see Requirement 6.2 (кнопка «👉 МОЯ ССЫЛКА 👈»)
  */
@@ -2377,6 +2389,11 @@ export class PartnerLinkHandler extends BaseNodeHandler {
         where: { id: userId },
         select: {
           partnerRole: true,
+          organizationMemberships: {
+            where: { projectId: context.projectId, canManage: true },
+            select: { id: true },
+            take: 1
+          },
           project: {
             select: { enablePartnerRoles: true, domain: true, name: true }
           }
@@ -2390,13 +2407,14 @@ export class PartnerLinkHandler extends BaseNodeHandler {
 
       const enablePartnerRoles = !!user.project?.enablePartnerRoles;
       const role = user.partnerRole || 'CLIENT';
-      // В B2B ссылка доступна партнёрам уровней 1–3, в legacy — всем.
-      const canRefer = enablePartnerRoles ? role !== 'CLIENT' : true;
+      const canRefer = enablePartnerRoles
+        ? role !== 'CLIENT' || user.organizationMemberships.length > 0
+        : true;
 
       if (!canRefer) {
         await sendPlatformMessage(
           context,
-          '🔒 Реферальная ссылка доступна только партнёрам уровней 1–3. Если вы партнёр — обратитесь к администратору, чтобы он назначил вам роль.',
+          '🔒 Реферальная ссылка доступна партнёрам и управляющим организации.',
           {
             replyMarkup: {
               inline_keyboard: [
@@ -2487,6 +2505,11 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         where: { id: userId },
         select: {
           partnerRole: true,
+          organizationMemberships: {
+            where: { projectId: context.projectId, canManage: true },
+            select: { id: true },
+            take: 1
+          },
           project: { select: { enablePartnerRoles: true } }
         }
       });
@@ -2505,11 +2528,13 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         return null;
       }
 
-      // Сводка доступна только партнёру уровня 3.
-      if (me.partnerRole !== 'DIRECTOR') {
+      if (
+        me.partnerRole !== 'DIRECTOR' &&
+        me.organizationMemberships.length === 0
+      ) {
         await sendPlatformMessage(
           context,
-          '🔒 Сводка по организации доступна только партнёру уровня 3.',
+          '🔒 Сводка по организации доступна управляющим.',
           {
             replyMarkup: {
               inline_keyboard: [
@@ -2521,13 +2546,14 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         return null;
       }
 
-      const { cachedGetDescendantTree } = await import(
-        '@/lib/services/referral-commission.service'
+      const { PartnerReferralGraphService } = await import(
+        '@/lib/services/partner-referral-graph.service'
       );
-      const descendants = await cachedGetDescendantTree(
-        userId,
-        context.projectId
-      );
+      const { allIds: descendants } =
+        await PartnerReferralGraphService.getVisibleTeamIds(
+          context.projectId,
+          userId
+        );
 
       if (descendants.length === 0) {
         await sendPlatformMessage(

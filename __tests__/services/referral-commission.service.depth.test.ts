@@ -1,7 +1,6 @@
 /**
  * @file: referral-commission.service.depth.test.ts
- * @description: План 004 — комиссионная глубина едина на 3 уровнях.
- *   Проверяем, что createPlan клампит maxPayoutDepth и уровни к 3.
+ * @description: Комиссионные планы поддерживают произвольную глубину.
  * @project: SaaS Bonus System
  */
 
@@ -11,7 +10,7 @@ import { db } from '@/lib/db';
 jest.mock('@/lib/db');
 jest.mock('@/lib/logger');
 
-describe('ReferralCommissionService.createPlan (план 004: глубина капится на 3)', () => {
+describe('ReferralCommissionService.createPlan (произвольная глубина)', () => {
   const mockDb = db as jest.Mocked<typeof db>;
   const projectId = 'project-1';
 
@@ -40,7 +39,7 @@ describe('ReferralCommissionService.createPlan (план 004: глубина к�
     (mockDb as any).$transaction = jest.fn((cb: any) => cb(tx));
   });
 
-  it('клампит maxPayoutDepth=6 до 3 при создании плана', async () => {
+  it('сохраняет maxPayoutDepth больше 3', async () => {
     await ReferralCommissionService.createPlan(
       projectId,
       'Слишком глубокий план',
@@ -50,12 +49,12 @@ describe('ReferralCommissionService.createPlan (план 004: глубина к�
 
     expect(createPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ maxPayoutDepth: 3 })
+        data: expect.objectContaining({ maxPayoutDepth: 6 })
       })
     );
   });
 
-  it('не сохраняет уровень 4 — он клампится в диапазон 1..3', async () => {
+  it('сохраняет уровень 4 без клампа', async () => {
     await ReferralCommissionService.createPlan(
       projectId,
       'План с уровнем 4',
@@ -73,8 +72,6 @@ describe('ReferralCommissionService.createPlan (план 004: глубина к�
     }>;
     const levelNumbers = persistedLevels.map((l) => l.level);
 
-    // Ни один сохранённый уровень не должен превышать 3.
-    expect(Math.max(...levelNumbers)).toBeLessThanOrEqual(3);
-    expect(levelNumbers).not.toContain(4);
+    expect(levelNumbers).toContain(4);
   });
 });
