@@ -167,6 +167,7 @@ model PartnerOrganization {
   slug                            String
   description                     String?
   isActive                        Boolean  @default(true) @map("is_active")
+  firstPurchaseDiscountPercent    Int      @default(0) @map("first_purchase_discount_percent")
   defaultReferralCommissionPlanId String?  @map("default_referral_commission_plan_id")
   directorUserId                  String?  @map("director_user_id")
   settings                        Json?    @default("{}")
@@ -499,8 +500,9 @@ model User {
   /// По умолчанию CLIENT. Применяется только когда у проекта включён `enablePartnerRoles`.
   partnerRole PartnerRole @default(CLIENT) @map("partner_role")
 
-  organizationId String?              @map("organization_id")
-  organization   PartnerOrganization? @relation("UserOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationId                  String?              @map("organization_id")
+  organization                    PartnerOrganization? @relation("UserOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  firstPurchaseDiscountRedeemedAt DateTime?            @map("first_purchase_discount_redeemed_at")
 
   /// Явный платёжный родитель в b2b-иерархии (тренер → менеджер → директор).
   /// Authoritative для resolvePayoutChain (план 005): кому уходит комиссия на

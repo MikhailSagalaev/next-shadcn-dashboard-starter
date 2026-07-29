@@ -8,22 +8,12 @@ import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/projects/[id]/users/balance/route';
 import { UserService } from '@/lib/services/user.service';
 import { ProjectService } from '@/lib/services/project.service';
+import { FirstPurchaseDiscountService } from '@/lib/services/first-purchase-discount.service';
 
 jest.mock('@/lib/services/user.service');
 jest.mock('@/lib/services/project.service');
+jest.mock('@/lib/services/first-purchase-discount.service');
 jest.mock('@/lib/logger');
-
-// Mock db
-jest.mock('@/lib/db', () => ({
-  db: {
-    project: {
-      findUnique: jest.fn().mockResolvedValue({
-        welcomeRewardType: 'DISCOUNT',
-        firstPurchaseDiscountPercent: 10
-      })
-    }
-  }
-}));
 
 // Mock dynamic import for BonusLevelService
 jest.mock('@/lib/services/bonus-level.service', () => ({
@@ -43,6 +33,13 @@ describe('Project Balance API', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (
+      FirstPurchaseDiscountService.getEligibility as jest.Mock
+    ).mockResolvedValue({
+      available: false,
+      discountPercent: 0,
+      source: null
+    });
   });
 
   it('returns balance successfully for existing user', async () => {
@@ -83,6 +80,52 @@ describe('Project Balance API', () => {
     expect(data.success).toBe(true);
     expect(data.balance).toBe(100);
     expect(data.user.email).toBe('test@example.com');
+  });
+
+  it('returns an organization first-purchase discount', async () => {
+    (ProjectService.getProjectById as jest.Mock).mockResolvedValue({
+      id: projectId,
+      domain: 'test.com',
+      operationMode: 'WITH_BOT'
+    });
+    (UserService.findUserByContact as jest.Mock).mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      phone: null,
+      totalPurchases: 0,
+      telegramId: null
+    });
+    (UserService.getUserBalance as jest.Mock).mockResolvedValue({
+      currentBalance: 0,
+      totalEarned: 0,
+      totalSpent: 0,
+      expiringSoon: 0
+    });
+    (
+      FirstPurchaseDiscountService.getEligibility as jest.Mock
+    ).mockResolvedValue({
+      available: true,
+      discountPercent: 10,
+      source: 'ORGANIZATION'
+    });
+
+    const req = new NextRequest(
+      `http://test.com/api/projects/${projectId}/users/balance?email=test@example.com`,
+      {
+        method: 'GET',
+        headers: { origin: 'http://test.com' }
+      }
+    );
+
+    const res = await GET(req, { params: Promise.resolve({ id: projectId }) });
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.firstPurchaseDiscount).toEqual({
+      available: true,
+      discountPercent: 10,
+      source: 'ORGANIZATION'
+    });
   });
 
   it('returns 404 for non-existing user if operationMode is WITH_BOT', async () => {
@@ -137,7 +180,7 @@ describe('Project Balance API', () => {
     });
 
     const req = new NextRequest(
-      `http://test.com/api/projects/${projectId}/users/balance?email=new@example.com&firstName=Alex&utm_source=ref123`,
+      `http://test.com/api/projects/${projectId}/users/balance?email=new@example.com&firstName=Alex&utm_source=ref123&utm_org=fitness-network`,
       {
         method: 'GET',
         headers: { origin: 'http://test.com' }
@@ -161,7 +204,8 @@ describe('Project Balance API', () => {
       utmMedium: undefined,
       utmCampaign: undefined,
       utmContent: undefined,
-      utmTerm: undefined
+      utmTerm: undefined,
+      utmOrg: 'fitness-network'
     });
   });
 });

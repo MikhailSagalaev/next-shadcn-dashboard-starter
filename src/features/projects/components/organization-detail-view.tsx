@@ -44,6 +44,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel
+} from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -90,6 +96,7 @@ type Organization = {
   slug: string;
   description: string | null;
   isActive: boolean;
+  firstPurchaseDiscountPercent: number;
   defaultReferralCommissionPlanId: string | null;
   directorUserId: string | null;
   defaultReferralCommissionPlan?: { id: string; name: string } | null;
@@ -173,6 +180,13 @@ const formatRub = (n: number) =>
     maximumFractionDigits: 0
   }).format(n);
 
+function parseDiscountPercent(value: string): number | null {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 100
+    ? parsed
+    : null;
+}
+
 export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -201,6 +215,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [editPlanId, setEditPlanId] = useState('');
   const [editDirectorId, setEditDirectorId] = useState('');
   const [editActive, setEditActive] = useState(true);
+  const [
+    editFirstPurchaseDiscountPercent,
+    setEditFirstPurchaseDiscountPercent
+  ] = useState('0');
 
   const [newUserId, setNewUserId] = useState('');
   const [newRole, setNewRole] = useState<
@@ -285,10 +303,21 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
     setEditPlanId(organization.defaultReferralCommissionPlanId ?? '');
     setEditDirectorId(organization.directorUserId ?? '');
     setEditActive(organization.isActive);
+    setEditFirstPurchaseDiscountPercent(
+      String(organization.firstPurchaseDiscountPercent ?? 0)
+    );
     setEditOpen(true);
   };
 
   const saveOrg = async () => {
+    const firstPurchaseDiscountPercent = parseDiscountPercent(
+      editFirstPurchaseDiscountPercent
+    );
+    if (firstPurchaseDiscountPercent === null) {
+      toast.error('Скидка должна быть целым числом от 0 до 100');
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(
@@ -301,6 +330,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             slug: editSlug.trim(),
             description: editDescription.trim() || null,
             isActive: editActive,
+            firstPurchaseDiscountPercent,
             defaultReferralCommissionPlanId: editPlanId || null,
             directorUserId: editDirectorId || null
           })
@@ -561,6 +591,12 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             <Badge variant={organization.isActive ? 'default' : 'secondary'}>
               {organization.isActive ? 'Активна' : 'Выключена'}
             </Badge>
+            {organization.firstPurchaseDiscountPercent > 0 && (
+              <Badge variant='secondary'>
+                Скидка на первую покупку{' '}
+                {organization.firstPurchaseDiscountPercent}%
+              </Badge>
+            )}
           </div>
           <p className='text-muted-foreground mt-1 text-sm'>
             slug: <code>{organization.slug}</code>
@@ -817,6 +853,38 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 rows={2}
               />
             </div>
+            <FieldGroup className='gap-4'>
+              <Field
+                data-invalid={
+                  parseDiscountPercent(editFirstPurchaseDiscountPercent) ===
+                  null
+                }
+              >
+                <FieldLabel htmlFor='org-first-purchase-discount'>
+                  Приветственная скидка, %
+                </FieldLabel>
+                <Input
+                  id='org-first-purchase-discount'
+                  type='number'
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={editFirstPurchaseDiscountPercent}
+                  onChange={(event) =>
+                    setEditFirstPurchaseDiscountPercent(event.target.value)
+                  }
+                  aria-invalid={
+                    parseDiscountPercent(editFirstPurchaseDiscountPercent) ===
+                    null
+                  }
+                />
+                <FieldDescription>
+                  Для участников этой организации без покупок. Значение 0
+                  отключает скидку организации; общая скидка проекта продолжит
+                  действовать, если она включена.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
             <div className='space-y-2'>
               <Label>Партнёрский план по умолчанию</Label>
               <Select

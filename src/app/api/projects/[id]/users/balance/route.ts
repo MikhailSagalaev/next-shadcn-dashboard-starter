@@ -10,6 +10,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { UserService } from '@/lib/services/user.service';
 import { ProjectService } from '@/lib/services/project.service';
+import { FirstPurchaseDiscountService } from '@/lib/services/first-purchase-discount.service';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -125,6 +126,7 @@ export async function GET(
       const utmCampaign = url.searchParams.get('utm_campaign') || undefined;
       const utmContent = url.searchParams.get('utm_content') || undefined;
       const utmTerm = url.searchParams.get('utm_term') || undefined;
+      const utmOrg = url.searchParams.get('utm_org') || undefined;
 
       try {
         user = await UserService.createUser({
@@ -137,7 +139,8 @@ export async function GET(
           utmMedium,
           utmCampaign,
           utmContent,
-          utmTerm
+          utmTerm,
+          utmOrg
         });
         logger.info('Auto-registered user in WITHOUT_BOT mode', {
           projectId,
@@ -186,32 +189,8 @@ export async function GET(
     );
 
     // Проверяем право на скидку первой покупки
-    const { db } = await import('@/lib/db');
-    const projectSettings = await db.project.findUnique({
-      where: { id: projectId },
-      select: {
-        welcomeRewardType: true,
-        firstPurchaseDiscountPercent: true
-      }
-    });
-
-    const isFirstPurchase = Number(user.totalPurchases) === 0;
-    const hasFirstPurchaseDiscount =
-      isFirstPurchase &&
-      projectSettings?.welcomeRewardType === 'DISCOUNT' &&
-      Number(projectSettings?.firstPurchaseDiscountPercent || 0) > 0;
-
-    const firstPurchaseDiscount = hasFirstPurchaseDiscount
-      ? {
-          available: true,
-          discountPercent: Number(
-            projectSettings?.firstPurchaseDiscountPercent || 0
-          )
-        }
-      : {
-          available: false,
-          discountPercent: 0
-        };
+    const firstPurchaseDiscount =
+      await FirstPurchaseDiscountService.getEligibility(projectId, user.id);
 
     logger.info('User balance retrieved', {
       projectId,

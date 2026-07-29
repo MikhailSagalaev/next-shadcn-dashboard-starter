@@ -18,6 +18,7 @@ export interface CreateOrganizationInput {
   name: string;
   slug?: string;
   description?: string;
+  firstPurchaseDiscountPercent?: number;
   defaultReferralCommissionPlanId?: string | null;
   directorUserId?: string | null;
 }
@@ -584,6 +585,8 @@ export class PartnerOrganizationService {
           name: input.name.trim(),
           slug,
           description: input.description?.trim() || null,
+          firstPurchaseDiscountPercent:
+            input.firstPurchaseDiscountPercent ?? 0,
           defaultReferralCommissionPlanId:
             input.defaultReferralCommissionPlanId || null,
           directorUserId: input.directorUserId || null
@@ -647,6 +650,10 @@ export class PartnerOrganizationService {
               ? data.description?.trim() || null
               : undefined,
           isActive: data.isActive,
+          firstPurchaseDiscountPercent:
+            data.firstPurchaseDiscountPercent !== undefined
+              ? data.firstPurchaseDiscountPercent
+              : undefined,
           defaultReferralCommissionPlanId:
             data.defaultReferralCommissionPlanId !== undefined
               ? data.defaultReferralCommissionPlanId

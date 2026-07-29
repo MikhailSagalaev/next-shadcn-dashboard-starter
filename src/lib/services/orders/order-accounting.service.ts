@@ -12,6 +12,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { BonusService, UserService } from '@/lib/services/user.service';
 import { ReferralService } from '@/lib/services/referral.service';
+import { resolveFirstPurchaseDiscount } from '@/lib/services/first-purchase-discount.service';
 
 export class OrderAccountingConflictError extends Error {
   readonly code = 'ORDER_ACCOUNTING_CONFLICT';
@@ -64,6 +65,14 @@ function numericMetadata(
 ): number {
   const value = metadata[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function stringMetadata(
+  metadata: Record<string, unknown>,
+  key: string
+): string {
+  const value = metadata[key];
+  return typeof value === 'string' ? value : '';
 }
 
 const ACCOUNTING_CLAIM_STALE_MS = 5 * 60 * 1000;
@@ -230,6 +239,9 @@ export class OrderAccountingService {
       0,
       Math.min(totalAmount, numericMetadata(metadata, 'requestedBonusAmount'))
     );
+    const usesFirstPurchaseDiscount =
+      requestedBonusAmount === 0 &&
+      stringMetadata(metadata, 'promocode').trim().toUpperCase() === 'GUPIL';
     const behavior = order.project.bonusBehavior || 'SPEND_AND_EARN';
 
     await db.$transaction(async (tx) => {
@@ -254,8 +266,32 @@ export class OrderAccountingService {
       );
       const currentUser = await tx.user.findUniqueOrThrow({
         where: { id: order.userId },
-        select: { totalPurchases: true }
+        select: {
+          totalPurchases: true,
+          firstPurchaseDiscountRedeemedAt: true,
+          organization: {
+            select: {
+              isActive: true,
+              firstPurchaseDiscountPercent: true
+            }
+          },
+          project: {
+            select: {
+              welcomeRewardType: true,
+              firstPurchaseDiscountPercent: true
+            }
+          }
+        }
       });
+      const discountEligibility = usesFirstPurchaseDiscount
+        ? resolveFirstPurchaseDiscount({
+            totalPurchases: Number(currentUser.totalPurchases),
+            firstPurchaseDiscountRedeemedAt:
+              currentUser.firstPurchaseDiscountRedeemedAt,
+            organization: currentUser.organization,
+            project: currentUser.project
+          })
+        : null;
       const nextTotalPurchases =
         Number(currentUser.totalPurchases) + totalAmount;
       const currentLevel = await resolveLevelName(
@@ -265,11 +301,31 @@ export class OrderAccountingService {
       );
       await tx.user.update({
         where: { id: order.userId },
-        data: { totalPurchases: nextTotalPurchases, currentLevel }
+        data: {
+          totalPurchases: nextTotalPurchases,
+          currentLevel,
+          ...(discountEligibility?.available
+            ? { firstPurchaseDiscountRedeemedAt: claimStartedAt }
+            : {})
+        }
       });
       await tx.order.update({
         where: { id: orderId },
-        data: { accountedPurchaseAmount: totalAmount }
+        data: {
+          accountedPurchaseAmount: totalAmount,
+          ...(discountEligibility?.available
+            ? {
+                metadata: {
+                  ...metadata,
+                  firstPurchaseDiscount: {
+                    source: discountEligibility.source,
+                    percent: discountEligibility.discountPercent,
+                    redeemedAt: claimStartedAt.toISOString()
+                  }
+                } as Prisma.InputJsonValue
+              }
+            : {})
+        }
       });
     });
 

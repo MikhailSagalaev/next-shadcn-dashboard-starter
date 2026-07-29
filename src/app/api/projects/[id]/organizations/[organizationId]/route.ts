@@ -5,7 +5,7 @@
  * @created: 2026-06-06
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { withProjectAccess } from '@/lib/with-project-access';
@@ -17,6 +17,7 @@ const UpdateOrgSchema = z.object({
   slug: z.string().min(1).max(64).optional(),
   description: z.string().max(500).nullable().optional(),
   isActive: z.boolean().optional(),
+  firstPurchaseDiscountPercent: z.number().int().min(0).max(100).optional(),
   defaultReferralCommissionPlanId: z.string().nullable().optional(),
   directorUserId: z.string().nullable().optional()
 });

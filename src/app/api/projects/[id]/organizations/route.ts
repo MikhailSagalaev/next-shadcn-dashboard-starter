@@ -5,7 +5,7 @@
  * @created: 2026-06-06
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { withProjectAccess } from '@/lib/with-project-access';
@@ -15,6 +15,7 @@ const CreateOrgSchema = z.object({
   name: z.string().min(1).max(120),
   slug: z.string().min(1).max(64).optional(),
   description: z.string().max(500).optional(),
+  firstPurchaseDiscountPercent: z.number().int().min(0).max(100).optional(),
   defaultReferralCommissionPlanId: z.string().nullable().optional(),
   directorUserId: z.string().nullable().optional()
 });
@@ -46,6 +47,8 @@ export const POST = withProjectAccess(async (request, { projectId }) => {
       name: parsed.data.name,
       slug: parsed.data.slug,
       description: parsed.data.description,
+      firstPurchaseDiscountPercent:
+        parsed.data.firstPurchaseDiscountPercent ?? 0,
       defaultReferralCommissionPlanId:
         parsed.data.defaultReferralCommissionPlanId ?? null,
       directorUserId: parsed.data.directorUserId ?? null

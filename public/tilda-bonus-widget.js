@@ -171,6 +171,16 @@
         }
       },
 
+      getCurrent: function () {
+        var stored = this._loadStored();
+        return {
+          ref:
+            (stored && stored.ref) || this._getCookie(this.COOKIE_REF) || null,
+          org:
+            (stored && stored.org) || this._getCookie(this.COOKIE_ORG) || null
+        };
+      },
+
       _saveStored: function (ref, org, widget) {
         if (!ref) return;
         var ttlDays = this._ttlDays(widget);
@@ -4159,6 +4169,9 @@
         const params = new URLSearchParams();
         if (validEmail) params.append('email', validEmail);
         if (phone) params.append('phone', phone);
+        const attribution = this.referralAttribution.getCurrent();
+        if (attribution.ref) params.append('utm_source', attribution.ref);
+        if (attribution.org) params.append('utm_org', attribution.org);
 
         const data = await this.makeApiRequest(
           `${this.config.apiUrl}/api/projects/${this.config.projectId}/users/balance?${params}`
