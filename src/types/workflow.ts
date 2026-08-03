@@ -655,6 +655,14 @@ export interface TelegramContext {
     text?: string;
     callbackData?: string;
   };
+  callback?: {
+    /** Full callback_data value, for example partner_subject:user-id. */
+    data: string;
+    /** Callback name before the first colon. */
+    name: string;
+    /** Parameters after the name, available as telegram.callback.params[0]. */
+    params: string[];
+  };
   contact?: TelegramContact;
 }
 

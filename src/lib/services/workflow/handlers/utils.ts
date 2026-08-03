@@ -261,6 +261,7 @@ export async function resolveVariablePath(
   context: ExecutionContext
 ): Promise<any> {
   const segments = path
+    .replace(/\[(\d+)\]/g, '.$1')
     .split('.')
     .map((segment) => segment.trim())
     .filter(Boolean);

@@ -1925,8 +1925,10 @@ export class PartnerTeamHandler extends BaseNodeHandler {
         }
       });
 
-      const filter: TeamListFilter =
-        me?.partnerRole === 'TRAINER' ? 'clients' : 'direct';
+      const filter: TeamListFilter = PartnerTeamService.getDefaultTeamFilter({
+        partnerRole: me?.partnerRole,
+        managesOrganization: Boolean(me?.organizationMemberships.length)
+      });
 
       const filterLabel: Record<TeamListFilter, string> = {
         direct: 'Прямые',
@@ -1964,6 +1966,8 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       const lines: string[] = [
         `<b>👥 Моя команда</b> · ${filterLabel[filter]} (${result.total})`,
         `Страница ${page + 1} из ${totalPages}`,
+        `💼 Оборот команды: <b>${formatRub(result.summary.totalPurchases)}</b>`,
+        `💰 Ваша комиссия: <b>${formatRub(result.summary.personalCommission)}</b>`,
         ''
       ];
 
@@ -2078,8 +2082,8 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
         throw new Error('partner_subject_stats: subjectUserId is required');
       }
 
-      const subjectUserId = (
-        await resolveTemplateString(config.subjectUserId, context)
+      const subjectUserId = String(
+        (await resolveTemplateString(config.subjectUserId, context)) ?? ''
       ).trim();
 
       const viewerUserId = await resolvePartnerUserId(context);

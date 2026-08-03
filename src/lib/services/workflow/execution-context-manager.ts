@@ -141,6 +141,12 @@ function sanitizeData(data: any, maxDepth: number = 10): any {
 /**
  * Менеджер контекста выполнения workflow
  */
+export function buildTelegramCallbackContext(callbackData?: string) {
+  if (!callbackData) return undefined;
+  const [name, ...params] = callbackData.split(':');
+  return { data: callbackData, name, params };
+}
+
 export class ExecutionContextManager {
   /**
    * Создает новый контекст выполнения
@@ -321,6 +327,7 @@ export class ExecutionContextManager {
           text: messageText,
           callbackData
         },
+        callback: buildTelegramCallbackContext(callbackData),
         contact: contact
       },
       variables: variableManager,
@@ -458,6 +465,7 @@ export class ExecutionContextManager {
           text: messageText,
           callbackData
         },
+        callback: buildTelegramCallbackContext(callbackData),
         contact: contact
       },
       variables: variableManager,

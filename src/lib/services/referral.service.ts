@@ -380,18 +380,26 @@ export class ReferralService {
       // Получаем настройки реферальной программы
       const referralProgram = await this.getReferralProgram(user.projectId);
 
-      if (!referralProgram || !referralProgram.isActive) {
+      // A locked B2B commission plan is independent from the classic referral toggle
+      // and from the legacy referredBy column: the graph is the source of truth.
+      const hasLockedCommissionPlan =
+        Boolean(user.project?.referralPlansEnabled) &&
+        Boolean(user.referralAttribution?.commissionPlan?.levels?.length);
+      if (!referralProgram && !hasLockedCommissionPlan) {
+        return { bonusAwarded: false };
+      }
+      if (referralProgram?.isActive === false && !hasLockedCommissionPlan) {
         return { bonusAwarded: false };
       }
 
-      if (referralProgram.minPurchaseAmount > 0) {
+      if (referralProgram?.isActive && referralProgram.minPurchaseAmount > 0) {
         const minAmount = Number(referralProgram.minPurchaseAmount);
         if (purchaseAmount < minAmount) {
           return { bonusAwarded: false };
         }
       }
 
-      if (!user.referredBy) {
+      if (!user.referredBy && !hasLockedCommissionPlan) {
         return { bonusAwarded: false };
       }
 
@@ -421,7 +429,7 @@ export class ReferralService {
             levelMap.set(level.level, Number(level.percent));
           });
       } else {
-        (referralProgram.levels || [])
+        (referralProgram?.levels || [])
           .filter(
             (level) =>
               level.level >= 1 && level.isActive && Number(level.percent) > 0
@@ -431,8 +439,8 @@ export class ReferralService {
           });
       }
 
-      if (!levelMap.size && referralProgram.referrerBonus > 0) {
-        levelMap.set(1, referralProgram.referrerBonus);
+      if (!levelMap.size && Number(referralProgram?.referrerBonus ?? 0) > 0) {
+        levelMap.set(1, Number(referralProgram?.referrerBonus ?? 0));
       }
 
       if (!levelMap.size) {
@@ -472,7 +480,7 @@ export class ReferralService {
         const level = index + 1;
         const percent =
           levelMap.get(level) ??
-          (level === 1 ? referralProgram.referrerBonus : 0);
+          (level === 1 ? Number(referralProgram?.referrerBonus ?? 0) : 0);
 
         if (!percent || percent <= 0) continue;
 

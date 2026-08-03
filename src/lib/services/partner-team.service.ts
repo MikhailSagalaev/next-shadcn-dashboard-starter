@@ -58,6 +58,18 @@ function displayName(u: {
 }
 
 export class PartnerTeamService {
+  static getDefaultTeamFilter(params: {
+    partnerRole?: string | null;
+    managesOrganization?: boolean;
+  }): TeamListFilter {
+    if (params.managesOrganization) return 'all';
+    if (params.partnerRole === 'TRAINER') return 'clients';
+    if (params.partnerRole === 'MANAGER' || params.partnerRole === 'DIRECTOR') {
+      return 'all';
+    }
+    return 'direct';
+  }
+
   static async getProjectPartnerFlags(projectId: string) {
     return db.project.findUnique({
       where: { id: projectId },
@@ -265,18 +277,20 @@ export class PartnerTeamService {
         projectId,
         viewerUserId
       );
-    const directRows = await db.user.findMany({
-      where: { projectId, id: { in: directIds } },
-      select: { id: true, partnerRole: true }
-    });
-
     let targetIds: string[];
     switch (filter) {
-      case 'clients':
-        targetIds = directRows
-          .filter((p) => p.partnerRole === 'CLIENT')
-          .map((p) => p.id);
+      case 'clients': {
+        const profiles = await db.user.findMany({
+          where: {
+            projectId,
+            id: { in: allDescendantIds },
+            partnerRole: 'CLIENT'
+          },
+          select: { id: true }
+        });
+        targetIds = profiles.map((p) => p.id);
         break;
+      }
       case 'partners': {
         const profiles = await db.user.findMany({
           where: {
@@ -298,13 +312,62 @@ export class PartnerTeamService {
         break;
     }
 
+    const summaryProfiles =
+      targetIds.length > 0
+        ? await db.user.findMany({
+            where: { projectId, id: { in: targetIds } },
+            select: { id: true, totalPurchases: true }
+          })
+        : [];
+    const purchasesById = new Map(
+      summaryProfiles.map((profile) => [
+        profile.id,
+        Number(profile.totalPurchases ?? 0)
+      ])
+    );
+    const originalPosition = new Map(targetIds.map((id, index) => [id, index]));
+    targetIds = [...targetIds].sort((left, right) => {
+      const purchaseDifference =
+        (purchasesById.get(right) ?? 0) - (purchasesById.get(left) ?? 0);
+      if (purchaseDifference !== 0) return purchaseDifference;
+      return (
+        (originalPosition.get(left) ?? Number.MAX_SAFE_INTEGER) -
+        (originalPosition.get(right) ?? Number.MAX_SAFE_INTEGER)
+      );
+    });
+    const personalCommission =
+      targetIds.length > 0
+        ? await db.transaction.aggregate({
+            where: {
+              userId: viewerUserId,
+              type: 'EARN',
+              isReferralBonus: true,
+              referralUserId: { in: targetIds }
+            },
+            _sum: { amount: true }
+          })
+        : null;
+    const summary = {
+      totalPurchases: summaryProfiles.reduce(
+        (sum, profile) => sum + Number(profile.totalPurchases ?? 0),
+        0
+      ),
+      personalCommission: Number(personalCommission?._sum.amount ?? 0)
+    };
+
     const total = targetIds.length;
     const start = (page - 1) * pageSize;
     const pageIds = targetIds.slice(start, start + pageSize);
     const directSet = new Set(directIds);
 
     if (pageIds.length === 0) {
-      return { items: [] as TeamMemberRow[], total, page, pageSize };
+      return {
+        items: [] as TeamMemberRow[],
+        total,
+        page,
+        pageSize,
+        summary
+      };
     }
 
     const [profiles, memberships] = await Promise.all([
@@ -381,7 +444,7 @@ export class PartnerTeamService {
       });
     }
 
-    return { items, total, page, pageSize };
+    return { items, total, page, pageSize, summary };
   }
 
   static async addToTeam(params: {

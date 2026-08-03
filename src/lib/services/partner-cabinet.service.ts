@@ -189,7 +189,7 @@ export class PartnerCabinetService {
         return true;
       }
 
-      if (data.startsWith('partner_team_remove:')) {
+      if (data.startsWith('partner_team_remove_confirm:')) {
         const subjectId = data.split(':')[1];
         await PartnerTeamService.removeFromTeam({
           projectId,
@@ -197,7 +197,54 @@ export class PartnerCabinetService {
           subjectUserId: subjectId
         });
         await ctx.answerCallbackQuery({ text: 'Убран из команды' });
-        await ctx.reply('👤 Участник убран из вашей команды.');
+        await ctx
+          .editMessageText('👤 Участник убран из вашей команды.')
+          .catch(() => {});
+        return true;
+      }
+
+      if (data === 'partner_team_remove_cancel') {
+        await ctx.answerCallbackQuery({ text: 'Удаление отменено' });
+        await ctx
+          .editMessageText('Удаление участника отменено.')
+          .catch(() => {});
+        return true;
+      }
+
+      if (data.startsWith('partner_team_remove:')) {
+        const subjectId = data.split(':')[1];
+        const subject = await db.user.findFirst({
+          where: { id: subjectId, projectId },
+          select: {
+            firstName: true,
+            lastName: true,
+            phone: true,
+            email: true
+          }
+        });
+        if (!subject) throw new Error('Участник не найден');
+
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          `Убрать <b>${formatName(subject)}</b> из команды? Связи и доступ к статистике изменятся.`,
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: 'Да, убрать',
+                    callback_data: `partner_team_remove_confirm:${subjectId}`
+                  },
+                  {
+                    text: 'Отмена',
+                    callback_data: 'partner_team_remove_cancel'
+                  }
+                ]
+              ]
+            }
+          }
+        );
         return true;
       }
 
@@ -238,7 +285,7 @@ export class PartnerCabinetService {
           projectId,
           userId,
           ctx,
-          'direct',
+          undefined,
           Number.isFinite(page) && page >= 0 ? page : 0
         );
         return true;
@@ -246,8 +293,17 @@ export class PartnerCabinetService {
 
       if (data.startsWith('partner_team_tab:')) {
         const parts = data.split(':');
-        const filter = (parts[1] ?? 'direct') as TeamListFilter;
-        const page = Number.parseInt(parts[2] ?? '0', 10);
+        const requestedFilter = parts[1] ?? 'direct';
+        const filter: TeamListFilter = (
+          ['direct', 'clients', 'partners', 'all'] as const
+        ).includes(requestedFilter as TeamListFilter)
+          ? (requestedFilter as TeamListFilter)
+          : 'direct';
+        const requestedPage = Number.parseInt(parts[2] ?? '0', 10);
+        const page =
+          Number.isFinite(requestedPage) && requestedPage >= 0
+            ? requestedPage
+            : 0;
         await this.renderTeamList(projectId, userId, ctx, filter, page);
         return true;
       }
@@ -273,7 +329,7 @@ export class PartnerCabinetService {
     projectId: string,
     userId: string,
     ctx: Context,
-    filter: TeamListFilter = 'direct',
+    filter: TeamListFilter | undefined,
     page = 0,
     pageSize = 5
   ) {
@@ -289,27 +345,49 @@ export class PartnerCabinetService {
       }
     });
 
+    const selectedFilter =
+      filter ??
+      PartnerTeamService.getDefaultTeamFilter({
+        partnerRole: me?.partnerRole,
+        managesOrganization: Boolean(me?.organizationMemberships.length)
+      });
     const result = await PartnerTeamService.listTeam({
       projectId,
       viewerUserId: userId,
-      filter,
+      filter: selectedFilter,
       page: page + 1,
       pageSize
     });
 
     const totalPages = Math.max(1, Math.ceil(result.total / pageSize));
+    const tabRow = [
+      { text: '👤 Клиенты', callback_data: 'partner_team_tab:clients:0' },
+      { text: '🏃 Партнёры', callback_data: 'partner_team_tab:partners:0' },
+      { text: '🌳 Все', callback_data: 'partner_team_tab:all:0' }
+    ];
 
     if (result.total === 0) {
       await ctx.reply(
-        `👥 <b>Моя команда</b> · ${FILTER_LABELS[filter]}\n\nПока пусто.`,
-        { parse_mode: 'HTML' }
+        `👥 <b>Моя команда</b> · ${FILTER_LABELS[selectedFilter]}\n\nПока пусто. Выберите другую вкладку или вернитесь в меню.`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              tabRow,
+              [{ text: '📥 Заявки', callback_data: 'partner_requests' }],
+              [{ text: '⬅️ Меню', callback_data: 'back_to_menu' }]
+            ]
+          }
+        }
       );
       return;
     }
 
     const lines = [
-      `<b>👥 Моя команда</b> · ${FILTER_LABELS[filter]} (${result.total})`,
+      `<b>👥 Моя команда</b> · ${FILTER_LABELS[selectedFilter]} (${result.total})`,
       `Стр. ${page + 1} / ${totalPages}`,
+      `💼 Оборот команды: <b>${formatRub(result.summary.totalPurchases)}</b>`,
+      `💰 Ваша комиссия: <b>${formatRub(result.summary.personalCommission)}</b>`,
       ''
     ];
 
@@ -341,30 +419,24 @@ export class PartnerCabinetService {
         !['DIRECTOR', 'MANAGER'].includes(u.partnerRole)
       ) {
         row.push({
-          text: '➖',
+          text: 'Убрать',
           callback_data: `partner_team_remove:${u.id}`
         });
       }
       return row;
     });
 
-    const tabRow = [
-      { text: '👤 Клиенты', callback_data: 'partner_team_tab:clients:0' },
-      { text: '🏃 Партнёры', callback_data: 'partner_team_tab:partners:0' },
-      { text: '🌳 Все', callback_data: 'partner_team_tab:all:0' }
-    ];
-
     const pager: Array<{ text: string; callback_data: string }> = [];
     if (page > 0) {
       pager.push({
         text: '⬅️',
-        callback_data: `partner_team_tab:${filter}:${page - 1}`
+        callback_data: `partner_team_tab:${selectedFilter}:${page - 1}`
       });
     }
     if (page + 1 < totalPages) {
       pager.push({
         text: '➡️',
-        callback_data: `partner_team_tab:${filter}:${page + 1}`
+        callback_data: `partner_team_tab:${selectedFilter}:${page + 1}`
       });
     }
 

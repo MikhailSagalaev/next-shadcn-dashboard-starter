@@ -14,6 +14,12 @@ describe('isTelegramCallbackIntercepted', () => {
   it('matches all documented prefix patterns with a real suffix', () => {
     expect(isTelegramCallbackIntercepted('partner_join_abc123')).toBe(true);
     expect(isTelegramCallbackIntercepted('partner_team_remove:u1')).toBe(true);
+    expect(
+      isTelegramCallbackIntercepted('partner_team_remove_confirm:u1')
+    ).toBe(true);
+    expect(isTelegramCallbackIntercepted('partner_team_remove_cancel')).toBe(
+      true
+    );
     expect(isTelegramCallbackIntercepted('partner_team_tab:clients')).toBe(
       true
     );
