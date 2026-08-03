@@ -32,6 +32,25 @@ export interface PerformanceMetrics {
   memory: number;
 }
 
+export function safeStringifyLogContext(value: unknown): string {
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(value, (_key, current) => {
+      if (typeof current === 'bigint') return current.toString();
+      if (current && typeof current === 'object') {
+        if (seen.has(current)) return '[Circular]';
+        seen.add(current);
+      }
+      return current;
+    });
+  } catch (error) {
+    return JSON.stringify({
+      serializationError:
+        error instanceof Error ? error.message : 'Unknown serialization error'
+    });
+  }
+}
+
 class Logger {
   private isDevelopment = process.env.NODE_ENV === 'development';
   private enableConsole = process.env.ENABLE_CONSOLE_LOGS !== 'false';
@@ -191,7 +210,7 @@ class Logger {
     const perf = performance
       ? ` (${performance.duration}ms, ${performance.memory}MB)`
       : '';
-    const contextStr = context ? ` ${JSON.stringify(context, null, 0)}` : '';
+    const contextStr = context ? ` ${safeStringifyLogContext(context)}` : '';
 
     const fullMessage = `${timestamp}${reqId} ${prefix} ${message}${perf}${contextStr}`;
 

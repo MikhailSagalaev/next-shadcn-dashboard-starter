@@ -147,4 +147,5 @@ main()
   })
   .finally(async () => {
     await db.$disconnect();
+    process.exit(process.exitCode ?? 0);
   });
