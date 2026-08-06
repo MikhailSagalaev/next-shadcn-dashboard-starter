@@ -1074,18 +1074,31 @@ export class ReferralService {
     additionalParams?: Record<string, string>
   ): Promise<string> {
     try {
-      // Проверяем роль пользователя в рамках b2b-режима
       const user = await db.user.findUnique({
         where: { id: userId },
         select: {
           partnerRole: true,
-          organizationId: true,
-          organization: { select: { slug: true, isActive: true } },
+          organizationMemberships: {
+            where: { organization: { isActive: true } },
+            orderBy: [{ canManage: 'desc' }, { level: 'desc' }],
+            select: {
+              level: true,
+              canManage: true,
+              organization: { select: { slug: true } }
+            }
+          },
           project: { select: { enablePartnerRoles: true } }
         }
       });
 
-      if (user?.project?.enablePartnerRoles && user.partnerRole === 'CLIENT') {
+      const eligibleMemberships = (user?.organizationMemberships ?? []).filter(
+        (membership) => membership.canManage || membership.level !== null
+      );
+      const isPartner =
+        (user?.partnerRole && user.partnerRole !== 'CLIENT') ||
+        eligibleMemberships.length > 0;
+
+      if (user?.project?.enablePartnerRoles && !isPartner) {
         throw new Error('Реферальная ссылка доступна только партнёрам');
       }
 
@@ -1097,8 +1110,14 @@ export class ReferralService {
       const url = new URL(base);
       // Новая схема: utm_ref с userId (+ utm_org для мульти-сетей)
       url.searchParams.set('utm_ref', userId);
-      if (user?.organization?.isActive && user.organization.slug) {
-        url.searchParams.set('utm_org', user.organization.slug);
+      const requestedOrganizationSlug = additionalParams?.utm_org;
+      const selectedMembership =
+        eligibleMemberships.find(
+          (membership) =>
+            membership.organization.slug === requestedOrganizationSlug
+        ) ?? eligibleMemberships[0];
+      if (selectedMembership?.organization.slug) {
+        url.searchParams.set('utm_org', selectedMembership.organization.slug);
       }
 
       // Добавляем дополнительные параметры

@@ -1633,6 +1633,67 @@ export class MenuCommandHandler extends BaseNodeHandler {
 ✨ Продолжайте совершать покупки для накопления бонусов!`;
           break;
 
+        case 'menu_purchases': {
+          const orders = await (
+            context.services.db as PrismaClient
+          ).order.findMany({
+            where: { projectId: context.projectId, userId },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+            select: {
+              orderNumber: true,
+              status: true,
+              totalAmount: true,
+              accountedPurchaseAmount: true,
+              createdAt: true,
+              items: {
+                select: { name: true, quantity: true },
+                take: 3
+              }
+            }
+          });
+          if (orders.length === 0) {
+            messageText =
+              '<b>🛍️ Мои покупки</b>\n\nПокупок пока нет. Заказы появятся здесь после привязки к вашему аккаунту.';
+            break;
+          }
+          const statusLabels: Record<string, string> = {
+            PENDING: 'Ожидает',
+            PROCESSING: 'В обработке',
+            COMPLETED: 'Выполнен',
+            CANCELLED: 'Отменён',
+            REFUNDED: 'Возврат'
+          };
+          const rows = orders.map((order, index) => {
+            const date = new Intl.DateTimeFormat('ru-RU', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            }).format(order.createdAt);
+            const items = order.items
+              .map((item) => escapeHtml(item.name) + ' × ' + item.quantity)
+              .join(', ');
+            const amount =
+              Number(order.accountedPurchaseAmount) > 0
+                ? order.accountedPurchaseAmount
+                : order.totalAmount;
+            return (
+              index +
+              1 +
+              '. <b>№ ' +
+              escapeHtml(order.orderNumber) +
+              '</b> · ' +
+              date +
+              '\n   ' +
+              formatRub(Number(amount)) +
+              ' · ' +
+              (statusLabels[order.status] ?? order.status) +
+              (items ? '\n   ' + items : '')
+            );
+          });
+          messageText = '<b>🛍️ Мои покупки</b>\n\n' + rows.join('\n\n');
+          break;
+        }
         case 'menu_history':
           messageText = `<b>📜 История операций</b>
 
@@ -1862,19 +1923,226 @@ function formatName(u: {
 
 /** Пользовательский лейбл партнёрской роли без изменения enum. */
 function partnerRoleLabel(role: string | null | undefined): string {
-  switch (role) {
-    case 'DIRECTOR':
-      return 'Уровень 3';
-    case 'MANAGER':
-      return 'Уровень 2';
-    case 'TRAINER':
-      return 'Уровень 1';
-    case 'CLIENT':
-    default:
-      return 'Клиент';
-  }
+  return role === 'CLIENT' ? 'Клиент' : 'Участник';
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+/**
+ * action.partner_home — единое адаптивное меню без ручной системной роли.
+ */
+export class PartnerHomeHandler extends BaseNodeHandler {
+  canHandle(nodeType: WorkflowNodeType): boolean {
+    return nodeType === 'action.partner_home';
+  }
+
+  async execute(
+    node: WorkflowNode,
+    context: ExecutionContext
+  ): Promise<string | null> {
+    try {
+      const userId = await resolvePartnerUserId(context);
+      if (!userId) {
+        await sendPlatformMessage(
+          context,
+          '❌ Не удалось определить ваш аккаунт. Введите /start.'
+        );
+        return null;
+      }
+
+      const db: PrismaClient = context.services.db as PrismaClient;
+      const user = await db.user.findFirst({
+        where: { id: userId, projectId: context.projectId, isActive: true },
+        select: {
+          firstName: true,
+          totalPurchases: true,
+          currentLevel: true,
+          project: {
+            select: {
+              enablePartnerRoles: true,
+              enablePartnerTeamManagement: true
+            }
+          },
+          organizationMemberships: {
+            where: {
+              projectId: context.projectId,
+              organization: { isActive: true }
+            },
+            orderBy: [{ canManage: 'desc' }, { level: 'desc' }],
+            select: {
+              level: true,
+              title: true,
+              canManage: true,
+              organization: {
+                select: { id: true, name: true, slug: true }
+              }
+            }
+          }
+        }
+      });
+      if (!user) {
+        await sendPlatformMessage(context, '❌ Аккаунт не найден.');
+        return null;
+      }
+
+      const memberships = user.organizationMemberships;
+      const primary = memberships[0] ?? null;
+      const isMember = memberships.length > 0;
+      const canManage = memberships.some((membership) => membership.canManage);
+      const b2bEnabled = Boolean(user.project?.enablePartnerRoles);
+      const teamEnabled =
+        b2bEnabled &&
+        Boolean(user.project?.enablePartnerTeamManagement) &&
+        isMember;
+      const canRefer = b2bEnabled
+        ? memberships.some(
+            (membership) => membership.canManage || membership.level !== null
+          )
+        : true;
+      const position = primary
+        ? primary.title ||
+          (primary.canManage
+            ? 'Управляющий'
+            : primary.level
+              ? 'Уровень ' + primary.level
+              : 'Клиент организации')
+        : 'Клиент';
+
+      const commission = isMember
+        ? await db.transaction.aggregate({
+            where: {
+              userId,
+              type: 'EARN',
+              isReferralBonus: true
+            },
+            _sum: { amount: true }
+          })
+        : null;
+
+      const balanceAgg = await db.bonus.aggregate({
+        where: {
+          userId,
+          isUsed: false,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+        },
+        _sum: { amount: true }
+      });
+
+      const lines = [
+        '<b>👋 Личный кабинет</b>',
+        '',
+        'Здравствуйте, ' + escapeHtml(user.firstName || 'пользователь') + '!',
+        isMember
+          ? '🏢 ' +
+            escapeHtml(primary?.organization.name || 'Организация') +
+            ' · <b>' +
+            escapeHtml(position) +
+            '</b>'
+          : '👤 <b>Клиент</b>',
+        memberships.length > 1
+          ? 'Связанных организаций: <b>' + memberships.length + '</b>'
+          : '',
+        '',
+        '🛍️ Покупки: <b>' + formatRub(Number(user.totalPurchases)) + '</b>',
+        '🏆 Уровень лояльности: <b>' +
+          escapeHtml(user.currentLevel || 'Базовый') +
+          '</b>',
+        '💰 Бонусный баланс: <b>' +
+          formatRub(Number(balanceAgg._sum.amount ?? 0)) +
+          '</b>',
+        isMember
+          ? '💵 Партнёрский доход: <b>' +
+            formatRub(Number(commission?._sum.amount ?? 0)) +
+            '</b>'
+          : ''
+      ].filter(Boolean);
+
+      const buttons: Array<Array<{ text: string; callback_data: string }>> = [
+        [
+          { text: '💰 Баланс', callback_data: 'menu_balance' },
+          { text: '🛍️ Покупки', callback_data: 'menu_purchases' }
+        ],
+        [
+          { text: '📜 История', callback_data: 'menu_history' },
+          { text: '🏆 Уровень', callback_data: 'menu_level' }
+        ]
+      ];
+
+      if (canRefer) {
+        for (const membership of memberships) {
+          const organization = membership.organization;
+          const shortName = organization.name.slice(0, 24);
+          if (membership.canManage || membership.level !== null) {
+            buttons.push([
+              {
+                text: '👉 Ссылка · ' + shortName,
+                callback_data: 'partner_link:' + organization.id
+              }
+            ]);
+          }
+          if (teamEnabled) {
+            buttons.push([
+              {
+                text: '👥 Команда · ' + shortName,
+                callback_data: 'partner_team_page:0:' + organization.id
+              }
+            ]);
+          }
+          if (membership.canManage) {
+            buttons.push([
+              {
+                text: '📊 Сводка · ' + shortName,
+                callback_data: 'partner_org_summary:' + organization.id
+              }
+            ]);
+          }
+        }
+        buttons.push([
+          { text: '💵 Мои выплаты', callback_data: 'partner_payouts' }
+        ]);
+      }
+      if (canManage && context.platform === 'telegram') {
+        buttons.push([
+          { text: '📥 Заявки', callback_data: 'partner_requests' }
+        ]);
+      }
+      if (!b2bEnabled) {
+        buttons.push([
+          { text: '👥 Реферальная программа', callback_data: 'menu_referrals' }
+        ]);
+      }
+      buttons.push([{ text: '❓ Помощь', callback_data: 'menu_help' }]);
+
+      await sendPlatformMessage(context, lines.join('\n'), {
+        replyMarkup: { inline_keyboard: buttons }
+      });
+      this.logStep(context, node, 'partner_home rendered', 'info', {
+        userId,
+        isMember,
+        canManage,
+        memberships: memberships.length
+      });
+      return null;
+    } catch (error) {
+      this.logStep(context, node, 'partner_home failed', 'error', {
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : String(error)
+      });
+      throw error;
+    }
+  }
+
+  async validate(_config: any): Promise<ValidationResult> {
+    return { isValid: true, errors: [] };
+  }
+}
 /**
  * action.partner_team — список direct referrals с агрегатами и пагинацией.
  *
@@ -1916,19 +2184,43 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       const me = await db.user.findFirst({
         where: { id: userId, projectId: context.projectId },
         select: {
-          partnerRole: true,
           organizationMemberships: {
-            where: { projectId: context.projectId, canManage: true },
-            select: { id: true },
-            take: 1
+            where: { projectId: context.projectId },
+            select: { id: true, canManage: true }
           }
         }
       });
 
-      const filter: TeamListFilter = PartnerTeamService.getDefaultTeamFilter({
-        partnerRole: me?.partnerRole,
-        managesOrganization: Boolean(me?.organizationMemberships.length)
-      });
+      const rawFilter =
+        config.filter !== undefined
+          ? String(
+              await resolveTemplateString(String(config.filter), context)
+            ).trim()
+          : '';
+      const filter: TeamListFilter = (
+        ['direct', 'clients', 'partners', 'all'] as const
+      ).includes(rawFilter as TeamListFilter)
+        ? (rawFilter as TeamListFilter)
+        : PartnerTeamService.getDefaultTeamFilter({
+            isOrganizationMember: Boolean(me?.organizationMemberships.length),
+            managesOrganization: Boolean(
+              me?.organizationMemberships.some(
+                (membership) => membership.canManage
+              )
+            )
+          });
+
+      const organizationId =
+        config.organizationId !== undefined
+          ? String(
+              await resolveTemplateString(
+                String(config.organizationId),
+                context
+              )
+            ).trim() || null
+          : null;
+
+      const organizationSuffix = organizationId ? ':' + organizationId : '';
 
       const filterLabel: Record<TeamListFilter, string> = {
         direct: 'Прямые',
@@ -1941,6 +2233,7 @@ export class PartnerTeamHandler extends BaseNodeHandler {
         projectId: context.projectId,
         viewerUserId: userId,
         filter,
+        organizationId,
         page: page + 1,
         pageSize
       });
@@ -1984,25 +2277,21 @@ export class PartnerTeamHandler extends BaseNodeHandler {
         );
       });
 
-      const canManage =
-        me &&
-        (me.partnerRole !== 'CLIENT' || me.organizationMemberships.length > 0);
+      const canManage = Boolean(
+        me?.organizationMemberships.some((membership) => membership.canManage)
+      );
 
       const detailButtons = result.items.map((u) => {
         const row: Array<{ text: string; callback_data: string }> = [
           {
             text: `📊 ${u.name.slice(0, 24)}`,
-            callback_data: `partner_subject:${u.id}`
+            callback_data: `partner_subject:${u.id}${organizationSuffix}`
           }
         ];
-        if (
-          canManage &&
-          u.id !== userId &&
-          !['DIRECTOR', 'MANAGER'].includes(u.partnerRole)
-        ) {
+        if (context.platform === 'telegram' && canManage && u.id !== userId) {
           row.push({
             text: '➖',
-            callback_data: `partner_team_remove:${u.id}`
+            callback_data: `partner_team_remove:${u.id}:${organizationId}`
           });
         }
         return row;
@@ -2018,13 +2307,13 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       if (page > 0) {
         pagerRow.push({
           text: '⬅️ Назад',
-          callback_data: `partner_team_page:${page - 1}`
+          callback_data: `partner_team_page:${page - 1}${organizationSuffix}`
         });
       }
       if (page + 1 < totalPages) {
         pagerRow.push({
           text: 'Вперёд ➡️',
-          callback_data: `partner_team_page:${page + 1}`
+          callback_data: `partner_team_page:${page + 1}${organizationSuffix}`
         });
       }
 
@@ -2034,7 +2323,9 @@ export class PartnerTeamHandler extends BaseNodeHandler {
             tabRow,
             ...detailButtons,
             ...(pagerRow.length > 0 ? [pagerRow] : []),
-            [{ text: '📥 Заявки', callback_data: 'partner_requests' }],
+            ...(context.platform === 'telegram'
+              ? [[{ text: '📥 Заявки', callback_data: 'partner_requests' }]]
+              : []),
             [{ text: '⬅️ В меню', callback_data: 'back_to_menu' }]
           ]
         }
@@ -2086,6 +2377,12 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
         (await resolveTemplateString(config.subjectUserId, context)) ?? ''
       ).trim();
 
+      const organizationId = config.organizationId
+        ? String(
+            await resolveTemplateString(String(config.organizationId), context)
+          ).trim()
+        : '';
+
       const viewerUserId = await resolvePartnerUserId(context);
       if (!viewerUserId) {
         await sendPlatformMessage(
@@ -2102,11 +2399,17 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
       const { cachedCanViewSubject } = await import(
         '@/lib/services/referral-commission.service'
       );
-      const allowed = await cachedCanViewSubject(
-        context.projectId,
-        viewerUserId,
-        subjectUserId
-      );
+      const allowed =
+        (await PartnerTeamService.canManageSubject(
+          context.projectId,
+          viewerUserId,
+          subjectUserId
+        )) ||
+        (await cachedCanViewSubject(
+          context.projectId,
+          viewerUserId,
+          subjectUserId
+        ));
 
       if (!allowed) {
         await sendPlatformMessage(
@@ -2190,7 +2493,14 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
       await sendPlatformMessage(context, lines.join('\n'), {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: '⬅️ К команде', callback_data: 'partner_team_page:0' }],
+            [
+              {
+                text: '⬅️ К команде',
+                callback_data:
+                  'partner_team_page:0' +
+                  (organizationId ? ':' + organizationId : '')
+              }
+            ],
             [{ text: '⬅️ В меню', callback_data: 'back_to_menu' }]
           ]
         }
@@ -2203,9 +2513,16 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
       return null;
     } catch (error) {
       this.logStep(context, node, 'partner_subject_stats failed', 'error', {
-        error
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : String(error)
       });
-      throw error;
+      await sendPlatformMessage(
+        context,
+        '❌ Не удалось загрузить статистику. Обновите меню и попробуйте ещё раз.'
+      );
+      return null;
     }
   }
 
@@ -2378,6 +2695,15 @@ export class PartnerLinkHandler extends BaseNodeHandler {
         string,
         string
       >;
+      const requestedOrganizationId =
+        config.organizationId !== undefined
+          ? String(
+              await resolveTemplateString(
+                String(config.organizationId),
+                context
+              )
+            ).trim() || null
+          : null;
 
       const userId = await resolvePartnerUserId(context);
       if (!userId) {
@@ -2392,11 +2718,17 @@ export class PartnerLinkHandler extends BaseNodeHandler {
       const user = await db.user.findUnique({
         where: { id: userId },
         select: {
-          partnerRole: true,
           organizationMemberships: {
-            where: { projectId: context.projectId, canManage: true },
-            select: { id: true },
-            take: 1
+            where: {
+              projectId: context.projectId,
+              organization: { isActive: true }
+            },
+            select: {
+              organizationId: true,
+              level: true,
+              canManage: true,
+              organization: { select: { slug: true } }
+            }
           },
           project: {
             select: { enablePartnerRoles: true, domain: true, name: true }
@@ -2410,10 +2742,16 @@ export class PartnerLinkHandler extends BaseNodeHandler {
       }
 
       const enablePartnerRoles = !!user.project?.enablePartnerRoles;
-      const role = user.partnerRole || 'CLIENT';
-      const canRefer = enablePartnerRoles
-        ? role !== 'CLIENT' || user.organizationMemberships.length > 0
-        : true;
+      const eligibleMemberships = user.organizationMemberships.filter(
+        (membership) => membership.canManage || membership.level !== null
+      );
+      const selectedMembership = requestedOrganizationId
+        ? eligibleMemberships.find(
+            (membership) =>
+              membership.organizationId === requestedOrganizationId
+          )
+        : eligibleMemberships[0];
+      const canRefer = enablePartnerRoles ? Boolean(selectedMembership) : true;
 
       if (!canRefer) {
         await sendPlatformMessage(
@@ -2437,7 +2775,12 @@ export class PartnerLinkHandler extends BaseNodeHandler {
       const link = await ReferralService.generateReferralLink(
         userId,
         baseUrl,
-        additionalParams
+        selectedMembership
+          ? {
+              ...additionalParams,
+              utm_org: selectedMembership.organization.slug
+            }
+          : additionalParams
       );
 
       await sendPlatformMessage(
@@ -2460,7 +2803,7 @@ export class PartnerLinkHandler extends BaseNodeHandler {
 
       this.logStep(context, node, 'partner_link rendered', 'info', {
         userId,
-        role
+        organizationId: selectedMembership?.organizationId ?? null
       });
       return null;
     } catch (error) {
@@ -2494,6 +2837,15 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
     try {
       const config = node.data.config?.['action.partner_org_summary'] || {};
       const topLimit = Math.max(1, Math.min(20, Number(config.topLimit ?? 5)));
+      const requestedOrganizationId =
+        config.organizationId !== undefined
+          ? String(
+              await resolveTemplateString(
+                String(config.organizationId),
+                context
+              )
+            ).trim() || null
+          : null;
 
       const userId = await resolvePartnerUserId(context);
       if (!userId) {
@@ -2508,10 +2860,19 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
       const me = await db.user.findUnique({
         where: { id: userId },
         select: {
-          partnerRole: true,
           organizationMemberships: {
-            where: { projectId: context.projectId, canManage: true },
-            select: { id: true },
+            where: {
+              projectId: context.projectId,
+              canManage: true,
+              organization: { isActive: true },
+              ...(requestedOrganizationId
+                ? { organizationId: requestedOrganizationId }
+                : {})
+            },
+            select: {
+              organizationId: true,
+              organization: { select: { name: true } }
+            },
             take: 1
           },
           project: { select: { enablePartnerRoles: true } }
@@ -2532,10 +2893,7 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         return null;
       }
 
-      if (
-        me.partnerRole !== 'DIRECTOR' &&
-        me.organizationMemberships.length === 0
-      ) {
+      if (me.organizationMemberships.length === 0) {
         await sendPlatformMessage(
           context,
           '🔒 Сводка по организации доступна управляющим.',
@@ -2550,13 +2908,15 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         return null;
       }
 
+      const selectedOrganization = me.organizationMemberships[0];
       const { PartnerReferralGraphService } = await import(
         '@/lib/services/partner-referral-graph.service'
       );
       const { allIds: descendants } =
         await PartnerReferralGraphService.getVisibleTeamIds(
           context.projectId,
-          userId
+          userId,
+          selectedOrganization.organizationId
         );
 
       if (descendants.length === 0) {
@@ -2567,62 +2927,81 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         return null;
       }
 
-      // Группа: разбиение по ролям + общий оборот команды
-      const [byRole, totalAgg, topTrainers] = await Promise.all([
-        db.user.groupBy({
-          by: ['partnerRole'],
-          where: { projectId: context.projectId, id: { in: descendants } },
-          _count: { _all: true }
-        }),
-        db.user.aggregate({
-          where: { projectId: context.projectId, id: { in: descendants } },
-          _sum: { totalPurchases: true }
-        }),
-        db.user.findMany({
-          where: {
-            projectId: context.projectId,
-            id: { in: descendants },
-            partnerRole: 'TRAINER'
-          },
-          orderBy: { totalPurchases: 'desc' },
-          take: topLimit,
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
-            totalPurchases: true
+      const memberships = await db.partnerOrganizationMembership.findMany({
+        where: {
+          projectId: context.projectId,
+          organizationId: selectedOrganization.organizationId,
+          userId: { in: descendants }
+        },
+        select: {
+          level: true,
+          canManage: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+              totalPurchases: true
+            }
           }
-        })
-      ]);
+        }
+      });
 
-      const roleCounts = new Map<string, number>();
-      for (const r of byRole) {
-        roleCounts.set(r.partnerRole, r._count._all);
+      const levelCounts = new Map<number, number>();
+      let clientCount = 0;
+      let totalPurchases = 0;
+      for (const membership of memberships) {
+        totalPurchases += Number(membership.user.totalPurchases);
+        if (membership.level === null && !membership.canManage) {
+          clientCount += 1;
+          continue;
+        }
+        if (membership.level !== null) {
+          levelCounts.set(
+            membership.level,
+            (levelCounts.get(membership.level) ?? 0) + 1
+          );
+        }
       }
 
       const lines = [
-        '<b>📊 Сводка по организации</b>',
+        '<b>📊 ' + escapeHtml(selectedOrganization.organization.name) + '</b>',
         '',
-        `👥 Всего в команде: <b>${descendants.length}</b>`,
-        `🔷 Партнёров уровня 2: <b>${roleCounts.get('MANAGER') ?? 0}</b>`,
-        `🔹 Партнёров уровня 1: <b>${roleCounts.get('TRAINER') ?? 0}</b>`,
-        `🛒 Клиентов: <b>${roleCounts.get('CLIENT') ?? 0}</b>`,
-        `💼 Общий оборот: <b>${formatRub(Number(totalAgg._sum.totalPurchases ?? 0))}</b>`,
-        ''
+        '👥 Всего в команде: <b>' + descendants.length + '</b>',
+        '🛒 Клиентов: <b>' + clientCount + '</b>',
+        '💼 Общий оборот: <b>' + formatRub(totalPurchases) + '</b>'
       ];
-
-      if (topTrainers.length > 0) {
-        lines.push(
-          `<b>🏆 Топ-${topTrainers.length} партнёров уровня 1 по обороту</b>`
+      for (const [level, count] of [...levelCounts.entries()].sort(
+        ([left], [right]) => left - right
+      )) {
+        lines.splice(
+          lines.length - 2,
+          0,
+          '🔹 Уровень ' + level + ': <b>' + count + '</b>'
         );
-        topTrainers.forEach((u, i) => {
+      }
+
+      const topMembers = memberships
+        .filter((membership) => membership.level !== null)
+        .sort(
+          (left, right) =>
+            Number(right.user.totalPurchases) - Number(left.user.totalPurchases)
+        )
+        .slice(0, topLimit);
+      if (topMembers.length > 0) {
+        lines.push('', '<b>🏆 Лидеры по обороту</b>');
+        topMembers.forEach((membership, index) => {
           lines.push(
-            `${i + 1}. ${formatName(u)} — ${formatRub(Number(u.totalPurchases))}`
+            index +
+              1 +
+              '. ' +
+              escapeHtml(formatName(membership.user)) +
+              ' — ' +
+              formatRub(Number(membership.user.totalPurchases))
           );
         });
       }
-
       await sendPlatformMessage(context, lines.join('\n'), {
         replyMarkup: {
           inline_keyboard: [
@@ -2633,7 +3012,8 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
 
       this.logStep(context, node, 'partner_org_summary rendered', 'info', {
         userId,
-        teamSize: descendants.length
+        teamSize: descendants.length,
+        organizationId: selectedOrganization.organizationId
       });
       return null;
     } catch (error) {

@@ -17,12 +17,12 @@ import { PartnerReferralGraphService } from './partner-referral-graph.service';
 
 export type TeamListFilter = 'direct' | 'clients' | 'partners' | 'all';
 
-const ROLE_RANK: Record<PartnerRole, number> = {
-  CLIENT: 0,
-  TRAINER: 1,
-  MANAGER: 2,
-  DIRECTOR: 3
-};
+function legacyPartnerRoleLevel(role: PartnerRole): number | null {
+  if (role === 'TRAINER') return 1;
+  if (role === 'MANAGER') return 2;
+  if (role === 'DIRECTOR') return 3;
+  return null;
+}
 
 export type TeamMemberRow = {
   id: string;
@@ -59,15 +59,11 @@ function displayName(u: {
 
 export class PartnerTeamService {
   static getDefaultTeamFilter(params: {
-    partnerRole?: string | null;
+    isOrganizationMember?: boolean;
     managesOrganization?: boolean;
   }): TeamListFilter {
     if (params.managesOrganization) return 'all';
-    if (params.partnerRole === 'TRAINER') return 'clients';
-    if (params.partnerRole === 'MANAGER' || params.partnerRole === 'DIRECTOR') {
-      return 'all';
-    }
-    return 'direct';
+    return params.isOrganizationMember ? 'direct' : 'direct';
   }
 
   static async getProjectPartnerFlags(projectId: string) {
@@ -84,7 +80,8 @@ export class PartnerTeamService {
   static async canManageSubject(
     projectId: string,
     viewerUserId: string,
-    subjectUserId: string
+    subjectUserId: string,
+    organizationId?: string | null
   ): Promise<boolean> {
     if (!projectId || !viewerUserId || !subjectUserId) return false;
     if (viewerUserId === subjectUserId) return false;
@@ -99,6 +96,7 @@ export class PartnerTeamService {
         projectId,
         userId: viewerUserId,
         canManage: true,
+        ...(organizationId ? { organizationId } : {}),
         organization: {
           memberships: { some: { userId: subjectUserId } }
         }
@@ -107,36 +105,11 @@ export class PartnerTeamService {
     });
     if (managedMembership) return true;
 
-    const [viewer, subject] = await Promise.all([
-      db.user.findFirst({
-        where: { id: viewerUserId, projectId },
-        select: { partnerRole: true, organizationId: true }
-      }),
-      db.user.findFirst({
-        where: { id: subjectUserId, projectId },
-        select: { partnerRole: true, organizationId: true }
-      })
-    ]);
-
-    if (!viewer || !subject) return false;
-    if (viewer.partnerRole === 'CLIENT') return false;
-    if (ROLE_RANK[viewer.partnerRole] <= ROLE_RANK[subject.partnerRole]) {
-      return false;
-    }
-
-    if (
-      viewer.organizationId &&
-      subject.organizationId &&
-      viewer.organizationId !== subject.organizationId
-    ) {
-      return false;
-    }
-
-    return ReferralCommissionService.canViewSubject(
+    const { allIds } = await PartnerReferralGraphService.getVisibleTeamIds(
       projectId,
-      viewerUserId,
-      subjectUserId
+      viewerUserId
     );
+    return allIds.includes(subjectUserId);
   }
 
   static async canInviteUser(
@@ -261,6 +234,7 @@ export class PartnerTeamService {
     projectId: string;
     viewerUserId: string;
     filter?: TeamListFilter;
+    organizationId?: string | null;
     page?: number;
     pageSize?: number;
   }) {
@@ -268,6 +242,7 @@ export class PartnerTeamService {
       projectId,
       viewerUserId,
       filter = 'direct',
+      organizationId = null,
       page = 1,
       pageSize = 10
     } = params;
@@ -275,11 +250,42 @@ export class PartnerTeamService {
     const { directIds, allIds: allDescendantIds } =
       await PartnerReferralGraphService.getVisibleTeamIds(
         projectId,
-        viewerUserId
+        viewerUserId,
+        organizationId
       );
+    const scopedMemberships =
+      organizationId && allDescendantIds.length > 0
+        ? await db.partnerOrganizationMembership.findMany({
+            where: {
+              projectId,
+              organizationId,
+              userId: { in: allDescendantIds }
+            },
+            select: { userId: true, level: true, canManage: true }
+          })
+        : [];
+    const scopedClientIds = new Set(
+      scopedMemberships
+        .filter(
+          (membership) => membership.level === null && !membership.canManage
+        )
+        .map((membership) => membership.userId)
+    );
+    const scopedPartnerIds = new Set(
+      scopedMemberships
+        .filter(
+          (membership) => membership.level !== null || membership.canManage
+        )
+        .map((membership) => membership.userId)
+    );
+
     let targetIds: string[];
     switch (filter) {
       case 'clients': {
+        if (organizationId) {
+          targetIds = allDescendantIds.filter((id) => scopedClientIds.has(id));
+          break;
+        }
         const profiles = await db.user.findMany({
           where: {
             projectId,
@@ -292,11 +298,15 @@ export class PartnerTeamService {
         break;
       }
       case 'partners': {
+        if (organizationId) {
+          targetIds = allDescendantIds.filter((id) => scopedPartnerIds.has(id));
+          break;
+        }
         const profiles = await db.user.findMany({
           where: {
             projectId,
             id: { in: allDescendantIds },
-            partnerRole: { in: ['TRAINER', 'MANAGER'] }
+            partnerRole: { not: 'CLIENT' }
           },
           select: { id: true }
         });
@@ -385,7 +395,11 @@ export class PartnerTeamService {
         }
       }),
       db.partnerOrganizationMembership.findMany({
-        where: { projectId, userId: { in: pageIds } },
+        where: {
+          projectId,
+          userId: { in: pageIds },
+          ...(organizationId ? { organizationId } : {})
+        },
         orderBy: [{ canManage: 'desc' }, { level: 'desc' }],
         select: {
           userId: true,
@@ -488,7 +502,7 @@ export class PartnerTeamService {
             organizationId,
             {
               userId: params.targetUserId,
-              partnerRole,
+              level: partnerRole === 'CLIENT' ? null : 1,
               referrerLinks: [
                 {
                   referrerId: params.managerUserId,
@@ -516,6 +530,7 @@ export class PartnerTeamService {
       });
     } catch (err) {
       logger.warn('addToTeam: attribution sync failed', { err });
+      throw err;
     }
 
     void PartnerNotificationService.notifyAncestorsAboutNewMember(
@@ -530,11 +545,13 @@ export class PartnerTeamService {
     projectId: string;
     managerUserId: string;
     subjectUserId: string;
+    organizationId?: string | null;
   }) {
     const allowed = await this.canManageSubject(
       params.projectId,
       params.managerUserId,
-      params.subjectUserId
+      params.subjectUserId,
+      params.organizationId
     );
     if (!allowed) {
       throw new Error('Нет прав убрать этого участника из команды');
@@ -544,7 +561,10 @@ export class PartnerTeamService {
       where: {
         projectId: params.projectId,
         childUserId: params.subjectUserId,
-        referrerUserId: params.managerUserId
+        referrerUserId: params.managerUserId,
+        ...(params.organizationId
+          ? { organizationId: params.organizationId }
+          : {})
       },
       select: { organizationId: true }
     });
@@ -893,12 +913,12 @@ export class PartnerTeamService {
               userId: request.userId
             }
           },
-          update: { level: ROLE_RANK[partnerRole] || null },
+          update: { level: legacyPartnerRoleLevel(partnerRole) },
           create: {
             projectId: params.projectId,
             organizationId: request.organizationId,
             userId: request.userId,
-            level: ROLE_RANK[partnerRole] || null
+            level: legacyPartnerRoleLevel(partnerRole)
           }
         });
         await tx.partnerReferralLink.deleteMany({
@@ -1182,7 +1202,7 @@ export class PartnerTeamService {
           projectId: params.projectId,
           organizationId: params.organizationId,
           userId: params.userId,
-          level: ROLE_RANK[user.partnerRole] || null
+          level: legacyPartnerRoleLevel(user.partnerRole)
         }
       });
       await PartnerReferralGraphService.replaceLinks({

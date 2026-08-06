@@ -45,12 +45,14 @@ export interface OrganizationMemberInput {
   outboundReferralPlanId?: string | null;
 }
 
-const ROLE_LEVEL: Record<PartnerRole, number | null> = {
-  CLIENT: null,
-  TRAINER: 1,
-  MANAGER: 2,
-  DIRECTOR: 3
-};
+function deriveCompatibilityRole(
+  memberships: Array<{ level: number | null; canManage: boolean }>
+): PartnerRole {
+  if (memberships.some((membership) => membership.canManage)) return 'DIRECTOR';
+  if (memberships.some((membership) => membership.level !== null))
+    return 'TRAINER';
+  return 'CLIENT';
+}
 
 function slugify(name: string): string {
   return (
@@ -332,12 +334,12 @@ export class PartnerOrganizationService {
     });
     if (!user) throw new Error('Пользователь не найден');
 
-    await this.validateOutboundPlan(projectId, input.outboundReferralPlanId);
-    const level =
-      normalizeLevel(input.level) ??
-      (input.level === null
-        ? null
-        : ROLE_LEVEL[input.partnerRole ?? user.partnerRole]);
+    const outboundReferralPlanId =
+      input.outboundReferralPlanId ??
+      org.defaultReferralCommissionPlanId ??
+      null;
+    await this.validateOutboundPlan(projectId, outboundReferralPlanId);
+    const level = normalizeLevel(input.level);
 
     await db.partnerOrganizationMembership.upsert({
       where: {
@@ -358,14 +360,18 @@ export class PartnerOrganizationService {
       }
     });
 
+    const compatibilityRole = deriveCompatibilityRole(
+      await db.partnerOrganizationMembership.findMany({
+        where: { projectId, userId: input.userId },
+        select: { level: true, canManage: true }
+      })
+    );
     const updated = await db.user.update({
       where: { id: input.userId },
       data: {
         ...(user.organizationId ? {} : { organizationId }),
-        ...(input.partnerRole ? { partnerRole: input.partnerRole } : {}),
-        ...(input.outboundReferralPlanId !== undefined
-          ? { outboundReferralPlanId: input.outboundReferralPlanId }
-          : {})
+        partnerRole: compatibilityRole,
+        outboundReferralPlanId
       }
     });
 
@@ -395,7 +401,7 @@ export class PartnerOrganizationService {
     void PartnerNotificationService.notifyRoleOrOrgChanged({
       userId: input.userId,
       projectId,
-      newRole: input.partnerRole ?? updated.partnerRole,
+      newRole: compatibilityRole,
       organizationName: org.name
     });
 
@@ -415,7 +421,7 @@ export class PartnerOrganizationService {
       throw new Error('Участник не найден в этой организации');
     }
 
-    return db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx) => {
       const [user, alternative, removedLinks] = await Promise.all([
         tx.user.findFirst({
           where: { id: userId, projectId },
@@ -497,6 +503,17 @@ export class PartnerOrganizationService {
       }
       return tx.user.findUniqueOrThrow({ where: { id: userId } });
     });
+    const compatibilityRole = deriveCompatibilityRole(
+      await db.partnerOrganizationMembership.findMany({
+        where: { projectId, userId },
+        select: { level: true, canManage: true }
+      })
+    );
+    await db.user.update({
+      where: { id: userId },
+      data: { partnerRole: compatibilityRole }
+    });
+    return result;
   }
 
   static async updateMember(
@@ -513,16 +530,20 @@ export class PartnerOrganizationService {
       throw new Error('Участник не найден в этой организации');
     }
 
-    await this.validateOutboundPlan(projectId, input.outboundReferralPlanId);
+    const org = await this.getById(projectId, organizationId);
+    if (!org) throw new Error('Организация не найдена');
+    const outboundReferralPlanId =
+      input.outboundReferralPlanId ??
+      org.defaultReferralCommissionPlanId ??
+      null;
+    await this.validateOutboundPlan(projectId, outboundReferralPlanId);
 
     await db.partnerOrganizationMembership.update({
       where: { id: membership.id },
       data: {
         ...(input.level !== undefined
           ? { level: normalizeLevel(input.level) }
-          : input.partnerRole !== undefined
-            ? { level: ROLE_LEVEL[input.partnerRole] }
-            : {}),
+          : {}),
         ...(input.title !== undefined
           ? { title: normalizeTitle(input.title) }
           : {}),
@@ -530,15 +551,17 @@ export class PartnerOrganizationService {
       }
     });
 
+    const compatibilityRole = deriveCompatibilityRole(
+      await db.partnerOrganizationMembership.findMany({
+        where: { projectId, userId },
+        select: { level: true, canManage: true }
+      })
+    );
     const updated = await db.user.update({
       where: { id: userId },
       data: {
-        ...(input.partnerRole !== undefined
-          ? { partnerRole: input.partnerRole }
-          : {}),
-        ...(input.outboundReferralPlanId !== undefined
-          ? { outboundReferralPlanId: input.outboundReferralPlanId }
-          : {})
+        partnerRole: compatibilityRole,
+        outboundReferralPlanId
       }
     });
 
@@ -565,18 +588,12 @@ export class PartnerOrganizationService {
       });
     }
 
-    const org = await this.getById(projectId, organizationId);
-    if (
-      input.partnerRole !== undefined &&
-      input.partnerRole !== membership.user.partnerRole
-    ) {
-      void PartnerNotificationService.notifyRoleOrOrgChanged({
-        userId,
-        projectId,
-        newRole: input.partnerRole,
-        organizationName: org?.name
-      });
-    }
+    void PartnerNotificationService.notifyRoleOrOrgChanged({
+      userId,
+      projectId,
+      newRole: compatibilityRole,
+      organizationName: org.name
+    });
 
     return { user: updated, attributionLocked };
   }
@@ -820,7 +837,7 @@ export class PartnerOrganizationService {
           projectId,
           organizationId,
           userId,
-          level: ROLE_LEVEL[user.partnerRole]
+          level: null
         }
       });
       if (!user.organizationId) {
@@ -852,8 +869,15 @@ export class PartnerOrganizationService {
       }
     });
     const members = memberships.map((membership) => membership.user);
-    const roleCount = (role: PartnerRole) =>
-      members.filter((member) => member.partnerRole === role).length;
+    const participants = memberships.filter(
+      (membership) => membership.level !== null
+    ).length;
+    const managers = memberships.filter(
+      (membership) => membership.canManage
+    ).length;
+    const clients = memberships.filter(
+      (membership) => membership.level === null
+    ).length;
 
     const userIds = members.map((member) => member.id);
     let commissionEarned = 0;
@@ -903,10 +927,10 @@ export class PartnerOrganizationService {
 
     return {
       members: members.length,
-      trainers: roleCount('TRAINER'),
-      managers: roleCount('MANAGER'),
-      directors: roleCount('DIRECTOR'),
-      clients: roleCount('CLIENT'),
+      trainers: participants,
+      managers,
+      directors: managers,
+      clients,
       totalPurchases: members.reduce(
         (sum, member) => sum + Number(member.totalPurchases ?? 0),
         0

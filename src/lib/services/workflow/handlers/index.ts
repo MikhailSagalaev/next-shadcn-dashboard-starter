@@ -34,6 +34,7 @@ import {
   GetUserBalanceHandler,
   MenuCommandHandler,
   CheckChannelSubscriptionHandler,
+  PartnerHomeHandler,
   PartnerTeamHandler,
   PartnerSubjectStatsHandler,
   PartnerPayoutsHandler,
@@ -105,6 +106,7 @@ export function initializeNodeHandlers(): void {
   nodeHandlersRegistry.register(new GetUserBalanceHandler());
   nodeHandlersRegistry.register(new CheckChannelSubscriptionHandler());
   // ✨ Phase 4: Partner Cabinet handlers (b2b-иерархия)
+  nodeHandlersRegistry.register(new PartnerHomeHandler());
   nodeHandlersRegistry.register(new PartnerTeamHandler());
   nodeHandlersRegistry.register(new PartnerSubjectStatsHandler());
   nodeHandlersRegistry.register(new PartnerPayoutsHandler());
@@ -154,6 +156,7 @@ export {
   GetUserBalanceHandler,
   MenuCommandHandler,
   CheckChannelSubscriptionHandler,
+  PartnerHomeHandler,
   PartnerTeamHandler,
   PartnerSubjectStatsHandler,
   PartnerPayoutsHandler,

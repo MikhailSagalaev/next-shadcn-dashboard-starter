@@ -1,6 +1,6 @@
 {
   "name": "B2B Партнёр",
-  "description": "B2B кабинет v1.3 — привязка Telegram по телефону, меню клиента и партнёров уровней 1–3, партнёрские callback-ветки, реферальная ссылка и сводка организации. Требует enablePartnerRoles.",
+  "description": "B2B кабинет v2 — единое адаптивное меню клиента, участника и управляющего; покупки, лояльность, команда, выплаты и сводка организации без ручной системной роли.",
   "nodes": [
     {
       "id": "start-trigger",
@@ -203,15 +203,25 @@
       }
     },
     {
+      "id": "action-partner-home",
+      "type": "action.partner_home",
+      "position": { "x": 380, "y": 80 },
+      "data": {
+        "label": "Адаптивное главное меню",
+        "config": {
+          "action.partner_home": {}
+        }
+      }
+    },    {
       "id": "cond-is-director",
       "type": "condition",
       "position": { "x": 380, "y": 80 },
       "data": {
-        "label": "Роль = DIRECTOR?",
+        "label": "Управляет организацией?",
         "config": {
           "condition": {
             "operator": "equals",
-            "variable": "user.partnerRole",
+            "variable": "user.partnerMenuKind",
             "value": "DIRECTOR"
           }
         }
@@ -222,11 +232,11 @@
       "type": "condition",
       "position": { "x": 760, "y": 240 },
       "data": {
-        "label": "Роль = MANAGER?",
+        "label": "Участник организации?",
         "config": {
           "condition": {
             "operator": "equals",
-            "variable": "user.partnerRole",
+            "variable": "user.partnerMenuKind",
             "value": "MANAGER"
           }
         }
@@ -237,11 +247,11 @@
       "type": "condition",
       "position": { "x": 1140, "y": 400 },
       "data": {
-        "label": "Роль = TRAINER?",
+        "label": "Служебная ветка (не используется)",
         "config": {
           "condition": {
             "operator": "equals",
-            "variable": "user.partnerRole",
+            "variable": "user.partnerMenuKind",
             "value": "TRAINER"
           }
         }
@@ -422,7 +432,8 @@
         "label": "Показать сводку",
         "config": {
           "action.partner_org_summary": {
-            "topLimit": 5
+            "topLimit": 5,
+            "organizationId": "{{telegram.callback.params[0]}}"
           }
         }
       }
@@ -449,12 +460,41 @@
         "config": {
           "action.partner_team": {
             "pageSize": 5,
-            "page": "{{telegram.callback.params[0]}}"
+            "page": "{{telegram.callback.params[0]}}",
+            "organizationId": "{{telegram.callback.params[1]}}"
           }
         }
       }
     },
     {
+      "id": "trigger-cb-team-tab",
+      "type": "trigger.callback",
+      "position": { "x": 0, "y": 980 },
+      "data": {
+        "label": "Вкладка команды (callback)",
+        "config": {
+          "trigger.callback": {
+            "callbackData": "partner_team_tab"
+          }
+        }
+      }
+    },
+    {
+      "id": "action-team-tab",
+      "type": "action.partner_team",
+      "position": { "x": 380, "y": 980 },
+      "data": {
+        "label": "Показать вкладку команды",
+        "config": {
+          "action.partner_team": {
+            "pageSize": 5,
+            "filter": "{{telegram.callback.params[0]}}",
+            "page": "{{telegram.callback.params[1]}}",
+            "organizationId": "{{telegram.callback.params[2]}}"
+          }
+        }
+      }
+    },    {
       "id": "trigger-cb-link",
       "type": "trigger.callback",
       "position": { "x": 0, "y": 1040 },
@@ -477,7 +517,8 @@
           "action.partner_link": {
             "additionalParams": {
               "utm_source": "partner-bot"
-            }
+            },
+            "organizationId": "{{telegram.callback.params[0]}}"
           }
         }
       }
@@ -529,7 +570,8 @@
         "label": "Стата подопечного",
         "config": {
           "action.partner_subject_stats": {
-            "subjectUserId": "{{telegram.callback.params[0]}}"
+            "subjectUserId": "{{telegram.callback.params[0]}}",
+            "organizationId": "{{telegram.callback.params[1]}}"
           }
         }
       }
@@ -566,6 +608,27 @@
       }
     },
     {
+      "id": "menu-purchases-trigger",
+      "type": "trigger.callback",
+      "position": { "x": 760, "y": 980 },
+      "data": {
+        "label": "Покупки (callback)",
+        "config": {
+          "trigger.callback": { "callbackData": "menu_purchases" }
+        }
+      }
+    },
+    {
+      "id": "show-purchases-list",
+      "type": "action.menu_command",
+      "position": { "x": 1140, "y": 980 },
+      "data": {
+        "label": "Показать покупки",
+        "config": {
+          "action.menu_command": { "command": "menu_purchases" }
+        }
+      }
+    },    {
       "id": "menu-history-trigger",
       "type": "trigger.callback",
       "position": { "x": 760, "y": 920 },
@@ -811,7 +874,7 @@
       "id": "e-remove-keyboard-b2b",
       "type": "default",
       "source": "msg-remove-keyboard",
-      "target": "cond-is-director"
+      "target": "action-partner-home"
     },
     {
       "id": "e-already-end",
@@ -916,6 +979,17 @@
       "target": "flow-end"
     },
     {
+      "id": "e-cb-team-tab",
+      "type": "default",
+      "source": "trigger-cb-team-tab",
+      "target": "action-team-tab"
+    },
+    {
+      "id": "e-team-tab-end",
+      "type": "default",
+      "source": "action-team-tab",
+      "target": "flow-end"
+    },    {
       "id": "e-cb-link",
       "type": "default",
       "source": "trigger-cb-link",
@@ -964,6 +1038,17 @@
       "target": "flow-end"
     },
     {
+      "id": "e-menu-purchases",
+      "type": "default",
+      "source": "menu-purchases-trigger",
+      "target": "show-purchases-list"
+    },
+    {
+      "id": "e-purchases-end",
+      "type": "default",
+      "source": "show-purchases-list",
+      "target": "flow-end"
+    },    {
       "id": "e-menu-history",
       "type": "default",
       "source": "menu-history-trigger",
@@ -1015,7 +1100,7 @@
       "id": "e-back-menu",
       "type": "default",
       "source": "back-to-menu-trigger",
-      "target": "cond-is-director"
+      "target": "action-partner-home"
     }
   ],
   "variables": [

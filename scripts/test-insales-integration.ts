@@ -16,6 +16,12 @@ interface TestResult {
   duration?: number;
 }
 
+interface TestUserRecord {
+  id: string;
+  email: string | null;
+  totalPurchases: unknown;
+}
+
 const results: TestResult[] = [];
 
 async function runTest(name: string, testFn: () => Promise<void>) {
@@ -46,7 +52,11 @@ async function main() {
       name: { contains: 'test', mode: 'insensitive' }
     },
     include: {
-      inSalesIntegration: true
+      inSalesIntegration: true,
+      bonusLevels: {
+        where: { isActive: true },
+        orderBy: { order: 'asc' }
+      }
     }
   });
 
@@ -74,7 +84,7 @@ async function main() {
       'Integration found',
       {
         isActive: testProject.inSalesIntegration.isActive,
-        bonusPercentage: testProject.inSalesIntegration.bonusPercentage
+        bonusPercent: testProject.inSalesIntegration.bonusPercent
       },
       'test-insales'
     );

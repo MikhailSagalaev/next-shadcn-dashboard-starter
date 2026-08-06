@@ -19,7 +19,6 @@ const ReferrerLinkSchema = z.object({
 
 const AddMemberSchema = z.object({
   userId: z.string().min(1),
-  partnerRole: z.enum(['CLIENT', 'TRAINER', 'MANAGER', 'DIRECTOR']).optional(),
   level: z.number().int().min(1).nullable().optional(),
   title: z.string().max(120).nullable().optional(),
   canManage: z.boolean().optional(),
@@ -70,7 +69,6 @@ export const POST = withProjectAccess<OrgParams>(
       const { user, attributionLocked } =
         await PartnerOrganizationService.addMember(projectId, organizationId, {
           userId: parsed.data.userId,
-          partnerRole: parsed.data.partnerRole,
           level: parsed.data.level,
           title: parsed.data.title,
           canManage: parsed.data.canManage,

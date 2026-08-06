@@ -44,6 +44,7 @@ export type WorkflowNodeType =
   | 'action.menu_command'
   | 'action.check_channel_subscription'
   // Партнёрские action-handlers (b2b-иерархия, Phase 4)
+  | 'action.partner_home'
   | 'action.partner_team'
   | 'action.partner_subject_stats'
   | 'action.partner_payouts'
@@ -123,8 +124,10 @@ export interface WorkflowNodeConfig {
   'action.link_telegram_account'?: LinkTelegramAccountActionConfig;
   'action.get_user_balance'?: GetUserBalanceActionConfig;
   'action.check_channel_subscription'?: CheckChannelSubscriptionActionConfig;
+  'action.menu_command'?: MenuCommandActionConfig;
 
   // Партнёрские action-handlers (b2b-иерархия, Phase 4)
+  'action.partner_home'?: Record<string, never>;
   'action.partner_team'?: PartnerTeamActionConfig;
   'action.partner_subject_stats'?: PartnerSubjectStatsActionConfig;
   'action.partner_payouts'?: PartnerPayoutsActionConfig;
@@ -447,6 +450,10 @@ export interface GetUserBalanceActionConfig {
   assignTo: string; // Имя переменной для баланса
 }
 
+export interface MenuCommandActionConfig {
+  command: string;
+}
+
 export interface CheckChannelSubscriptionActionConfig {
   channelId: string; // ID канала (например, @channel_name или -100123456789)
   userId?: string; // ID пользователя Telegram (если не указан, берется из контекста)
@@ -456,17 +463,25 @@ export interface CheckChannelSubscriptionActionConfig {
 
 // Партнёрские action-handlers (b2b-иерархия, Phase 4)
 /** Конфиг для action.partner_team — список direct referrals с пагинацией. */
+export type TeamListFilterValue = 'direct' | 'clients' | 'partners' | 'all';
+
 export interface PartnerTeamActionConfig {
   /** Размер страницы, по умолчанию 5. */
   pageSize?: number;
   /** Номер страницы для callback-навигации. */
   page?: number | string;
+  /** Вкладка команды, может приходить из callback. */
+  filter?: TeamListFilterValue | string;
+  /** Организация для multi-org команды. */
+  organizationId?: string;
 }
 
 /** Конфиг для action.partner_subject_stats — детальная статистика подопечного. */
 export interface PartnerSubjectStatsActionConfig {
   /** ID подопечного (поддерживает шаблоны вида `{{partner_subject_id}}`). */
   subjectUserId: string;
+  /** Организация, из которой открыт участник. */
+  organizationId?: string;
 }
 
 /** Конфиг для action.partner_payouts — последние реферальные начисления. */
@@ -479,12 +494,16 @@ export interface PartnerPayoutsActionConfig {
 export interface PartnerLinkActionConfig {
   /** UTM-параметры, прикрепляемые к ссылке. */
   additionalParams?: Record<string, string>;
+  /** Организация, выбранная в multi-org меню. */
+  organizationId?: string;
 }
 
 /** Конфиг для action.partner_org_summary — сводка по всему дереву (DIRECTOR). */
 export interface PartnerOrgSummaryActionConfig {
   /** Кол-во топ-партнёров для рейтинга, по умолчанию 5. */
   topLimit?: number;
+  /** Организация, выбранная в multi-org меню. */
+  organizationId?: string;
 }
 
 // Поток управления

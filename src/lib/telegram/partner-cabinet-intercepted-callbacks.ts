@@ -19,8 +19,6 @@ export function isTelegramCallbackIntercepted(data: string): boolean {
     data.startsWith('partner_team_remove:') ||
     data.startsWith('partner_team_remove_confirm:') ||
     data === 'partner_team_remove_cancel' ||
-    data.startsWith('partner_team_tab:') ||
-    data.startsWith('partner_team_page:') ||
     data === 'partner_requests' ||
     data === 'payout_request' ||
     data.startsWith('payout_cancel:') ||

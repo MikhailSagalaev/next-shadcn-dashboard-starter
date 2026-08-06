@@ -671,13 +671,13 @@ export class ComplianceGatewayService {
         .filter(
           (item) =>
             item.name &&
-            /^\d{14}$/.test(item.gtin) &&
+            /^\d{8,14}$/.test(String(item.gtin ?? '').trim()) &&
             Number.isInteger(item.quantity) &&
             item.quantity > 0
         )
         .map((item) => ({
           name: item.name,
-          gtin: item.gtin,
+          gtin: String(item.gtin).trim().padStart(14, '0'),
           expectedQuantity: item.quantity,
           unitCost: item.unitCost
         }));

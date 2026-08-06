@@ -190,11 +190,12 @@ export class PartnerCabinetService {
       }
 
       if (data.startsWith('partner_team_remove_confirm:')) {
-        const subjectId = data.split(':')[1];
+        const [, subjectId, organizationId] = data.split(':');
         await PartnerTeamService.removeFromTeam({
           projectId,
           managerUserId: userId,
-          subjectUserId: subjectId
+          subjectUserId: subjectId,
+          organizationId: organizationId || null
         });
         await ctx.answerCallbackQuery({ text: 'Убран из команды' });
         await ctx
@@ -212,7 +213,7 @@ export class PartnerCabinetService {
       }
 
       if (data.startsWith('partner_team_remove:')) {
-        const subjectId = data.split(':')[1];
+        const [, subjectId, organizationId] = data.split(':');
         const subject = await db.user.findFirst({
           where: { id: subjectId, projectId },
           select: {
@@ -234,7 +235,7 @@ export class PartnerCabinetService {
                 [
                   {
                     text: 'Да, убрать',
-                    callback_data: `partner_team_remove_confirm:${subjectId}`
+                    callback_data: `partner_team_remove_confirm:${subjectId}:${organizationId || ''}`
                   },
                   {
                     text: 'Отмена',
@@ -336,11 +337,9 @@ export class PartnerCabinetService {
     const me = await db.user.findFirst({
       where: { id: userId, projectId },
       select: {
-        partnerRole: true,
         organizationMemberships: {
-          where: { projectId, canManage: true },
-          select: { id: true },
-          take: 1
+          where: { projectId },
+          select: { id: true, canManage: true }
         }
       }
     });
@@ -348,8 +347,10 @@ export class PartnerCabinetService {
     const selectedFilter =
       filter ??
       PartnerTeamService.getDefaultTeamFilter({
-        partnerRole: me?.partnerRole,
-        managesOrganization: Boolean(me?.organizationMemberships.length)
+        isOrganizationMember: Boolean(me?.organizationMemberships.length),
+        managesOrganization: Boolean(
+          me?.organizationMemberships.some((membership) => membership.canManage)
+        )
       });
     const result = await PartnerTeamService.listTeam({
       projectId,
@@ -402,9 +403,9 @@ export class PartnerCabinetService {
       );
     });
 
-    const canManage =
-      me &&
-      (me.partnerRole !== 'CLIENT' || me.organizationMemberships.length > 0);
+    const canManage = Boolean(
+      me?.organizationMemberships.some((membership) => membership.canManage)
+    );
 
     const detailButtons = result.items.map((u) => {
       const row: Array<{ text: string; callback_data: string }> = [
@@ -413,11 +414,7 @@ export class PartnerCabinetService {
           callback_data: `partner_subject:${u.id}`
         }
       ];
-      if (
-        canManage &&
-        u.id !== userId &&
-        !['DIRECTOR', 'MANAGER'].includes(u.partnerRole)
-      ) {
+      if (canManage && u.id !== userId) {
         row.push({
           text: 'Убрать',
           callback_data: `partner_team_remove:${u.id}`

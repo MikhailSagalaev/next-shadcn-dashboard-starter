@@ -496,6 +496,11 @@ export class UserVariablesService {
   ): Promise<Record<string, any>> {
     const defaults = {
       'user.partnerRole': '',
+      'user.partnerMenuKind': 'CLIENT',
+      'user.isOrganizationMember': false,
+      'user.canManageOrganization': false,
+      'user.organizationCount': 0,
+      'user.organizationPosition': 'Клиент',
       'user.canRefer': false,
       'user.directReferralsCount': 0,
       'user.indirectReferralsCount': 0,
@@ -513,17 +518,47 @@ export class UserVariablesService {
           partnerRole: true,
           project: { select: { enablePartnerRoles: true } },
           organizationMemberships: {
-            where: { projectId, canManage: true },
-            select: { id: true },
-            take: 1
+            where: { projectId },
+            orderBy: [{ canManage: 'desc' }, { level: 'desc' }],
+            select: {
+              level: true,
+              title: true,
+              canManage: true,
+              organization: { select: { id: true, name: true, isActive: true } }
+            }
           }
         }
       });
 
       if (!user) return defaults;
 
-      const partnerRole = user.partnerRole || 'CLIENT';
+      const legacyRole = user.partnerRole || 'CLIENT';
       const enabled = !!user.project?.enablePartnerRoles;
+      const memberships = user.organizationMemberships.filter(
+        (membership) => membership.organization.isActive
+      );
+      const primaryMembership = memberships[0] ?? null;
+      const canManageOrganization = memberships.some(
+        (membership) => membership.canManage
+      );
+      const isOrganizationMember = memberships.length > 0;
+      const partnerMenuKind = canManageOrganization
+        ? 'MANAGER'
+        : isOrganizationMember || legacyRole !== 'CLIENT'
+          ? 'MEMBER'
+          : 'CLIENT';
+      const partnerRole = canManageOrganization
+        ? 'DIRECTOR'
+        : partnerMenuKind === 'MEMBER'
+          ? 'TRAINER'
+          : 'CLIENT';
+      const organizationPosition =
+        primaryMembership?.title ||
+        (primaryMembership?.level
+          ? `Уровень ${primaryMembership.level}`
+          : isOrganizationMember
+            ? 'Участник организации'
+            : 'Клиент');
 
       // Когда фича выключена — возвращаем минимальный набор без тяжёлых запросов.
       // canRefer=true здесь намеренно: это c2c-режим, где рефералкой может
@@ -532,13 +567,13 @@ export class UserVariablesService {
       if (!enabled) {
         return {
           ...defaults,
-          'user.partnerRole': '', // без режима ролей семантика «не партнёр»
+          'user.partnerRole': '',
+          'user.partnerMenuKind': 'CLIENT',
           'user.canRefer': true
         };
       }
 
-      const canRefer =
-        partnerRole !== 'CLIENT' || user.organizationMemberships.length > 0;
+      const canRefer = partnerMenuKind !== 'CLIENT';
 
       // Считаем direct + descendants и комиссии параллельно.
       const [team, totalAgg, monthAgg] = await Promise.all([
@@ -566,6 +601,11 @@ export class UserVariablesService {
 
       return {
         'user.partnerRole': partnerRole,
+        'user.partnerMenuKind': partnerMenuKind,
+        'user.isOrganizationMember': isOrganizationMember,
+        'user.canManageOrganization': canManageOrganization,
+        'user.organizationCount': memberships.length,
+        'user.organizationPosition': organizationPosition,
         'user.canRefer': canRefer,
         'user.directReferralsCount': directCount,
         'user.indirectReferralsCount': indirectCount,

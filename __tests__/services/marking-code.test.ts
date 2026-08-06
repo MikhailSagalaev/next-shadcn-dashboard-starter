@@ -18,6 +18,14 @@ describe('marking code utilities', () => {
     });
   });
 
+  it('handles serial numbers containing 91 without GS delimiters correctly', () => {
+    const code = ']D2010460123456789021SER91001';
+    expect(parseGs1DataMatrix(code)).toMatchObject({
+      gtin: '04601234567890',
+      serial: 'SER91001'
+    });
+  });
+
   it('explains that a bare GTIN is not a Data Matrix', () => {
     expect(() => parseGs1DataMatrix('04601234567890')).toThrow(
       'Введён только GTIN товара'

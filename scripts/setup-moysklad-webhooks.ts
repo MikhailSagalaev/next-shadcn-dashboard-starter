@@ -6,14 +6,28 @@
  */
 
 import { db } from '@/lib/db';
-import { decrypt } from '@/lib/moysklad-direct/encryption';
+import { decryptApiToken } from '@/lib/moysklad-direct/encryption';
 
 const MOYSKLAD_API_URL = 'https://api.moysklad.ru/api/remap/1.2';
 
+type WebhookAction = 'CREATE' | 'UPDATE' | 'DELETE';
+
 interface WebhookConfig {
   entityType: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  action: WebhookAction;
   description: string;
+}
+
+interface MoySkladWebhook {
+  id: string;
+  entityType: string;
+  action: WebhookAction;
+  url: string;
+  enabled: boolean;
+}
+
+interface MoySkladWebhookList {
+  rows: MoySkladWebhook[];
 }
 
 const WEBHOOK_CONFIGS: WebhookConfig[] = [
@@ -48,7 +62,7 @@ async function createWebhook(
   apiToken: string,
   webhookUrl: string,
   config: WebhookConfig
-) {
+): Promise<MoySkladWebhook> {
   const response = await fetch(`${MOYSKLAD_API_URL}/entity/webhook`, {
     method: 'POST',
     headers: {
@@ -67,10 +81,11 @@ async function createWebhook(
     throw new Error(`Failed to create webhook: ${error}`);
   }
 
-  return await response.json();
+  const payload: unknown = await response.json();
+  return payload as MoySkladWebhook;
 }
 
-async function listWebhooks(apiToken: string) {
+async function listWebhooks(apiToken: string): Promise<MoySkladWebhookList> {
   const response = await fetch(`${MOYSKLAD_API_URL}/entity/webhook`, {
     method: 'GET',
     headers: {
@@ -83,7 +98,8 @@ async function listWebhooks(apiToken: string) {
     throw new Error(`Failed to list webhooks: ${error}`);
   }
 
-  return await response.json();
+  const payload: unknown = await response.json();
+  return payload as MoySkladWebhookList;
 }
 
 async function deleteWebhook(apiToken: string, webhookId: string) {
@@ -135,7 +151,7 @@ async function main() {
   }
 
   // Расшифровать токен
-  const apiToken = decrypt(integration.apiToken);
+  const apiToken = decryptApiToken(integration.apiToken);
   const webhookUrl = `https://gupil.ru/api/webhook/moysklad-direct/${projectId}`;
 
   console.log(`\n🔧 МойСклад Webhooks Manager`);
@@ -174,7 +190,7 @@ async function main() {
         if (result.rows.length === 0) {
           console.log('No webhooks found');
         } else {
-          result.rows.forEach((webhook: any) => {
+          result.rows.forEach((webhook) => {
             console.log(`ID: ${webhook.id}`);
             console.log(`  Type: ${webhook.entityType}`);
             console.log(`  Action: ${webhook.action}`);

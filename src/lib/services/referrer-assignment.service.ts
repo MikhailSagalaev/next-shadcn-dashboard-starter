@@ -156,6 +156,7 @@ export class ReferrerAssignmentService {
           attrError instanceof Error ? attrError.message : 'Неизвестная ошибка',
         component: 'referrer-assignment-service'
       });
+      throw attrError;
     }
 
     void PartnerNotificationService.notifyAncestorsAboutNewMember(

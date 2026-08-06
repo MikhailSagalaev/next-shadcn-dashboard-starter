@@ -74,10 +74,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { buildReferralLink } from '@/lib/utils/referral-link';
-import {
-  getPartnerRoleLabel,
-  PartnerRoleBadge
-} from '@/features/bonuses/components/partner-role-badge';
+
 import { PartnerUserCombobox, type PartnerUser } from './partner-user-combobox';
 
 type PlanOption = { id: string; name: string };
@@ -404,9 +401,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   ] = useState('0');
 
   const [newUserId, setNewUserId] = useState('');
-  const [newRole, setNewRole] = useState<
-    'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
-  >('TRAINER');
+
   const [newLevel, setNewLevel] = useState('1');
   const [newTitle, setNewTitle] = useState('');
   const [newCanManage, setNewCanManage] = useState(false);
@@ -416,9 +411,6 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [newPlanId, setNewPlanId] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
 
-  const [memberRole, setMemberRole] = useState<
-    'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
-  >('TRAINER');
   const [memberLevel, setMemberLevel] = useState('');
   const [memberTitle, setMemberTitle] = useState('');
   const [memberCanManage, setMemberCanManage] = useState(false);
@@ -505,7 +497,6 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
   const openAddMember = () => {
     setNewUserId('');
-    setNewRole('TRAINER');
     setNewLevel('1');
     setNewTitle('');
     setNewCanManage(false);
@@ -580,7 +571,6 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: newUserId,
-            partnerRole: newRole,
             level: newLevel ? Number(newLevel) : null,
             title: newTitle.trim() || null,
             canManage: newCanManage,
@@ -622,9 +612,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
   const openEditMember = (member: Member) => {
     setEditMember(member);
-    setMemberRole(
-      member.partnerRole as 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'
-    );
+
     setMemberLevel(member.level ? String(member.level) : '');
     setMemberTitle(member.title ?? '');
     setMemberCanManage(member.canManage);
@@ -663,7 +651,6 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            partnerRole: memberRole,
             level: memberLevel ? Number(memberLevel) : null,
             title: memberTitle.trim() || null,
             canManage: memberCanManage,
@@ -718,7 +705,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   };
 
   const copyMemberReferralLink = async (member: Member) => {
-    if (!organization || member.partnerRole === 'CLIENT') return;
+    if (!organization || (!member.level && !member.canManage)) return;
     try {
       await navigator.clipboard.writeText(
         buildReferralLink(
@@ -900,7 +887,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       </div>
 
       {stats && (
-        <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7'>
+        <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6'>
           {[
             { label: 'Участников', value: stats.members },
             { label: 'Уровень 1', value: stats.trainers },
@@ -1009,7 +996,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                                   Уровень {m.level}
                                 </Badge>
                               ) : (
-                                <PartnerRoleBadge role={m.partnerRole} />
+                                <Badge variant='outline'>Клиент</Badge>
                               )}
                               {m.canManage && (
                                 <Badge variant='secondary'>Управляющий</Badge>
@@ -1077,7 +1064,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                                       <Pencil />
                                       Редактировать
                                     </DropdownMenuItem>
-                                    {m.partnerRole !== 'CLIENT' && (
+                                    {(Boolean(m.level) || m.canManage) && (
                                       <DropdownMenuItem
                                         onSelect={() =>
                                           void copyMemberReferralLink(m)
@@ -1295,36 +1282,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 placeholder='Поиск по имени, email, телефону…'
               />
             </div>
-            <div className='space-y-2'>
-              <Label>Системная роль для меню бота</Label>
-              <Select
-                value={newRole}
-                onValueChange={(v) => {
-                  const role = v as typeof newRole;
-                  setNewRole(role);
-                  const suggestedLevel = {
-                    CLIENT: '',
-                    TRAINER: '1',
-                    MANAGER: '2',
-                    DIRECTOR: '3'
-                  }[role];
-                  setNewLevel(suggestedLevel);
-                }}
-              >
-                <SelectTrigger className='w-full'>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(['DIRECTOR', 'MANAGER', 'TRAINER', 'CLIENT'] as const).map(
-                    (r) => (
-                      <SelectItem key={r} value={r}>
-                        {getPartnerRoleLabel(r)}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+
             <FieldGroup className='gap-4'>
               <Field>
                 <FieldLabel htmlFor='new-member-level'>
@@ -1340,7 +1298,8 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                   placeholder='Не задан'
                 />
                 <FieldDescription>
-                  Любое целое число от 1. Количество уровней не ограничено.
+                  Любое целое число от 1. Оставьте пустым для обычного клиента.
+                  Количество уровней не ограничено.
                 </FieldDescription>
               </Field>
               <Field>
@@ -1382,16 +1341,16 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               onChange={setNewReferrerLinks}
             />
             <div className='space-y-2'>
-              <Label>Партнёрский план (outbound)</Label>
+              <Label>План для приглашённых этим участником</Label>
               <Select
                 value={newPlanId || '__none__'}
                 onValueChange={(v) => setNewPlanId(v === '__none__' ? '' : v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder='По умолчанию сети' />
+                  <SelectValue placeholder='План организации' />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value='__none__'>По умолчанию сети</SelectItem>
+                  <SelectItem value='__none__'>План организации</SelectItem>
                   {plans.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -1426,29 +1385,6 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             </DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-2'>
-            <div className='space-y-2'>
-              <Label>Системная роль для меню бота</Label>
-              <Select
-                value={memberRole}
-                onValueChange={(v) => {
-                  const role = v as typeof memberRole;
-                  setMemberRole(role);
-                }}
-              >
-                <SelectTrigger className='w-full'>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(['DIRECTOR', 'MANAGER', 'TRAINER', 'CLIENT'] as const).map(
-                    (r) => (
-                      <SelectItem key={r} value={r}>
-                        {getPartnerRoleLabel(r)}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
             <FieldGroup className='gap-4'>
               <Field>
                 <FieldLabel htmlFor='edit-member-level'>
@@ -1501,7 +1437,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               onChange={setMemberReferrerLinks}
             />
             <div className='space-y-2'>
-              <Label>Партнёрский план</Label>
+              <Label>План для приглашённых этим участником</Label>
               <Select
                 value={memberPlanId || '__none__'}
                 onValueChange={(v) =>
@@ -1512,7 +1448,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value='__none__'>Сбросить</SelectItem>
+                  <SelectItem value='__none__'>План организации</SelectItem>
                   {plans.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}

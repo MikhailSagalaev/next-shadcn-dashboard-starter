@@ -5,7 +5,7 @@ export interface ParsedMarkCode {
 }
 
 export function parseGs1DataMatrix(input: string): ParsedMarkCode {
-  const raw = input.trim().replace(/^\]d2/, '');
+  const raw = input.trim().replace(/^\][a-z0-9]{2}/i, '');
   if (!raw) throw new Error('Код маркировки пуст');
   if (/^\d{8,14}$/.test(raw)) {
     throw new Error(
@@ -22,7 +22,21 @@ export function parseGs1DataMatrix(input: string): ParsedMarkCode {
   if (serialMarker < 0)
     throw new Error('В коде отсутствует серийный номер (21)');
   const serialTail = normalized.slice(serialMarker + 2);
-  const serial = serialTail.split(/\x1d|\u001d|(?=91)|(?=92)/i)[0];
+
+  let serial = '';
+  if (/[\x1d\u001d]/.test(serialTail)) {
+    serial = serialTail.split(/[\x1d\u001d]/)[0];
+  } else if (/\((?:91|92)\)/.test(serialTail)) {
+    serial = serialTail.split(/\((?:91|92)\)/)[0];
+  } else if (
+    serialTail.length >= 15 &&
+    (serialTail.startsWith('91', 13) || serialTail.startsWith('92', 13))
+  ) {
+    serial = serialTail.slice(0, 13);
+  } else {
+    serial = serialTail;
+  }
+
   if (!serial) throw new Error('Серийный номер Data Matrix пуст');
   return { raw, gtin, serial };
 }

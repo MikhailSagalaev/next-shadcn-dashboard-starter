@@ -18,7 +18,6 @@ const ReferrerLinkSchema = z.object({
 });
 
 const UpdateMemberSchema = z.object({
-  partnerRole: z.enum(['CLIENT', 'TRAINER', 'MANAGER', 'DIRECTOR']).optional(),
   level: z.number().int().min(1).nullable().optional(),
   title: z.string().max(120).nullable().optional(),
   canManage: z.boolean().optional(),
