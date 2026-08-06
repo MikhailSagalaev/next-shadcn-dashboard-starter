@@ -384,7 +384,7 @@ export function ReceiptDetailView({
                 </AlertDescription>
               </Alert>
             )}
-            {!documentConfirmed && quarantined === 0 && scanned > 0 && (
+            {!updConfirmed && quarantined === 0 && scanned > 0 && (
               <Alert>
                 <ShieldAlert />
                 <AlertTitle>Без подписи товар ещё недоступен</AlertTitle>
