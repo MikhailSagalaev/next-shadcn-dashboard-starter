@@ -1348,6 +1348,7 @@ export class ReferralService {
             ...program.project,
             bonusPercentage: Number(program.project.bonusPercentage),
             welcomeBonus: Number(program.project.welcomeBonus),
+            maxPaymentPercentage: Number(program.project.maxPaymentPercentage),
             firstPurchaseDiscountPercent: Number(
               program.project.firstPurchaseDiscountPercent
             )

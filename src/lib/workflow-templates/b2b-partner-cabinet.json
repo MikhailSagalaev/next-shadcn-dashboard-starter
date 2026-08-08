@@ -212,204 +212,6 @@
           "action.partner_home": {}
         }
       }
-    },    {
-      "id": "cond-is-director",
-      "type": "condition",
-      "position": { "x": 380, "y": 80 },
-      "data": {
-        "label": "Управляет организацией?",
-        "config": {
-          "condition": {
-            "operator": "equals",
-            "variable": "user.partnerMenuKind",
-            "value": "DIRECTOR"
-          }
-        }
-      }
-    },
-    {
-      "id": "cond-is-manager",
-      "type": "condition",
-      "position": { "x": 760, "y": 240 },
-      "data": {
-        "label": "Участник организации?",
-        "config": {
-          "condition": {
-            "operator": "equals",
-            "variable": "user.partnerMenuKind",
-            "value": "MANAGER"
-          }
-        }
-      }
-    },
-    {
-      "id": "cond-is-trainer",
-      "type": "condition",
-      "position": { "x": 1140, "y": 400 },
-      "data": {
-        "label": "Служебная ветка (не используется)",
-        "config": {
-          "condition": {
-            "operator": "equals",
-            "variable": "user.partnerMenuKind",
-            "value": "TRAINER"
-          }
-        }
-      }
-    },
-    {
-      "id": "menu-director",
-      "type": "message",
-      "position": { "x": 760, "y": 80 },
-      "data": {
-        "label": "Меню уровня 3",
-        "config": {
-          "message": {
-            "text": "🏆 <b>Кабинет партнёра — Уровень 3</b>\n\nПривет, {user.firstName}!\n\n👥 В команде: <b>{user.teamSize}</b>\n💼 Комиссия в этом месяце: <b>{user.commissionThisMonthFormatted}</b>\n💰 Всего заработано: <b>{user.totalCommissionEarnedFormatted}</b>\n\nВыберите действие:",
-            "parseMode": "HTML",
-            "keyboard": {
-              "type": "inline",
-              "buttons": [
-                [
-                  {
-                    "text": "📊 Сводка по организации",
-                    "callback_data": "partner_org_summary"
-                  },
-                  {
-                    "text": "👥 Моя команда",
-                    "callback_data": "partner_team_page:0"
-                  },
-                  { "text": "📥 Заявки", "callback_data": "partner_requests" }
-                ],
-                [
-                  {
-                    "text": "👉 МОЯ ССЫЛКА 👈",
-                    "callback_data": "partner_link"
-                  },
-                  {
-                    "text": "💵 Мои выплаты",
-                    "callback_data": "partner_payouts"
-                  }
-                ],
-                [
-                  { "text": "💰 Баланс", "callback_data": "menu_balance" },
-                  { "text": "📜 История", "callback_data": "menu_history" }
-                ]
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "id": "menu-manager",
-      "type": "message",
-      "position": { "x": 1140, "y": 240 },
-      "data": {
-        "label": "Меню уровня 2",
-        "config": {
-          "message": {
-            "text": "👥 <b>Кабинет партнёра — Уровень 2</b>\n\nПривет, {user.firstName}!\n\n👤 Под вами: <b>{user.directReferralsCount}</b> прямых · <b>{user.indirectReferralsCount}</b> косвенных\n💼 Комиссия в этом месяце: <b>{user.commissionThisMonthFormatted}</b>\n💰 Всего заработано: <b>{user.totalCommissionEarnedFormatted}</b>\n\nВыберите действие:",
-            "parseMode": "HTML",
-            "keyboard": {
-              "type": "inline",
-              "buttons": [
-                [
-                  {
-                    "text": "👥 Моя команда",
-                    "callback_data": "partner_team_page:0"
-                  },
-                  { "text": "📥 Заявки", "callback_data": "partner_requests" }
-                ],
-                [
-                  {
-                    "text": "👉 МОЯ ССЫЛКА 👈",
-                    "callback_data": "partner_link"
-                  },
-                  {
-                    "text": "💵 Мои выплаты",
-                    "callback_data": "partner_payouts"
-                  }
-                ],
-                [
-                  { "text": "💰 Баланс", "callback_data": "menu_balance" },
-                  { "text": "📜 История", "callback_data": "menu_history" }
-                ]
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "id": "menu-trainer",
-      "type": "message",
-      "position": { "x": 1520, "y": 400 },
-      "data": {
-        "label": "Меню уровня 1",
-        "config": {
-          "message": {
-            "text": "🏃 <b>Кабинет партнёра — Уровень 1</b>\n\nПривет, {user.firstName}!\n\n👤 Клиентов: <b>{user.directReferralsCount}</b>\n💼 Комиссия в этом месяце: <b>{user.commissionThisMonthFormatted}</b>\n💰 Всего заработано: <b>{user.totalCommissionEarnedFormatted}</b>\n\nВыберите действие:",
-            "parseMode": "HTML",
-            "keyboard": {
-              "type": "inline",
-              "buttons": [
-                [
-                  {
-                    "text": "👉 МОЯ ССЫЛКА 👈",
-                    "callback_data": "partner_link"
-                  }
-                ],
-                [
-                  {
-                    "text": "👤 Мои клиенты",
-                    "callback_data": "partner_team_page:0"
-                  },
-                  {
-                    "text": "💵 Мои выплаты",
-                    "callback_data": "partner_payouts"
-                  }
-                ],
-                [
-                  { "text": "💰 Баланс", "callback_data": "menu_balance" },
-                  { "text": "📜 История", "callback_data": "menu_history" }
-                ]
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "id": "menu-client",
-      "type": "message",
-      "position": { "x": 1520, "y": 560 },
-      "data": {
-        "label": "Меню клиента",
-        "config": {
-          "message": {
-            "text": "👋 <b>Здравствуйте, {user.firstName}!</b>\n\n💵 Баланс: <b>{user.balanceFormatted}</b>\n🏆 Уровень: <b>{user.currentLevel}</b>\n📈 Заработано бонусов: <b>{user.totalEarnedFormatted}</b>\n\nВыберите действие:",
-            "parseMode": "HTML",
-            "keyboard": {
-              "type": "inline",
-              "buttons": [
-                [
-                  { "text": "💰 Баланс", "callback_data": "menu_balance" },
-                  { "text": "📜 История", "callback_data": "menu_history" }
-                ],
-                [
-                  { "text": "🏆 Уровень", "callback_data": "menu_level" },
-                  {
-                    "text": "👥 Реферальная программа",
-                    "callback_data": "menu_referrals"
-                  }
-                ],
-                [{ "text": "❓ Помощь", "callback_data": "menu_help" }]
-              ]
-            }
-          }
-        }
-      }
     },
     {
       "id": "trigger-cb-org-summary",
@@ -494,7 +296,8 @@
           }
         }
       }
-    },    {
+    },
+    {
       "id": "trigger-cb-link",
       "type": "trigger.callback",
       "position": { "x": 0, "y": 1040 },
@@ -628,7 +431,8 @@
           "action.menu_command": { "command": "menu_purchases" }
         }
       }
-    },    {
+    },
+    {
       "id": "menu-history-trigger",
       "type": "trigger.callback",
       "position": { "x": 760, "y": 920 },
@@ -889,72 +693,6 @@
       "target": "flow-end"
     },
     {
-      "id": "e-director-yes",
-      "type": "default",
-      "source": "cond-is-director",
-      "target": "menu-director",
-      "sourceHandle": "true"
-    },
-    {
-      "id": "e-director-no",
-      "type": "default",
-      "source": "cond-is-director",
-      "target": "cond-is-manager",
-      "sourceHandle": "false"
-    },
-    {
-      "id": "e-manager-yes",
-      "type": "default",
-      "source": "cond-is-manager",
-      "target": "menu-manager",
-      "sourceHandle": "true"
-    },
-    {
-      "id": "e-manager-no",
-      "type": "default",
-      "source": "cond-is-manager",
-      "target": "cond-is-trainer",
-      "sourceHandle": "false"
-    },
-    {
-      "id": "e-trainer-yes",
-      "type": "default",
-      "source": "cond-is-trainer",
-      "target": "menu-trainer",
-      "sourceHandle": "true"
-    },
-    {
-      "id": "e-trainer-no",
-      "type": "default",
-      "source": "cond-is-trainer",
-      "target": "menu-client",
-      "sourceHandle": "false"
-    },
-    {
-      "id": "e-menu-director-end",
-      "type": "default",
-      "source": "menu-director",
-      "target": "flow-end"
-    },
-    {
-      "id": "e-menu-manager-end",
-      "type": "default",
-      "source": "menu-manager",
-      "target": "flow-end"
-    },
-    {
-      "id": "e-menu-trainer-end",
-      "type": "default",
-      "source": "menu-trainer",
-      "target": "flow-end"
-    },
-    {
-      "id": "e-menu-client-end",
-      "type": "default",
-      "source": "menu-client",
-      "target": "flow-end"
-    },
-    {
       "id": "e-cb-org-summary",
       "type": "default",
       "source": "trigger-cb-org-summary",
@@ -989,7 +727,8 @@
       "type": "default",
       "source": "action-team-tab",
       "target": "flow-end"
-    },    {
+    },
+    {
       "id": "e-cb-link",
       "type": "default",
       "source": "trigger-cb-link",
@@ -1048,7 +787,8 @@
       "type": "default",
       "source": "show-purchases-list",
       "target": "flow-end"
-    },    {
+    },
+    {
       "id": "e-menu-history",
       "type": "default",
       "source": "menu-history-trigger",

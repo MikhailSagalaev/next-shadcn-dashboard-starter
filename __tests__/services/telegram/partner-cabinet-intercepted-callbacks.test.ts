@@ -20,10 +20,6 @@ describe('isTelegramCallbackIntercepted', () => {
     expect(isTelegramCallbackIntercepted('partner_team_remove_cancel')).toBe(
       true
     );
-    expect(isTelegramCallbackIntercepted('partner_team_tab:clients')).toBe(
-      true
-    );
-    expect(isTelegramCallbackIntercepted('partner_team_page:0')).toBe(true);
     expect(isTelegramCallbackIntercepted('payout_cancel:p1')).toBe(true);
     expect(isTelegramCallbackIntercepted('payout_method:card')).toBe(true);
   });
@@ -38,6 +34,12 @@ describe('isTelegramCallbackIntercepted', () => {
     expect(isTelegramCallbackIntercepted('partner_link')).toBe(false);
     expect(isTelegramCallbackIntercepted('partner_org_summary')).toBe(false);
     expect(isTelegramCallbackIntercepted('partner_payouts')).toBe(false);
+    expect(
+      isTelegramCallbackIntercepted('partner_team_tab:clients:0:org')
+    ).toBe(false);
+    expect(isTelegramCallbackIntercepted('partner_team_page:0:org')).toBe(
+      false
+    );
     expect(isTelegramCallbackIntercepted('menu_referrals')).toBe(false);
     expect(isTelegramCallbackIntercepted('back_to_menu')).toBe(false);
   });
@@ -51,8 +53,9 @@ describe('isTelegramCallbackIntercepted', () => {
 });
 
 describe('isTriggerNodePatternIntercepted', () => {
-  it('flags the one dead node in the shipped b2b template', () => {
-    expect(isTriggerNodePatternIntercepted('partner_team_page')).toBe(true);
+  it('keeps team navigation inside the workflow engine', () => {
+    expect(isTriggerNodePatternIntercepted('partner_team_page')).toBe(false);
+    expect(isTriggerNodePatternIntercepted('partner_team_tab')).toBe(false);
   });
 
   it('does not flag the live nodes in the shipped b2b template', () => {

@@ -4,23 +4,25 @@ describe('PartnerTeamService.getDefaultTeamFilter', () => {
   test('organization manager sees all', () => {
     expect(
       PartnerTeamService.getDefaultTeamFilter({
-        partnerRole: 'TRAINER',
+        isOrganizationMember: true,
         managesOrganization: true
       })
     ).toBe('all');
   });
-  test('trainer sees clients', () => {
+
+  test('organization member sees direct referrals first', () => {
     expect(
       PartnerTeamService.getDefaultTeamFilter({
-        partnerRole: 'TRAINER',
+        isOrganizationMember: true,
         managesOrganization: false
       })
-    ).toBe('clients');
+    ).toBe('direct');
   });
-  test('client sees direct referrals', () => {
+
+  test('regular client sees direct referrals', () => {
     expect(
       PartnerTeamService.getDefaultTeamFilter({
-        partnerRole: 'CLIENT',
+        isOrganizationMember: false,
         managesOrganization: false
       })
     ).toBe('direct');

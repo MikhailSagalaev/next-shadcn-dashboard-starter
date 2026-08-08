@@ -26,9 +26,8 @@ export interface CreateOrganizationInput {
 
 export interface OrganizationStats {
   members: number;
-  trainers: number;
+  levels: Array<{ level: number; count: number }>;
   managers: number;
-  directors: number;
   clients: number;
   totalPurchases: number;
   commissionEarned: number;
@@ -232,7 +231,6 @@ export class PartnerOrganizationService {
             phone: true,
             partnerRole: true,
             referredBy: true,
-            outboundReferralPlanId: true,
             registeredAt: true,
             totalPurchases: true,
             isActive: true
@@ -270,7 +268,7 @@ export class PartnerOrganizationService {
       ...new Set(
         memberships
           .flatMap((membership) => [
-            membership.user.outboundReferralPlanId,
+            membership.outboundReferralPlanId,
             attributionByUserId.get(membership.userId)
           ])
           .filter((id): id is string => Boolean(id))
@@ -307,9 +305,9 @@ export class PartnerOrganizationService {
           sharePercent: Number(link.sharePercent),
           isPrimary: link.isPrimary
         })),
-        outboundReferralPlanId: user.outboundReferralPlanId,
-        outboundPlanName: user.outboundReferralPlanId
-          ? (planMap.get(user.outboundReferralPlanId) ?? null)
+        outboundReferralPlanId: membership.outboundReferralPlanId,
+        outboundPlanName: membership.outboundReferralPlanId
+          ? (planMap.get(membership.outboundReferralPlanId) ?? null)
           : null,
         attributionPlanName: attributionByUserId.get(user.id)
           ? (planMap.get(attributionByUserId.get(user.id)!) ?? null)
@@ -348,7 +346,8 @@ export class PartnerOrganizationService {
       update: {
         level,
         title: normalizeTitle(input.title),
-        canManage: input.canManage
+        canManage: input.canManage,
+        outboundReferralPlanId
       },
       create: {
         projectId,
@@ -356,7 +355,8 @@ export class PartnerOrganizationService {
         userId: input.userId,
         level,
         title: normalizeTitle(input.title) ?? null,
-        canManage: input.canManage ?? false
+        canManage: input.canManage ?? false,
+        outboundReferralPlanId
       }
     });
 
@@ -371,7 +371,9 @@ export class PartnerOrganizationService {
       data: {
         ...(user.organizationId ? {} : { organizationId }),
         partnerRole: compatibilityRole,
-        outboundReferralPlanId
+        ...(!user.organizationId || user.organizationId === organizationId
+          ? { outboundReferralPlanId }
+          : {})
       }
     });
 
@@ -547,7 +549,10 @@ export class PartnerOrganizationService {
         ...(input.title !== undefined
           ? { title: normalizeTitle(input.title) }
           : {}),
-        ...(input.canManage !== undefined ? { canManage: input.canManage } : {})
+        ...(input.canManage !== undefined
+          ? { canManage: input.canManage }
+          : {}),
+        outboundReferralPlanId
       }
     });
 
@@ -561,7 +566,9 @@ export class PartnerOrganizationService {
       where: { id: userId },
       data: {
         partnerRole: compatibilityRole,
-        outboundReferralPlanId
+        ...(membership.user.organizationId === organizationId
+          ? { outboundReferralPlanId }
+          : {})
       }
     });
 
@@ -614,7 +621,11 @@ export class PartnerOrganizationService {
       }),
       db.partnerOrganization.findFirst({
         where: { id: targetOrganizationId, projectId },
-        select: { id: true, name: true }
+        select: {
+          id: true,
+          name: true,
+          defaultReferralCommissionPlanId: true
+        }
       }),
       db.user.findFirst({ where: { id: userId, projectId } })
     ]);
@@ -636,7 +647,9 @@ export class PartnerOrganizationService {
       update: {
         level: sourceMembership.level,
         title: sourceMembership.title,
-        canManage: sourceMembership.canManage
+        canManage: sourceMembership.canManage,
+        outboundReferralPlanId:
+          targetOrganization.defaultReferralCommissionPlanId
       },
       create: {
         projectId,
@@ -644,7 +657,9 @@ export class PartnerOrganizationService {
         userId,
         level: sourceMembership.level,
         title: sourceMembership.title,
-        canManage: sourceMembership.canManage
+        canManage: sourceMembership.canManage,
+        outboundReferralPlanId:
+          targetOrganization.defaultReferralCommissionPlanId
       }
     });
     await this.removeMember(projectId, sourceOrganizationId, userId);
@@ -713,7 +728,9 @@ export class PartnerOrganizationService {
             projectId: input.projectId,
             organizationId: org.id,
             userId: input.directorUserId,
-            canManage: true
+            canManage: true,
+            outboundReferralPlanId:
+              input.defaultReferralCommissionPlanId ?? null
           }
         });
       }
@@ -791,7 +808,9 @@ export class PartnerOrganizationService {
             projectId,
             organizationId,
             userId: data.directorUserId,
-            canManage: true
+            canManage: true,
+            outboundReferralPlanId:
+              updated.defaultReferralCommissionPlanId ?? null
           }
         });
       }
@@ -864,20 +883,32 @@ export class PartnerOrganizationService {
       where: { projectId, organizationId },
       include: {
         user: {
-          select: { partnerRole: true, totalPurchases: true, id: true }
+          select: {
+            partnerRole: true,
+            totalPurchases: true,
+            organizationId: true,
+            id: true
+          }
         }
       }
     });
     const members = memberships.map((membership) => membership.user);
-    const participants = memberships.filter(
-      (membership) => membership.level !== null
-    ).length;
+    const levelCounts = new Map<number, number>();
+    for (const membership of memberships) {
+      if (membership.level !== null) {
+        levelCounts.set(
+          membership.level,
+          (levelCounts.get(membership.level) ?? 0) + 1
+        );
+      }
+    }
     const managers = memberships.filter(
       (membership) => membership.canManage
     ).length;
     const clients = memberships.filter(
-      (membership) => membership.level === null
+      (membership) => membership.level === null && !membership.canManage
     ).length;
+    const attributionOrganization = new Map<string, string | null>();
 
     const userIds = members.map((member) => member.id);
     let commissionEarned = 0;
@@ -897,11 +928,11 @@ export class PartnerOrganizationService {
           select: { userId: true, organizationId: true }
         })
       ]);
-      const attributionOrganization = new Map(
-        attributions.map((attribution) => [
+      attributions.forEach((attribution) =>
+        attributionOrganization.set(
           attribution.userId,
           attribution.organizationId
-        ])
+        )
       );
       commissionEarned = transactions.reduce((sum, transaction) => {
         const metadata =
@@ -927,12 +958,17 @@ export class PartnerOrganizationService {
 
     return {
       members: members.length,
-      trainers: participants,
+      levels: [...levelCounts.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([level, count]) => ({ level, count })),
       managers,
-      directors: managers,
       clients,
       totalPurchases: members.reduce(
-        (sum, member) => sum + Number(member.totalPurchases ?? 0),
+        (sum, member) =>
+          (attributionOrganization.get(member.id) ?? member.organizationId) ===
+          organizationId
+            ? sum + Number(member.totalPurchases ?? 0)
+            : sum,
         0
       ),
       commissionEarned

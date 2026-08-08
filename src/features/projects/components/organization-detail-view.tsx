@@ -81,9 +81,8 @@ type PlanOption = { id: string; name: string };
 
 type OrgStats = {
   members: number;
-  trainers: number;
+  levels: Array<{ level: number; count: number }>;
   managers: number;
-  directors: number;
   clients: number;
   totalPurchases: number;
   commissionEarned: number;
@@ -887,12 +886,14 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       </div>
 
       {stats && (
-        <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6'>
+        <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5'>
           {[
             { label: 'Участников', value: stats.members },
-            { label: 'Уровень 1', value: stats.trainers },
-            { label: 'Уровень 2', value: stats.managers },
-            { label: 'Уровень 3', value: stats.directors },
+            ...stats.levels.map(({ level, count }) => ({
+              label: `Уровень ${level}`,
+              value: count
+            })),
+            { label: 'Управляющие', value: stats.managers },
             { label: 'Клиенты', value: stats.clients },
             {
               label: 'Покупки',

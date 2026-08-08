@@ -128,42 +128,48 @@ export class ReferralCommissionService {
     projectDefaultPlanId: string | null,
     organizationId?: string | null
   ): Promise<string | null> {
-    const referrer = await db.user.findFirst({
-      where: { id: referrerId, projectId },
-      select: { outboundReferralPlanId: true, organizationId: true }
-    });
+    const [referrer, membership] = await Promise.all([
+      db.user.findFirst({
+        where: { id: referrerId, projectId },
+        select: { outboundReferralPlanId: true, organizationId: true }
+      }),
+      organizationId
+        ? db.partnerOrganizationMembership.findUnique({
+            where: {
+              organizationId_userId: { organizationId, userId: referrerId }
+            },
+            select: { outboundReferralPlanId: true }
+          })
+        : Promise.resolve(null)
+    ]);
 
-    const preferred = referrer?.outboundReferralPlanId;
-    if (preferred) {
+    const orgId = organizationId ?? referrer?.organizationId ?? null;
+    const organization = orgId
+      ? await db.partnerOrganization.findFirst({
+          where: { id: orgId, projectId },
+          select: { defaultReferralCommissionPlanId: true }
+        })
+      : null;
+
+    // An explicit organization must win over the legacy global user field.
+    // Otherwise adding the same person to organization B changes payouts for A.
+    const candidates = organizationId
+      ? [
+          membership?.outboundReferralPlanId,
+          organization?.defaultReferralCommissionPlanId,
+          referrer?.outboundReferralPlanId,
+          projectDefaultPlanId
+        ]
+      : [
+          referrer?.outboundReferralPlanId,
+          organization?.defaultReferralCommissionPlanId,
+          projectDefaultPlanId
+        ];
+
+    for (const planId of candidates) {
+      if (!planId) continue;
       const ok = await db.referralCommissionPlan.findFirst({
-        where: { id: preferred, projectId, isActive: true },
-        select: { id: true }
-      });
-      if (ok) return ok.id;
-    }
-
-    const orgId = organizationId ?? referrer?.organizationId;
-    if (orgId) {
-      const org = await db.partnerOrganization.findFirst({
-        where: { id: orgId, projectId },
-        select: { defaultReferralCommissionPlanId: true }
-      });
-      if (org?.defaultReferralCommissionPlanId) {
-        const ok = await db.referralCommissionPlan.findFirst({
-          where: {
-            id: org.defaultReferralCommissionPlanId,
-            projectId,
-            isActive: true
-          },
-          select: { id: true }
-        });
-        if (ok) return ok.id;
-      }
-    }
-
-    if (projectDefaultPlanId) {
-      const ok = await db.referralCommissionPlan.findFirst({
-        where: { id: projectDefaultPlanId, projectId, isActive: true },
+        where: { id: planId, projectId, isActive: true },
         select: { id: true }
       });
       if (ok) return ok.id;

@@ -2298,9 +2298,18 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       });
 
       const tabRow = [
-        { text: '👤 Клиенты', callback_data: 'partner_team_tab:clients:0' },
-        { text: '🏃 Партнёры', callback_data: 'partner_team_tab:partners:0' },
-        { text: '🌳 Все', callback_data: 'partner_team_tab:all:0' }
+        {
+          text: '👤 Клиенты',
+          callback_data: `partner_team_tab:clients:0${organizationSuffix}`
+        },
+        {
+          text: '🏃 Партнёры',
+          callback_data: `partner_team_tab:partners:0${organizationSuffix}`
+        },
+        {
+          text: '🌳 Все',
+          callback_data: `partner_team_tab:all:0${organizationSuffix}`
+        }
       ];
 
       const pagerRow: Array<{ text: string; callback_data: string }> = [];
@@ -2403,13 +2412,15 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
         (await PartnerTeamService.canManageSubject(
           context.projectId,
           viewerUserId,
-          subjectUserId
+          subjectUserId,
+          organizationId || null
         )) ||
-        (await cachedCanViewSubject(
-          context.projectId,
-          viewerUserId,
-          subjectUserId
-        ));
+        (!organizationId &&
+          (await cachedCanViewSubject(
+            context.projectId,
+            viewerUserId,
+            subjectUserId
+          )));
 
       if (!allowed) {
         await sendPlatformMessage(

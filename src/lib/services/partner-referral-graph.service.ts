@@ -32,16 +32,12 @@ export function normalizeReferralLinks(
   const seen = new Set<string>();
   const normalized = links.map((link) => {
     const referrerId = link.referrerId.trim();
-    if (!referrerId) throw new Error('Р’С‹Р±РµСЂРёС‚Рµ СЂРµС„РµСЂРµСЂР°');
+    if (!referrerId) throw new Error('Выберите реферера');
     if (referrerId === childUserId) {
-      throw new Error(
-        'РЈС‡Р°СЃС‚РЅРёРє РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ СЂРµС„РµСЂРµСЂРѕРј СЃР°Рј СЃРµР±Рµ'
-      );
+      throw new Error('Участник не может быть реферером сам себе');
     }
     if (seen.has(referrerId)) {
-      throw new Error(
-        'РћРґРёРЅ СЂРµС„РµСЂРµСЂ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РґРѕР±Р°РІР»РµРЅ РґРІР°Р¶РґС‹'
-      );
+      throw new Error('Один реферер не может быть добавлен дважды');
     }
     seen.add(referrerId);
 
@@ -51,9 +47,7 @@ export function normalizeReferralLinks(
       sharePercent < 0 ||
       sharePercent > 100
     ) {
-      throw new Error(
-        'Р”РѕР»СЏ СЂРµС„РµСЂРµСЂР° РґРѕР»Р¶РЅР° Р±С‹С‚СЊ РѕС‚ 0 РґРѕ 100%'
-      );
+      throw new Error('Доля реферера должна быть от 0 до 100%');
     }
 
     return {
@@ -64,18 +58,14 @@ export function normalizeReferralLinks(
   });
 
   if (normalized.filter((link) => link.isPrimary).length > 1) {
-    throw new Error(
-      'РћСЃРЅРѕРІРЅС‹Рј РјРѕР¶РµС‚ Р±С‹С‚СЊ С‚РѕР»СЊРєРѕ РѕРґРёРЅ СЂРµС„РµСЂРµСЂ'
-    );
+    throw new Error('Основным может быть только один реферер');
   }
 
   const totalShare = roundShare(
     normalized.reduce((sum, link) => sum + link.sharePercent, 0)
   );
   if (totalShare > 100) {
-    throw new Error(
-      'РЎСѓРјРјР° РґРѕР»РµР№ СЂРµС„РµСЂРµСЂРѕРІ РЅРµ РјРѕР¶РµС‚ РїСЂРµРІС‹С€Р°С‚СЊ 100%'
-    );
+    throw new Error('Сумма долей рефереров не может превышать 100%');
   }
 
   if (normalized.length > 0 && !normalized.some((link) => link.isPrimary)) {
@@ -108,9 +98,7 @@ function assertAcyclic(
     while (stack.length > 0) {
       const current = stack.pop()!;
       if (current === childUserId) {
-        throw new Error(
-          'Р РµС„РµСЂР°Р»СЊРЅР°СЏ СЃРІСЏР·СЊ СЃРѕР·РґР°С‘С‚ С†РёРєР»'
-        );
+        throw new Error('Реферальная связь создаёт цикл');
       }
       if (visited.has(current)) continue;
       visited.add(current);
@@ -158,8 +146,7 @@ export class PartnerReferralGraphService {
       })
     ]);
 
-    if (!organization)
-      throw new Error('РћСЂРіР°РЅРёР·Р°С†РёСЏ РЅРµ РЅР°Р№РґРµРЅР°');
+    if (!organization) throw new Error('Организация не найдена');
 
     const memberIds = new Set(
       memberships.map((membership) => membership.userId)
@@ -167,7 +154,7 @@ export class PartnerReferralGraphService {
     const missingId = participantIds.find((id) => !memberIds.has(id));
     if (missingId) {
       throw new Error(
-        'Р’СЃРµ СѓС‡Р°СЃС‚РЅРёРєРё СЂРµС„РµСЂР°Р»СЊРЅРѕР№ СЃРІСЏР·Рё РґРѕР»Р¶РЅС‹ СЃРѕСЃС‚РѕСЏС‚СЊ РІ СЌС‚РѕР№ РѕСЂРіР°РЅРёР·Р°С†РёРё'
+        'Все участники реферальной связи должны состоять в этой организации'
       );
     }
 

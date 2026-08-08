@@ -119,6 +119,7 @@ export class BonusLevelService {
               ...level.project,
               bonusPercentage: Number(level.project.bonusPercentage),
               welcomeBonus: Number(level.project.welcomeBonus),
+              maxPaymentPercentage: Number(level.project.maxPaymentPercentage),
               firstPurchaseDiscountPercent: Number(
                 level.project.firstPurchaseDiscountPercent
               )
@@ -176,6 +177,7 @@ export class BonusLevelService {
               ...level.project,
               bonusPercentage: Number(level.project.bonusPercentage),
               welcomeBonus: Number(level.project.welcomeBonus),
+              maxPaymentPercentage: Number(level.project.maxPaymentPercentage),
               firstPurchaseDiscountPercent: Number(
                 level.project.firstPurchaseDiscountPercent
               )

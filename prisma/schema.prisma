@@ -113,12 +113,13 @@ model ReferralCommissionPlan {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  project              Project                       @relation("ProjectCommissionPlans", fields: [projectId], references: [id], onDelete: Cascade)
-  defaultForProjects   Project[]                     @relation("ProjectDefaultCommissionPlan")
-  organizationDefaults PartnerOrganization[]         @relation("OrganizationDefaultPlan")
-  levels               ReferralCommissionPlanLevel[]
-  outboundUsers        User[]                        @relation("UserOutboundReferralPlan")
-  referralAttributions ReferralAttribution[]
+  project                 Project                         @relation("ProjectCommissionPlans", fields: [projectId], references: [id], onDelete: Cascade)
+  defaultForProjects      Project[]                       @relation("ProjectDefaultCommissionPlan")
+  organizationDefaults    PartnerOrganization[]           @relation("OrganizationDefaultPlan")
+  membershipOutboundPlans PartnerOrganizationMembership[] @relation("MembershipOutboundReferralPlan")
+  levels                  ReferralCommissionPlanLevel[]
+  outboundUsers           User[]                          @relation("UserOutboundReferralPlan")
+  referralAttributions    ReferralAttribution[]
 
   @@index([projectId])
   @@map("referral_commission_plans")
@@ -191,23 +192,26 @@ model PartnerOrganization {
 /// Membership is organization-scoped. A user may belong to and manage any
 /// number of B2B organizations without being moved between them.
 model PartnerOrganizationMembership {
-  id             String   @id @default(cuid())
-  projectId      String   @map("project_id")
-  organizationId String   @map("organization_id")
-  userId         String   @map("user_id")
-  level          Int?
-  title          String?
-  canManage      Boolean  @default(false) @map("can_manage")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                     String   @id @default(cuid())
+  projectId              String   @map("project_id")
+  organizationId         String   @map("organization_id")
+  userId                 String   @map("user_id")
+  level                  Int?
+  title                  String?
+  canManage              Boolean  @default(false) @map("can_manage")
+  outboundReferralPlanId String?  @map("outbound_referral_plan_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
-  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  organization PartnerOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project              Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization         PartnerOrganization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outboundReferralPlan ReferralCommissionPlan? @relation("MembershipOutboundReferralPlan", fields: [outboundReferralPlanId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, userId])
   @@index([projectId, userId])
   @@index([organizationId, canManage])
+  @@index([outboundReferralPlanId])
   @@map("partner_organization_memberships")
 }
 
