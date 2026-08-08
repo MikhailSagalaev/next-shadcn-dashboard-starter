@@ -657,13 +657,8 @@ export class ComplianceGatewayService {
       const documentDate = new Date(incoming.date);
       if (Number.isNaN(documentDate.getTime())) continue;
       const incomingStatus = normalizedStatus(incoming.status);
-      const isConfirmed = [
-        'SIGNED',
-        'ACCEPTED',
-        'CONFIRMED',
-        'SUCCEEDED',
-        'COMPLETED'
-      ].includes(incomingStatus);
+      // Acknowledged and signed are still pending at the operator.
+      const isConfirmed = ['SUCCEEDED', 'COMPLETED'].includes(incomingStatus);
       const existing = await db.goodsReceipt.findFirst({
         where: { projectId, externalDocumentId: incoming.id }
       });

@@ -221,7 +221,10 @@ export class RefundService {
             mark_mode: '0',
             mark_code_info: {
               gs_1m: markCodeToGs1m(decryptMarkCode(unit.codeEncrypted))
-            }
+            },
+            ...(item.measure === 'piece'
+              ? { mark_quantity: { numerator: 1, denominator: 1 } }
+              : {})
           });
         }
       } else if (request.full) {
