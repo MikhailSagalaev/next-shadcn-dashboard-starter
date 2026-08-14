@@ -113,12 +113,17 @@ export function ProjectSettingsView({
       setLoading(true);
 
       // Загружаем проект, уровни и статистику параллельно
-      const [projectResponse, levelsResponse, statsResponse] =
-        await Promise.all([
-          fetch(`/api/projects/${projectId}`),
-          fetch(`/api/projects/${projectId}/bonus-levels`),
-          fetch(`/api/projects/${projectId}/stats`)
-        ]);
+      const [
+        projectResponse,
+        credentialsResponse,
+        levelsResponse,
+        statsResponse
+      ] = await Promise.all([
+        fetch(`/api/projects/${projectId}`),
+        fetch(`/api/projects/${projectId}/credentials`),
+        fetch(`/api/projects/${projectId}/bonus-levels`),
+        fetch(`/api/projects/${projectId}/stats`)
+      ]);
 
       // Проверяем наличие уровней
       if (levelsResponse.ok) {
@@ -140,7 +145,11 @@ export function ProjectSettingsView({
       }
 
       if (projectResponse.ok) {
-        const projectData = await projectResponse.json();
+        const [projectData, credentials] = await Promise.all([
+          projectResponse.json(),
+          credentialsResponse.ok ? credentialsResponse.json() : {}
+        ]);
+        Object.assign(projectData, credentials);
         setLoadError(null);
         setProject(projectData);
         setFormData({

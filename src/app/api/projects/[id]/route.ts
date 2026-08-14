@@ -112,8 +112,17 @@ export async function GET(
     }
 
     // Возвращаем проект с подсчетом пользователей и bonusMode
+    const {
+      botToken: _botToken,
+      maxBotToken: _maxBotToken,
+      webhookSecret: _webhookSecret,
+      ...safeProject
+    } = project;
     const response = {
-      ...project,
+      ...safeProject,
+      botConfigured: Boolean(_botToken),
+      maxBotConfigured: Boolean(_maxBotToken),
+      webhookConfigured: Boolean(_webhookSecret),
       ...(bonusModeValue !== undefined && { bonusMode: bonusModeValue }),
       _count: {
         users: userCount

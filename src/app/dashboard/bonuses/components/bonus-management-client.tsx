@@ -62,7 +62,6 @@ export function BonusManagementClient({
     users,
     isLoading: usersLoading,
     totalUsers,
-    totalBonuses,
     currentPage,
     totalCount,
     loadUsers,
@@ -73,17 +72,12 @@ export function BonusManagementClient({
     searchTerm: ''
   });
 
-  // Stats data. activeBonuses/expiringSoon приходят из initialData.stats —
-  // это реальные агрегаты по всем проектам владельца (посчитаны на сервере
-  // при загрузке страницы), а не по выбранному в селекторе проекту, поэтому
-  // они не всегда будут 1:1 совпадать с totalUsers/totalBonuses ниже (те
-  // живые и относятся к текущему selectedProjectId). Это лучше, чем
-  // показывать выдуманное число, но точный расчёт по выбранному проекту
-  // потребует отдельного API-запроса.
+  // Все KPI в этом блоке имеют один scope: весь аккаунт владельца.
+  // Селектор ниже фильтрует таблицу, но не меняет смысл верхних карточек.
   const statsData = {
-    totalProjects: initialData.projects.length,
-    totalUsers,
-    totalBonuses,
+    totalProjects: initialData.stats.totalProjects,
+    totalUsers: initialData.stats.totalUsers,
+    totalBonuses: initialData.stats.totalBonuses,
     activeBonuses: initialData.stats.activeBonuses,
     expiringSoon: initialData.stats.expiringSoon
   };

@@ -78,13 +78,20 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
       setLoading(true);
 
       // Загружаем проект
-      const projectResponse = await fetch(`/api/projects/${projectId}`);
+      const [projectResponse, botResponse] = await Promise.all([
+        fetch(`/api/projects/${projectId}`),
+        fetch(`/api/projects/${projectId}/bot`)
+      ]);
       if (projectResponse.ok) {
-        const projectData = await projectResponse.json();
-        setProject(projectData);
+        const [projectData, botData] = await Promise.all([
+          projectResponse.json(),
+          botResponse.ok ? botResponse.json() : {}
+        ]);
+        const mergedProject = { ...projectData, ...botData };
+        setProject(mergedProject);
         setTokenForm({
-          botToken: projectData.botToken || '',
-          botUsername: projectData.botUsername || ''
+          botToken: mergedProject.botToken || '',
+          botUsername: mergedProject.botUsername || ''
         });
       }
 
@@ -161,10 +168,10 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
 
   const handleToggleBot = async () => {
     const isActive = botStatus?.status === 'ACTIVE';
-    
+
     try {
       setToggling(true);
-      
+
       if (isActive) {
         // Останавливаем бота
         const response = await fetch(`/api/projects/${projectId}/bot/restart`, {
@@ -206,7 +213,7 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
           });
         }
       }
-      
+
       await checkBotStatus();
     } catch (error) {
       toast({
@@ -252,11 +259,11 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
               <CardTitle>Подключение бота</CardTitle>
               <CardDescription>
                 Получите токен у{' '}
-                <a 
-                  href="https://t.me/botfather" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary underline hover:text-primary/80"
+                <a
+                  href='https://t.me/botfather'
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  className='text-primary hover:text-primary/80 underline'
                 >
                   @BotFather
                 </a>{' '}
@@ -320,7 +327,7 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                     }
                     setEditingToken(true);
                   }}
-                  title="Редактировать токен"
+                  title='Редактировать токен'
                 >
                   <Edit className='h-4 w-4' />
                 </Button>
@@ -331,7 +338,7 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
                   onClick={() => setEditingToken(true)}
                   disabled={saving}
                 >
-                  <Edit className='h-4 w-4 mr-2' />
+                  <Edit className='mr-2 h-4 w-4' />
                   Добавить токен
                 </Button>
               )}
@@ -412,7 +419,8 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
             <Alert>
               <Bot className='h-4 w-4' />
               <AlertDescription>
-                <strong>@{botStatus.bot.username}</strong> • {botStatus.bot.firstName}
+                <strong>@{botStatus.bot.username}</strong> •{' '}
+                {botStatus.bot.firstName}
               </AlertDescription>
             </Alert>
           )}
@@ -424,17 +432,15 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
         <Card>
           <CardHeader>
             <CardTitle>Управление ботом</CardTitle>
-            <CardDescription>
-              Запустите или остановите бота
-            </CardDescription>
+            <CardDescription>Запустите или остановите бота</CardDescription>
           </CardHeader>
           <CardContent className='space-y-4'>
             <div className='flex items-center justify-between'>
               <div>
                 <p className='text-sm font-medium'>Статус бота</p>
                 <p className='text-muted-foreground text-sm'>
-                  {isActive 
-                    ? 'Бот запущен и обрабатывает сообщения' 
+                  {isActive
+                    ? 'Бот запущен и обрабатывает сообщения'
                     : 'Бот остановлен'}
                 </p>
               </div>
@@ -469,13 +475,16 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
           <Alert className='mb-4'>
             <Workflow className='h-4 w-4' />
             <AlertDescription>
-              Все сообщения, команды и действия бота настраиваются через конструктор workflow.
-              Это позволяет гибко управлять поведением бота без конфликтов.
+              Все сообщения, команды и действия бота настраиваются через
+              конструктор workflow. Это позволяет гибко управлять поведением
+              бота без конфликтов.
             </AlertDescription>
           </Alert>
-          
+
           <Button
-            onClick={() => router.push(`/dashboard/projects/${projectId}/workflow`)}
+            onClick={() =>
+              router.push(`/dashboard/projects/${projectId}/workflow`)
+            }
             size='lg'
             className='w-full'
           >
@@ -487,4 +496,3 @@ export function BotManagementView({ projectId }: BotManagementViewProps) {
     </div>
   );
 }
-
