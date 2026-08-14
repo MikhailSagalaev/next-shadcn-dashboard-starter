@@ -199,18 +199,7 @@ export async function getDashboardStats(): Promise<SystemStats> {
       { error },
       'dashboard-service'
     );
-    // Return empty stats on error rather than crashing the whole page
-    return {
-      totalProjects: 0,
-      totalUsers: 0,
-      activeUsers: 0,
-      activeBots: 0,
-      totalBonuses: 0,
-      recentProjects: [],
-      userGrowth: [],
-      userGrowthByDays: [],
-      userGrowthByWeeks: []
-    };
+    throw error;
   }
 }
 
@@ -305,7 +294,7 @@ async function getUserGrowthStats(
       { error },
       'dashboard-service'
     );
-    return [];
+    throw error;
   }
 }
 
@@ -366,7 +355,7 @@ async function getUserGrowthByDays(
       { error },
       'dashboard-service'
     );
-    return [];
+    throw error;
   }
 }
 
@@ -437,6 +426,6 @@ async function getUserGrowthByWeeks(
       { error },
       'dashboard-service'
     );
-    return [];
+    throw error;
   }
 }

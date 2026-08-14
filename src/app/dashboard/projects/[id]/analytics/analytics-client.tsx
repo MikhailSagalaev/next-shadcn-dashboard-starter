@@ -24,6 +24,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import {
   ShoppingCart,
@@ -49,6 +50,7 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [orgData, setOrgData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -56,6 +58,7 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [ordersRes, productsRes, analyticsRes, orgRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/analytics/orders?period=${period}`),
@@ -63,6 +66,10 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
         fetch(`/api/projects/${projectId}/analytics`),
         fetch(`/api/projects/${projectId}/analytics/organizations`)
       ]);
+
+      if (!ordersRes.ok || !productsRes.ok || !analyticsRes.ok || !orgRes.ok) {
+        throw new Error('Сервер вернул ошибку вместо аналитики');
+      }
 
       const orders = await ordersRes.json();
       const products = await productsRes.json();
@@ -75,6 +82,11 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
       setOrgData(orgs);
     } catch (error) {
       console.error('Failed to load analytics:', error);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось загрузить аналитику'
+      );
     } finally {
       setLoading(false);
     }
@@ -82,6 +94,20 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
 
   if (loading) {
     return <div className='py-12 text-center'>Загрузка аналитики...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <Card className='mx-auto max-w-xl'>
+        <CardHeader>
+          <CardTitle>Аналитика временно недоступна</CardTitle>
+          <CardDescription>{loadError}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={loadData}>Попробовать снова</Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   const stats = [
@@ -185,16 +211,23 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
 
       {/* Tabs */}
       <Tabs defaultValue='orders' className='space-y-4'>
-        <TabsList>
-          <TabsTrigger value='orders'>Заказы</TabsTrigger>
-          <TabsTrigger value='products'>Товары</TabsTrigger>
-          <TabsTrigger value='top'>Топ товаров</TabsTrigger>
-          <TabsTrigger value='cohorts'>Когорты</TabsTrigger>
-          <TabsTrigger value='referrals'>Рефералы</TabsTrigger>
-          {orgData?.enabled && orgData?.organizations?.length > 0 && (
-            <TabsTrigger value='organizations'>Организации</TabsTrigger>
-          )}
-        </TabsList>
+        <div
+          className='max-w-full overflow-x-auto pb-1'
+          role='region'
+          aria-label='Разделы аналитики'
+          tabIndex={0}
+        >
+          <TabsList className='flex w-max min-w-full justify-start'>
+            <TabsTrigger value='orders'>Заказы</TabsTrigger>
+            <TabsTrigger value='products'>Товары</TabsTrigger>
+            <TabsTrigger value='top'>Топ товаров</TabsTrigger>
+            <TabsTrigger value='cohorts'>Когорты</TabsTrigger>
+            <TabsTrigger value='referrals'>Рефералы</TabsTrigger>
+            {orgData?.enabled && orgData?.organizations?.length > 0 && (
+              <TabsTrigger value='organizations'>Организации</TabsTrigger>
+            )}
+          </TabsList>
+        </div>
 
         {/* Orders Tab */}
         <TabsContent value='orders' className='space-y-4'>

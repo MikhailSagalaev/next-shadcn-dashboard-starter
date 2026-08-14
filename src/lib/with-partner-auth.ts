@@ -5,10 +5,11 @@
  * @created: 2026-06-07
  */
 
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { resolvePartnerUserFromPlatform } from '@/lib/partner-auth';
+import { redis } from '@/lib/redis';
 
 export async function requirePartnerUser(
   request: NextRequest,
@@ -34,6 +35,7 @@ export async function requirePartnerUser(
 
   const timestamp = request.headers.get('x-partner-timestamp');
   const signature = request.headers.get('x-partner-signature');
+  const nonce = request.headers.get('x-partner-nonce');
   const secret = process.env.PARTNER_API_SHARED_SECRET;
   const platform = telegramId ? 'telegram' : 'max';
   const externalUserId = telegramId ?? maxId!;
@@ -44,6 +46,8 @@ export async function requirePartnerUser(
   if (
     !secret ||
     !signature ||
+    !nonce ||
+    !/^[A-Za-z0-9_-]{16,128}$/.test(nonce) ||
     !Number.isFinite(timestampMs) ||
     Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000
   ) {
@@ -52,9 +56,26 @@ export async function requirePartnerUser(
     } as const;
   }
 
-  const expected = createHmac('sha256', secret)
-    .update(`${projectId}:${platform}:${externalUserId}:${timestamp}`)
+  const normalizedQuery = new URLSearchParams(
+    [...request.nextUrl.searchParams.entries()].sort(([left], [right]) =>
+      left.localeCompare(right)
+    )
+  ).toString();
+  const canonicalPath = `${request.nextUrl.pathname}${normalizedQuery ? `?${normalizedQuery}` : ''}`;
+  const bodyHash = createHash('sha256')
+    .update(await request.clone().text())
     .digest('hex');
+  const canonical = [
+    request.method.toUpperCase(),
+    canonicalPath,
+    bodyHash,
+    projectId,
+    platform,
+    externalUserId,
+    timestamp,
+    nonce
+  ].join('\n');
+  const expected = createHmac('sha256', secret).update(canonical).digest('hex');
   const signatureBuffer = Buffer.from(signature, 'hex');
   const expectedBuffer = Buffer.from(expected, 'hex');
   if (
@@ -63,6 +84,32 @@ export async function requirePartnerUser(
   ) {
     return {
       error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    } as const;
+  }
+
+  const nonceDigest = createHash('sha256')
+    .update(`${projectId}:${platform}:${externalUserId}:${nonce}`)
+    .digest('hex');
+  try {
+    const accepted = await redis.set(
+      `partner-auth:nonce:${nonceDigest}`,
+      '1',
+      'PX',
+      5 * 60 * 1000,
+      'NX'
+    );
+    if (accepted !== 'OK') {
+      return {
+        error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      } as const;
+    }
+  } catch {
+    // Authentication must fail closed when replay protection is unavailable.
+    return {
+      error: NextResponse.json(
+        { error: 'Partner authentication is temporarily unavailable' },
+        { status: 503 }
+      )
     } as const;
   }
 

@@ -197,38 +197,43 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
             </DialogHeader>
             <div className='grid gap-4 py-2'>
               <div className='space-y-2'>
-                <Label>Название</Label>
+                <Label htmlFor='new-org-name'>Название</Label>
                 <Input
+                  id='new-org-name'
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder='Сеть X-Fit Москва'
                 />
               </div>
               <div className='space-y-2'>
-                <Label>Slug</Label>
+                <Label htmlFor='new-org-slug'>Slug</Label>
                 <Input
+                  id='new-org-slug'
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
                   placeholder='xfit-moscow (авто из названия)'
                 />
               </div>
               <div className='space-y-2'>
-                <Label>Описание</Label>
+                <Label htmlFor='new-org-description'>Описание</Label>
                 <Textarea
+                  id='new-org-description'
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={2}
                 />
               </div>
               <div className='space-y-2'>
-                <Label>Партнёрский план по умолчанию</Label>
+                <Label htmlFor='new-org-plan'>
+                  Партнёрский план по умолчанию
+                </Label>
                 <Select
                   value={defaultPlanId || '__none__'}
                   onValueChange={(v) =>
                     setDefaultPlanId(v === '__none__' ? '' : v)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id='new-org-plan'>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -242,8 +247,9 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
                 </Select>
               </div>
               <div className='space-y-2'>
-                <Label>Руководитель</Label>
+                <Label htmlFor='new-org-director'>Руководитель</Label>
                 <PartnerUserCombobox
+                  id='new-org-director'
                   projectId={projectId}
                   value={directorUserId}
                   onChange={(u) => setDirectorUserId(u?.id ?? '')}
@@ -309,16 +315,21 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
                   <Button variant='ghost' size='icon' asChild>
                     <Link
                       href={`/dashboard/projects/${projectId}/referral/organizations/${org.id}`}
+                      aria-label={`Открыть организацию «${org.name}»`}
                     >
-                      <ChevronRight className='h-5 w-5' />
+                      <ChevronRight aria-hidden='true' className='h-5 w-5' />
                     </Link>
                   </Button>
                   <Button
                     variant='ghost'
                     size='icon'
                     onClick={() => setDeleteTarget(org)}
+                    aria-label={`Удалить организацию «${org.name}»`}
                   >
-                    <Trash2 className='text-destructive h-4 w-4' />
+                    <Trash2
+                      aria-hidden='true'
+                      className='text-destructive h-4 w-4'
+                    />
                   </Button>
                 </div>
               </CardHeader>

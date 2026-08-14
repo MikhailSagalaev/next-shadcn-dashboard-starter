@@ -15,7 +15,7 @@
 'use client';
 
 import * as React from 'react';
-import { Check, ChevronsUpDown, Loader2, Search, User } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Search, User, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -65,6 +65,11 @@ interface PartnerUserComboboxProps {
   className?: string;
   /** Плейсхолдер кнопки когда нет выбранного пользователя. */
   placeholder?: string;
+  /** IDs that must not be selectable, e.g. current organization members. */
+  excludedUserIds?: string[];
+  id?: string;
+  ariaInvalid?: boolean;
+  organizationId?: string;
 }
 
 const FETCH_LIMIT = 20;
@@ -119,7 +124,11 @@ export function PartnerUserCombobox({
   planNameById,
   disabled,
   className,
-  placeholder = 'Выберите партнёра…'
+  placeholder = 'Выберите партнёра…',
+  excludedUserIds = [],
+  id,
+  ariaInvalid,
+  organizationId
 }: PartnerUserComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -130,10 +139,20 @@ export function PartnerUserCombobox({
   const [hasMore, setHasMore] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [loadingMore, setLoadingMore] = React.useState(false);
+  const [loadError, setLoadError] = React.useState(false);
   const [selected, setSelected] = React.useState<PartnerUser | null>(null);
+  const [portalContainer, setPortalContainer] =
+    React.useState<HTMLElement | null>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const generatedId = React.useId();
   const searchRequestIdRef = React.useRef(0);
   const loadMoreRequestIdRef = React.useRef(0);
   const activeQueryRef = React.useRef('');
+  const excludedIds = React.useMemo(
+    () => new Set(excludedUserIds),
+    [excludedUserIds]
+  );
+  const listId = `${id ?? generatedId}-listbox`;
 
   const fetchUsers = React.useCallback(
     async (search: string, requestedPage: number, append: boolean) => {
@@ -148,6 +167,7 @@ export function PartnerUserCombobox({
         loadMoreRequestIdRef.current += 1;
         activeQueryRef.current = normalizedSearch;
         setLoading(true);
+        setLoadError(false);
       }
 
       const isCurrentRequest = () =>
@@ -159,10 +179,12 @@ export function PartnerUserCombobox({
       try {
         if (options) {
           const normalizedQuery = normalizedSearch.toLocaleLowerCase('ru-RU');
-          const filtered = options.filter((user) =>
-            [user.name, user.email, user.phone, user.id].some((value) =>
-              value?.toLocaleLowerCase('ru-RU').includes(normalizedQuery)
-            )
+          const filtered = options.filter(
+            (user) =>
+              !excludedIds.has(user.id) &&
+              [user.name, user.email, user.phone, user.id].some((value) =>
+                value?.toLocaleLowerCase('ru-RU').includes(normalizedQuery)
+              )
           );
           const start = (requestedPage - 1) * FETCH_LIMIT;
           const users = filtered.slice(start, start + FETCH_LIMIT);
@@ -187,6 +209,7 @@ export function PartnerUserCombobox({
         });
         if (normalizedSearch) params.set('search', normalizedSearch);
         if (partnerRolesOnly) params.set('role', 'TRAINER,MANAGER,DIRECTOR');
+        if (organizationId) params.set('organizationId', organizationId);
 
         const res = await fetch(
           `/api/projects/${projectId}/users?${params.toString()}`
@@ -195,7 +218,9 @@ export function PartnerUserCombobox({
 
         const data = (await res.json()) as UsersApiResponse;
         const users = Array.isArray(data.users)
-          ? data.users.map((user) => mapApiUser(user))
+          ? data.users
+              .map((user) => mapApiUser(user))
+              .filter((user) => !excludedIds.has(user.id))
           : [];
         const responsePage = data.pagination?.page ?? requestedPage;
         const responseTotal = data.pagination?.total ?? users.length;
@@ -221,6 +246,7 @@ export function PartnerUserCombobox({
           setTotal(0);
           setTotalPages(1);
           setHasMore(false);
+          setLoadError(true);
         }
       } finally {
         if (!isCurrentRequest()) return;
@@ -228,7 +254,7 @@ export function PartnerUserCombobox({
         else setLoading(false);
       }
     },
-    [options, projectId, partnerRolesOnly]
+    [excludedIds, options, organizationId, projectId, partnerRolesOnly]
   );
 
   const debouncedFetch = useDebouncedCallback(
@@ -294,57 +320,74 @@ export function PartnerUserCombobox({
     setOpen(false);
   };
 
-  const handleClear = (event: React.MouseEvent) => {
-    event.stopPropagation();
+  const handleClear = () => {
     setSelected(null);
     onChange(null);
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setPortalContainer(
+        triggerRef.current?.closest<HTMLElement>(
+          '[data-slot="dialog-content"]'
+        ) ?? null
+      );
+    }
+    setOpen(nextOpen);
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type='button'
-          variant='outline'
-          role='combobox'
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn(
-            'w-[320px] justify-between text-left font-normal',
-            !selected && 'text-muted-foreground',
-            className
-          )}
-        >
-          <span className='flex min-w-0 flex-1 items-center gap-2'>
-            {selected ? (
-              <>
-                <User className='h-4 w-4 shrink-0 opacity-60' />
-                <span className='truncate'>{selected.name}</span>
-                <PartnerRoleBadge role={selected.partnerRole} />
-              </>
-            ) : (
-              <>
-                <Search className='h-4 w-4 shrink-0 opacity-60' />
-                <span className='truncate'>{placeholder}</span>
-              </>
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <div className={cn('flex w-full min-w-0 gap-2', className)}>
+        <PopoverTrigger asChild>
+          <Button
+            ref={triggerRef}
+            id={id}
+            type='button'
+            variant='outline'
+            role='combobox'
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-invalid={ariaInvalid}
+            disabled={disabled}
+            className={cn(
+              'min-w-0 flex-1 justify-between text-left font-normal',
+              !selected && 'text-muted-foreground'
             )}
-          </span>
-          {selected ? (
-            <span
-              role='button'
-              tabIndex={0}
-              onClick={handleClear}
-              className='hover:text-foreground text-muted-foreground ml-2 text-xs'
-            >
-              Сбросить
+          >
+            <span className='flex min-w-0 flex-1 items-center gap-2'>
+              {selected ? (
+                <>
+                  <User className='h-4 w-4 shrink-0 opacity-60' />
+                  <span className='truncate'>{selected.name}</span>
+                  <PartnerRoleBadge role={selected.partnerRole} />
+                </>
+              ) : (
+                <>
+                  <Search className='h-4 w-4 shrink-0 opacity-60' />
+                  <span className='truncate'>{placeholder}</span>
+                </>
+              )}
             </span>
-          ) : (
             <ChevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
-          )}
-        </Button>
-      </PopoverTrigger>
+          </Button>
+        </PopoverTrigger>
+        {selected && !disabled && (
+          <Button
+            type='button'
+            variant='outline'
+            size='icon'
+            onClick={handleClear}
+            aria-label={`Сбросить выбор: ${selected.name}`}
+            className='shrink-0'
+          >
+            <X aria-hidden='true' />
+          </Button>
+        )}
+      </div>
       <PopoverContent
-        className='max-h-[min(50dvh,24rem)] w-[min(360px,calc(100vw-2rem))] overflow-hidden p-0'
+        portalContainer={portalContainer}
+        className='max-h-[min(50dvh,24rem)] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] min-w-[min(20rem,calc(100vw-2rem))] overflow-hidden p-0'
         align='start'
       >
         <Command shouldFilter={false}>
@@ -353,18 +396,34 @@ export function PartnerUserCombobox({
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList className='max-h-[min(50dvh,22rem)] overflow-y-auto'>
+          <CommandList
+            id={listId}
+            className='max-h-[min(50dvh,22rem)] overflow-y-auto overscroll-contain'
+          >
             {loading && (
               <div className='text-muted-foreground flex items-center justify-center gap-2 py-4 text-sm'>
                 <Loader2 className='h-4 w-4 animate-spin' />
                 Поиск…
               </div>
             )}
-            {!loading && items.length === 0 && (
+            {!loading && loadError && (
+              <div className='space-y-2 px-4 py-5 text-center text-sm'>
+                <p role='alert'>Не удалось загрузить пользователей</p>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={() => void fetchUsers(query, 1, false)}
+                >
+                  Повторить
+                </Button>
+              </div>
+            )}
+            {!loading && !loadError && items.length === 0 && (
               <CommandEmpty>
                 {query
                   ? 'Никого не нашли по запросу'
-                  : 'Начните вводить имя или телефон'}
+                  : 'Нет доступных пользователей'}
               </CommandEmpty>
             )}
             {items.length > 0 && (

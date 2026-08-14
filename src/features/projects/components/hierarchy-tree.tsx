@@ -129,22 +129,22 @@ function Highlight({
 
 interface NodeRowProps {
   node: HierarchyNode;
-  depth: number;
   hasChildren: boolean;
   isExpanded: boolean;
   isHighlighted: boolean;
   query: string;
   onToggle: () => void;
+  childContainerId: string;
 }
 
 function NodeRow({
   node,
-  depth,
   hasChildren,
   isExpanded,
   isHighlighted,
   query,
-  onToggle
+  onToggle,
+  childContainerId
 }: NodeRowProps) {
   return (
     <div
@@ -153,15 +153,16 @@ function NodeRow({
           ? 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20'
           : 'hover:border-zinc-300 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50'
       }`}
-      style={{ marginLeft: depth * 16 }}
     >
       <div className='flex min-w-0 flex-1 items-start gap-2'>
         <button
           type='button'
           onClick={onToggle}
           disabled={!hasChildren}
-          aria-label={isExpanded ? 'Свернуть' : 'Развернуть'}
-          className='text-muted-foreground hover:text-foreground mt-1 disabled:opacity-30'
+          aria-label={`${isExpanded ? 'Свернуть' : 'Развернуть'} ветку: ${node.name}`}
+          aria-expanded={hasChildren ? isExpanded : undefined}
+          aria-controls={hasChildren ? childContainerId : undefined}
+          className='text-muted-foreground hover:text-foreground mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md disabled:opacity-30'
         >
           {hasChildren ? (
             isExpanded ? (
@@ -313,19 +314,23 @@ export function HierarchyTree({
     if (!node) return null;
     const children = index.byParent.get(id) ?? [];
     const expanded = isExpanded(id);
+    const childContainerId = `hierarchy-children-${id}`;
     return (
       <div key={id} className='space-y-2'>
         <NodeRow
           node={node}
-          depth={depth}
           hasChildren={children.length > 0}
           isExpanded={expanded}
           isHighlighted={matchedIds.has(id)}
           query={debouncedSearch}
           onToggle={() => toggleId(id)}
+          childContainerId={childContainerId}
         />
         {expanded && children.length > 0 && (
-          <div className='space-y-2 border-l border-dashed border-zinc-200 pl-3 dark:border-zinc-800'>
+          <div
+            id={childContainerId}
+            className='space-y-2 border-s border-dashed border-zinc-200 ps-2 sm:ps-3 dark:border-zinc-800'
+          >
             {children.map((c) => renderNode(c.id, depth + 1))}
           </div>
         )}

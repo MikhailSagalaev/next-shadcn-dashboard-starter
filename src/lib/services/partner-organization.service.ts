@@ -94,6 +94,20 @@ function normalizeTitle(title: string | null | undefined) {
 }
 
 export class PartnerOrganizationService {
+  private static async recomputeCompatibilityRole(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    userId: string
+  ): Promise<PartnerRole> {
+    const memberships = await tx.partnerOrganizationMembership.findMany({
+      where: { projectId, userId },
+      select: { level: true, canManage: true }
+    });
+    const partnerRole = deriveCompatibilityRole(memberships);
+    await tx.user.update({ where: { id: userId }, data: { partnerRole } });
+    return partnerRole;
+  }
+
   private static async validateDirector(
     tx: Prisma.TransactionClient,
     projectId: string,
@@ -271,6 +285,7 @@ export class PartnerOrganizationService {
             membership.outboundReferralPlanId,
             attributionByUserId.get(membership.userId)
           ])
+          .concat(org.defaultReferralCommissionPlanId)
           .filter((id): id is string => Boolean(id))
       )
     ];
@@ -306,9 +321,15 @@ export class PartnerOrganizationService {
           isPrimary: link.isPrimary
         })),
         outboundReferralPlanId: membership.outboundReferralPlanId,
-        outboundPlanName: membership.outboundReferralPlanId
-          ? (planMap.get(membership.outboundReferralPlanId) ?? null)
-          : null,
+        outboundPlanName:
+          planMap.get(
+            membership.outboundReferralPlanId ??
+              org.defaultReferralCommissionPlanId ??
+              ''
+          ) ?? null,
+        outboundPlanInherited:
+          !membership.outboundReferralPlanId &&
+          Boolean(org.defaultReferralCommissionPlanId),
         attributionPlanName: attributionByUserId.get(user.id)
           ? (planMap.get(attributionByUserId.get(user.id)!) ?? null)
           : null,
@@ -332,49 +353,49 @@ export class PartnerOrganizationService {
     });
     if (!user) throw new Error('Пользователь не найден');
 
-    const outboundReferralPlanId =
-      input.outboundReferralPlanId ??
-      org.defaultReferralCommissionPlanId ??
-      null;
+    const outboundReferralPlanId = input.outboundReferralPlanId ?? null;
     await this.validateOutboundPlan(projectId, outboundReferralPlanId);
     const level = normalizeLevel(input.level);
 
-    await db.partnerOrganizationMembership.upsert({
-      where: {
-        organizationId_userId: { organizationId, userId: input.userId }
-      },
-      update: {
-        level,
-        title: normalizeTitle(input.title),
-        canManage: input.canManage,
-        outboundReferralPlanId
-      },
-      create: {
-        projectId,
-        organizationId,
-        userId: input.userId,
-        level,
-        title: normalizeTitle(input.title) ?? null,
-        canManage: input.canManage ?? false,
-        outboundReferralPlanId
+    const { updated, compatibilityRole } = await db.$transaction(async (tx) => {
+      const existing = await tx.partnerOrganizationMembership.findUnique({
+        where: {
+          organizationId_userId: { organizationId, userId: input.userId }
+        },
+        select: { id: true }
+      });
+      if (existing) {
+        throw new Error('Пользователь уже состоит в этой организации');
       }
-    });
 
-    const compatibilityRole = deriveCompatibilityRole(
-      await db.partnerOrganizationMembership.findMany({
-        where: { projectId, userId: input.userId },
-        select: { level: true, canManage: true }
-      })
-    );
-    const updated = await db.user.update({
-      where: { id: input.userId },
-      data: {
-        ...(user.organizationId ? {} : { organizationId }),
-        partnerRole: compatibilityRole,
-        ...(!user.organizationId || user.organizationId === organizationId
-          ? { outboundReferralPlanId }
-          : {})
-      }
+      await tx.partnerOrganizationMembership.create({
+        data: {
+          projectId,
+          organizationId,
+          userId: input.userId,
+          level,
+          title: normalizeTitle(input.title) ?? null,
+          canManage: input.canManage ?? false,
+          // null means true inheritance from the organization default.
+          outboundReferralPlanId
+        }
+      });
+
+      const compatibilityRole = await this.recomputeCompatibilityRole(
+        tx,
+        projectId,
+        input.userId
+      );
+      const updated = await tx.user.update({
+        where: { id: input.userId },
+        data: {
+          ...(user.organizationId ? {} : { organizationId }),
+          ...(!user.organizationId || user.organizationId === organizationId
+            ? { outboundReferralPlanId }
+            : {})
+        }
+      });
+      return { updated, compatibilityRole };
     });
 
     const referralLinks = this.toReferralLinks(input);
@@ -436,7 +457,7 @@ export class PartnerOrganizationService {
             organizationId: { not: organizationId }
           },
           orderBy: [{ canManage: 'desc' }, { createdAt: 'asc' }],
-          select: { organizationId: true }
+          select: { organizationId: true, outboundReferralPlanId: true }
         }),
         tx.partnerReferralLink.findMany({
           where: {
@@ -497,23 +518,24 @@ export class PartnerOrganizationService {
         });
       }
 
-      if (user?.organizationId === organizationId) {
-        return tx.user.update({
-          where: { id: userId },
-          data: { organizationId: alternative?.organizationId ?? null }
-        });
-      }
-      return tx.user.findUniqueOrThrow({ where: { id: userId } });
-    });
-    const compatibilityRole = deriveCompatibilityRole(
-      await db.partnerOrganizationMembership.findMany({
-        where: { projectId, userId },
-        select: { level: true, canManage: true }
-      })
-    );
-    await db.user.update({
-      where: { id: userId },
-      data: { partnerRole: compatibilityRole }
+      const compatibilityRole = await this.recomputeCompatibilityRole(
+        tx,
+        projectId,
+        userId
+      );
+      return tx.user.update({
+        where: { id: userId },
+        data: {
+          partnerRole: compatibilityRole,
+          ...(user?.organizationId === organizationId
+            ? {
+                organizationId: alternative?.organizationId ?? null,
+                outboundReferralPlanId:
+                  alternative?.outboundReferralPlanId ?? null
+              }
+            : {})
+        }
+      });
     });
     return result;
   }
@@ -535,41 +557,42 @@ export class PartnerOrganizationService {
     const org = await this.getById(projectId, organizationId);
     if (!org) throw new Error('Организация не найдена');
     const outboundReferralPlanId =
-      input.outboundReferralPlanId ??
-      org.defaultReferralCommissionPlanId ??
-      null;
+      input.outboundReferralPlanId === undefined
+        ? membership.outboundReferralPlanId
+        : input.outboundReferralPlanId;
     await this.validateOutboundPlan(projectId, outboundReferralPlanId);
 
-    await db.partnerOrganizationMembership.update({
-      where: { id: membership.id },
-      data: {
-        ...(input.level !== undefined
-          ? { level: normalizeLevel(input.level) }
-          : {}),
-        ...(input.title !== undefined
-          ? { title: normalizeTitle(input.title) }
-          : {}),
-        ...(input.canManage !== undefined
-          ? { canManage: input.canManage }
-          : {}),
-        outboundReferralPlanId
-      }
-    });
+    const { updated, compatibilityRole } = await db.$transaction(async (tx) => {
+      await tx.partnerOrganizationMembership.update({
+        where: { id: membership.id },
+        data: {
+          ...(input.level !== undefined
+            ? { level: normalizeLevel(input.level) }
+            : {}),
+          ...(input.title !== undefined
+            ? { title: normalizeTitle(input.title) }
+            : {}),
+          ...(input.canManage !== undefined
+            ? { canManage: input.canManage }
+            : {}),
+          outboundReferralPlanId
+        }
+      });
 
-    const compatibilityRole = deriveCompatibilityRole(
-      await db.partnerOrganizationMembership.findMany({
-        where: { projectId, userId },
-        select: { level: true, canManage: true }
-      })
-    );
-    const updated = await db.user.update({
-      where: { id: userId },
-      data: {
-        partnerRole: compatibilityRole,
-        ...(membership.user.organizationId === organizationId
-          ? { outboundReferralPlanId }
-          : {})
-      }
+      const compatibilityRole = await this.recomputeCompatibilityRole(
+        tx,
+        projectId,
+        userId
+      );
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(membership.user.organizationId === organizationId
+            ? { outboundReferralPlanId }
+            : {})
+        }
+      });
+      return { updated, compatibilityRole };
     });
 
     const referralLinks = this.toReferralLinks(input);
@@ -615,63 +638,108 @@ export class PartnerOrganizationService {
       throw new Error('Выберите другую организацию');
     }
 
-    const [sourceMembership, targetOrganization, user] = await Promise.all([
-      db.partnerOrganizationMembership.findFirst({
-        where: { projectId, organizationId: sourceOrganizationId, userId }
-      }),
-      db.partnerOrganization.findFirst({
-        where: { id: targetOrganizationId, projectId },
-        select: {
-          id: true,
-          name: true,
-          defaultReferralCommissionPlanId: true
-        }
-      }),
-      db.user.findFirst({ where: { id: userId, projectId } })
-    ]);
-    if (!sourceMembership) {
-      throw new Error('Участник не найден в исходной организации');
-    }
-    if (!targetOrganization) {
-      throw new Error('Целевая организация не найдена');
-    }
-    if (!user) throw new Error('Пользователь не найден');
-
-    await db.partnerOrganizationMembership.upsert({
-      where: {
-        organizationId_userId: {
-          organizationId: targetOrganizationId,
-          userId
-        }
-      },
-      update: {
-        level: sourceMembership.level,
-        title: sourceMembership.title,
-        canManage: sourceMembership.canManage,
-        outboundReferralPlanId:
-          targetOrganization.defaultReferralCommissionPlanId
-      },
-      create: {
-        projectId,
-        organizationId: targetOrganizationId,
-        userId,
-        level: sourceMembership.level,
-        title: sourceMembership.title,
-        canManage: sourceMembership.canManage,
-        outboundReferralPlanId:
-          targetOrganization.defaultReferralCommissionPlanId
+    const result = await db.$transaction(async (tx) => {
+      const [sourceMembership, targetOrganization, targetMembership, user] =
+        await Promise.all([
+          tx.partnerOrganizationMembership.findFirst({
+            where: { projectId, organizationId: sourceOrganizationId, userId }
+          }),
+          tx.partnerOrganization.findFirst({
+            where: { id: targetOrganizationId, projectId },
+            select: { id: true, name: true }
+          }),
+          tx.partnerOrganizationMembership.findUnique({
+            where: {
+              organizationId_userId: {
+                organizationId: targetOrganizationId,
+                userId
+              }
+            },
+            select: { id: true }
+          }),
+          tx.user.findFirst({
+            where: { id: userId, projectId },
+            select: { id: true, organizationId: true }
+          })
+        ]);
+      if (!sourceMembership) {
+        throw new Error('Участник не найден в исходной организации');
       }
+      if (!targetOrganization) {
+        throw new Error('Целевая организация не найдена');
+      }
+      if (targetMembership) {
+        throw new Error('Пользователь уже состоит в целевой организации');
+      }
+      if (!user) throw new Error('Пользователь не найден');
+
+      await tx.partnerOrganizationMembership.create({
+        data: {
+          projectId,
+          organizationId: targetOrganizationId,
+          userId,
+          level: sourceMembership.level,
+          title: sourceMembership.title,
+          canManage: sourceMembership.canManage,
+          // A transfer adopts the target organization's default dynamically.
+          outboundReferralPlanId: null
+        }
+      });
+      await tx.partnerReferralLink.deleteMany({
+        where: {
+          projectId,
+          organizationId: sourceOrganizationId,
+          OR: [{ childUserId: userId }, { referrerUserId: userId }]
+        }
+      });
+      await tx.partnerOrganizationMembership.delete({
+        where: { id: sourceMembership.id }
+      });
+      await tx.partnerOrganization.updateMany({
+        where: {
+          id: sourceOrganizationId,
+          projectId,
+          directorUserId: userId
+        },
+        data: { directorUserId: null }
+      });
+
+      const compatibilityRole = await this.recomputeCompatibilityRole(
+        tx,
+        projectId,
+        userId
+      );
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(user.organizationId === sourceOrganizationId
+            ? {
+                organizationId: targetOrganizationId,
+                outboundReferralPlanId: null
+              }
+            : {})
+        }
+      });
+
+      return {
+        user: { id: userId },
+        compatibilityRole,
+        targetOrganizationName: targetOrganization.name,
+        attributionLocked: false
+      };
     });
-    await this.removeMember(projectId, sourceOrganizationId, userId);
 
     void PartnerNotificationService.notifyRoleOrOrgChanged({
       userId,
       projectId,
-      newRole: user.partnerRole,
-      organizationName: targetOrganization.name
+      newRole: result.compatibilityRole,
+      organizationName: result.targetOrganizationName
     });
 
-    return { user, attributionLocked: false };
+    return {
+      user: result.user,
+      attributionLocked: result.attributionLocked
+    };
   }
 
   static async resolveBySlug(
@@ -729,10 +797,18 @@ export class PartnerOrganizationService {
             organizationId: org.id,
             userId: input.directorUserId,
             canManage: true,
-            outboundReferralPlanId:
-              input.defaultReferralCommissionPlanId ?? null
+            outboundReferralPlanId: null
           }
         });
+        await tx.user.updateMany({
+          where: { id: input.directorUserId, organizationId: null },
+          data: { organizationId: org.id, outboundReferralPlanId: null }
+        });
+        await this.recomputeCompatibilityRole(
+          tx,
+          input.projectId,
+          input.directorUserId
+        );
       }
 
       return org;
@@ -795,24 +871,53 @@ export class PartnerOrganizationService {
         }
       });
 
-      if (data.directorUserId) {
-        await tx.partnerOrganizationMembership.upsert({
-          where: {
-            organizationId_userId: {
+      if (
+        data.directorUserId !== undefined &&
+        data.directorUserId !== org.directorUserId
+      ) {
+        if (org.directorUserId) {
+          await tx.partnerOrganizationMembership.updateMany({
+            where: {
+              projectId,
               organizationId,
-              userId: data.directorUserId
-            }
-          },
-          update: { canManage: true },
-          create: {
+              userId: org.directorUserId
+            },
+            data: { canManage: false }
+          });
+          await this.recomputeCompatibilityRole(
+            tx,
             projectId,
-            organizationId,
-            userId: data.directorUserId,
-            canManage: true,
-            outboundReferralPlanId:
-              updated.defaultReferralCommissionPlanId ?? null
-          }
-        });
+            org.directorUserId
+          );
+        }
+
+        if (data.directorUserId) {
+          await tx.partnerOrganizationMembership.upsert({
+            where: {
+              organizationId_userId: {
+                organizationId,
+                userId: data.directorUserId
+              }
+            },
+            update: { canManage: true },
+            create: {
+              projectId,
+              organizationId,
+              userId: data.directorUserId,
+              canManage: true,
+              outboundReferralPlanId: null
+            }
+          });
+          await tx.user.updateMany({
+            where: { id: data.directorUserId, organizationId: null },
+            data: { organizationId, outboundReferralPlanId: null }
+          });
+          await this.recomputeCompatibilityRole(
+            tx,
+            projectId,
+            data.directorUserId
+          );
+        }
       }
 
       return updated;
@@ -820,17 +925,55 @@ export class PartnerOrganizationService {
   }
 
   static async delete(projectId: string, organizationId: string) {
-    const org = await this.getById(projectId, organizationId);
-    if (!org) throw new Error('Организация не найдена');
+    await db.$transaction(async (tx) => {
+      const org = await tx.partnerOrganization.findFirst({
+        where: { id: organizationId, projectId },
+        select: { id: true }
+      });
+      if (!org) throw new Error('Организация не найдена');
 
-    const memberships = await db.partnerOrganizationMembership.findMany({
-      where: { projectId, organizationId },
-      select: { userId: true }
+      const memberships = await tx.partnerOrganizationMembership.findMany({
+        where: { projectId, organizationId },
+        select: { userId: true }
+      });
+      const affectedUserIds = [
+        ...new Set(memberships.map((item) => item.userId))
+      ];
+
+      await tx.partnerOrganization.delete({ where: { id: organizationId } });
+
+      for (const userId of affectedUserIds) {
+        const [user, alternative] = await Promise.all([
+          tx.user.findUnique({
+            where: { id: userId },
+            select: { organizationId: true }
+          }),
+          tx.partnerOrganizationMembership.findFirst({
+            where: { projectId, userId },
+            orderBy: [{ canManage: 'desc' }, { createdAt: 'asc' }],
+            select: { organizationId: true, outboundReferralPlanId: true }
+          })
+        ]);
+        const partnerRole = await this.recomputeCompatibilityRole(
+          tx,
+          projectId,
+          userId
+        );
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            partnerRole,
+            ...(user?.organizationId === organizationId
+              ? {
+                  organizationId: alternative?.organizationId ?? null,
+                  outboundReferralPlanId:
+                    alternative?.outboundReferralPlanId ?? null
+                }
+              : {})
+          }
+        });
+      }
     });
-    for (const membership of memberships) {
-      await this.removeMember(projectId, organizationId, membership.userId);
-    }
-    await db.partnerOrganization.delete({ where: { id: organizationId } });
 
     return { success: true };
   }

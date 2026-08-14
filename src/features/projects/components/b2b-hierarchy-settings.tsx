@@ -346,19 +346,20 @@ export function B2bHierarchySettings({
             </div>
 
             <div className='grid gap-3 sm:grid-cols-2'>
-              <Link
-                href={`/dashboard/projects/${projectId}/referral?tab=hierarchy`}
+              <Button
+                type='button'
+                variant='outline'
+                className='w-full justify-start'
+                asChild
               >
-                <Button
-                  type='button'
-                  variant='outline'
-                  className='w-full justify-start'
+                <Link
+                  href={`/dashboard/projects/${projectId}/referral?tab=hierarchy`}
                 >
                   <Building2 className='mr-2 h-4 w-4' />
                   Открыть дерево партнёров
                   <ArrowRight className='ml-auto h-4 w-4 opacity-50' />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
               <Button
                 type='button'
                 variant='outline'

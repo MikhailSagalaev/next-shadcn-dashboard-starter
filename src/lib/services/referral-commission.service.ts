@@ -31,6 +31,7 @@ export type PlanLevelInput = {
 export type ReferralCommissionPlanDependencies = {
   projectDefaults: number;
   organizationDefaults: number;
+  membershipOutboundPlans: number;
   outboundUsers: number;
   referralAttributions: number;
 };
@@ -284,6 +285,7 @@ export class ReferralCommissionService {
             select: {
               defaultForProjects: true,
               organizationDefaults: true,
+              membershipOutboundPlans: true,
               outboundUsers: true,
               referralAttributions: true
             }
@@ -295,6 +297,7 @@ export class ReferralCommissionService {
       const dependencies: ReferralCommissionPlanDependencies = {
         projectDefaults: plan._count.defaultForProjects,
         organizationDefaults: plan._count.organizationDefaults,
+        membershipOutboundPlans: plan._count.membershipOutboundPlans,
         outboundUsers: plan._count.outboundUsers,
         referralAttributions: plan._count.referralAttributions
       };
@@ -310,6 +313,7 @@ export class ReferralCommissionService {
       }
 
       if (
+        dependencies.membershipOutboundPlans > 0 ||
         dependencies.outboundUsers > 0 ||
         dependencies.referralAttributions > 0
       ) {

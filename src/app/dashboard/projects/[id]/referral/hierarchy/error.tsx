@@ -23,10 +23,7 @@ interface HierarchyErrorProps {
   reset: () => void;
 }
 
-export default function HierarchyError({
-  error,
-  reset
-}: HierarchyErrorProps) {
+export default function HierarchyError({ error, reset }: HierarchyErrorProps) {
   useEffect(() => {
     // Логируем в console для DevTools — Server Component error.tsx
     // получает сообщение редактированным в production. Хоть что-то.
@@ -43,9 +40,9 @@ export default function HierarchyError({
           Не удалось загрузить иерархию
         </h2>
         <p className='text-muted-foreground mt-2 text-sm'>
-          Произошла ошибка при отображении дерева партнёров. Попробуйте
-          обновить страницу. Если проблема повторяется — отключите b2b-режим в
-          настройках проекта и сообщите в поддержку.
+          Произошла ошибка при отображении дерева партнёров. Попробуйте обновить
+          страницу. Если проблема повторяется — отключите b2b-режим в настройках
+          проекта и сообщите в поддержку.
         </p>
         {error?.message && (
           <pre className='bg-muted text-muted-foreground mt-4 max-w-full overflow-x-auto rounded-md p-3 text-left text-xs'>
@@ -61,7 +58,7 @@ export default function HierarchyError({
           <Link href='./'>
             <Button variant='outline'>К проекту</Button>
           </Link>
-          <Link href='./settings'>
+          <Link href='../../settings'>
             <Button variant='ghost' className='gap-2'>
               <Settings className='h-4 w-4' />
               Настройки

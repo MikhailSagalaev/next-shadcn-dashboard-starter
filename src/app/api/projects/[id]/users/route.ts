@@ -119,7 +119,9 @@ async function getHandler(
       where.partnerRole = { in: roles };
     }
     if (organizationId) {
-      where.organizationId = organizationId;
+      where.organizationMemberships = {
+        some: { projectId: id, organizationId }
+      };
     }
 
     const { users: enrichedUsers, total } = await UserService.getProjectUsers(
@@ -135,24 +137,11 @@ async function getHandler(
       const currentBalance =
         Number(user.totalEarned || 0) - Number(user.totalSpent || 0);
       const roundedBalance = Number(currentBalance.toFixed(2));
-      const isLinkedToBot = Boolean(user.telegramId);
       // Пользователь активен, если:
       // 1. Явно установлен isActive === true ИЛИ
       // 2. Привязан к Telegram (telegramId не null)
       // Примечание: пользователи без Telegram должны быть неактивными по умолчанию
       const computedActive = user.isActive === true || Boolean(user.telegramId);
-
-      // Логируем для отладки статуса пользователя
-      if (index === 0) {
-        logger.debug('User status check (first user)', {
-          userId: user.id,
-          userIsActive: user.isActive,
-          hasTelegramId: !!user.telegramId,
-          telegramId: user.telegramId?.toString(),
-          computedActive,
-          email: user.email
-        });
-      }
 
       return {
         id: user.id,

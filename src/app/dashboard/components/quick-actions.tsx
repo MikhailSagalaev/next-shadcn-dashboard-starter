@@ -7,17 +7,16 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Bot, Gift, Plus, Settings, Zap } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Bot, Gift, Plus, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 const actions = [
   {
     title: 'Создать проект',
     description: 'Запустить новую программу',
     icon: Plus,
-    href: '/dashboard/projects',
+    href: '/dashboard/projects?create=true',
     color: 'text-blue-500',
     bgColor: 'bg-blue-500/10'
   },
@@ -40,8 +39,6 @@ const actions = [
 ];
 
 export function QuickActions() {
-  const router = useRouter();
-
   return (
     <Card className='glass-card h-full border-zinc-200 dark:border-zinc-800 dark:bg-zinc-900/50'>
       <CardHeader>
@@ -52,15 +49,17 @@ export function QuickActions() {
         <CardDescription>Часто используемые функции</CardDescription>
       </CardHeader>
       <CardContent className='grid gap-4'>
-        {actions.map((action, index) => (
+        {actions.map((action) => (
           <motion.div
             key={action.title}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className='group cursor-pointer rounded-xl border border-zinc-100 bg-white p-3 shadow-sm transition-all hover:border-indigo-100 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-900/50'
-            onClick={() => router.push(action.href)}
+            className='rounded-xl'
           >
-            <div className='flex items-center gap-4'>
+            <Link
+              href={action.href}
+              className='group flex items-center gap-4 rounded-xl border border-zinc-100 bg-white p-3 shadow-sm transition-all hover:border-indigo-100 hover:shadow-md focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-900/50'
+            >
               <div
                 className={`rounded-lg p-2.5 ${action.bgColor} ${action.color}`}
               >
@@ -77,7 +76,7 @@ export function QuickActions() {
               <div className='block text-zinc-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-zinc-600'>
                 →
               </div>
-            </div>
+            </Link>
           </motion.div>
         ))}
       </CardContent>

@@ -56,6 +56,12 @@ export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
   const router = useRouter();
+  const isPathActive = React.useCallback(
+    (url: string) =>
+      pathname === url ||
+      (url !== '/dashboard' && pathname.startsWith(`${url}/`)),
+    [pathname]
+  );
 
   React.useEffect(() => {
     // Side effects based on sidebar state changes
@@ -97,7 +103,7 @@ export default function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         tooltip={item.title}
-                        isActive={pathname === item.url}
+                        isActive={isPathActive(item.url)}
                       >
                         {item.icon && <Icon />}
                         <span>{item.title}</span>
@@ -110,7 +116,7 @@ export default function AppSidebar() {
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton
                               asChild
-                              isActive={pathname === subItem.url}
+                              isActive={isPathActive(subItem.url)}
                             >
                               <Link href={subItem.url}>
                                 <span>{subItem.title}</span>
@@ -127,7 +133,7 @@ export default function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     tooltip={item.title}
-                    isActive={pathname === item.url}
+                    isActive={isPathActive(item.url)}
                   >
                     <Link href={item.url}>
                       {item.icon && <Icon />}

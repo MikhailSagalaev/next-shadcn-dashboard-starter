@@ -29,7 +29,7 @@ export const metadata = {
 async function getIntegrationData(projectId: string) {
   const admin = await getCurrentAdmin();
   if (!admin) {
-    redirect('/auth/login');
+    redirect('/auth/sign-in');
   }
 
   // Owner filter для мультитенантности
@@ -110,15 +110,16 @@ async function getIntegrationData(projectId: string) {
 export default async function MoySkladIntegrationPage({
   params
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { project, integration, stats } = await getIntegrationData(params.id);
+  const { id } = await params;
+  const { project, integration, stats } = await getIntegrationData(id);
 
   return (
     <div className='flex flex-1 flex-col space-y-6 px-6 py-6'>
       {/* Breadcrumb */}
       <Link
-        href={`/dashboard/projects/${params.id}/integrations`}
+        href={`/dashboard/projects/${id}/integrations`}
         className='text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors'
       >
         <ChevronLeft className='h-4 w-4' />

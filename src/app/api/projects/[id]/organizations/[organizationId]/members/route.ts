@@ -89,7 +89,8 @@ export const POST = withProjectAccess<OrgParams>(
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Server error';
-      return NextResponse.json({ error: msg }, { status: 400 });
+      const status = msg.includes('уже состоит') ? 409 : 400;
+      return NextResponse.json({ error: msg }, { status });
     }
   }
 );

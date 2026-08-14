@@ -69,7 +69,7 @@ export function ProjectsView() {
       if (!response.ok) {
         if (response.status === 401) {
           // Не авторизован - перенаправить на страницу входа
-          window.location.href = '/login';
+          window.location.href = '/auth/sign-in';
           return;
         }
         throw new Error(`Ошибка загрузки проектов: ${response.status}`);

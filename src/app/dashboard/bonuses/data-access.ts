@@ -222,18 +222,7 @@ export async function getBonusesData(): Promise<BonusPageData> {
     };
   } catch (error) {
     logger.error('Error fetching bonuses data', { error }, 'bonuses-service');
-    // Возвращаем пустые данные вместо краша
-    return {
-      stats: {
-        totalProjects: 0,
-        totalUsers: 0,
-        totalBonuses: 0,
-        activeBonuses: 0,
-        expiringSoon: 0
-      },
-      recentTransactions: [],
-      projects: []
-    };
+    throw error;
   }
 }
 
@@ -334,12 +323,6 @@ export async function getTransactions(
     };
   } catch (error) {
     logger.error('Error fetching transactions', { error }, 'bonuses-service');
-    return {
-      transactions: [],
-      total: 0,
-      page: 1,
-      pageSize,
-      totalPages: 0
-    };
+    throw error;
   }
 }

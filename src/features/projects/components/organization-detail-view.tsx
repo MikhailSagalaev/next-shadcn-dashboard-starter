@@ -136,6 +136,7 @@ type Member = {
   }>;
   outboundReferralPlanId: string | null;
   outboundPlanName: string | null;
+  outboundPlanInherited: boolean;
   attributionPlanName: string | null;
   registeredAt: string;
   totalPurchases: number;
@@ -182,21 +183,19 @@ function newReferralLink(
 
 function ReferralLinksEditor({
   projectId,
+  organizationId,
   members,
   childUserId,
   value,
   onChange
 }: {
   projectId: string;
+  organizationId: string;
   members: Member[];
   childUserId?: string;
   value: ReferralLinkDraft[];
   onChange: (value: ReferralLinkDraft[]) => void;
 }) {
-  const options = members
-    .filter((member) => member.id !== childUserId)
-    .map((member) => memberToPartnerUser(member)!)
-    .filter(Boolean);
   const totalShare = value.reduce(
     (sum, link) => sum + Number(link.sharePercent || 0),
     0
@@ -253,7 +252,8 @@ function ReferralLinksEditor({
                   projectId={projectId}
                   value={link.referrerId}
                   initialUser={initialUser}
-                  options={options}
+                  organizationId={organizationId}
+                  excludedUserIds={childUserId ? [childUserId] : []}
                   onChange={(user) =>
                     onChange(
                       value.map((item, itemIndex) =>
@@ -368,6 +368,7 @@ function parseDiscountPercent(value: string): number | null {
 
 export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [stats, setStats] = useState<OrgStats | null>(null);
@@ -401,7 +402,8 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
   const [newUserId, setNewUserId] = useState('');
 
-  const [newLevel, setNewLevel] = useState('1');
+  const [newLevel, setNewLevel] = useState('');
+  const [newUserError, setNewUserError] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newCanManage, setNewCanManage] = useState(false);
   const [newReferrerLinks, setNewReferrerLinks] = useState<ReferralLinkDraft[]>(
@@ -424,6 +426,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       // спиннер (иначе вьюха схлопывается и кажется, будто изменения не приняты).
       if (!opts?.silent) setLoading(true);
       try {
+        setLoadError('');
         // cache: 'no-store' — иначе браузер отдаёт закэшированный ответ и свежие
         // данные видны только после полной перезагрузки страницы.
         const [orgRes, membersRes, organizationsRes, plansRes] =
@@ -443,6 +446,13 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               cache: 'no-store'
             })
           ]);
+
+        const failed = [orgRes, membersRes, organizationsRes, plansRes].find(
+          (response) => !response.ok
+        );
+        if (failed) {
+          throw new Error(`Не удалось загрузить данные (${failed.status})`);
+        }
 
         if (orgRes.ok) {
           const data = await orgRes.json();
@@ -467,8 +477,13 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             }))
           );
         }
-      } catch {
-        toast.error('Не удалось загрузить организацию');
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Не удалось загрузить организацию';
+        setLoadError(message);
+        toast.error(message);
       } finally {
         if (!opts?.silent) setLoading(false);
       }
@@ -496,7 +511,8 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
   const openAddMember = () => {
     setNewUserId('');
-    setNewLevel('1');
+    setNewLevel('');
+    setNewUserError('');
     setNewTitle('');
     setNewCanManage(false);
     setNewReferrerLinks([]);
@@ -545,9 +561,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
   const addMember = async () => {
     if (!newUserId) {
-      toast.error('Выберите пользователя');
+      setNewUserError('Выберите пользователя');
       return;
     }
+    setNewUserError('');
     if (newReferrerLinks.some((link) => !link.referrerId)) {
       toast.error('Выберите пользователя во всех строках рефереров');
       return;
@@ -596,7 +613,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       }
       setAddMemberOpen(false);
       setNewUserId('');
-      setNewLevel('1');
+      setNewLevel('');
       setNewTitle('');
       setNewCanManage(false);
       setNewReferrerLinks([]);
@@ -773,6 +790,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   }
 
   if (!organization) {
+    if (loadError) {
+      return (
+        <Alert variant='destructive'>
+          <AlertTitle>Не удалось загрузить организацию</AlertTitle>
+          <AlertDescription className='mt-2 space-y-3'>
+            <p>{loadError}</p>
+            <Button type='button' variant='outline' onClick={() => void load()}>
+              Повторить
+            </Button>
+          </AlertDescription>
+        </Alert>
+      );
+    }
     return (
       <Alert variant='destructive'>
         <AlertTitle>Организация не найдена</AlertTitle>
@@ -937,7 +967,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         </TabsList>
 
         <TabsContent value='members' className='mt-4 space-y-4'>
-          <div className='flex items-center justify-between gap-4'>
+          <div className='flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
             <p className='text-muted-foreground text-xs'>
               Участник может состоять в нескольких организациях. Уровень,
               управляющий доступ и реферальные выплаты настраиваются независимо.
@@ -959,8 +989,12 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 <>
                   <div className='border-b p-4'>
                     <div className='relative max-w-sm'>
+                      <Label htmlFor='member-search' className='sr-only'>
+                        Поиск участников
+                      </Label>
                       <Search className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
                       <Input
+                        id='member-search'
                         value={memberSearch}
                         onChange={(event) =>
                           setMemberSearch(event.target.value)
@@ -969,6 +1003,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                         className='pl-9'
                       />
                     </div>
+                    <p className='text-muted-foreground mt-2 text-xs md:hidden'>
+                      Таблица прокручивается по горизонтали; действия закреплены
+                      справа.
+                    </p>
                   </div>
                   <Table>
                     <TableHeader>
@@ -978,13 +1016,15 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                         <TableHead>Рефереры</TableHead>
                         <TableHead>План комиссии</TableHead>
                         <TableHead className='text-right'>Покупки</TableHead>
-                        <TableHead className='w-[100px]' />
+                        <TableHead className='bg-background sticky right-0 z-10 w-[72px] shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
+                          <span className='sr-only'>Действия</span>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredMembers.map((m) => (
                         <TableRow key={m.id}>
-                          <TableCell>
+                          <TableCell className='bg-background sticky right-0 z-10 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
                             <div className='font-medium'>{m.name}</div>
                             <div className='text-muted-foreground text-xs'>
                               {m.email || m.phone}
@@ -1028,7 +1068,9 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                               <>
                                 <div>{m.outboundPlanName}</div>
                                 <div className='text-muted-foreground text-xs'>
-                                  для приглашений
+                                  {m.outboundPlanInherited
+                                    ? 'по умолчанию организации'
+                                    : 'для приглашений'}
                                 </div>
                               </>
                             ) : m.attributionPlanName ? (
@@ -1143,31 +1185,34 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
       {/* Edit org dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto'>
-          <DialogHeader>
+        <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-0'>
+          <DialogHeader className='shrink-0 px-6 pt-6'>
             <DialogTitle>Настройки организации</DialogTitle>
             <DialogDescription>
               Изменения slug повлияют на utm_org в реферальных ссылках
             </DialogDescription>
           </DialogHeader>
-          <div className='grid gap-4 py-2'>
+          <div className='grid min-h-0 gap-4 overflow-y-auto overscroll-contain px-6 py-4'>
             <div className='space-y-2'>
-              <Label>Название</Label>
+              <Label htmlFor='org-name'>Название</Label>
               <Input
+                id='org-name'
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
               />
             </div>
             <div className='space-y-2'>
-              <Label>Slug (URL)</Label>
+              <Label htmlFor='org-slug'>Slug (URL)</Label>
               <Input
+                id='org-slug'
                 value={editSlug}
                 onChange={(e) => setEditSlug(e.target.value)}
               />
             </div>
             <div className='space-y-2'>
-              <Label>Описание</Label>
+              <Label htmlFor='org-description'>Описание</Label>
               <Textarea
+                id='org-description'
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
                 rows={2}
@@ -1206,12 +1251,14 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Field>
             </FieldGroup>
             <div className='space-y-2'>
-              <Label>Партнёрский план по умолчанию</Label>
+              <Label htmlFor='org-default-plan'>
+                Партнёрский план по умолчанию
+              </Label>
               <Select
                 value={editPlanId || '__none__'}
                 onValueChange={(v) => setEditPlanId(v === '__none__' ? '' : v)}
               >
-                <SelectTrigger className='w-full'>
+                <SelectTrigger id='org-default-plan' className='w-full'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1225,13 +1272,14 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Select>
             </div>
             <div className='space-y-2'>
-              <Label>Основной управляющий</Label>
+              <Label htmlFor='org-director'>Основной управляющий</Label>
               <p className='text-muted-foreground text-xs'>
                 Получает доступ к участникам этой организации, но не участвует в
                 выплатах автоматически. Один пользователь может управлять
                 несколькими организациями.
               </p>
               <PartnerUserCombobox
+                id='org-director'
                 projectId={projectId}
                 value={editDirectorId}
                 initialUser={directorInitialUser}
@@ -1250,8 +1298,12 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setEditOpen(false)}>
+          <DialogFooter className='bg-background shrink-0 border-t px-6 py-4'>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => setEditOpen(false)}
+            >
               Отмена
             </Button>
             <Button onClick={saveOrg} disabled={saving}>
@@ -1264,112 +1316,138 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
 
       {/* Add member dialog */}
       <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
-        <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto'>
-          <DialogHeader>
-            <DialogTitle>Добавить в организацию</DialogTitle>
-            <DialogDescription>
-              Пользователь останется в других организациях, если уже состоит в
-              них.
-            </DialogDescription>
-          </DialogHeader>
-          <div className='grid gap-4 py-2'>
-            <div className='space-y-2'>
-              <Label>Пользователь</Label>
-              <PartnerUserCombobox
-                projectId={projectId}
-                value={newUserId}
-                onChange={(u) => setNewUserId(u?.id ?? '')}
-                partnerRolesOnly={false}
-                placeholder='Поиск по имени, email, телефону…'
-              />
-            </div>
+        <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-0'>
+          <form
+            className='flex min-h-0 flex-1 flex-col overflow-hidden'
+            onSubmit={(event) => {
+              event.preventDefault();
+              void addMember();
+            }}
+          >
+            <DialogHeader className='shrink-0 px-6 pt-6'>
+              <DialogTitle>Добавить в организацию</DialogTitle>
+              <DialogDescription>
+                Пользователь останется в других организациях, если уже состоит в
+                них.
+              </DialogDescription>
+            </DialogHeader>
+            <div className='grid min-h-0 gap-4 overflow-y-auto overscroll-contain px-6 py-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='new-member-user'>Пользователь</Label>
+                <PartnerUserCombobox
+                  id='new-member-user'
+                  projectId={projectId}
+                  value={newUserId}
+                  onChange={(u) => {
+                    setNewUserId(u?.id ?? '');
+                    setNewUserError('');
+                  }}
+                  partnerRolesOnly={false}
+                  excludedUserIds={members.map((member) => member.id)}
+                  ariaInvalid={Boolean(newUserError)}
+                  placeholder='Поиск по имени, email, телефону…'
+                />
+                {newUserError && (
+                  <p role='alert' className='text-destructive text-sm'>
+                    {newUserError}
+                  </p>
+                )}
+              </div>
 
-            <FieldGroup className='gap-4'>
-              <Field>
-                <FieldLabel htmlFor='new-member-level'>
-                  Уровень в организации
-                </FieldLabel>
-                <Input
-                  id='new-member-level'
-                  type='number'
-                  min={1}
-                  step={1}
-                  value={newLevel}
-                  onChange={(event) => setNewLevel(event.target.value)}
-                  placeholder='Не задан'
-                />
-                <FieldDescription>
-                  Любое целое число от 1. Оставьте пустым для обычного клиента.
-                  Количество уровней не ограничено.
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor='new-member-title'>
-                  Название роли
-                </FieldLabel>
-                <Input
-                  id='new-member-title'
-                  value={newTitle}
-                  maxLength={120}
-                  onChange={(event) => setNewTitle(event.target.value)}
-                  placeholder='Например, региональный куратор'
-                />
-              </Field>
-              <Field>
-                <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
-                  <div>
-                    <FieldLabel htmlFor='new-member-manage'>
-                      Управляющий доступ
-                    </FieldLabel>
-                    <FieldDescription>
-                      Видит и редактирует участников без автоматической
-                      комиссии.
-                    </FieldDescription>
-                  </div>
-                  <Switch
-                    id='new-member-manage'
-                    checked={newCanManage}
-                    onCheckedChange={setNewCanManage}
+              <FieldGroup className='gap-4'>
+                <Field>
+                  <FieldLabel htmlFor='new-member-level'>
+                    Уровень в организации
+                  </FieldLabel>
+                  <Input
+                    id='new-member-level'
+                    type='number'
+                    min={1}
+                    step={1}
+                    value={newLevel}
+                    onChange={(event) => setNewLevel(event.target.value)}
+                    placeholder='Не задан'
                   />
-                </div>
-              </Field>
-            </FieldGroup>
-            <ReferralLinksEditor
-              projectId={projectId}
-              members={members}
-              childUserId={newUserId}
-              value={newReferrerLinks}
-              onChange={setNewReferrerLinks}
-            />
-            <div className='space-y-2'>
-              <Label>План для приглашённых этим участником</Label>
-              <Select
-                value={newPlanId || '__none__'}
-                onValueChange={(v) => setNewPlanId(v === '__none__' ? '' : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder='План организации' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='__none__'>План организации</SelectItem>
-                  {plans.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  <FieldDescription>
+                    Любое целое число от 1. Оставьте пустым для обычного
+                    клиента. Количество уровней не ограничено.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor='new-member-title'>
+                    Название роли
+                  </FieldLabel>
+                  <Input
+                    id='new-member-title'
+                    value={newTitle}
+                    maxLength={120}
+                    onChange={(event) => setNewTitle(event.target.value)}
+                    placeholder='Например, региональный куратор'
+                  />
+                </Field>
+                <Field>
+                  <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
+                    <div>
+                      <FieldLabel htmlFor='new-member-manage'>
+                        Управляющий доступ
+                      </FieldLabel>
+                      <FieldDescription>
+                        Видит и редактирует участников без автоматической
+                        комиссии.
+                      </FieldDescription>
+                    </div>
+                    <Switch
+                      id='new-member-manage'
+                      checked={newCanManage}
+                      onCheckedChange={setNewCanManage}
+                    />
+                  </div>
+                </Field>
+              </FieldGroup>
+              <ReferralLinksEditor
+                projectId={projectId}
+                organizationId={organizationId}
+                members={members}
+                childUserId={newUserId}
+                value={newReferrerLinks}
+                onChange={setNewReferrerLinks}
+              />
+              <div className='space-y-2'>
+                <Label htmlFor='new-member-plan'>
+                  План для приглашённых этим участником
+                </Label>
+                <Select
+                  value={newPlanId || '__none__'}
+                  onValueChange={(v) => setNewPlanId(v === '__none__' ? '' : v)}
+                >
+                  <SelectTrigger id='new-member-plan'>
+                    <SelectValue placeholder='План организации' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='__none__'>План организации</SelectItem>
+                    {plans.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant='outline' onClick={() => setAddMemberOpen(false)}>
-              Отмена
-            </Button>
-            <Button onClick={addMember} disabled={saving}>
-              {saving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-              Добавить
-            </Button>
-          </DialogFooter>
+            <DialogFooter className='bg-background shrink-0 border-t px-6 py-4'>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => setAddMemberOpen(false)}
+              >
+                Отмена
+              </Button>
+              <Button type='submit' disabled={saving}>
+                {saving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+                Добавить
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -1378,14 +1456,14 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         open={Boolean(editMember)}
         onOpenChange={(open) => !open && setEditMember(null)}
       >
-        <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto'>
-          <DialogHeader>
+        <DialogContent className='flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-0'>
+          <DialogHeader className='shrink-0 px-6 pt-6'>
             <DialogTitle>Участник: {editMember?.name}</DialogTitle>
             <DialogDescription>
               Уровень, управляющий доступ, рефереры и план этой организации
             </DialogDescription>
           </DialogHeader>
-          <div className='grid gap-4 py-2'>
+          <div className='grid min-h-0 gap-4 overflow-y-auto overscroll-contain px-6 py-4'>
             <FieldGroup className='gap-4'>
               <Field>
                 <FieldLabel htmlFor='edit-member-level'>
@@ -1432,20 +1510,23 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             </FieldGroup>
             <ReferralLinksEditor
               projectId={projectId}
+              organizationId={organizationId}
               members={members}
               childUserId={editMember?.id}
               value={memberReferrerLinks}
               onChange={setMemberReferrerLinks}
             />
             <div className='space-y-2'>
-              <Label>План для приглашённых этим участником</Label>
+              <Label htmlFor='edit-member-plan'>
+                План для приглашённых этим участником
+              </Label>
               <Select
                 value={memberPlanId || '__none__'}
                 onValueChange={(v) =>
                   setMemberPlanId(v === '__none__' ? '' : v)
                 }
               >
-                <SelectTrigger className='w-full'>
+                <SelectTrigger id='edit-member-plan' className='w-full'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1459,7 +1540,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className='bg-background shrink-0 border-t px-6 py-4'>
             <Button variant='outline' onClick={() => setEditMember(null)}>
               Отмена
             </Button>

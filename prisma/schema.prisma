@@ -356,6 +356,8 @@ model Payout {
   paidBy       String?   @map("paid_by")
   failReason   String?   @map("fail_reason")
   cancelledAt  DateTime? @map("cancelled_at")
+  refundTargetStatus PayoutStatus? @map("refund_target_status")
+  refundCompletedAt  DateTime?     @map("refund_completed_at")
 
   // Учёт/бухгалтерия: № платёжки / строки выгрузки.
   externalRef String? @map("external_ref")
@@ -375,11 +377,13 @@ model Payout {
 
   @@index([projectId, status])
   @@index([projectId, userId, status])
+  @@index([status, updatedAt])
   @@map("payouts")
 }
 
 enum PayoutStatus {
   RESERVING @map("reserving") // durable saga state before the bonus reserve
+  REFUND_PENDING @map("refund_pending") // terminal decision made, reserve refund must finish
   REQUESTED @map("requested") // подана из бота, бонусы зарезервированы (hold)
   APPROVED  @map("approved") // админ одобрил, ждёт ручной выплаты
   PAID      @map("paid") // деньги выплачены, бонусы списаны окончательно
