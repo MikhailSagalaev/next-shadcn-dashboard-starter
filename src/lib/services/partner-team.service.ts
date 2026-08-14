@@ -27,8 +27,6 @@ function legacyPartnerRoleLevel(role: PartnerRole): number | null {
 export type TeamMemberRow = {
   id: string;
   name: string;
-  email: string | null;
-  phone: string | null;
   partnerRole: string;
   organizationLevel: number | null;
   organizationTitle: string | null;
@@ -449,8 +447,6 @@ export class PartnerTeamService {
       items.push({
         id: p.id,
         name: displayName(p),
-        email: p.email,
-        phone: p.phone,
         partnerRole: p.partnerRole,
         organizationLevel: membership?.level ?? null,
         organizationTitle: membership?.title ?? null,

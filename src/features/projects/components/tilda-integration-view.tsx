@@ -238,11 +238,19 @@ export function ProjectIntegrationView({
 
   async function loadProject() {
     try {
-      const response = await fetch(`/api/projects/${projectId}`);
-      if (!response.ok) throw new Error('Failed to load project');
+      const [response, credentialsResponse] = await Promise.all([
+        fetch(`/api/projects/${projectId}`),
+        fetch(`/api/projects/${projectId}/credentials`)
+      ]);
+      if (!response.ok || !credentialsResponse.ok) {
+        throw new Error('Failed to load project');
+      }
 
-      const data = await response.json();
-      setProject(data);
+      const [data, credentials] = await Promise.all([
+        response.json(),
+        credentialsResponse.json()
+      ]);
+      setProject({ ...data, ...credentials });
 
       // Загружаем настройки виджета из нового endpoint /widget
       try {
