@@ -207,9 +207,13 @@ export class PartnerTeamService {
           },
           select: { canManage: true }
         });
-      if (managedMembership?.canManage) return true;
+      // Organization-scoped requests must be reviewed with organization-
+      // scoped authority. Global compatibility roles are not proof of access
+      // when a user belongs to several organizations.
+      return managedMembership?.canManage === true;
     }
 
+    // Legacy requests without an organization retain role-based behavior.
     // A referrer can review only if they are an actual B2B partner.
     if (reviewerUserId === referrerId)
       return referrer?.partnerRole !== 'CLIENT';
@@ -994,14 +998,25 @@ export class PartnerTeamService {
       if (!canReview) throw new Error('Нет прав отклонить эту заявку');
     }
 
-    const updated = await db.partnerJoinRequest.update({
-      where: { id: request.id },
+    const claimed = await db.partnerJoinRequest.updateMany({
+      where: {
+        id: request.id,
+        projectId: params.projectId,
+        status: 'PENDING'
+      },
       data: {
         status: 'REJECTED',
         reviewedBy: params.reviewerUserId,
         reviewedAt: new Date(),
         rejectReason: params.reason ?? null
       }
+    });
+    if (claimed.count !== 1) {
+      throw new Error('Заявка уже обработана');
+    }
+
+    const updated = await db.partnerJoinRequest.findUniqueOrThrow({
+      where: { id: request.id }
     });
 
     void PartnerNotificationService.notifyApplicantAboutJoinDecision({

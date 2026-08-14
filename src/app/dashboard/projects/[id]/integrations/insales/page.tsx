@@ -27,7 +27,7 @@ export const metadata = {
 async function getIntegrationData(projectId: string) {
   const admin = await getCurrentAdmin();
   if (!admin) {
-    redirect('/auth/login');
+    redirect('/auth/sign-in');
   }
 
   // Owner filter для мультитенантности

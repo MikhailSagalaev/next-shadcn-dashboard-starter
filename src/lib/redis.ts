@@ -139,6 +139,27 @@ const createRedisClient = () => {
     },
     async setex(key: string, ttlSeconds: number, val: string) {
       store.set(key, { value: val, expireAt: nowMs() + ttlSeconds * 1000 });
+      return 'OK';
+    },
+    async set(
+      key: string,
+      val: string,
+      expiryMode?: 'EX' | 'PX',
+      ttl?: number,
+      condition?: 'NX'
+    ) {
+      if (condition === 'NX' && (await stub.get(key)) !== null) return null;
+      const ttlMs =
+        expiryMode === 'EX' && ttl
+          ? ttl * 1000
+          : expiryMode === 'PX' && ttl
+            ? ttl
+            : undefined;
+      store.set(key, {
+        value: val,
+        ...(ttlMs ? { expireAt: nowMs() + ttlMs } : {})
+      });
+      return 'OK';
     },
     async del(...keys: string[]) {
       let cnt = 0;

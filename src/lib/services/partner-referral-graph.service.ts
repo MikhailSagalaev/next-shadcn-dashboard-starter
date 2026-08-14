@@ -119,78 +119,88 @@ export class PartnerReferralGraphService {
       params.childUserId,
       ...normalized.map((link) => link.referrerId)
     ];
+    await db.$transaction(
+      async (tx) => {
+        const [organization, memberships, existingLinks] = await Promise.all([
+          tx.partnerOrganization.findFirst({
+            where: {
+              id: params.organizationId,
+              projectId: params.projectId
+            },
+            select: { id: true }
+          }),
+          tx.partnerOrganizationMembership.findMany({
+            where: {
+              projectId: params.projectId,
+              organizationId: params.organizationId,
+              userId: { in: participantIds }
+            },
+            select: { userId: true }
+          }),
+          tx.partnerReferralLink.findMany({
+            where: {
+              projectId: params.projectId,
+              organizationId: params.organizationId,
+              childUserId: { not: params.childUserId }
+            },
+            select: { childUserId: true, referrerUserId: true }
+          })
+        ]);
 
-    const [organization, memberships, existingLinks] = await Promise.all([
-      db.partnerOrganization.findFirst({
-        where: {
-          id: params.organizationId,
-          projectId: params.projectId
-        },
-        select: { id: true }
-      }),
-      db.partnerOrganizationMembership.findMany({
-        where: {
-          projectId: params.projectId,
-          organizationId: params.organizationId,
-          userId: { in: participantIds }
-        },
-        select: { userId: true }
-      }),
-      db.partnerReferralLink.findMany({
-        where: {
-          projectId: params.projectId,
-          organizationId: params.organizationId,
-          childUserId: { not: params.childUserId }
-        },
-        select: { childUserId: true, referrerUserId: true }
-      })
-    ]);
+        if (!organization) throw new Error('Организация не найдена');
 
-    if (!organization) throw new Error('Организация не найдена');
-
-    const memberIds = new Set(
-      memberships.map((membership) => membership.userId)
-    );
-    const missingId = participantIds.find((id) => !memberIds.has(id));
-    if (missingId) {
-      throw new Error(
-        'Все участники реферальной связи должны состоять в этой организации'
-      );
-    }
-
-    assertAcyclic(params.childUserId, normalized, existingLinks);
-
-    const primary =
-      normalized.find((link) => link.isPrimary) ?? normalized[0] ?? null;
-
-    await db.$transaction(async (tx) => {
-      await tx.partnerReferralLink.deleteMany({
-        where: {
-          projectId: params.projectId,
-          organizationId: params.organizationId,
-          childUserId: params.childUserId
+        const memberIds = new Set(
+          memberships.map((membership) => membership.userId)
+        );
+        const missingId = participantIds.find((id) => !memberIds.has(id));
+        if (missingId) {
+          throw new Error(
+            'Все участники реферальной связи должны состоять в этой организации'
+          );
         }
-      });
-      if (normalized.length > 0) {
-        await tx.partnerReferralLink.createMany({
-          data: normalized.map((link) => ({
+
+        // Validation and write share a serializable transaction. Concurrent
+        // reciprocal edits can no longer both validate against a stale graph.
+        assertAcyclic(params.childUserId, normalized, existingLinks);
+
+        const primary =
+          normalized.find((link) => link.isPrimary) ?? normalized[0] ?? null;
+
+        await tx.partnerReferralLink.deleteMany({
+          where: {
             projectId: params.projectId,
             organizationId: params.organizationId,
-            childUserId: params.childUserId,
-            referrerUserId: link.referrerId,
-            sharePercent: new Prisma.Decimal(link.sharePercent),
-            isPrimary: link.isPrimary
-          }))
+            childUserId: params.childUserId
+          }
         });
-      }
-      await tx.user.update({
-        where: { id: params.childUserId },
-        data: {
-          referredBy: primary?.referrerId ?? null,
-          partnerParentId: primary?.referrerId ?? null
+        if (normalized.length > 0) {
+          await tx.partnerReferralLink.createMany({
+            data: normalized.map((link) => ({
+              projectId: params.projectId,
+              organizationId: params.organizationId,
+              childUserId: params.childUserId,
+              referrerUserId: link.referrerId,
+              sharePercent: new Prisma.Decimal(link.sharePercent),
+              isPrimary: link.isPrimary
+            }))
+          });
         }
-      });
-    });
+        // Global fields are legacy compatibility state for the user's primary
+        // organization only. Never let editing organization B overwrite A.
+        await tx.user.updateMany({
+          where: {
+            id: params.childUserId,
+            projectId: params.projectId,
+            organizationId: params.organizationId
+          },
+          data: {
+            referredBy: primary?.referrerId ?? null,
+            partnerParentId: primary?.referrerId ?? null
+          }
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
 
     return normalized;
   }
@@ -359,10 +369,12 @@ export class PartnerReferralGraphService {
               }
             })
           : Promise.resolve([]),
-        db.user.findMany({
-          where: { projectId: params.projectId, id: { in: childIds } },
-          select: { id: true, partnerParentId: true, referredBy: true }
-        })
+        params.organizationId
+          ? Promise.resolve([])
+          : db.user.findMany({
+              where: { projectId: params.projectId, id: { in: childIds } },
+              select: { id: true, partnerParentId: true, referredBy: true }
+            })
       ]);
 
       const linksByChild = new Map<
@@ -399,7 +411,12 @@ export class PartnerReferralGraphService {
           continue;
         }
 
-        const legacyParentId = legacyParentByChild.get(childId);
+        // Legacy parents belong to the single-organization C2C model only.
+        // An organization-scoped payout chain must stop when no scoped edge
+        // exists instead of escaping into another organization's hierarchy.
+        const legacyParentId = params.organizationId
+          ? null
+          : legacyParentByChild.get(childId);
         if (legacyParentId) {
           nextWeights.set(
             legacyParentId,
@@ -417,7 +434,17 @@ export class PartnerReferralGraphService {
       const recipients = await db.user.findMany({
         where: {
           projectId: params.projectId,
-          id: { in: [...nextWeights.keys()] }
+          id: { in: [...nextWeights.keys()] },
+          ...(params.organizationId
+            ? {
+                organizationMemberships: {
+                  some: {
+                    projectId: params.projectId,
+                    organizationId: params.organizationId
+                  }
+                }
+              }
+            : {})
         },
         select: {
           id: true,

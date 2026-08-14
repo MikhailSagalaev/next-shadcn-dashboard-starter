@@ -13,7 +13,11 @@ describe('PartnerReferralGraphService', () => {
     jest.clearAllMocks();
     Object.defineProperty(mockDb, 'partnerReferralLink', {
       configurable: true,
-      value: { findMany: jest.fn() }
+      value: {
+        findMany: jest.fn(),
+        deleteMany: jest.fn(),
+        createMany: jest.fn()
+      }
     });
     Object.defineProperty(mockDb, 'partnerOrganization', {
       configurable: true,
@@ -23,6 +27,13 @@ describe('PartnerReferralGraphService', () => {
       configurable: true,
       value: { findMany: jest.fn() }
     });
+    Object.defineProperty(mockDb, 'user', {
+      configurable: true,
+      value: { findMany: jest.fn(), updateMany: jest.fn() }
+    });
+    (mockDb.$transaction as jest.Mock).mockImplementation(
+      (callback: (tx: typeof db) => unknown) => callback(mockDb)
+    );
   });
 
   it('не разрешает создать цикл в мульти-реферальном графе', async () => {
@@ -92,26 +103,22 @@ describe('PartnerReferralGraphService', () => {
           sharePercent: 40
         }
       ]);
-      (mockDb.user.findMany as jest.Mock)
-        .mockResolvedValueOnce([
-          { id: 'child', partnerParentId: null, referredBy: null }
-        ])
-        .mockResolvedValueOnce([
-          {
-            id: 'first',
-            firstName: 'Первый',
-            lastName: null,
-            email: null,
-            phone: null
-          },
-          {
-            id: 'second',
-            firstName: 'Второй',
-            lastName: null,
-            email: null,
-            phone: null
-          }
-        ]);
+      (mockDb.user.findMany as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 'first',
+          firstName: 'Первый',
+          lastName: null,
+          email: null,
+          phone: null
+        },
+        {
+          id: 'second',
+          firstName: 'Второй',
+          lastName: null,
+          email: null,
+          phone: null
+        }
+      ]);
 
       const levels = await PartnerReferralGraphService.resolvePayoutLevels({
         projectId: 'project',
@@ -136,14 +143,6 @@ describe('PartnerReferralGraphService', () => {
           sharePercent: 0
         }
       ]);
-      (mockDb.user.findMany as jest.Mock).mockResolvedValueOnce([
-        {
-          id: 'child',
-          partnerParentId: 'visibility-only',
-          referredBy: 'visibility-only'
-        }
-      ]);
-
       const levels = await PartnerReferralGraphService.resolvePayoutLevels({
         projectId: 'project',
         organizationId: 'organization',
@@ -152,7 +151,7 @@ describe('PartnerReferralGraphService', () => {
       });
 
       expect(levels).toEqual([]);
-      expect(mockDb.user.findMany).toHaveBeenCalledTimes(1);
+      expect(mockDb.user.findMany).not.toHaveBeenCalled();
     });
   });
 });

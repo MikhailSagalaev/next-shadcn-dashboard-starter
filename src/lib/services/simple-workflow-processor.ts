@@ -558,11 +558,7 @@ export class SimpleWorkflowProcessor {
         logger.warn('⚠️ No next node found, ending workflow execution', {
           lastNodeId: currentNodeId,
           step,
-          connectionsMapSize: this.connectionsMap.size,
-          allConnections: Array.from(this.connectionsMap.values()).map((c) => ({
-            source: c.source,
-            target: c.target
-          }))
+          connectionsMapSize: this.connectionsMap.size
         });
         break;
       }
@@ -588,29 +584,16 @@ export class SimpleWorkflowProcessor {
       (connection) => connection.source === currentNodeId
     );
 
-    console.log('🔍 getNextNodeId called', {
+    logger.debug('getNextNodeId called', {
       currentNodeId,
       connectionsMapSize: this.connectionsMap.size,
-      relevantConnectionsCount: relevantConnections.length,
-      relevantConnections: relevantConnections.map((c) => ({
-        source: c.source,
-        target: c.target
-      }))
+      relevantConnectionsCount: relevantConnections.length
     });
 
     if (relevantConnections.length === 0) {
-      console.error('⚠️ CRITICAL: No connections found for node', {
+      logger.warn('No connections found for workflow node', {
         currentNodeId,
-        allConnections: Array.from(this.connectionsMap.values()).map((c) => ({
-          source: c.source,
-          target: c.target
-        })),
-        allConnectionsRaw:
-          this.connectionsMap.size > 0
-            ? JSON.stringify(
-                Array.from(this.connectionsMap.values()).slice(0, 10)
-              )
-            : 'EMPTY'
+        connectionsMapSize: this.connectionsMap.size
       });
       return null;
     }

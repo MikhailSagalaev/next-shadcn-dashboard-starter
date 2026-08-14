@@ -379,7 +379,7 @@ export class MailingService {
   static async startMailing(
     projectId: string,
     mailingId: string
-  ): Promise<void> {
+  ): Promise<{ recipientCount: number }> {
     try {
       const mailing = await db.mailing.findFirst({
         where: {
@@ -409,58 +409,97 @@ export class MailingService {
         throw new Error('Рассылка уже запущена или завершена');
       }
 
-      // Обновляем статус на SENDING
-      await db.mailing.update({
-        where: { id: mailingId },
-        data: {
-          status: 'SENDING',
-          sentAt: new Date()
-        }
-      });
+      if (!mailingQueue) {
+        throw new Error('Очередь рассылок недоступна. Попробуйте позже.');
+      }
 
-      // Получаем список получателей
       let recipients: Array<{
         userId?: string;
         email?: string;
         phone?: string;
+        telegramId?: string;
       }> = [];
 
       if (mailing.segment) {
-        // Получаем пользователей из сегмента
-        recipients = mailing.segment.members.map((member) => ({
-          userId: member.user.id,
-          email: member.user.email || undefined,
-          phone: member.user.phone || undefined
-        }));
+        recipients = mailing.segment.members
+          .filter(
+            ({ user }) =>
+              user.projectId === projectId &&
+              user.isActive &&
+              ((mailing.type === 'TELEGRAM' && user.telegramId !== null) ||
+                (mailing.type === 'EMAIL' && Boolean(user.email)) ||
+                (mailing.type !== 'TELEGRAM' &&
+                  mailing.type !== 'EMAIL' &&
+                  Boolean(user.phone)))
+          )
+          .map(({ user }) => ({
+            userId: user.id,
+            email: user.email || undefined,
+            phone: user.phone || undefined,
+            telegramId: user.telegramId?.toString()
+          }));
       } else if (mailing.recipients.length > 0) {
-        // Используем существующих получателей
         recipients = mailing.recipients.map((r) => ({
           userId: r.userId || undefined,
           email: r.email || undefined,
-          phone: r.phone || undefined
+          phone: r.phone || undefined,
+          telegramId: r.telegramId || undefined
         }));
+      } else {
+        const channelWhere: Prisma.UserWhereInput =
+          mailing.type === 'TELEGRAM'
+            ? { telegramId: { not: null } }
+            : mailing.type === 'EMAIL'
+              ? { email: { not: null } }
+              : { phone: { not: null } };
+        recipients = await db.user
+          .findMany({
+            where: { projectId, isActive: true, ...channelWhere },
+            select: { id: true, email: true, phone: true, telegramId: true }
+          })
+          .then((users) =>
+            users.map((user) => ({
+              userId: user.id,
+              email: user.email || undefined,
+              phone: user.phone || undefined,
+              telegramId: user.telegramId?.toString()
+            }))
+          );
       }
 
-      // Создаем записи получателей, если их нет
-      if (mailing.recipients.length === 0) {
-        await db.mailingRecipient.createMany({
-          data: recipients.map((recipient) => ({
-            mailingId: mailing.id,
-            userId: recipient.userId,
-            email: recipient.email,
-            phone: recipient.phone,
-            status: 'PENDING'
-          }))
+      if (recipients.length === 0) {
+        throw new Error(
+          'Нет получателей с активным контактом для выбранного канала'
+        );
+      }
+
+      await db.$transaction(async (tx) => {
+        const claimed = await tx.mailing.updateMany({
+          where: { id: mailingId, projectId, status: mailing.status },
+          data: { status: 'SENDING', sentAt: new Date(), completedAt: null }
         });
-      }
-
-      // Получаем обновленный список получателей
-      const mailingRecipients = await db.mailingRecipient.findMany({
-        where: { mailingId: mailing.id }
+        if (claimed.count !== 1) {
+          throw new Error('Рассылку уже запустил другой администратор');
+        }
+        if (mailing.recipients.length === 0) {
+          await tx.mailingRecipient.createMany({
+            data: recipients.map((recipient) => ({
+              mailingId: mailing.id,
+              userId: recipient.userId,
+              email: recipient.email,
+              phone: recipient.phone,
+              telegramId: recipient.telegramId,
+              status: 'PENDING'
+            }))
+          });
+        }
       });
 
-      // Добавляем задачи в очередь
-      if (mailingQueue) getMailingWorker();
+      const mailingRecipients = await db.mailingRecipient.findMany({
+        where: { mailingId: mailing.id, status: 'PENDING' }
+      });
+
+      getMailingWorker();
       const subject = mailing.template?.subject || '';
       const body =
         mailing.template?.body ||
@@ -493,50 +532,30 @@ export class MailingService {
             ...((recipient.metadata as Record<string, any>) || {})
           };
 
-          // Добавляем задачу в очередь (если Redis доступен)
-          if (mailingQueue) {
-            await mailingQueue.add(
-              'send-message',
-              {
-                mailingId: mailing.id,
-                recipientId: recipient.id,
-                type: mailing.type,
-                recipient: {
-                  userId: recipient.userId || undefined,
-                  email: recipient.email || undefined,
-                  phone: recipient.phone || undefined
-                },
-                subject,
-                body,
-                metadata: combinedMetadata
+          await mailingQueue.add(
+            'send-message',
+            {
+              mailingId: mailing.id,
+              recipientId: recipient.id,
+              type: mailing.type,
+              recipient: {
+                userId: recipient.userId || undefined,
+                email: recipient.email || undefined,
+                phone: recipient.phone || undefined
               },
-              {
-                attempts: 3,
-                backoff: {
-                  type: 'exponential',
-                  delay: 2000
-                }
+              subject,
+              body,
+              metadata: combinedMetadata
+            },
+            {
+              jobId: `mailing-${mailing.id}-${recipient.id}`,
+              attempts: 3,
+              backoff: {
+                type: 'exponential',
+                delay: 2000
               }
-            );
-          } else {
-            logger.warn(
-              'Mailing queue not available, marking recipient as failed',
-              {
-                mailingId: mailing.id,
-                recipientId: recipient.id,
-                component: 'mailing-service'
-              }
-            );
-
-            // Помечаем получателя как неудачного
-            await db.mailingRecipient.update({
-              where: { id: recipient.id },
-              data: {
-                status: 'FAILED',
-                error: 'Очередь рассылок недоступна (Redis не подключен)'
-              }
-            });
-          }
+            }
+          );
         }
       }
 
@@ -546,6 +565,7 @@ export class MailingService {
         recipientsCount: mailingRecipients.length,
         component: 'mailing-service'
       });
+      return { recipientCount: mailingRecipients.length };
     } catch (error) {
       logger.error('Ошибка запуска рассылки', {
         mailingId,
@@ -554,12 +574,9 @@ export class MailingService {
         component: 'mailing-service'
       });
 
-      // Обновляем статус на FAILED в случае ошибки
-      await db.mailing.update({
-        where: { id: mailingId },
-        data: {
-          status: 'FAILED'
-        }
+      await db.mailing.updateMany({
+        where: { id: mailingId, projectId, status: 'SENDING' },
+        data: { status: 'FAILED', completedAt: new Date() }
       });
 
       throw error;

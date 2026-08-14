@@ -1429,7 +1429,8 @@ export class BonusService {
     amount: number,
     description?: string,
     metadata?: Record<string, unknown>,
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    options?: { bonusType?: BonusType; createdBefore?: Date }
   ): Promise<Transaction[]> {
     const findExistingSpend = async (): Promise<Transaction[]> => {
       if (!idempotencyKey) return [];
@@ -1493,6 +1494,10 @@ export class BonusService {
           where: {
             userId,
             isUsed: false,
+            ...(options?.bonusType ? { type: options.bonusType } : {}),
+            ...(options?.createdBefore
+              ? { createdAt: { lte: options.createdBefore } }
+              : {}),
             OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
           },
           orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }]

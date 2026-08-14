@@ -27,9 +27,9 @@ export async function POST(
     const { id: projectId, mailingId } = await context.params;
     await ProjectService.verifyProjectAccess(projectId, admin.sub);
 
-    await MailingService.startMailing(projectId, mailingId);
+    const result = await MailingService.startMailing(projectId, mailingId);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, ...result });
   } catch (error) {
     logger.error('Ошибка запуска рассылки', {
       error: error instanceof Error ? error.message : 'Неизвестная ошибка',
@@ -42,7 +42,17 @@ export async function POST(
         error:
           error instanceof Error ? error.message : 'Ошибка запуска рассылки'
       },
-      { status: 500 }
+      {
+        status:
+          error instanceof Error &&
+          (error.message.includes('нет получателей') ||
+            error.message.includes('уже запущена') ||
+            error.message.includes('уже запустил'))
+            ? 409
+            : error instanceof Error && error.message.includes('Очередь')
+              ? 503
+              : 500
+      }
     );
   }
 }

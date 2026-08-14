@@ -21,7 +21,7 @@ export default async function YooKassaFiscalPage({
 }) {
   const { id: projectId } = await params;
   const admin = await getCurrentAdmin();
-  if (!admin) redirect('/auth/login');
+  if (!admin) redirect('/auth/sign-in');
 
   const project = await db.project.findFirst({
     where: { id: projectId, ownerId: admin.sub },

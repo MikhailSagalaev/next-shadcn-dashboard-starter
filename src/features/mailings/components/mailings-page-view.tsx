@@ -75,6 +75,9 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [formOpen, setFormOpen] = useState(false);
   const [editingMailing, setEditingMailing] = useState<any>(null);
+  const [startingMailingId, setStartingMailingId] = useState<string | null>(
+    null
+  );
 
   // Статистика
   const stats = {
@@ -97,6 +100,10 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
         fetch(`/api/projects/${projectId}/mailings`),
         fetch(`/api/projects/${projectId}/segments`)
       ]);
+
+      if (!mailingsRes.ok || !segmentsRes.ok) {
+        throw new Error('Не удалось загрузить рассылки');
+      }
 
       const mailingsData = await mailingsRes.json();
       const segmentsData = await segmentsRes.json();
@@ -149,21 +156,46 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
     }
   };
 
-  const handleStart = async (mailingId: string) => {
+  const handleStart = async (mailing: any) => {
+    const audience = mailing.segment
+      ? `сегменту «${mailing.segment.name}» (${mailing.segment.memberCount} участников)`
+      : mailing._count?.recipients
+        ? `${mailing._count.recipients} подготовленным получателям`
+        : 'всем активным пользователям с подходящим контактом';
+    const preview = (mailing.messageText || mailing.messageHtml || '')
+      .replace(/<[^>]*>/g, '')
+      .slice(0, 140);
+    if (
+      !window.confirm(
+        `Запустить «${mailing.name}» по каналу ${mailing.type} ${audience}?${preview ? `\n\n${preview}` : ''}`
+      )
+    ) {
+      return;
+    }
+
+    setStartingMailingId(mailing.id);
     try {
       const response = await fetch(
-        `/api/projects/${projectId}/mailings/${mailingId}/start`,
+        `/api/projects/${projectId}/mailings/${mailing.id}/start`,
         { method: 'POST' }
       );
 
+      const result = await response.json().catch(() => ({}));
+
       if (response.ok) {
-        toast.success('Рассылка запущена');
+        toast.success(
+          `Рассылка запущена: ${result.recipientCount ?? 0} получателей`
+        );
         loadData();
       } else {
-        throw new Error();
+        throw new Error(result.error || 'Ошибка запуска рассылки');
       }
-    } catch {
-      toast.error('Ошибка запуска рассылки');
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Ошибка запуска рассылки'
+      );
+    } finally {
+      setStartingMailingId(null);
     }
   };
 
@@ -383,8 +415,12 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
                             variant='ghost'
                             size='icon'
                             className='h-8 w-8'
+                            aria-label={`Действия рассылки «${mailing.name}»`}
                           >
-                            <MoreVertical className='h-4 w-4' />
+                            <MoreVertical
+                              className='h-4 w-4'
+                              aria-hidden='true'
+                            />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align='end'>
@@ -405,10 +441,17 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
                           </DropdownMenuItem>
                           {mailing.status === 'DRAFT' && (
                             <DropdownMenuItem
-                              onClick={() => handleStart(mailing.id)}
+                              onClick={() => handleStart(mailing)}
+                              disabled={startingMailingId === mailing.id}
                             >
-                              <Play className='mr-2 h-4 w-4' />
-                              Запустить
+                              {startingMailingId === mailing.id ? (
+                                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                              ) : (
+                                <Play className='mr-2 h-4 w-4' />
+                              )}
+                              {startingMailingId === mailing.id
+                                ? 'Запуск…'
+                                : 'Запустить'}
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />

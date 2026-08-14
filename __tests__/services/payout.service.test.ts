@@ -37,7 +37,9 @@ beforeEach(() => {
   (mockUser.spendBonuses as jest.Mock) = jest.fn().mockResolvedValue([]);
   (mockUser.awardBonus as jest.Mock) = jest.fn().mockResolvedValue({});
   (mockDb as any).referralProgram = {
-    findUnique: jest.fn().mockResolvedValue({ payoutMinAmount: 0 })
+    findUnique: jest
+      .fn()
+      .mockResolvedValue({ payoutMinAmount: 0, payoutHoldDays: 0 })
   };
   (mockDb as any).user = {
     findFirst: jest.fn().mockResolvedValue({ id: userId })
@@ -49,6 +51,9 @@ beforeEach(() => {
     update: jest.fn().mockResolvedValue(payoutRow()),
     updateMany: jest.fn(),
     deleteMany: jest.fn()
+  };
+  (mockDb as any).bonus = {
+    aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 10_000 } })
   };
 });
 
@@ -64,7 +69,9 @@ describe('PayoutService.requestPayout', () => {
       userId,
       500,
       expect.any(String),
-      expect.objectContaining({ source: 'payout' })
+      expect.objectContaining({ source: 'payout' }),
+      expect.any(String),
+      expect.objectContaining({ bonusType: 'REFERRAL' })
     );
     expect((mockDb as any).payout.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -84,7 +91,7 @@ describe('PayoutService.requestPayout', () => {
   it('отклоняет сумму ниже порога проекта без резерва', async () => {
     (mockDb as any).referralProgram.findUnique = jest
       .fn()
-      .mockResolvedValue({ payoutMinAmount: 1000 });
+      .mockResolvedValue({ payoutMinAmount: 1000, payoutHoldDays: 0 });
 
     await expect(
       PayoutService.requestPayout({ projectId, userId, amount: 500 })
@@ -117,11 +124,20 @@ describe('PayoutService.requestPayout', () => {
     await expect(
       PayoutService.requestPayout({ projectId, userId, amount: 500 })
     ).rejects.toThrow('Недостаточно бонусов');
-    expect((mockDb as any).payout.create).not.toHaveBeenCalled();
+    expect((mockDb as any).payout.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'RESERVING' })
+      })
+    );
+    expect((mockDb as any).payout.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'RESERVING' })
+      })
+    );
   });
 
   it('при сбое создания заявки после резерва возвращает бонусы', async () => {
-    (mockDb as any).payout.create = jest
+    (mockDb as any).payout.update = jest
       .fn()
       .mockRejectedValue(new Error('db down'));
 
@@ -149,6 +165,18 @@ describe('PayoutService переходы состояний', () => {
     expect((mockDb as any).payout.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'payout-1', status: { in: ['REQUESTED'] } },
+        data: expect.objectContaining({
+          status: 'REFUND_PENDING',
+          refundTargetStatus: 'REJECTED'
+        })
+      })
+    );
+    expect((mockDb as any).payout.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'payout-1',
+          status: 'REFUND_PENDING'
+        }),
         data: expect.objectContaining({ status: 'REJECTED' })
       })
     );

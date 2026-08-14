@@ -235,7 +235,7 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
   return (
     <div className='flex flex-1 flex-col space-y-6'>
       {/* Header */}
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
         <div>
           <Heading
             title={`Реферальная программа: ${project?.name || 'Проект'}`}
@@ -271,45 +271,63 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
             onValueChange={setActiveTab}
             className='space-y-6'
           >
-            <TabsList
-              className={`grid w-full ${
-                project?.enablePartnerRoles ? 'grid-cols-6' : 'grid-cols-3'
-              }`}
+            <div
+              className='max-w-full overflow-x-auto pb-1'
+              role='region'
+              aria-label='Разделы реферальной программы'
+              tabIndex={0}
             >
-              <TabsTrigger value='settings' className='flex items-center'>
-                <Settings className='mr-2 h-4 w-4' />
-                Настройки
-              </TabsTrigger>
-              <TabsTrigger value='stats' className='flex items-center'>
-                <BarChart3 className='mr-2 h-4 w-4' />
-                Статистика
-              </TabsTrigger>
-              <TabsTrigger value='plans' className='flex items-center'>
-                <Target className='mr-2 h-4 w-4' />
-                {project?.enablePartnerRoles ? 'Планы партнёров' : 'Планы %'}
-              </TabsTrigger>
-              {project?.enablePartnerRoles && (
-                <TabsTrigger value='payouts' className='flex items-center'>
-                  <Wallet className='mr-2 h-4 w-4' />
-                  Выплаты
-                </TabsTrigger>
-              )}
-              {project?.enablePartnerRoles && (
+              <TabsList className='flex h-auto w-max min-w-full justify-start'>
                 <TabsTrigger
-                  value='organizations'
-                  className='flex items-center'
+                  value='settings'
+                  className='flex flex-none items-center'
                 >
-                  <Building2 className='mr-2 h-4 w-4' />
-                  Организации
+                  <Settings className='mr-2 h-4 w-4' />
+                  Настройки
                 </TabsTrigger>
-              )}
-              {project?.enablePartnerRoles && (
-                <TabsTrigger value='hierarchy' className='flex items-center'>
-                  <Network className='mr-2 h-4 w-4' />
-                  Иерархия
+                <TabsTrigger
+                  value='stats'
+                  className='flex flex-none items-center'
+                >
+                  <BarChart3 className='mr-2 h-4 w-4' />
+                  Статистика
                 </TabsTrigger>
-              )}
-            </TabsList>
+                <TabsTrigger
+                  value='plans'
+                  className='flex flex-none items-center'
+                >
+                  <Target className='mr-2 h-4 w-4' />
+                  {project?.enablePartnerRoles ? 'Планы партнёров' : 'Планы %'}
+                </TabsTrigger>
+                {project?.enablePartnerRoles && (
+                  <TabsTrigger
+                    value='payouts'
+                    className='flex flex-none items-center'
+                  >
+                    <Wallet className='mr-2 h-4 w-4' />
+                    Выплаты
+                  </TabsTrigger>
+                )}
+                {project?.enablePartnerRoles && (
+                  <TabsTrigger
+                    value='organizations'
+                    className='flex flex-none items-center'
+                  >
+                    <Building2 className='mr-2 h-4 w-4' />
+                    Организации
+                  </TabsTrigger>
+                )}
+                {project?.enablePartnerRoles && (
+                  <TabsTrigger
+                    value='hierarchy'
+                    className='flex flex-none items-center'
+                  >
+                    <Network className='mr-2 h-4 w-4' />
+                    Иерархия
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
 
             <TabsContent value='settings' className='space-y-6'>
               <ReferralSettingsForm

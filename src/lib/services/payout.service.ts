@@ -59,7 +59,22 @@ export class PayoutService {
     }
 
     const user = await db.user.findFirst({
-      where: { id: userId, projectId, isActive: true },
+      where: {
+        id: userId,
+        projectId,
+        isActive: true,
+        OR: [
+          { partnerRole: { not: 'CLIENT' } },
+          {
+            organizationMemberships: {
+              some: {
+                projectId,
+                OR: [{ level: { not: null } }, { canManage: true }]
+              }
+            }
+          }
+        ]
+      },
       select: { id: true }
     });
     if (!user) throw new Error('Партнёр не принадлежит активному проекту');
@@ -67,11 +82,32 @@ export class PayoutService {
     // Порог вывода из настроек b2b-программы (план 007, 0 = без порога).
     const program = await db.referralProgram.findUnique({
       where: { projectId },
-      select: { payoutMinAmount: true }
+      select: { payoutMinAmount: true, payoutHoldDays: true }
     });
     const minAmount = Number(program?.payoutMinAmount ?? 0);
     if (minAmount > 0 && amount < minAmount) {
       throw new Error(`Минимальная сумма вывода: ${minAmount}`);
+    }
+
+    const holdDays = Math.max(0, program?.payoutHoldDays ?? 0);
+    const createdBefore = new Date(Date.now() - holdDays * 24 * 60 * 60 * 1000);
+    const eligible = await db.bonus.aggregate({
+      where: {
+        userId,
+        type: 'REFERRAL',
+        isUsed: false,
+        createdAt: { lte: createdBefore },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+      },
+      _sum: { amount: true }
+    });
+    const withdrawableAmount = Number(eligible._sum.amount ?? 0);
+    if (withdrawableAmount < amount) {
+      throw new Error(
+        holdDays > 0
+          ? `Недостаточно доступной партнёрской комиссии после выдержки ${holdDays} дн. Доступно: ${withdrawableAmount}`
+          : `Недостаточно доступной партнёрской комиссии. Доступно: ${withdrawableAmount}`
+      );
     }
 
     // Резерв бонусов. spendBonuses атомарно проверяет баланс и бросает при
@@ -105,7 +141,9 @@ export class PayoutService {
         {
           source: 'payout',
           spendBatchId
-        }
+        },
+        spendBatchId,
+        { bonusType: 'REFERRAL', createdBefore }
       );
     } catch (error) {
       await db.payout.deleteMany({
@@ -187,7 +225,7 @@ export class PayoutService {
     adminId: string,
     reason?: string
   ): Promise<Payout> {
-    const payout = await PayoutService.transition(
+    return PayoutService.transitionWithRefund(
       payoutId,
       ['REQUESTED'],
       'REJECTED',
@@ -197,8 +235,6 @@ export class PayoutService {
         rejectReason: reason ?? null
       }
     );
-    await PayoutService.refundReserve(payout);
-    return payout;
   }
 
   /** REQUESTED → CANCELLED (партнёр отозвал до одобрения) + возврат резерва. */
@@ -219,14 +255,12 @@ export class PayoutService {
       }
     }
 
-    const payout = await PayoutService.transition(
+    return PayoutService.transitionWithRefund(
       payoutId,
       ['REQUESTED'],
       'CANCELLED',
       { cancelledAt: new Date() }
     );
-    await PayoutService.refundReserve(payout);
-    return payout;
   }
 
   /**
@@ -252,14 +286,157 @@ export class PayoutService {
     adminId: string,
     reason?: string
   ): Promise<Payout> {
-    const payout = await PayoutService.transition(
+    return PayoutService.transitionWithRefund(
       payoutId,
       ['APPROVED'],
       'FAILED',
       { reviewedBy: adminId, failReason: reason ?? null }
     );
-    await PayoutService.refundReserve(payout);
-    return payout;
+  }
+
+  /**
+   * Makes the refund itself a durable state. If bonus credit fails, the payout
+   * stays REFUND_PENDING and a reconciler can safely retry by externalId.
+   */
+  private static async transitionWithRefund(
+    payoutId: string,
+    from: PayoutStatus[],
+    target: Extract<PayoutStatus, 'REJECTED' | 'CANCELLED' | 'FAILED'>,
+    data: Prisma.PayoutUpdateManyMutationInput
+  ): Promise<Payout> {
+    const claimed = await db.payout.updateMany({
+      where: { id: payoutId, status: { in: from } },
+      data: {
+        ...data,
+        status: 'REFUND_PENDING',
+        refundTargetStatus: target,
+        refundCompletedAt: null
+      }
+    });
+    if (claimed.count !== 1) {
+      const current = await db.payout.findUnique({ where: { id: payoutId } });
+      if (!current) throw new Error(`Заявка на вывод ${payoutId} не найдена`);
+      throw new Error(
+        `Недопустимый переход выплаты ${payoutId}: ${current.status} → ${target}`
+      );
+    }
+
+    const pending = await db.payout.findUniqueOrThrow({
+      where: { id: payoutId }
+    });
+    await PayoutService.refundReserve(pending);
+    return PayoutService.finishRefund(pending.id, target);
+  }
+
+  private static async finishRefund(
+    payoutId: string,
+    target: Extract<PayoutStatus, 'REJECTED' | 'CANCELLED' | 'FAILED'>
+  ): Promise<Payout> {
+    const finalized = await db.payout.updateMany({
+      where: {
+        id: payoutId,
+        status: 'REFUND_PENDING',
+        refundTargetStatus: target
+      },
+      data: {
+        status: target,
+        refundCompletedAt: new Date()
+      }
+    });
+    if (finalized.count !== 1) {
+      throw new Error(`Не удалось завершить возврат выплаты ${payoutId}`);
+    }
+    return db.payout.findUniqueOrThrow({ where: { id: payoutId } });
+  }
+
+  static async reconcilePending(limit = 100): Promise<{
+    reservingRecovered: number;
+    refundsRecovered: number;
+    failures: number;
+  }> {
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+    const [reserving, refunds] = await Promise.all([
+      db.payout.findMany({
+        where: { status: 'RESERVING', updatedAt: { lt: cutoff } },
+        take: limit,
+        orderBy: { updatedAt: 'asc' }
+      }),
+      db.payout.findMany({
+        where: { status: 'REFUND_PENDING' },
+        take: limit,
+        orderBy: { updatedAt: 'asc' }
+      })
+    ]);
+
+    let reservingRecovered = 0;
+    let refundsRecovered = 0;
+    let failures = 0;
+
+    for (const payout of reserving) {
+      try {
+        const ledgerBatchId = payout.ledgerBatchId;
+        const spend = ledgerBatchId
+          ? await db.transaction.findFirst({
+              where: {
+                userId: payout.userId,
+                type: 'SPEND',
+                OR: [
+                  { externalId: { startsWith: `${ledgerBatchId}:` } },
+                  {
+                    metadata: {
+                      path: ['spendBatchId'],
+                      equals: ledgerBatchId
+                    }
+                  }
+                ]
+              },
+              select: { id: true }
+            })
+          : null;
+        if (spend) {
+          await db.payout.updateMany({
+            where: { id: payout.id, status: 'RESERVING' },
+            data: { status: 'REQUESTED' }
+          });
+        } else {
+          await db.payout.deleteMany({
+            where: { id: payout.id, status: 'RESERVING' }
+          });
+        }
+        reservingRecovered += 1;
+      } catch (error) {
+        failures += 1;
+        logger.error('Failed to reconcile reserving payout', {
+          payoutId: payout.id,
+          error: error instanceof Error ? error.message : String(error),
+          component: 'payout-service'
+        });
+      }
+    }
+
+    for (const payout of refunds) {
+      try {
+        const target = payout.refundTargetStatus;
+        if (!target || !['REJECTED', 'CANCELLED', 'FAILED'].includes(target)) {
+          throw new Error('Некорректный целевой статус возврата');
+        }
+        await PayoutService.refundReserve(payout);
+        await PayoutService.finishRefund(
+          payout.id,
+          target as Extract<PayoutStatus, 'REJECTED' | 'CANCELLED' | 'FAILED'>
+        );
+        refundsRecovered += 1;
+      } catch (error) {
+        failures += 1;
+        logger.error('Failed to reconcile payout refund', {
+          payoutId: payout.id,
+          error: error instanceof Error ? error.message : String(error),
+          component: 'payout-service'
+        });
+      }
+    }
+
+    return { reservingRecovered, refundsRecovered, failures };
   }
 
   /**

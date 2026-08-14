@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 async function getIntegrationStatuses(projectId: string) {
   const admin = await getCurrentAdmin();
-  if (!admin) redirect('/auth/login');
+  if (!admin) redirect('/auth/sign-in');
 
   const project = await db.project.findFirst({
     where: { id: projectId, ownerId: admin.sub },

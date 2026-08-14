@@ -62,7 +62,7 @@ export async function getIntegrationPageData(
   const admin = await getCurrentAdmin();
 
   if (!admin) {
-    redirect('/auth/login');
+    redirect('/auth/sign-in');
   }
 
   // Verify project ownership
