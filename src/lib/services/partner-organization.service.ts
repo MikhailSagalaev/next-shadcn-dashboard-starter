@@ -13,6 +13,7 @@ import {
   type ReferralLinkInput
 } from './partner-referral-graph.service';
 import { ReferrerAssignmentService } from './referrer-assignment.service';
+import { OrganizationFinancialMetricsService } from './organization-financial-metrics.service';
 
 export interface CreateOrganizationInput {
   projectId: string;
@@ -247,6 +248,7 @@ export class PartnerOrganizationService {
             referredBy: true,
             registeredAt: true,
             totalPurchases: true,
+            organizationId: true,
             isActive: true
           }
         }
@@ -260,20 +262,41 @@ export class PartnerOrganizationService {
       userIds.length > 0
         ? db.referralAttribution.findMany({
             where: { projectId, userId: { in: userIds } },
-            select: { userId: true, commissionPlanId: true }
+            select: {
+              userId: true,
+              referrerId: true,
+              organizationId: true,
+              commissionPlanId: true
+            }
           })
         : Promise.resolve([])
     ]);
+    const legacyOrgByUserId = new Map(
+      memberships.map((membership) => [
+        membership.userId,
+        membership.user.organizationId
+      ])
+    );
+    const scopedAttributions = attributions.filter(
+      (attribution) =>
+        (attribution.organizationId ??
+          legacyOrgByUserId.get(attribution.userId) ??
+          null) === organizationId
+    );
 
     const linksByChild = new Map<string, typeof links>();
+    const linksByReferrer = new Map<string, typeof links>();
     for (const link of links) {
       const childLinks = linksByChild.get(link.childUserId) ?? [];
       childLinks.push(link);
       linksByChild.set(link.childUserId, childLinks);
+      const referralLinks = linksByReferrer.get(link.referrerUserId) ?? [];
+      referralLinks.push(link);
+      linksByReferrer.set(link.referrerUserId, referralLinks);
     }
 
     const attributionByUserId = new Map(
-      attributions.map((attribution) => [
+      scopedAttributions.map((attribution) => [
         attribution.userId,
         attribution.commissionPlanId
       ])
@@ -289,20 +312,68 @@ export class PartnerOrganizationService {
           .filter((id): id is string => Boolean(id))
       )
     ];
-    const plans =
+    const invitedByIds = [
+      ...new Set(
+        scopedAttributions.map((attribution) => attribution.referrerId)
+      )
+    ];
+    const [plans, invitedByUsers, financialMetrics] = await Promise.all([
       planIds.length > 0
-        ? await db.referralCommissionPlan.findMany({
+        ? db.referralCommissionPlan.findMany({
             where: { id: { in: planIds }, projectId },
             select: { id: true, name: true }
           })
-        : [];
+        : Promise.resolve([]),
+      invitedByIds.length > 0
+        ? db.user.findMany({
+            where: { projectId, id: { in: invitedByIds } },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true
+            }
+          })
+        : Promise.resolve([]),
+      OrganizationFinancialMetricsService.getMany({
+        projectId,
+        organizationId,
+        subjects: memberships.map((membership) => ({
+          id: membership.userId,
+          totalPurchases: membership.user.totalPurchases,
+          legacyOrganizationId: membership.user.organizationId
+        }))
+      })
+    ]);
     const planMap = new Map(plans.map((plan) => [plan.id, plan.name]));
+    const invitedByUserMap = new Map(
+      invitedByUsers.map((user) => [user.id, user])
+    );
+    const attributionByUser = new Map(
+      scopedAttributions.map((attribution) => [attribution.userId, attribution])
+    );
+    const memberById = new Map(
+      memberships.map((membership) => [membership.userId, membership.user])
+    );
 
     return memberships.map((membership) => {
       const user = membership.user;
       const memberLinks = linksByChild.get(user.id) ?? [];
       const primaryLink =
         memberLinks.find((link) => link.isPrimary) ?? memberLinks[0] ?? null;
+      const attribution = attributionByUser.get(user.id);
+      const invitedByUser = attribution
+        ? invitedByUserMap.get(attribution.referrerId)
+        : null;
+      const directReferrals = (linksByReferrer.get(user.id) ?? [])
+        .map((link) => memberById.get(link.childUserId))
+        .filter((child): child is NonNullable<typeof child> => Boolean(child))
+        .map((child) => ({ id: child.id, name: displayName(child) }));
+      const metric = financialMetrics.get(user.id) ?? {
+        totalPurchases: 0,
+        referralBonusEarned: 0
+      };
       return {
         id: user.id,
         name: displayName(user),
@@ -312,7 +383,7 @@ export class PartnerOrganizationService {
         level: membership.level,
         title: membership.title,
         canManage: membership.canManage,
-        referredBy: primaryLink?.referrerUserId ?? user.referredBy,
+        referredBy: primaryLink?.referrerUserId ?? null,
         referrerName: primaryLink ? displayName(primaryLink.referrer) : null,
         referrerLinks: memberLinks.map((link) => ({
           referrerId: link.referrerUserId,
@@ -333,8 +404,13 @@ export class PartnerOrganizationService {
         attributionPlanName: attributionByUserId.get(user.id)
           ? (planMap.get(attributionByUserId.get(user.id)!) ?? null)
           : null,
+        invitedById: attribution?.referrerId ?? null,
+        invitedByName: invitedByUser ? displayName(invitedByUser) : null,
+        directReferrals,
+        joinedAt: membership.createdAt.toISOString(),
         registeredAt: user.registeredAt.toISOString(),
-        totalPurchases: Number(user.totalPurchases ?? 0),
+        totalPurchases: metric.totalPurchases,
+        referralBonusEarned: metric.referralBonusEarned,
         isActive: user.isActive
       };
     });
@@ -1051,53 +1127,23 @@ export class PartnerOrganizationService {
     const clients = memberships.filter(
       (membership) => membership.level === null && !membership.canManage
     ).length;
-    const attributionOrganization = new Map<string, string | null>();
-
-    const userIds = members.map((member) => member.id);
-    let commissionEarned = 0;
-    if (userIds.length > 0) {
-      const [transactions, attributions] = await Promise.all([
-        db.transaction.findMany({
-          where: {
-            referralUserId: { in: userIds },
-            type: 'EARN',
-            isReferralBonus: true,
-            ...(since ? { createdAt: { gte: since } } : {})
-          },
-          select: { amount: true, referralUserId: true, metadata: true }
-        }),
-        db.referralAttribution.findMany({
-          where: { projectId, userId: { in: userIds } },
-          select: { userId: true, organizationId: true }
-        })
-      ]);
-      attributions.forEach((attribution) =>
-        attributionOrganization.set(
-          attribution.userId,
-          attribution.organizationId
-        )
-      );
-      commissionEarned = transactions.reduce((sum, transaction) => {
-        const metadata =
-          transaction.metadata &&
-          typeof transaction.metadata === 'object' &&
-          !Array.isArray(transaction.metadata)
-            ? (transaction.metadata as Record<string, unknown>)
-            : null;
-        const recordedOrganizationId =
-          typeof metadata?.referralOrganizationId === 'string'
-            ? metadata.referralOrganizationId
-            : null;
-        const attributedOrganizationId = transaction.referralUserId
-          ? attributionOrganization.get(transaction.referralUserId)
-          : null;
-        return recordedOrganizationId === organizationId ||
-          (!recordedOrganizationId &&
-            attributedOrganizationId === organizationId)
-          ? sum + Number(transaction.amount)
-          : sum;
-      }, 0);
-    }
+    const financialMetrics = await OrganizationFinancialMetricsService.getMany({
+      projectId,
+      organizationId,
+      since,
+      subjects: members.map((member) => ({
+        id: member.id,
+        totalPurchases: member.totalPurchases,
+        legacyOrganizationId: member.organizationId
+      }))
+    });
+    const totals = [...financialMetrics.values()].reduce(
+      (result, metric) => ({
+        totalPurchases: result.totalPurchases + metric.totalPurchases,
+        commissionEarned: result.commissionEarned + metric.referralBonusEarned
+      }),
+      { totalPurchases: 0, commissionEarned: 0 }
+    );
 
     return {
       members: members.length,
@@ -1106,15 +1152,8 @@ export class PartnerOrganizationService {
         .map(([level, count]) => ({ level, count })),
       managers,
       clients,
-      totalPurchases: members.reduce(
-        (sum, member) =>
-          (attributionOrganization.get(member.id) ?? member.organizationId) ===
-          organizationId
-            ? sum + Number(member.totalPurchases ?? 0)
-            : sum,
-        0
-      ),
-      commissionEarned
+      totalPurchases: totals.totalPurchases,
+      commissionEarned: totals.commissionEarned
     };
   }
 

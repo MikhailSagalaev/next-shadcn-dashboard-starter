@@ -410,6 +410,8 @@ export class ReferralService {
         referralPlansEnabled?: boolean;
       } | null;
       const attribution = user.referralAttribution;
+      const payoutOrganizationId =
+        attribution?.organizationId ?? user.organizationId ?? null;
       const useCommissionPlan =
         Boolean(projectRow?.referralPlansEnabled) &&
         Boolean(attribution?.commissionPlan?.levels?.length);
@@ -457,10 +459,7 @@ export class ReferralService {
       const payoutLevels = projectFlags?.enablePartnerRoles
         ? await PartnerReferralGraphService.resolvePayoutLevels({
             projectId: user.projectId,
-            organizationId:
-              user.referralAttribution?.organizationId ??
-              user.organizationId ??
-              null,
+            organizationId: payoutOrganizationId,
             childUserId: user.id,
             depth: chainDepth
           })
@@ -513,9 +512,8 @@ export class ReferralService {
                 referralLevel: level,
                 referralSharePercent: referrer.weight * 100,
                 purchaseAmount,
-                ...(user.referralAttribution?.organizationId && {
-                  referralOrganizationId:
-                    user.referralAttribution.organizationId
+                ...(payoutOrganizationId && {
+                  referralOrganizationId: payoutOrganizationId
                 }),
                 ...(orderId ? { orderId } : {}),
                 ...(user.referralAttribution?.commissionPlanId && {
@@ -708,6 +706,15 @@ export class ReferralService {
         const reversalExternalId = referralTx.externalId
           ? `reversal_${referralTx.externalId}`
           : `reversal_legacy_referral_${orderId}_${referralTx.id}`;
+        const referralOrganizationId =
+          referralTx.metadata &&
+          typeof referralTx.metadata === 'object' &&
+          !Array.isArray(referralTx.metadata) &&
+          typeof (referralTx.metadata as Record<string, unknown>)
+            .referralOrganizationId === 'string'
+            ? (referralTx.metadata as Record<string, string>)
+                .referralOrganizationId
+            : null;
 
         try {
           const existingReversal = await db.transaction.findUnique({
@@ -773,6 +780,7 @@ export class ReferralService {
                   awardedAmount,
                   reversibleAmount,
                   shortfall,
+                  ...(referralOrganizationId ? { referralOrganizationId } : {}),
                   ...(projectId ? { projectId } : {})
                 }
               }

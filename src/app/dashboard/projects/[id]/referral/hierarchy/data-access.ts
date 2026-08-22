@@ -23,6 +23,7 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { cachedGetDescendantTree } from '@/lib/services/referral-commission.service';
+import { OrganizationFinancialMetricsService } from '@/lib/services/organization-financial-metrics.service';
 
 export type HierarchyPeriod = 'today' | '7d' | '30d' | 'all';
 
@@ -48,9 +49,9 @@ export interface HierarchyNode {
   directCount: number;
   /** Размер дерева ниже этого узла (без него самого). */
   subtreeSize: number;
-  /** Сумма totalPurchases всех потомков + сам узел в выбранном периоде. */
+  /** Личная сумма покупок участника в выбранном периоде и организации. */
   totalPurchasesPeriod: number;
-  /** Комиссия (REFERRAL EARN) этого узла за выбранный период. */
+  /** Чистые реферальные бонусы (EARN минус REFUND) за период и организацию. */
   commissionEarned: number;
 }
 
@@ -64,6 +65,7 @@ export interface HierarchyTreeResult {
     managers: number;
     directors: number;
     levels: Array<{ level: number; count: number }>;
+    totalPurchases: number;
     commissionTotal: number;
   };
 }
@@ -124,6 +126,7 @@ export async function getHierarchyTree(
     referredBy: string | null;
     registeredAt: Date;
     totalPurchases: unknown;
+    legacyOrganizationId: string | null;
     organizationLevel: number | null;
     organizationTitle: string | null;
     canManageOrganization: boolean;
@@ -159,7 +162,8 @@ export async function getHierarchyTree(
               partnerRole: true,
               referredBy: true,
               registeredAt: true,
-              totalPurchases: true
+              totalPurchases: true,
+              organizationId: true
             }
           }
         },
@@ -188,13 +192,11 @@ export async function getHierarchyTree(
     );
     partners = memberships.map((membership) => ({
       ...membership.user,
-      referredBy:
-        primaryByChild.get(membership.userId) ??
-        membership.user.referredBy ??
-        null,
+      referredBy: primaryByChild.get(membership.userId) ?? null,
       organizationLevel: membership.level,
       organizationTitle: membership.title,
-      canManageOrganization: membership.canManage
+      canManageOrganization: membership.canManage,
+      legacyOrganizationId: membership.user.organizationId
     }));
   } else {
     const users = await db.user.findMany({
@@ -213,7 +215,8 @@ export async function getHierarchyTree(
         partnerRole: true,
         referredBy: true,
         registeredAt: true,
-        totalPurchases: true
+        totalPurchases: true,
+        organizationId: true
       },
       orderBy: [{ partnerRole: 'desc' }, { registeredAt: 'asc' }]
     });
@@ -221,7 +224,8 @@ export async function getHierarchyTree(
       ...user,
       organizationLevel: null,
       organizationTitle: null,
-      canManageOrganization: false
+      canManageOrganization: false,
+      legacyOrganizationId: user.organizationId
     }));
   }
 
@@ -236,6 +240,7 @@ export async function getHierarchyTree(
         managers: 0,
         directors: 0,
         levels: [],
+        totalPurchases: 0,
         commissionTotal: 0
       }
     };
@@ -302,21 +307,16 @@ export async function getHierarchyTree(
     );
   }
 
-  // Комиссия за период по каждому партнёру.
-  const commissionAgg = await db.transaction.groupBy({
-    by: ['userId'],
-    where: {
-      type: 'EARN',
-      isReferralBonus: true,
-      userId: { in: partners.map((p) => p.id) },
-      ...(since ? { createdAt: { gte: since } } : {})
-    },
-    _sum: { amount: true }
+  const financialMetrics = await OrganizationFinancialMetricsService.getMany({
+    projectId,
+    organizationId,
+    since,
+    subjects: partners.map((partner) => ({
+      id: partner.id,
+      totalPurchases: partner.totalPurchases,
+      legacyOrganizationId: partner.legacyOrganizationId
+    }))
   });
-  const commissionByUser = new Map<string, number>();
-  for (const row of commissionAgg) {
-    commissionByUser.set(row.userId, Number(row._sum.amount ?? 0));
-  }
 
   // Превращаем в HierarchyNode. parentId привязываем только если родитель —
   // тоже партнёр в этом списке (иначе считаем корнем).
@@ -359,8 +359,8 @@ export async function getHierarchyTree(
       registeredAt: p.registeredAt.toISOString(),
       directCount: directCountByParent.get(p.id) ?? 0,
       subtreeSize: subtreeSizeById.get(p.id) ?? 0,
-      totalPurchasesPeriod: Number(p.totalPurchases ?? 0),
-      commissionEarned: commissionByUser.get(p.id) ?? 0
+      totalPurchasesPeriod: financialMetrics.get(p.id)?.totalPurchases ?? 0,
+      commissionEarned: financialMetrics.get(p.id)?.referralBonusEarned ?? 0
     };
   });
 
@@ -381,9 +381,12 @@ export async function getHierarchyTree(
     { trainers: 0, managers: 0, directors: 0 }
   );
 
-  const commissionTotal = Array.from(commissionByUser.values()).reduce(
-    (s, v) => s + v,
-    0
+  const financialTotals = [...financialMetrics.values()].reduce(
+    (result, metric) => ({
+      totalPurchases: result.totalPurchases + metric.totalPurchases,
+      commissionTotal: result.commissionTotal + metric.referralBonusEarned
+    }),
+    { totalPurchases: 0, commissionTotal: 0 }
   );
   const levelCounts = new Map<number, number>();
   for (const node of nodes) {
@@ -405,7 +408,8 @@ export async function getHierarchyTree(
       members: nodes.length,
       ...totalsByRole,
       levels,
-      commissionTotal
+      totalPurchases: financialTotals.totalPurchases,
+      commissionTotal: financialTotals.commissionTotal
     }
   };
 }
@@ -436,6 +440,7 @@ export async function getHierarchyTreeSafe(
         managers: 0,
         directors: 0,
         levels: [],
+        totalPurchases: 0,
         commissionTotal: 0
       }
     };

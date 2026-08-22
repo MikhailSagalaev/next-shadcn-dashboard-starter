@@ -5,7 +5,7 @@
  *               (b2b-referral-hierarchy Phase 6.9–6.11, 6.14)
  *
  *               Принимает плоский массив `HierarchyNode` от data-access,
- *               собирает дерево по `parentId`, рендерит вложенный список с
+ *               собирает дерево по `parentId`, рендерит сортируемую таблицу с
  *               раскрываемыми уровнями.
  *
  *               Возможности:
@@ -13,7 +13,8 @@
  *                 - Поиск по name/email/phone с подсветкой и
  *                   автораскрытием цепочки родителей
  *                 - Кнопка экспорта CSV
- *                 - Per-node агрегаты: direct, subtree size, commission
+ *                 - Per-node агрегаты: direct, subtree size, purchases,
+ *                   net referral bonuses
  *
  *               НЕ переиспользуем `ReferralTree` напрямую (он завязан на
  *               отдельную пагинированную загрузку через `loadingIds` и
@@ -32,12 +33,16 @@
 import * as React from 'react';
 import Link from 'next/link';
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ChevronDown,
   ChevronRight,
   Download,
   Mail,
   Phone,
   Search,
+  ShoppingBag,
   Users,
   Wallet
 } from 'lucide-react';
@@ -46,6 +51,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/composite';
 import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -88,7 +101,39 @@ interface ChildrenIndex {
   parentOf: Map<string, string | null>;
 }
 
-function buildIndex(nodes: HierarchyNode[]): ChildrenIndex {
+type HierarchySortField =
+  | 'name'
+  | 'registeredAt'
+  | 'directCount'
+  | 'totalPurchasesPeriod'
+  | 'commissionEarned';
+type SortOrder = 'asc' | 'desc';
+
+function compareNodes(
+  left: HierarchyNode,
+  right: HierarchyNode,
+  field: HierarchySortField,
+  order: SortOrder
+) {
+  let result = 0;
+  if (field === 'name') {
+    result = left.name.localeCompare(right.name, 'ru-RU');
+  } else if (field === 'registeredAt') {
+    result =
+      new Date(left.registeredAt).getTime() -
+      new Date(right.registeredAt).getTime();
+  } else {
+    result = left[field] - right[field];
+  }
+  if (result === 0) result = left.name.localeCompare(right.name, 'ru-RU');
+  return order === 'asc' ? result : -result;
+}
+
+function buildIndex(
+  nodes: HierarchyNode[],
+  sortField: HierarchySortField,
+  sortOrder: SortOrder
+): ChildrenIndex {
   const byParent = new Map<string, HierarchyNode[]>();
   const byId = new Map<string, HierarchyNode>();
   const parentOf = new Map<string, string | null>();
@@ -99,6 +144,11 @@ function buildIndex(nodes: HierarchyNode[]): ChildrenIndex {
     const arr = byParent.get(key) ?? [];
     arr.push(n);
     byParent.set(key, arr);
+  }
+  for (const children of byParent.values()) {
+    children.sort((left, right) =>
+      compareNodes(left, right, sortField, sortOrder)
+    );
   }
   return { byParent, byId, parentOf };
 }
@@ -134,7 +184,7 @@ interface NodeRowProps {
   isHighlighted: boolean;
   query: string;
   onToggle: () => void;
-  childContainerId: string;
+  depth: number;
 }
 
 function NodeRow({
@@ -144,94 +194,161 @@ function NodeRow({
   isHighlighted,
   query,
   onToggle,
-  childContainerId
+  depth
 }: NodeRowProps) {
   return (
-    <div
-      className={`group flex flex-col gap-2 rounded-lg border px-3 py-2.5 transition-all sm:flex-row sm:items-center sm:justify-between ${
-        isHighlighted
-          ? 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20'
-          : 'hover:border-zinc-300 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50'
-      }`}
+    <TableRow
+      className={
+        isHighlighted ? 'bg-amber-50/60 dark:bg-amber-900/20' : undefined
+      }
     >
-      <div className='flex min-w-0 flex-1 items-start gap-2'>
-        <button
-          type='button'
-          onClick={onToggle}
-          disabled={!hasChildren}
-          aria-label={`${isExpanded ? 'Свернуть' : 'Развернуть'} ветку: ${node.name}`}
-          aria-expanded={hasChildren ? isExpanded : undefined}
-          aria-controls={hasChildren ? childContainerId : undefined}
-          className='text-muted-foreground hover:text-foreground mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md disabled:opacity-30'
+      <TableCell className='min-w-[320px] whitespace-normal'>
+        <div
+          className='flex min-w-0 items-start gap-2'
+          style={{ paddingInlineStart: `${depth * 16}px` }}
         >
-          {hasChildren ? (
-            isExpanded ? (
-              <ChevronDown className='h-4 w-4' />
+          <button
+            type='button'
+            onClick={onToggle}
+            disabled={!hasChildren}
+            aria-label={`${isExpanded ? 'Свернуть' : 'Развернуть'} ветку: ${node.name}`}
+            aria-expanded={hasChildren ? isExpanded : undefined}
+            className='text-muted-foreground hover:text-foreground focus-visible:ring-ring mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-30'
+          >
+            {hasChildren ? (
+              isExpanded ? (
+                <ChevronDown className='h-4 w-4' aria-hidden='true' />
+              ) : (
+                <ChevronRight className='h-4 w-4' aria-hidden='true' />
+              )
             ) : (
-              <ChevronRight className='h-4 w-4' />
-            )
-          ) : (
-            <span className='inline-block h-4 w-4' />
-          )}
-        </button>
-        <div className='min-w-0 flex-1'>
-          <div className='flex flex-wrap items-center gap-2'>
-            <span className='truncate font-medium'>
-              <Highlight text={node.name} query={query} />
-            </span>
-            {node.organizationTitle ? (
-              <Badge variant='outline'>{node.organizationTitle}</Badge>
-            ) : node.organizationLevel ? (
-              <Badge variant='outline'>Уровень {node.organizationLevel}</Badge>
-            ) : (
-              <PartnerRoleBadge role={node.partnerRole} />
+              <span className='inline-block h-4 w-4' />
             )}
-            {node.canManageOrganization && (
-              <Badge variant='secondary'>Управляющий</Badge>
-            )}
-          </div>
-          <div className='text-muted-foreground mt-0.5 flex flex-wrap gap-3 text-xs'>
-            {node.email && (
-              <span className='inline-flex items-center gap-1'>
-                <Mail className='h-3 w-3' />
-                <Highlight text={node.email} query={query} />
+          </button>
+          <div className='min-w-0 flex-1'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <span className='font-medium'>
+                <Highlight text={node.name} query={query} />
               </span>
-            )}
-            {node.phone && (
-              <span className='inline-flex items-center gap-1'>
-                <Phone className='h-3 w-3' />
-                <Highlight text={node.phone} query={query} />
-              </span>
-            )}
-            <span>
-              c {new Date(node.registeredAt).toLocaleDateString('ru-RU')}
-            </span>
-          </div>
-          {node.referrerLinks.length > 0 && (
-            <div className='text-muted-foreground mt-1 text-xs'>
-              Рефереры:{' '}
-              {node.referrerLinks
-                .map(
-                  (link) =>
-                    `${link.referrerName} ${link.sharePercent}%${link.isPrimary ? ' (основной)' : ''}`
-                )
-                .join(' · ')}
+              {node.organizationTitle ? (
+                <Badge variant='outline'>{node.organizationTitle}</Badge>
+              ) : node.organizationLevel ? (
+                <Badge variant='outline'>
+                  Уровень {node.organizationLevel}
+                </Badge>
+              ) : (
+                <PartnerRoleBadge role={node.partnerRole} />
+              )}
+              {node.canManageOrganization && (
+                <Badge variant='secondary'>Управляющий</Badge>
+              )}
             </div>
-          )}
+            <div className='text-muted-foreground mt-0.5 flex flex-wrap gap-3 text-xs'>
+              {node.email && (
+                <span className='inline-flex items-center gap-1'>
+                  <Mail className='h-3 w-3' aria-hidden='true' />
+                  <Highlight text={node.email} query={query} />
+                </span>
+              )}
+              {node.phone && (
+                <span className='inline-flex items-center gap-1'>
+                  <Phone className='h-3 w-3' aria-hidden='true' />
+                  <Highlight text={node.phone} query={query} />
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-      <div className='flex flex-wrap items-center gap-3 sm:flex-nowrap'>
-        <Badge variant='secondary' className='gap-1 font-mono'>
-          <Users className='h-3 w-3' />
+      </TableCell>
+      <TableCell className='text-muted-foreground tabular-nums'>
+        {new Date(node.registeredAt).toLocaleDateString('ru-RU')}
+      </TableCell>
+      <TableCell className='max-w-[280px] whitespace-normal'>
+        {node.referrerLinks.length > 0 ? (
+          <div className='space-y-1 text-xs'>
+            {node.referrerLinks.map((link) => (
+              <div key={link.referrerId}>
+                {link.referrerName} · {link.sharePercent}%
+                {link.isPrimary ? ' · основной' : ''}
+              </div>
+            ))}
+          </div>
+        ) : (
+          '—'
+        )}
+      </TableCell>
+      <TableCell className='text-right'>
+        <Badge variant='secondary' className='gap-1 tabular-nums'>
+          <Users className='h-3 w-3' aria-hidden='true' />
           {node.directCount}
           <span className='text-muted-foreground'>/{node.subtreeSize}</span>
         </Badge>
-        <Badge variant='outline' className='gap-1 font-mono'>
-          <Wallet className='h-3 w-3' />
+      </TableCell>
+      <TableCell className='text-right font-medium tabular-nums'>
+        <span className='inline-flex items-center gap-1'>
+          <ShoppingBag
+            className='text-muted-foreground h-3.5 w-3.5'
+            aria-hidden='true'
+          />
+          {formatRub(node.totalPurchasesPeriod)}
+        </span>
+      </TableCell>
+      <TableCell className='text-right font-medium tabular-nums'>
+        <span className='inline-flex items-center gap-1'>
+          <Wallet
+            className='text-muted-foreground h-3.5 w-3.5'
+            aria-hidden='true'
+          />
           {formatRub(node.commissionEarned)}
-        </Badge>
-      </div>
-    </div>
+        </span>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function SortableHierarchyHead({
+  field,
+  label,
+  activeField,
+  order,
+  align = 'start',
+  onSort
+}: {
+  field: HierarchySortField;
+  label: string;
+  activeField: HierarchySortField;
+  order: SortOrder;
+  align?: 'start' | 'end';
+  onSort: (field: HierarchySortField) => void;
+}) {
+  const active = field === activeField;
+  const Icon = active ? (order === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <TableHead
+      className={align === 'end' ? 'text-right' : undefined}
+      aria-sort={
+        active ? (order === 'asc' ? 'ascending' : 'descending') : 'none'
+      }
+    >
+      <Button
+        type='button'
+        variant='ghost'
+        size='sm'
+        className={`h-8 px-2 ${align === 'end' ? 'ml-auto' : '-ml-2'} ${
+          active ? 'font-semibold' : ''
+        }`}
+        onClick={() => onSort(field)}
+        aria-label={`${label}: сортировать ${
+          active && order === 'asc' ? 'по убыванию' : 'по возрастанию'
+        }`}
+      >
+        {label}
+        <Icon
+          className={`ml-1.5 h-3.5 w-3.5 ${active ? '' : 'opacity-40'}`}
+          aria-hidden='true'
+        />
+      </Button>
+    </TableHead>
   );
 }
 
@@ -245,13 +362,19 @@ export function HierarchyTree({
 }: HierarchyTreeProps) {
   const [search, setSearch] = React.useState('');
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  const [sortField, setSortField] =
+    React.useState<HierarchySortField>('registeredAt');
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>('desc');
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 200);
     return () => clearTimeout(t);
   }, [search]);
 
-  const index = React.useMemo(() => buildIndex(nodes), [nodes]);
+  const index = React.useMemo(
+    () => buildIndex(nodes, sortField, sortOrder),
+    [nodes, sortField, sortOrder]
+  );
 
   /**
    * При наличии поиска — собираем set матчей и всех их предков, чтобы
@@ -289,6 +412,10 @@ export function HierarchyTree({
     () => new Set(rootIds) // По умолчанию корни раскрыты.
   );
 
+  React.useEffect(() => {
+    setManualExpanded((current) => new Set([...current, ...rootIds]));
+  }, [rootIds]);
+
   const toggleId = (id: string) => {
     setManualExpanded((prev) => {
       const next = new Set(prev);
@@ -298,9 +425,6 @@ export function HierarchyTree({
     });
   };
 
-  const isExpanded = (id: string) =>
-    manualExpanded.has(id) || expandedAuto.has(id);
-
   const handleExport = () => {
     const params = new URLSearchParams();
     params.set('period', period);
@@ -308,35 +432,42 @@ export function HierarchyTree({
     const url = `/api/projects/${projectId}/hierarchy/export?${params.toString()}`;
     window.location.href = url;
   };
-
-  const renderNode = (id: string, depth: number): React.ReactNode => {
-    const node = index.byId.get(id);
-    if (!node) return null;
-    const children = index.byParent.get(id) ?? [];
-    const expanded = isExpanded(id);
-    const childContainerId = `hierarchy-children-${id}`;
-    return (
-      <div key={id} className='space-y-2'>
-        <NodeRow
-          node={node}
-          hasChildren={children.length > 0}
-          isExpanded={expanded}
-          isHighlighted={matchedIds.has(id)}
-          query={debouncedSearch}
-          onToggle={() => toggleId(id)}
-          childContainerId={childContainerId}
-        />
-        {expanded && children.length > 0 && (
-          <div
-            id={childContainerId}
-            className='space-y-2 border-s border-dashed border-zinc-200 ps-2 sm:ps-3 dark:border-zinc-800'
-          >
-            {children.map((c) => renderNode(c.id, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
+  const handleSort = (field: HierarchySortField) => {
+    if (field === sortField) {
+      setSortOrder((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortField(field);
+    setSortOrder(field === 'name' ? 'asc' : 'desc');
   };
+
+  const visibleRows = React.useMemo(() => {
+    const rows: Array<{
+      node: HierarchyNode;
+      depth: number;
+      hasChildren: boolean;
+      expanded: boolean;
+    }> = [];
+    const searchVisibleIds = debouncedSearch
+      ? new Set([...matchedIds, ...expandedAuto])
+      : null;
+    const visit = (node: HierarchyNode, depth: number) => {
+      if (searchVisibleIds && !searchVisibleIds.has(node.id)) return;
+      const children = index.byParent.get(node.id) ?? [];
+      const expanded = manualExpanded.has(node.id) || expandedAuto.has(node.id);
+      rows.push({
+        node,
+        depth,
+        hasChildren: children.length > 0,
+        expanded
+      });
+      if (expanded) {
+        children.forEach((child) => visit(child, depth + 1));
+      }
+    };
+    (index.byParent.get('__root__') ?? []).forEach((root) => visit(root, 0));
+    return rows;
+  }, [debouncedSearch, expandedAuto, index, manualExpanded, matchedIds]);
 
   if (nodes.length === 0) {
     return (
@@ -361,11 +492,15 @@ export function HierarchyTree({
       {/* Toolbar: search, period, export */}
       <div className='flex flex-wrap items-center gap-3'>
         <div className='relative min-w-[260px] flex-1'>
-          <Search className='text-muted-foreground absolute top-2.5 left-2.5 h-4 w-4' />
+          <Search
+            className='text-muted-foreground pointer-events-none absolute top-2.5 left-2.5 h-4 w-4'
+            aria-hidden='true'
+          />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder='Поиск по имени, email, телефону…'
+            aria-label='Поиск участников иерархии'
             className='pl-8'
           />
         </div>
@@ -373,7 +508,7 @@ export function HierarchyTree({
           value={period}
           onValueChange={(v) => onPeriodChange(v as HierarchyPeriod)}
         >
-          <SelectTrigger className='w-[200px]'>
+          <SelectTrigger className='w-[200px]' aria-label='Период статистики'>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -390,7 +525,7 @@ export function HierarchyTree({
           onClick={handleExport}
           className='gap-2'
         >
-          <Download className='h-4 w-4' />
+          <Download className='h-4 w-4' aria-hidden='true' />
           Экспорт CSV
         </Button>
       </div>
@@ -401,9 +536,83 @@ export function HierarchyTree({
         </div>
       )}
 
-      <div className='space-y-2'>
+      <p className='text-muted-foreground text-xs md:hidden'>
+        Таблица прокручивается по горизонтали. Раскрывайте строки кнопкой перед
+        именем участника.
+      </p>
+
+      <div className='overflow-hidden rounded-lg border'>
         {rootIds.length > 0 ? (
-          rootIds.map((id) => renderNode(id, 0))
+          <Table className='min-w-[1160px]'>
+            <TableHeader>
+              <TableRow>
+                <SortableHierarchyHead
+                  field='name'
+                  label='Участник'
+                  activeField={sortField}
+                  order={sortOrder}
+                  onSort={handleSort}
+                />
+                <SortableHierarchyHead
+                  field='registeredAt'
+                  label='Регистрация'
+                  activeField={sortField}
+                  order={sortOrder}
+                  onSort={handleSort}
+                />
+                <TableHead>Рефереры</TableHead>
+                <SortableHierarchyHead
+                  field='directCount'
+                  label='Прямые / ветка'
+                  activeField={sortField}
+                  order={sortOrder}
+                  align='end'
+                  onSort={handleSort}
+                />
+                <SortableHierarchyHead
+                  field='totalPurchasesPeriod'
+                  label='Покупки'
+                  activeField={sortField}
+                  order={sortOrder}
+                  align='end'
+                  onSort={handleSort}
+                />
+                <SortableHierarchyHead
+                  field='commissionEarned'
+                  label='Реф. бонусы'
+                  activeField={sortField}
+                  order={sortOrder}
+                  align='end'
+                  onSort={handleSort}
+                />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleRows.length > 0 ? (
+                visibleRows.map(({ node, depth, hasChildren, expanded }) => (
+                  <NodeRow
+                    key={node.id}
+                    node={node}
+                    depth={depth}
+                    hasChildren={hasChildren}
+                    isExpanded={expanded}
+                    isHighlighted={matchedIds.has(node.id)}
+                    query={debouncedSearch}
+                    onToggle={() => toggleId(node.id)}
+                  />
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className='text-muted-foreground h-24 text-center'
+                  >
+                    По вашему запросу участники не найдены
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         ) : (
           <EmptyState
             icon={Users}

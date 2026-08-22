@@ -11,7 +11,10 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  ArrowDown,
   ArrowRightLeft,
+  ArrowUp,
+  ArrowUpDown,
   Building2,
   Copy,
   Loader2,
@@ -138,10 +141,25 @@ type Member = {
   outboundPlanName: string | null;
   outboundPlanInherited: boolean;
   attributionPlanName: string | null;
+  invitedById: string | null;
+  invitedByName: string | null;
+  directReferrals: Array<{ id: string; name: string }>;
+  joinedAt: string;
   registeredAt: string;
   totalPurchases: number;
+  referralBonusEarned: number;
   isActive: boolean;
 };
+
+type MemberSortField =
+  | 'name'
+  | 'joinedAt'
+  | 'registeredAt'
+  | 'directReferrals'
+  | 'totalPurchases'
+  | 'referralBonusEarned';
+
+type SortOrder = 'asc' | 'desc';
 
 type ReferralLinkDraft = {
   draftId: string;
@@ -359,6 +377,75 @@ const formatRub = (n: number) =>
     maximumFractionDigits: 0
   }).format(n);
 
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString('ru-RU');
+
+function compareMembers(
+  left: Member,
+  right: Member,
+  field: MemberSortField,
+  order: SortOrder
+) {
+  let result = 0;
+  if (field === 'name') {
+    result = left.name.localeCompare(right.name, 'ru-RU');
+  } else if (field === 'joinedAt' || field === 'registeredAt') {
+    result = new Date(left[field]).getTime() - new Date(right[field]).getTime();
+  } else if (field === 'directReferrals') {
+    result = left.directReferrals.length - right.directReferrals.length;
+  } else {
+    result = left[field] - right[field];
+  }
+  if (result === 0) result = left.name.localeCompare(right.name, 'ru-RU');
+  return order === 'asc' ? result : -result;
+}
+
+function SortableMemberHead({
+  field,
+  label,
+  activeField,
+  order,
+  align = 'start',
+  onSort
+}: {
+  field: MemberSortField;
+  label: string;
+  activeField: MemberSortField;
+  order: SortOrder;
+  align?: 'start' | 'end';
+  onSort: (field: MemberSortField) => void;
+}) {
+  const active = field === activeField;
+  const Icon = active ? (order === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <TableHead
+      className={align === 'end' ? 'text-right' : undefined}
+      aria-sort={
+        active ? (order === 'asc' ? 'ascending' : 'descending') : 'none'
+      }
+    >
+      <Button
+        type='button'
+        variant='ghost'
+        size='sm'
+        className={`h-8 px-2 ${align === 'end' ? 'ml-auto' : '-ml-2'} ${
+          active ? 'font-semibold' : ''
+        }`}
+        onClick={() => onSort(field)}
+        aria-label={`${label}: сортировать ${
+          active && order === 'asc' ? 'по убыванию' : 'по возрастанию'
+        }`}
+      >
+        {label}
+        <Icon
+          className={`ml-1.5 h-3.5 w-3.5 ${active ? '' : 'opacity-40'}`}
+          aria-hidden='true'
+        />
+      </Button>
+    </TableHead>
+  );
+}
+
 function parseDiscountPercent(value: string): number | null {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 && parsed <= 100
@@ -411,6 +498,9 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   );
   const [newPlanId, setNewPlanId] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
+  const [memberSortField, setMemberSortField] =
+    useState<MemberSortField>('joinedAt');
+  const [memberSortOrder, setMemberSortOrder] = useState<SortOrder>('desc');
 
   const [memberLevel, setMemberLevel] = useState('');
   const [memberTitle, setMemberTitle] = useState('');
@@ -829,18 +919,31 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
       }
     : null;
   const query = memberSearch.trim().toLocaleLowerCase('ru-RU');
-  const filteredMembers = query
+  const searchedMembers = query
     ? members.filter((member) =>
         [
           member.name,
           member.email,
           member.phone,
           member.referrerName,
+          member.invitedByName,
+          ...member.directReferrals.map((referral) => referral.name),
           member.outboundPlanName,
           member.attributionPlanName
         ].some((value) => value?.toLocaleLowerCase('ru-RU').includes(query))
       )
     : members;
+  const filteredMembers = [...searchedMembers].sort((left, right) =>
+    compareMembers(left, right, memberSortField, memberSortOrder)
+  );
+  const handleMemberSort = (field: MemberSortField) => {
+    if (memberSortField === field) {
+      setMemberSortOrder((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setMemberSortField(field);
+    setMemberSortOrder(field === 'name' ? 'asc' : 'desc');
+  };
 
   return (
     <div className='space-y-6'>
@@ -930,7 +1033,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
               value: formatRub(stats.totalPurchases)
             },
             {
-              label: 'Вознаграждение',
+              label: 'Реф. бонусы',
               value: formatRub(stats.commissionEarned)
             }
           ].map((item) => (
@@ -992,7 +1095,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                       <Label htmlFor='member-search' className='sr-only'>
                         Поиск участников
                       </Label>
-                      <Search className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
+                      <Search
+                        className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2'
+                        aria-hidden='true'
+                      />
                       <Input
                         id='member-search'
                         value={memberSearch}
@@ -1008,14 +1114,50 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                       справа.
                     </p>
                   </div>
-                  <Table>
+                  <Table className='min-w-[1540px]'>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Имя</TableHead>
+                        <SortableMemberHead
+                          field='name'
+                          label='Участник'
+                          activeField={memberSortField}
+                          order={memberSortOrder}
+                          onSort={handleMemberSort}
+                        />
                         <TableHead>Уровень и доступ</TableHead>
+                        <TableHead>Кто привёл</TableHead>
                         <TableHead>Рефереры</TableHead>
+                        <SortableMemberHead
+                          field='directReferrals'
+                          label='Рефералы'
+                          activeField={memberSortField}
+                          order={memberSortOrder}
+                          onSort={handleMemberSort}
+                        />
                         <TableHead>План комиссии</TableHead>
-                        <TableHead className='text-right'>Покупки</TableHead>
+                        <SortableMemberHead
+                          field='joinedAt'
+                          label='Добавлен'
+                          activeField={memberSortField}
+                          order={memberSortOrder}
+                          onSort={handleMemberSort}
+                        />
+                        <SortableMemberHead
+                          field='totalPurchases'
+                          label='Покупки'
+                          activeField={memberSortField}
+                          order={memberSortOrder}
+                          align='end'
+                          onSort={handleMemberSort}
+                        />
+                        <SortableMemberHead
+                          field='referralBonusEarned'
+                          label='Реф. бонусы'
+                          activeField={memberSortField}
+                          order={memberSortOrder}
+                          align='end'
+                          onSort={handleMemberSort}
+                        />
                         <TableHead className='bg-background sticky right-0 z-10 w-[72px] shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
                           <span className='sr-only'>Действия</span>
                         </TableHead>
@@ -1024,8 +1166,13 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                     <TableBody>
                       {filteredMembers.map((m) => (
                         <TableRow key={m.id}>
-                          <TableCell className='bg-background sticky right-0 z-10 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
-                            <div className='font-medium'>{m.name}</div>
+                          <TableCell className='min-w-[220px]'>
+                            <div className='flex items-center gap-2 font-medium'>
+                              <span>{m.name}</span>
+                              {!m.isActive && (
+                                <Badge variant='secondary'>Неактивен</Badge>
+                              )}
+                            </div>
                             <div className='text-muted-foreground text-xs'>
                               {m.email || m.phone}
                             </div>
@@ -1049,7 +1196,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                               </div>
                             )}
                           </TableCell>
-                          <TableCell className='text-sm'>
+                          <TableCell className='max-w-[200px] whitespace-normal'>
+                            {m.invitedByName ? (
+                              <>
+                                <div className='text-sm'>{m.invitedByName}</div>
+                                <div className='text-muted-foreground text-xs'>
+                                  при регистрации
+                                </div>
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className='max-w-[260px] whitespace-normal'>
                             {m.referrerLinks.length > 0 ? (
                               <div className='space-y-1'>
                                 {m.referrerLinks.map((link) => (
@@ -1063,7 +1222,23 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                               '—'
                             )}
                           </TableCell>
-                          <TableCell className='text-sm'>
+                          <TableCell className='max-w-[240px] whitespace-normal'>
+                            {m.directReferrals.length > 0 ? (
+                              <div className='space-y-1'>
+                                <Badge variant='secondary'>
+                                  {m.directReferrals.length}
+                                </Badge>
+                                {m.directReferrals.map((referral) => (
+                                  <div key={referral.id} className='text-xs'>
+                                    {referral.name}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className='max-w-[220px] whitespace-normal'>
                             {m.outboundPlanName ? (
                               <>
                                 <div>{m.outboundPlanName}</div>
@@ -1084,10 +1259,19 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                               '—'
                             )}
                           </TableCell>
-                          <TableCell className='text-right text-sm'>
+                          <TableCell className='text-sm'>
+                            <div>{formatDate(m.joinedAt)}</div>
+                            <div className='text-muted-foreground text-xs'>
+                              регистрация {formatDate(m.registeredAt)}
+                            </div>
+                          </TableCell>
+                          <TableCell className='text-right text-sm font-medium tabular-nums'>
                             {formatRub(m.totalPurchases)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className='text-right text-sm font-medium tabular-nums'>
+                            {formatRub(m.referralBonusEarned)}
+                          </TableCell>
+                          <TableCell className='bg-background sticky right-0 z-10 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
                             <div className='flex justify-end'>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -1140,6 +1324,16 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                           </TableCell>
                         </TableRow>
                       ))}
+                      {filteredMembers.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={10}
+                            className='text-muted-foreground h-24 text-center'
+                          >
+                            По вашему запросу участники не найдены
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                   {filteredMembers.length === 0 && (

@@ -138,6 +138,7 @@ describe('ReferralService.reverseReferralBonus', () => {
         externalId: `referral_${orderId}_trainer-1_L1`,
         referralUserId: 'buyer-1',
         referralLevel: 1,
+        metadata: { referralOrganizationId: 'org-1' },
         bonus: { id: 'rb-1', isUsed: false, amount: 100 }
       },
       {
@@ -168,6 +169,10 @@ describe('ReferralService.reverseReferralBonus', () => {
       mockDb.transaction.create as jest.Mock
     ).mock.calls.map((c) => c[0].data.type);
     expect(createdTypes).toEqual(['REFUND', 'REFUND']);
+    expect(
+      (mockDb.transaction.create as jest.Mock).mock.calls[0][0].data.metadata
+        .referralOrganizationId
+    ).toBe('org-1');
   });
 
   it('2b. идемпотентность: повторная отмена не создаёт лишних откатов', async () => {

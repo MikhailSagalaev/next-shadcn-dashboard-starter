@@ -53,6 +53,7 @@ interface TreeResponse {
     managers: number;
     directors: number;
     levels: Array<{ level: number; count: number }>;
+    totalPurchases: number;
     commissionTotal: number;
   };
 }
@@ -208,7 +209,12 @@ export function HierarchyTabPanel({ projectId }: { projectId: string }) {
           />
         ))}
         <SummaryCard
-          label='Вознаграждение за период'
+          label='Покупки за период'
+          value={formatRub(data.totals.totalPurchases)}
+          accent='amber'
+        />
+        <SummaryCard
+          label='Реф. бонусы за период'
           value={formatRub(data.totals.commissionTotal)}
           accent='emerald'
         />

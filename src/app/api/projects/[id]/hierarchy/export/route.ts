@@ -2,7 +2,8 @@
  * @file: src/app/api/projects/[id]/hierarchy/export/route.ts
  * @description: GET — CSV-экспорт партнёрской иерархии.
  *               Колонки: id, name, role, parent_name, registered_at,
- *               total_purchases, commission_earned.
+ *               direct referrals, branch size, period purchases and net
+ *               referral bonuses.
  *               (b2b-referral-hierarchy Phase 6.13)
  *
  *               Заголовки строк — на русском, разделитель — точка с запятой
@@ -89,8 +90,10 @@ export async function GET(
       'Рефереры и доли',
       'Родитель',
       'Дата регистрации',
-      'Сумма покупок',
-      'Заработанная комиссия'
+      'Прямые рефералы',
+      'Размер ветки',
+      'Сумма покупок за период',
+      'Реферальные бонусы за период (нетто)'
     ];
 
     const rows = tree.nodes.map((n) => [
@@ -107,6 +110,8 @@ export async function GET(
       n.parentId ? (nameById.get(n.parentId) ?? n.parentId) : '',
       // YYYY-MM-DD HH:mm — компактно для отчёта
       new Date(n.registeredAt).toISOString().replace('T', ' ').slice(0, 16),
+      n.directCount,
+      n.subtreeSize,
       n.totalPurchasesPeriod.toFixed(2),
       n.commissionEarned.toFixed(2)
     ]);
