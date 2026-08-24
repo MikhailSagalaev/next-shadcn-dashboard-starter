@@ -149,9 +149,19 @@ async function completeMailingIfReady(mailingId: string): Promise<void> {
   });
   if (pendingRecipients !== 0) return;
 
+  const [sentCount, failedCount] = await Promise.all([
+    db.mailingRecipient.count({ where: { mailingId, status: 'SENT' } }),
+    db.mailingRecipient.count({ where: { mailingId, status: 'FAILED' } })
+  ]);
+
   await db.mailing.updateMany({
     where: { id: mailingId, status: 'SENDING' },
-    data: { status: 'COMPLETED', completedAt: new Date() }
+    data: {
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      sentCount,
+      failedCount
+    }
   });
 }
 
