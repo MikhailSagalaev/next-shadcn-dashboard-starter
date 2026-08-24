@@ -1121,6 +1121,15 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
             <BarChart3 className='mr-2 h-4 w-4' />
             {showStats ? 'Скрыть аналитику' : 'Аналитика аудитории'}
           </Button>
+          <Button
+            variant='outline'
+            onClick={() =>
+              router.push(`/dashboard/projects/${projectId}/mailings`)
+            }
+          >
+            <Send className='mr-2 h-4 w-4' />
+            Рассылки
+          </Button>
           <Button variant='outline' onClick={() => setShowImportDialog(true)}>
             <Upload className='mr-2 h-4 w-4' />
             Импорт CSV

@@ -57,6 +57,15 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -546,12 +555,156 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
         </TabsContent>
 
         <TabsContent value='list' className='mt-6'>
-          {/* Компактный список - можно добавить позже */}
-          <Card>
-            <CardContent className='text-muted-foreground py-8 text-center'>
-              Список в разработке
-            </CardContent>
-          </Card>
+          {filteredMailings.length === 0 ? (
+            <Card>
+              <CardContent className='flex flex-col items-center justify-center py-12'>
+                <MessageSquare className='text-muted-foreground mb-4 h-12 w-12' />
+                <h3 className='mb-2 text-lg font-semibold'>
+                  {searchQuery || statusFilter !== 'all'
+                    ? 'Рассылки не найдены'
+                    : 'Нет рассылок'}
+                </h3>
+                <p className='text-muted-foreground mb-4 text-center'>
+                  {searchQuery || statusFilter !== 'all'
+                    ? 'Попробуйте изменить фильтры'
+                    : 'Создайте первую рассылку для ваших пользователей'}
+                </p>
+                {!searchQuery && statusFilter === 'all' && (
+                  <Button onClick={handleCreate}>
+                    <Plus className='mr-2 h-4 w-4' />
+                    Создать рассылку
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Название</TableHead>
+                    <TableHead>Канал</TableHead>
+                    <TableHead>Статус</TableHead>
+                    <TableHead>Получатели</TableHead>
+                    <TableHead>Доставлено</TableHead>
+                    <TableHead>Дата создания</TableHead>
+                    <TableHead className='text-right'>Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredMailings.map((m) => {
+                    const totalRecipients =
+                      m.recipientCount ||
+                      m._count?.recipients ||
+                      (m.recipients ? m.recipients.length : 0);
+                    const sent = m.sentCount || 0;
+                    const failed = m.failedCount || 0;
+                    const successPct =
+                      totalRecipients > 0
+                        ? Math.round((sent / totalRecipients) * 100)
+                        : 0;
+
+                    return (
+                      <TableRow key={m.id}>
+                        <TableCell className='font-medium'>
+                          <div className='font-semibold'>{m.name}</div>
+                          <div className='text-muted-foreground line-clamp-1 max-w-[280px] text-xs'>
+                            {m.messageText?.replace(/<[^>]*>/g, '') ||
+                              'Без текста'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant='outline' className='text-xs'>
+                            {m.type === 'TELEGRAM' ? 'Telegram' : m.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(m.status)}</TableCell>
+                        <TableCell>
+                          <div className='font-medium'>
+                            {totalRecipients.toLocaleString('ru-RU')}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className='min-w-[120px] space-y-1'>
+                            <div className='flex justify-between text-xs'>
+                              <span className='font-medium text-green-600'>
+                                {sent.toLocaleString('ru-RU')}
+                              </span>
+                              {failed > 0 && (
+                                <span className='text-red-500'>
+                                  {failed.toLocaleString('ru-RU')} ош.
+                                </span>
+                              )}
+                            </div>
+                            <Progress value={successPct} className='h-1.5' />
+                          </div>
+                        </TableCell>
+                        <TableCell className='text-muted-foreground text-xs'>
+                          {m.createdAt
+                            ? format(
+                                new Date(m.createdAt),
+                                'dd MMM yyyy, HH:mm',
+                                { locale: ru }
+                              )
+                            : '—'}
+                        </TableCell>
+                        <TableCell className='text-right'>
+                          <div className='flex items-center justify-end gap-1'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() =>
+                                router.push(
+                                  `/dashboard/projects/${projectId}/mailings/${m.id}/analytics`
+                                )
+                              }
+                            >
+                              <BarChart3 className='mr-1.5 h-3.5 w-3.5' />
+                              Аналитика
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant='ghost'
+                                  size='icon'
+                                  className='h-8 w-8'
+                                >
+                                  <MoreVertical className='h-4 w-4' />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align='end'>
+                                <DropdownMenuItem onClick={() => handleEdit(m)}>
+                                  <Edit className='mr-2 h-4 w-4' />
+                                  Редактировать
+                                </DropdownMenuItem>
+                                {m.status === 'DRAFT' && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleStart(m)}
+                                    disabled={startingMailingId === m.id}
+                                  >
+                                    <Play className='mr-2 h-4 w-4' />
+                                    Запустить
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(m.id)}
+                                  className='text-destructive'
+                                >
+                                  <Trash2 className='mr-2 h-4 w-4' />
+                                  Удалить
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

@@ -239,6 +239,180 @@ export class MailingService {
   }
 
   /**
+   * Получение рассылки по ID
+   */
+  static async getMailing(projectId: string, mailingId: string) {
+    try {
+      const mailing = await db.mailing.findFirst({
+        where: { id: mailingId, projectId },
+        include: {
+          template: true,
+          segment: true,
+          _count: {
+            select: {
+              recipients: true
+            }
+          }
+        }
+      });
+
+      return mailing;
+    } catch (error) {
+      logger.error('Ошибка получения рассылки', {
+        mailingId,
+        projectId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'mailing-service'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Обновление рассылки
+   */
+  static async updateMailing(
+    projectId: string,
+    mailingId: string,
+    data: {
+      name?: string;
+      segmentId?: string;
+      templateId?: string;
+      scheduledAt?: Date;
+      status?: MailingStatus;
+      messageText?: string;
+      messageHtml?: string;
+      statistics?: Record<string, any>;
+    }
+  ) {
+    try {
+      const mailing = await db.mailing.update({
+        where: { id: mailingId },
+        data: {
+          ...(data.name && { name: data.name }),
+          ...(data.segmentId !== undefined && { segmentId: data.segmentId }),
+          ...(data.templateId !== undefined && { templateId: data.templateId }),
+          ...(data.scheduledAt !== undefined && {
+            scheduledAt: data.scheduledAt
+          }),
+          ...(data.status && { status: data.status }),
+          ...(data.messageText !== undefined && {
+            messageText: data.messageText
+          }),
+          ...(data.messageHtml !== undefined && {
+            messageHtml: data.messageHtml
+          }),
+          ...(data.statistics !== undefined && {
+            statistics: toPrismaJson(data.statistics)
+          })
+        },
+        include: {
+          template: true,
+          segment: true,
+          _count: {
+            select: {
+              recipients: true
+            }
+          }
+        }
+      });
+
+      return mailing;
+    } catch (error) {
+      logger.error('Ошибка обновления рассылки', {
+        mailingId,
+        projectId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'mailing-service'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Удаление рассылки
+   */
+  static async deleteMailing(projectId: string, mailingId: string) {
+    try {
+      await db.$transaction([
+        db.mailingRecipient.deleteMany({ where: { mailingId } }),
+        db.mailingHistory.deleteMany({ where: { mailingId } }),
+        db.mailingLinkClick.deleteMany({ where: { mailingId } }),
+        db.mailingLink.deleteMany({ where: { mailingId } }),
+        db.mailing.delete({ where: { id: mailingId, projectId } })
+      ]);
+
+      return { success: true };
+    } catch (error) {
+      logger.error('Ошибка удаления рассылки', {
+        mailingId,
+        projectId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'mailing-service'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Очистка недействительных привязок Telegram по результатам рассылки (403, 400)
+   */
+  static async cleanUnavailableRecipients(
+    projectId: string,
+    mailingId: string
+  ) {
+    try {
+      const failedRecipients = await db.mailingRecipient.findMany({
+        where: {
+          mailingId,
+          status: 'FAILED',
+          userId: { not: null },
+          OR: [
+            { error: { contains: 'blocked by the user' } },
+            { error: { contains: 'user is deactivated' } },
+            { error: { contains: 'chat not found' } }
+          ]
+        },
+        select: { userId: true }
+      });
+
+      const userIds = failedRecipients
+        .map((r) => r.userId)
+        .filter((id): id is string => Boolean(id));
+
+      if (userIds.length === 0) {
+        return { cleanedCount: 0 };
+      }
+
+      const result = await db.user.updateMany({
+        where: {
+          id: { in: userIds },
+          projectId
+        },
+        data: {
+          telegramId: null
+        }
+      });
+
+      logger.info('Недействительные Telegram-привязки очищены', {
+        projectId,
+        mailingId,
+        cleanedCount: result.count
+      });
+
+      return { cleanedCount: result.count };
+    } catch (error) {
+      logger.error('Ошибка очистки недействительных Telegram-привязок', {
+        projectId,
+        mailingId,
+        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        component: 'mailing-service'
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Создаёт фоновую Telegram-рассылку для всех активных привязанных
    * пользователей. Получатели без telegramId учитываются как skipped, но не
    * создают тысячи заведомо неуспешных jobs.
@@ -655,6 +829,32 @@ export class MailingService {
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
+      const errorsBreakdown: Record<string, number> = {};
+      let blockedCount = 0;
+      let deactivatedCount = 0;
+      let chatNotFoundCount = 0;
+
+      for (const r of recipients) {
+        if (r.error) {
+          if (r.error.includes('blocked by the user')) {
+            blockedCount++;
+            errorsBreakdown['Заблокирован бот'] =
+              (errorsBreakdown['Заблокирован бот'] || 0) + 1;
+          } else if (r.error.includes('user is deactivated')) {
+            deactivatedCount++;
+            errorsBreakdown['Удален аккаунт Telegram'] =
+              (errorsBreakdown['Удален аккаунт Telegram'] || 0) + 1;
+          } else if (r.error.includes('chat not found')) {
+            chatNotFoundCount++;
+            errorsBreakdown['Чат не найден'] =
+              (errorsBreakdown['Чат не найден'] || 0) + 1;
+          } else {
+            const label = r.error.slice(0, 60);
+            errorsBreakdown[label] = (errorsBreakdown[label] || 0) + 1;
+          }
+        }
+      }
+
       // Обновляем статистику в рассылке
       await db.mailing.update({
         where: { id: mailingId },
@@ -664,7 +864,11 @@ export class MailingService {
             historyStats,
             openRate,
             clickRate,
-            clickThroughRate
+            clickThroughRate,
+            errorsBreakdown,
+            blockedCount,
+            deactivatedCount,
+            chatNotFoundCount
           },
           status: stats.pending === 0 ? 'COMPLETED' : undefined
         }
@@ -676,6 +880,10 @@ export class MailingService {
         openRate: Math.round(openRate * 100) / 100,
         clickRate: Math.round(clickRate * 100) / 100,
         clickThroughRate: Math.round(clickThroughRate * 100) / 100,
+        errorsBreakdown,
+        blockedCount,
+        deactivatedCount,
+        chatNotFoundCount,
         timeline
       };
     } catch (error) {
