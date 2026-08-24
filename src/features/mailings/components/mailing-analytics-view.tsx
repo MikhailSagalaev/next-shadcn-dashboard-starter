@@ -1,6 +1,6 @@
 /**
  * @file: src/features/mailings/components/mailing-analytics-view.tsx
- * @description: Детальная аналитика рассылки с разбивкой ошибок, списком получателей и очисткой базы
+ * @description: Детальная сквозная аналитика рассылки с воронкой конверсий, трекингом ссылок, Open Rate, CTR и получателями
  * @project: SaaS Bonus System
  */
 
@@ -15,17 +15,20 @@ import {
   Users,
   Calendar,
   Clock,
-  Download,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
   Trash2,
   Search,
-  FileText,
-  Layers,
+  Eye,
+  MousePointerClick,
+  ExternalLink,
   ChevronLeft,
   ChevronRight,
-  ExternalLink
+  TrendingUp,
+  Link as LinkIcon,
+  Layers,
+  BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -247,10 +250,17 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
   const sent = stats?.sent || mailing.sentCount || 0;
   const failed = stats?.failed || mailing.failedCount || 0;
   const pending = stats?.pending || 0;
+  const opened = stats?.opened || mailing.openedCount || 0;
+  const clicked = stats?.clicked || mailing.clickedCount || 0;
+
   const successRate = total > 0 ? (sent / total) * 100 : 0;
   const failRate = total > 0 ? (failed / total) * 100 : 0;
+  const openRate = sent > 0 ? (opened / sent) * 100 : 0;
+  const clickRate = sent > 0 ? (clicked / sent) * 100 : 0;
 
   const errorsBreakdown = stats?.errorsBreakdown || {};
+  const linksAnalytics =
+    stats?.linksAnalytics || mailing.statistics?.linksAnalytics || [];
 
   const pieData = [
     { name: 'Доставлено', value: sent, color: PIE_COLORS[0] },
@@ -302,7 +312,8 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
               </Badge>
             </div>
             <p className='text-muted-foreground mt-0.5 text-xs'>
-              Детальная аналитика и результаты доставки
+              Сквозная аналитика: доставляемость, открытия, клики по ссылкам и
+              воронка конверсий
             </p>
           </div>
         </div>
@@ -334,23 +345,9 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
         </div>
       </div>
 
-      {/* Карточки основных метрик */}
+      {/* Карточки ключевых показателей */}
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-        <Card className='p-4 shadow-sm'>
-          <div className='flex items-center justify-between pb-1'>
-            <span className='text-muted-foreground text-xs font-medium'>
-              Всего получателей
-            </span>
-            <Users className='text-muted-foreground h-4 w-4' />
-          </div>
-          <div className='text-2xl font-bold tracking-tight'>
-            {total.toLocaleString('ru-RU')}
-          </div>
-          <p className='text-muted-foreground mt-1 text-[11px]'>
-            контактов в рассылке
-          </p>
-        </Card>
-
+        {/* Карточка 1: Доставлено */}
         <Card className='border-green-200/80 bg-green-50/30 p-4 shadow-sm dark:bg-green-950/20'>
           <div className='flex items-center justify-between pb-1'>
             <span className='text-muted-foreground text-xs font-medium'>
@@ -369,8 +366,69 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
           <div className='mt-2'>
             <Progress value={successRate} className='h-1.5' />
           </div>
+          <p className='text-muted-foreground mt-1 text-[11px]'>
+            из {total.toLocaleString('ru-RU')} контактов
+          </p>
         </Card>
 
+        {/* Карточка 2: Прочитано / Открыто */}
+        <Card className='border-blue-200/80 bg-blue-50/30 p-4 shadow-sm dark:bg-blue-950/20'>
+          <div className='flex items-center justify-between pb-1'>
+            <span className='text-muted-foreground text-xs font-medium'>
+              Прочитали / Открыли
+            </span>
+            <Eye className='h-4 w-4 text-blue-600 dark:text-blue-400' />
+          </div>
+          <div className='flex items-baseline justify-between'>
+            <div className='text-2xl font-bold tracking-tight text-blue-600 dark:text-blue-400'>
+              {opened.toLocaleString('ru-RU')}
+            </div>
+            <Badge variant='secondary' className='text-[10px] font-normal'>
+              Open Rate: {openRate.toFixed(1)}%
+            </Badge>
+          </div>
+          <div className='mt-2'>
+            <Progress
+              value={openRate}
+              className='h-1.5 bg-blue-100 dark:bg-blue-950'
+            />
+          </div>
+          <p className='text-muted-foreground mt-1 text-[11px]'>
+            активных прочтений сообщения
+          </p>
+        </Card>
+
+        {/* Карточка 3: Клики по ссылкам */}
+        <Card className='border-purple-200/80 bg-purple-50/30 p-4 shadow-sm dark:bg-purple-950/20'>
+          <div className='flex items-center justify-between pb-1'>
+            <span className='text-muted-foreground text-xs font-medium'>
+              Перешли по ссылкам
+            </span>
+            <MousePointerClick className='h-4 w-4 text-purple-600 dark:text-purple-400' />
+          </div>
+          <div className='flex items-baseline justify-between'>
+            <div className='text-2xl font-bold tracking-tight text-purple-600 dark:text-purple-400'>
+              {clicked.toLocaleString('ru-RU')}
+            </div>
+            <Badge
+              variant='outline'
+              className='border-purple-300 text-[10px] font-normal text-purple-700 dark:text-purple-300'
+            >
+              CTR: {clickRate.toFixed(1)}%
+            </Badge>
+          </div>
+          <div className='mt-2'>
+            <Progress
+              value={clickRate}
+              className='h-1.5 bg-purple-100 dark:bg-purple-950'
+            />
+          </div>
+          <p className='text-muted-foreground mt-1 text-[11px]'>
+            переходов на целевые страницы
+          </p>
+        </Card>
+
+        {/* Карточка 4: Ошибки доставки */}
         <Card className='border-red-200/80 bg-red-50/30 p-4 shadow-sm dark:bg-red-950/20'>
           <div className='flex items-center justify-between pb-1'>
             <span className='text-muted-foreground text-xs font-medium'>
@@ -392,52 +450,96 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
               className='h-1.5 bg-red-100 dark:bg-red-900/30'
             />
           </div>
-        </Card>
-
-        <Card className='p-4 shadow-sm'>
-          <div className='flex items-center justify-between pb-1'>
-            <span className='text-muted-foreground text-xs font-medium'>
-              Дата и время отправки
-            </span>
-            <Calendar className='text-muted-foreground h-4 w-4' />
-          </div>
-          <div className='mt-1 text-sm font-semibold'>
-            {mailing.sentAt
-              ? format(new Date(mailing.sentAt), 'dd MMM yyyy, HH:mm', {
-                  locale: ru
-                })
-              : mailing.createdAt
-                ? format(new Date(mailing.createdAt), 'dd MMM yyyy, HH:mm', {
-                    locale: ru
-                  })
-                : '—'}
-          </div>
           <p className='text-muted-foreground mt-1 text-[11px]'>
-            {mailing.completedAt
-              ? `Завершена: ${format(new Date(mailing.completedAt), 'HH:mm:ss', { locale: ru })}`
-              : 'Фоновая очередь'}
+            заблокировали бота или удалены
           </p>
         </Card>
       </div>
 
       {/* Вкладки аналитики */}
       <Tabs defaultValue='overview' className='w-full'>
-        <TabsList className='grid w-full max-w-[400px] grid-cols-3'>
+        <TabsList className='grid w-full max-w-[560px] grid-cols-4'>
           <TabsTrigger value='overview'>Обзор</TabsTrigger>
+          <TabsTrigger value='links'>
+            Ссылки ({linksAnalytics.length})
+          </TabsTrigger>
           <TabsTrigger value='recipients'>
             Получатели ({total.toLocaleString('ru-RU')})
           </TabsTrigger>
           <TabsTrigger value='content'>Содержимое</TabsTrigger>
         </TabsList>
 
-        {/* Вкладка 1: Обзор */}
+        {/* Вкладка 1: Обзор и Воронка */}
         <TabsContent value='overview' className='mt-4 space-y-4'>
+          {/* Воронка конверсии */}
+          <Card>
+            <CardHeader className='p-4 pb-2'>
+              <CardTitle className='text-sm font-medium'>
+                Воронка эффективности кампании
+              </CardTitle>
+              <CardDescription className='text-xs'>
+                Этапы прохождения аудитории от отправки до целевого действия
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='p-4 pt-2'>
+              <div className='grid gap-3 sm:grid-cols-4'>
+                <div className='bg-muted/20 rounded-lg border p-3'>
+                  <span className='text-muted-foreground text-xs font-medium'>
+                    1. База получателей
+                  </span>
+                  <div className='mt-1 text-xl font-bold'>
+                    {total.toLocaleString('ru-RU')}
+                  </div>
+                  <div className='text-muted-foreground mt-0.5 text-[11px]'>
+                    100% охвата
+                  </div>
+                </div>
+
+                <div className='rounded-lg border bg-green-50/40 p-3 dark:bg-green-950/20'>
+                  <span className='text-muted-foreground text-xs font-medium'>
+                    2. Доставлено
+                  </span>
+                  <div className='mt-1 text-xl font-bold text-green-600 dark:text-green-400'>
+                    {sent.toLocaleString('ru-RU')}
+                  </div>
+                  <div className='mt-0.5 text-[11px] font-medium text-green-600 dark:text-green-400'>
+                    {successRate.toFixed(1)}% от базы
+                  </div>
+                </div>
+
+                <div className='rounded-lg border bg-blue-50/40 p-3 dark:bg-blue-950/20'>
+                  <span className='text-muted-foreground text-xs font-medium'>
+                    3. Прочитано (Open)
+                  </span>
+                  <div className='mt-1 text-xl font-bold text-blue-600 dark:text-blue-400'>
+                    {opened.toLocaleString('ru-RU')}
+                  </div>
+                  <div className='mt-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400'>
+                    {openRate.toFixed(1)}% от доставленных
+                  </div>
+                </div>
+
+                <div className='rounded-lg border bg-purple-50/40 p-3 dark:bg-purple-950/20'>
+                  <span className='text-muted-foreground text-xs font-medium'>
+                    4. Перешли (CTR)
+                  </span>
+                  <div className='mt-1 text-xl font-bold text-purple-600 dark:text-purple-400'>
+                    {clicked.toLocaleString('ru-RU')}
+                  </div>
+                  <div className='mt-0.5 text-[11px] font-medium text-purple-600 dark:text-purple-400'>
+                    {clickRate.toFixed(1)}% от доставленных
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className='grid gap-4 md:grid-cols-2'>
             {/* Круговая диаграмма */}
             <Card>
               <CardHeader className='p-4 pb-2'>
                 <CardTitle className='text-sm font-medium'>
-                  Распределение результатов
+                  Распределение результатов доставки
                 </CardTitle>
                 <CardDescription className='text-xs'>
                   Соотношение успешно доставленных сообщений и ошибок
@@ -445,15 +547,15 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
               </CardHeader>
               <CardContent className='p-4 pt-0'>
                 {pieData.length > 0 ? (
-                  <div className='h-[240px]'>
+                  <div className='h-[220px]'>
                     <ResponsiveContainer width='100%' height='100%'>
                       <PieChart>
                         <Pie
                           data={pieData}
                           cx='50%'
                           cy='50%'
-                          innerRadius={60}
-                          outerRadius={85}
+                          innerRadius={55}
+                          outerRadius={80}
                           paddingAngle={3}
                           dataKey='value'
                         >
@@ -467,7 +569,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <div className='text-muted-foreground flex h-[240px] items-center justify-center text-xs'>
+                  <div className='text-muted-foreground flex h-[220px] items-center justify-center text-xs'>
                     Нет данных для диаграммы
                   </div>
                 )}
@@ -507,7 +609,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                     })}
                   </div>
                 ) : (
-                  <div className='text-muted-foreground flex h-[200px] flex-col items-center justify-center text-center text-xs'>
+                  <div className='text-muted-foreground flex h-[180px] flex-col items-center justify-center text-center text-xs'>
                     <CheckCircle2 className='mb-2 h-8 w-8 text-green-500' />
                     Ошибок доставки не зафиксировано
                   </div>
@@ -517,7 +619,77 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
           </div>
         </TabsContent>
 
-        {/* Вкладка 2: Получатели */}
+        {/* Вкладка 2: Ссылки и клики */}
+        <TabsContent value='links' className='mt-4 space-y-4'>
+          <Card>
+            <CardHeader className='p-4 pb-2'>
+              <CardTitle className='text-sm font-medium'>
+                Эффективность ссылок рассылки
+              </CardTitle>
+              <CardDescription className='text-xs'>
+                Статистика переходов по каждой ссылке и кнопке из сообщения
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='p-4 pt-2'>
+              {linksAnalytics.length === 0 ? (
+                <div className='text-muted-foreground py-10 text-center text-xs'>
+                  <LinkIcon className='text-muted-foreground/50 mx-auto mb-2 h-8 w-8' />
+                  В этой рассылке не было ссылок или данные еще собираются
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Целевой URL</TableHead>
+                      <TableHead>Трекинг-код</TableHead>
+                      <TableHead>Всего кликов</TableHead>
+                      <TableHead>Уникальных переходов</TableHead>
+                      <TableHead className='text-right'>CTR</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {linksAnalytics.map((linkItem: any) => (
+                      <TableRow key={linkItem.id}>
+                        <TableCell className='max-w-[340px] truncate text-xs font-medium'>
+                          <a
+                            href={linkItem.originalUrl}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            className='text-primary flex items-center gap-1.5 hover:underline'
+                          >
+                            <span className='truncate'>
+                              {linkItem.originalUrl}
+                            </span>
+                            <ExternalLink className='h-3 w-3 flex-shrink-0' />
+                          </a>
+                        </TableCell>
+                        <TableCell className='text-muted-foreground font-mono text-xs'>
+                          /r/{linkItem.shortCode}
+                        </TableCell>
+                        <TableCell className='text-xs font-semibold'>
+                          {linkItem.totalClicks?.toLocaleString('ru-RU') || 0}
+                        </TableCell>
+                        <TableCell className='text-xs font-semibold text-purple-600 dark:text-purple-400'>
+                          {linkItem.uniqueClicks?.toLocaleString('ru-RU') || 0}
+                        </TableCell>
+                        <TableCell className='text-right text-xs'>
+                          <Badge
+                            variant='outline'
+                            className='text-[10px] font-normal'
+                          >
+                            {linkItem.ctr || 0}%
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Вкладка 3: Получатели */}
         <TabsContent value='recipients' className='mt-4 space-y-3'>
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <div className='flex max-w-[360px] flex-1 items-center gap-2'>
@@ -558,8 +730,9 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                 <TableRow>
                   <TableHead>Получатель</TableHead>
                   <TableHead>Telegram ID</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead>Причина ошибки / Детали</TableHead>
+                  <TableHead>Доставка</TableHead>
+                  <TableHead>Прочитано</TableHead>
+                  <TableHead>Клики по ссылкам</TableHead>
                   <TableHead className='text-right'>Время</TableHead>
                 </TableRow>
               </TableHeader>
@@ -567,7 +740,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                 {recipientsLoading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className='text-muted-foreground h-24 text-center text-xs'
                     >
                       Загрузка получателей...
@@ -576,7 +749,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                 ) : recipients.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className='text-muted-foreground h-24 text-center text-xs'
                     >
                       Получатели не найдены
@@ -592,6 +765,9 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                         user.phone ||
                         'Пользователь'
                       : 'Пользователь';
+
+                    const hasOpened = Boolean(r.openedAt || r.openCount > 0);
+                    const hasClicked = Boolean(r.clickedAt || r.clickCount > 0);
 
                     return (
                       <TableRow key={r.id}>
@@ -614,27 +790,67 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                           {r.telegramId || '—'}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={isSuccess ? 'default' : 'destructive'}
-                            className='px-2 py-0.5 text-[10px] font-normal'
-                          >
-                            {isSuccess ? 'Доставлено' : 'Ошибка'}
-                          </Badge>
+                          {isSuccess ? (
+                            <Badge
+                              variant='default'
+                              className='bg-green-600 px-2 py-0.5 text-[10px] font-normal hover:bg-green-700'
+                            >
+                              Доставлено
+                            </Badge>
+                          ) : (
+                            <div className='space-y-0.5'>
+                              <Badge
+                                variant='destructive'
+                                className='px-2 py-0.5 text-[10px] font-normal'
+                              >
+                                Ошибка
+                              </Badge>
+                              {r.error && (
+                                <div className='text-muted-foreground max-w-[180px] truncate text-[10px]'>
+                                  {r.error}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
-                        <TableCell className='text-muted-foreground max-w-[320px] truncate text-xs'>
-                          {r.error || (isSuccess ? 'Успешно доставлено' : '—')}
+                        <TableCell>
+                          {hasOpened ? (
+                            <div className='flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400'>
+                              <Eye className='h-3.5 w-3.5' />
+                              <span>Да</span>
+                            </div>
+                          ) : (
+                            <span className='text-muted-foreground text-xs'>
+                              —
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {hasClicked ? (
+                            <div className='flex items-center gap-1.5'>
+                              <Badge
+                                variant='outline'
+                                className='border-purple-300 text-[10px] font-medium text-purple-700 dark:text-purple-300'
+                              >
+                                <MousePointerClick className='mr-1 h-3 w-3' />
+                                {r.clickCount || 1} клик(ов)
+                              </Badge>
+                            </div>
+                          ) : (
+                            <span className='text-muted-foreground text-xs'>
+                              —
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className='text-muted-foreground text-right text-xs'>
                           {r.sentAt
-                            ? format(new Date(r.sentAt), 'dd.MM HH:mm:ss', {
+                            ? format(new Date(r.sentAt), 'dd.MM HH:mm', {
                                 locale: ru
                               })
                             : r.createdAt
-                              ? format(
-                                  new Date(r.createdAt),
-                                  'dd.MM HH:mm:ss',
-                                  { locale: ru }
-                                )
+                              ? format(new Date(r.createdAt), 'dd.MM HH:mm', {
+                                  locale: ru
+                                })
                               : '—'}
                         </TableCell>
                       </TableRow>
@@ -685,7 +901,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
           )}
         </TabsContent>
 
-        {/* Вкладка 3: Содержимое */}
+        {/* Вкладка 4: Содержимое */}
         <TabsContent value='content' className='mt-4'>
           <Card>
             <CardHeader className='p-4 pb-2'>

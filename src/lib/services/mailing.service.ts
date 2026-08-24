@@ -855,20 +855,57 @@ export class MailingService {
         }
       }
 
+      // Загружаем ссылки рассылки и детальную статистику кликов
+      const links = await db.mailingLink.findMany({
+        where: { mailingId },
+        include: {
+          _count: {
+            select: { clicks: true }
+          }
+        }
+      });
+
+      const linkClicks = await db.mailingLinkClick.findMany({
+        where: { mailingId }
+      });
+
+      const linksAnalytics = links.map((link) => {
+        const clicksForThisLink = linkClicks.filter(
+          (c) => c.url === link.originalUrl
+        );
+        const uniqueRecipients = new Set(
+          clicksForThisLink.map((c) => c.recipientId)
+        ).size;
+        return {
+          id: link.id,
+          originalUrl: link.originalUrl,
+          shortCode: link.shortCode,
+          totalClicks: clicksForThisLink.length || link._count.clicks,
+          uniqueClicks: uniqueRecipients,
+          ctr:
+            stats.sent > 0
+              ? Math.round((uniqueRecipients / stats.sent) * 1000) / 10
+              : 0
+        };
+      });
+
       // Обновляем статистику в рассылке
       await db.mailing.update({
         where: { id: mailingId },
         data: {
+          openedCount: stats.opened,
+          clickedCount: stats.clicked,
           statistics: {
             ...stats,
             historyStats,
-            openRate,
-            clickRate,
-            clickThroughRate,
+            openRate: Math.round(openRate * 100) / 100,
+            clickRate: Math.round(clickRate * 100) / 100,
+            clickThroughRate: Math.round(clickThroughRate * 100) / 100,
             errorsBreakdown,
             blockedCount,
             deactivatedCount,
-            chatNotFoundCount
+            chatNotFoundCount,
+            linksAnalytics
           },
           status: stats.pending === 0 ? 'COMPLETED' : undefined
         }
@@ -884,6 +921,7 @@ export class MailingService {
         blockedCount,
         deactivatedCount,
         chatNotFoundCount,
+        linksAnalytics,
         timeline
       };
     } catch (error) {

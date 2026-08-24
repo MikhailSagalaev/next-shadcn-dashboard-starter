@@ -13,6 +13,7 @@ import { db } from '@/lib/db';
 import type { MailingType } from '@prisma/client';
 import { sendRichBroadcastMessage } from '@/lib/telegram/notifications';
 import { createBullMQConnectionOptions } from '@/lib/queues/bullmq-connection';
+import { MailingTrackerService } from '@/lib/services/mailing-tracker.service';
 
 const queueConnection = createBullMQConnectionOptions('queue');
 const workerConnection = createBullMQConnectionOptions('worker');
@@ -105,15 +106,26 @@ async function deliverMailingJob(
       return { success: false, error: 'Пользователь не найден' };
     }
 
-    const imageUrl =
-      typeof metadata?.imageUrl === 'string' ? metadata.imageUrl : undefined;
-    const buttons = Array.isArray(metadata?.buttons)
+    const rawButtons = Array.isArray(metadata?.buttons)
       ? metadata.buttons.filter(isMailingButton)
       : undefined;
+
+    // Оборачиваем ссылки в тексте и кнопках в трекинг-ссылки
+    const { text: wrappedBody, buttons: wrappedButtons } =
+      await MailingTrackerService.wrapMessageForRecipient(
+        job.data.mailingId,
+        job.data.recipientId,
+        body,
+        rawButtons,
+        'telegram'
+      );
+
+    const imageUrl =
+      typeof metadata?.imageUrl === 'string' ? metadata.imageUrl : undefined;
     const parseMode = metadata?.parseMode === 'Markdown' ? 'Markdown' : 'HTML';
     const result = await sendRichBroadcastMessage(
       projectId,
-      { message: body, imageUrl, buttons, parseMode },
+      { message: wrappedBody, imageUrl, buttons: wrappedButtons, parseMode },
       [recipient.userId]
     );
 
@@ -121,7 +133,7 @@ async function deliverMailingJob(
       return {
         success: true,
         hasImage: Boolean(imageUrl),
-        buttonsCount: buttons?.length ?? 0
+        buttonsCount: wrappedButtons?.length ?? 0
       };
     }
 
