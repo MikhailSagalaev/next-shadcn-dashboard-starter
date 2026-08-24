@@ -25,9 +25,29 @@ export async function GET(
     await ProjectService.verifyProjectAccess(id, admin.sub);
 
     // Получаем статистику параллельно
-    const [totalUsers, activeUsers, totalTransactions] = await Promise.all([
+    const [
+      totalUsers,
+      activeUsers,
+      telegramTotal,
+      telegramEligible,
+      maxTotal,
+      maxEligible,
+      noMessenger,
+      totalTransactions
+    ] = await Promise.all([
       db.user.count({ where: { projectId: id } }),
       db.user.count({ where: { projectId: id, isActive: true } }),
+      db.user.count({ where: { projectId: id, telegramId: { not: null } } }),
+      db.user.count({
+        where: { projectId: id, telegramId: { not: null }, isActive: true }
+      }),
+      db.user.count({ where: { projectId: id, maxId: { not: null } } }),
+      db.user.count({
+        where: { projectId: id, maxId: { not: null }, isActive: true }
+      }),
+      db.user.count({
+        where: { projectId: id, telegramId: null, maxId: null }
+      }),
       db.transaction.count({
         where: { user: { projectId: id } }
       })
@@ -37,6 +57,11 @@ export async function GET(
       totalUsers,
       activeUsers,
       inactiveUsers: totalUsers - activeUsers,
+      telegramTotal,
+      telegramEligible,
+      maxTotal,
+      maxEligible,
+      noMessenger,
       totalTransactions
     });
   } catch (error) {

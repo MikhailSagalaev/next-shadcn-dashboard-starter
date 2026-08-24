@@ -34,7 +34,9 @@ import {
   Gift,
   Trash2,
   Edit,
-  Loader2
+  Loader2,
+  Send,
+  MessageSquare
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -370,10 +372,34 @@ export function UsersTable({
     },
     {
       accessorKey: 'telegramUsername',
-      header: 'Telegram',
+      header: 'Мессенджер',
       cell: ({ row }) => {
-        const username = row.getValue('telegramUsername') as string | undefined;
-        return <div className='text-sm'>{username ? `@${username}` : '-'}</div>;
+        const user = row.original;
+        const username = user.telegramUsername;
+        const tgId = user.telegramId;
+        const maxId = user.maxId;
+
+        if (tgId) {
+          return (
+            <div className='flex items-center gap-1.5 text-sm'>
+              <Send className='h-3.5 w-3.5 shrink-0 text-blue-500' />
+              <span className='font-mono'>
+                {username ? `@${username}` : `TG:${tgId.slice(-6)}`}
+              </span>
+            </div>
+          );
+        }
+
+        if (maxId) {
+          return (
+            <div className='flex items-center gap-1.5 text-sm'>
+              <MessageSquare className='h-3.5 w-3.5 shrink-0 text-purple-500' />
+              <span className='font-mono'>MAX:{maxId.slice(-6)}</span>
+            </div>
+          );
+        }
+
+        return <span className='text-muted-foreground text-sm'>—</span>;
       }
     },
     {

@@ -124,6 +124,25 @@ async function getHandler(
       };
     }
 
+    // Фильтр по каналу мессенджера: ?messenger=telegram|telegram_eligible|max|none
+    const messengerParam = (url.searchParams.get('messenger') || '')
+      .toLowerCase()
+      .trim();
+    if (messengerParam === 'telegram') {
+      where.telegramId = { not: null };
+    } else if (messengerParam === 'telegram_eligible') {
+      where.telegramId = { not: null };
+      where.isActive = true;
+    } else if (messengerParam === 'max') {
+      where.maxId = { not: null };
+    } else if (messengerParam === 'max_eligible') {
+      where.maxId = { not: null };
+      where.isActive = true;
+    } else if (messengerParam === 'none') {
+      where.telegramId = null;
+      where.maxId = null;
+    }
+
     const { users: enrichedUsers, total } = await UserService.getProjectUsers(
       id,
       page,
@@ -169,6 +188,13 @@ async function getHandler(
         // Telegram данные
         telegramId: user.telegramId ? user.telegramId.toString() : null,
         telegramUsername: user.telegramUsername || null,
+        // MAX данные
+        maxId: (user as any).maxId ? (user as any).maxId.toString() : null,
+        maxUsername: (user as any).maxUsername || null,
+        hasTelegram: Boolean(user.telegramId),
+        hasMax: Boolean((user as any).maxId),
+        isTelegramEligible: Boolean(user.telegramId) && computedActive,
+        isMaxEligible: Boolean((user as any).maxId) && computedActive,
         // Партнёрская иерархия (Phase 2 b2b-referral-hierarchy)
         partnerRole: (user as any).partnerRole || 'CLIENT',
         outboundReferralPlanId: (user as any).outboundReferralPlanId ?? null,
@@ -197,16 +223,54 @@ async function getHandler(
               where: { projectId: id }
             });
 
-            // Активные пользователи (с бонусами > 0)
+            // Активные пользователи (флаг isActive = true)
             const activeUsersCount = await tx.user.count({
               where: {
                 projectId: id,
-                bonuses: {
-                  some: {
-                    isUsed: false,
-                    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-                  }
-                }
+                isActive: true
+              }
+            });
+
+            // Пользователи Telegram
+            const telegramUsersCount = await tx.user.count({
+              where: {
+                projectId: id,
+                telegramId: { not: null }
+              }
+            });
+
+            // Пользователи Telegram, доступные для рассылки
+            const telegramEligibleCount = await tx.user.count({
+              where: {
+                projectId: id,
+                telegramId: { not: null },
+                isActive: true
+              }
+            });
+
+            // Пользователи MAX
+            const maxUsersCount = await tx.user.count({
+              where: {
+                projectId: id,
+                maxId: { not: null }
+              }
+            });
+
+            // Пользователи MAX, доступные для рассылки
+            const maxEligibleCount = await tx.user.count({
+              where: {
+                projectId: id,
+                maxId: { not: null },
+                isActive: true
+              }
+            });
+
+            // Пользователи без мессенджеров
+            const noMessengerCount = await tx.user.count({
+              where: {
+                projectId: id,
+                telegramId: null,
+                maxId: null
               }
             });
 
@@ -223,6 +287,11 @@ async function getHandler(
             return {
               totalUsers: totalUsersCount,
               activeUsers: activeUsersCount,
+              telegramUsers: telegramUsersCount,
+              telegramEligible: telegramEligibleCount,
+              maxUsers: maxUsersCount,
+              maxEligible: maxEligibleCount,
+              noMessenger: noMessengerCount,
               totalBonuses: Number(totalBonusesResult._sum.amount || 0)
             };
           });

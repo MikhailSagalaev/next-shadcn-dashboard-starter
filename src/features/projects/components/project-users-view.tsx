@@ -27,7 +27,10 @@ import {
   Badge as BadgeIcon,
   Target,
   TrendingUp,
-  Upload
+  Upload,
+  Smartphone,
+  Send,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -185,6 +188,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
+  // Фильтр по каналу мессенджера ('all' | 'telegram' | 'telegram_eligible' | 'max' | 'none')
+  const [messengerFilter, setMessengerFilter] = useState<string>('all');
+
   // Phase 2: локальные значения селекторов в диалоге профиля
   // (роль и outbound-план) и состояние сохранения.
   const [profileRole, setProfileRole] = useState<
@@ -208,6 +214,11 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     totalUsers,
     totalCount: filteredUsersCount,
     activeUsers,
+    telegramUsers,
+    telegramEligible,
+    maxUsers,
+    maxEligible,
+    noMessenger,
     totalBonuses,
     currentPage,
     totalPages,
@@ -219,6 +230,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     searchTerm: debouncedSearchTerm,
     roles: roleFilter,
     organizationId: orgFilter,
+    messenger: messengerFilter,
     sort: sortField,
     order: sortOrder
   });
@@ -265,6 +277,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     debouncedSearchTerm,
     roleFilter,
     orgFilter,
+    messengerFilter,
     sortField,
     sortOrder
   ]);
@@ -368,6 +381,11 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const statsData = {
     totalUsers,
     activeUsers,
+    telegramUsers,
+    telegramEligible,
+    maxUsers,
+    maxEligible,
+    noMessenger,
     totalBonuses
   };
 
@@ -1336,6 +1354,87 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
+
+              {/* Фильтр по каналу мессенджера */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant='outline' size='sm'>
+                    <Smartphone className='mr-2 h-4 w-4' />
+                    {messengerFilter === 'telegram'
+                      ? 'Telegram'
+                      : messengerFilter === 'telegram_eligible'
+                        ? 'Telegram (активен)'
+                        : messengerFilter === 'max'
+                          ? 'MAX'
+                          : messengerFilter === 'max_eligible'
+                            ? 'MAX (активен)'
+                            : messengerFilter === 'none'
+                              ? 'Без мессенджера'
+                              : 'Канал связи'}
+                    {messengerFilter && messengerFilter !== 'all' && (
+                      <Badge
+                        variant='secondary'
+                        className='ml-2 px-1.5 text-xs'
+                      >
+                        1
+                      </Badge>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align='end' className='w-64'>
+                  <DropdownMenuLabel>Фильтр по каналу связи</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={messengerFilter === 'all' || !messengerFilter}
+                    onCheckedChange={() => setMessengerFilter('all')}
+                  >
+                    Все контакты ({totalUsers})
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={messengerFilter === 'telegram'}
+                    onCheckedChange={() => setMessengerFilter('telegram')}
+                  >
+                    Telegram — привязаны ({telegramUsers})
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={messengerFilter === 'telegram_eligible'}
+                    onCheckedChange={() =>
+                      setMessengerFilter('telegram_eligible')
+                    }
+                  >
+                    Telegram — готовы к рассылке ({telegramEligible})
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={messengerFilter === 'max'}
+                    onCheckedChange={() => setMessengerFilter('max')}
+                  >
+                    MAX — привязаны ({maxUsers})
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={messengerFilter === 'max_eligible'}
+                    onCheckedChange={() => setMessengerFilter('max_eligible')}
+                  >
+                    MAX — готовы к рассылке ({maxEligible})
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={messengerFilter === 'none'}
+                    onCheckedChange={() => setMessengerFilter('none')}
+                  >
+                    Без мессенджера ({noMessenger})
+                  </DropdownMenuCheckboxItem>
+                  {messengerFilter && messengerFilter !== 'all' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuCheckboxItem
+                        checked={false}
+                        onCheckedChange={() => setMessengerFilter('all')}
+                      >
+                        Сбросить фильтр
+                      </DropdownMenuCheckboxItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 variant='default'
                 size='sm'

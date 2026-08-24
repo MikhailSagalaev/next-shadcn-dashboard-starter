@@ -18,13 +18,20 @@ import {
   TrendingUp,
   AlertTriangle,
   Activity,
-  Target
+  Send,
+  MessageSquare,
+  Smartphone
 } from 'lucide-react';
 
-interface BonusStats {
+export interface BonusStats {
   totalUsers: number;
   activeUsers: number;
   totalBonuses: number;
+  telegramUsers?: number;
+  telegramEligible?: number;
+  maxUsers?: number;
+  maxEligible?: number;
+  noMessenger?: number;
   pendingBonuses?: number;
   expiringSoonBonuses?: number;
   averageBonusPerUser?: number;
@@ -67,98 +74,141 @@ export const BonusStatsCards = memo<BonusStatsCardsProps>(
         ? Number((stats.totalBonuses / stats.totalUsers).toFixed(2))
         : 0;
 
-    const expiringSoonPercentage =
-      stats.totalBonuses > 0 && stats.expiringSoonBonuses
-        ? Math.round((stats.expiringSoonBonuses / stats.totalBonuses) * 100)
-        : 0;
+    const hasAudienceStats =
+      stats.telegramUsers !== undefined || stats.telegramEligible !== undefined;
 
     // Определяем карточки статистики
-    const statCards: StatCard[] = [
-      {
-        title: 'Всего пользователей',
-        value: stats.totalUsers.toLocaleString('ru-RU'),
-        subtitle: `${stats.activeUsers} активных`,
-        trend: stats.monthlyGrowth
-          ? {
-              value: stats.monthlyGrowth,
-              isPositive: stats.monthlyGrowth > 0
-            }
-          : undefined,
-        icon: Users,
-        variant: 'default',
-        badge:
-          stats.activeUsers > 0
-            ? {
-                text: `${conversionRate}% активность`,
-                variant: conversionRate > 50 ? 'default' : 'secondary'
-              }
-            : undefined
-      },
-      {
-        title: 'Общий баланс бонусов',
-        value: `${Number(stats.totalBonuses).toFixed(2)} бонусов`,
-        subtitle:
-          averageBonusPerUser > 0
-            ? `${averageBonusPerUser.toFixed(2)} бонусов на пользователя`
-            : undefined,
-        icon: Coins,
-        variant: 'success'
-      },
-      {
-        title: 'Активные пользователи',
-        value: stats.activeUsers.toLocaleString('ru-RU'),
-        subtitle:
-          stats.totalUsers > 0
-            ? `${conversionRate}% от общего числа`
-            : undefined,
-        icon: Activity,
-        variant: stats.activeUsers > 0 ? 'default' : 'warning',
-        badge: {
-          text:
-            conversionRate > 70
-              ? 'Отлично'
-              : conversionRate > 40
-                ? 'Хорошо'
-                : 'Низкая активность',
-          variant:
-            conversionRate > 70
-              ? 'default'
-              : conversionRate > 40
-                ? 'secondary'
-                : 'destructive'
-        }
-      },
-      {
-        title: 'Скоро истекут',
-        value: stats.expiringSoonBonuses?.toLocaleString('ru-RU') || '0',
-        subtitle: stats.expiringSoonBonuses
-          ? `${expiringSoonPercentage}% от общего баланса`
-          : 'Нет истекающих бонусов',
-        icon: AlertTriangle,
-        variant:
-          expiringSoonPercentage > 20
-            ? 'destructive'
-            : expiringSoonPercentage > 10
-              ? 'warning'
-              : 'default',
-        badge: stats.expiringSoonBonuses
-          ? {
-              text:
-                expiringSoonPercentage > 20
-                  ? 'Критично'
-                  : expiringSoonPercentage > 10
-                    ? 'Внимание'
-                    : 'Норма',
+    const statCards: StatCard[] = hasAudienceStats
+      ? [
+          {
+            title: 'Всего контактов',
+            value: stats.totalUsers.toLocaleString('ru-RU'),
+            subtitle: `${stats.activeUsers.toLocaleString('ru-RU')} активных в системе`,
+            icon: Users,
+            variant: 'default',
+            badge:
+              stats.activeUsers > 0
+                ? {
+                    text: `${conversionRate}% активность`,
+                    variant: conversionRate > 50 ? 'default' : 'secondary'
+                  }
+                : undefined
+          },
+          {
+            title: 'Telegram для рассылок',
+            value: (
+              stats.telegramEligible ??
+              stats.telegramUsers ??
+              0
+            ).toLocaleString('ru-RU'),
+            subtitle: `из ${(stats.telegramUsers ?? 0).toLocaleString('ru-RU')} запустивших бота`,
+            icon: Send,
+            variant: (stats.telegramEligible ?? 0) > 0 ? 'success' : 'default',
+            badge: {
+              text: `${Math.round(((stats.telegramEligible ?? stats.telegramUsers ?? 0) / (stats.totalUsers || 1)) * 100)}% базы`,
               variant:
-                expiringSoonPercentage > 20
-                  ? 'destructive'
-                  : expiringSoonPercentage > 10
-                    ? 'outline'
-                    : 'secondary'
+                (stats.telegramEligible ?? 0) > 0 ? 'default' : 'secondary'
             }
-          : undefined
-      }
-    ];
+          },
+          {
+            title: 'MAX для рассылок',
+            value: (stats.maxEligible ?? stats.maxUsers ?? 0).toLocaleString(
+              'ru-RU'
+            ),
+            subtitle: `из ${(stats.maxUsers ?? 0).toLocaleString('ru-RU')} запустивших бота`,
+            icon: MessageSquare,
+            variant: (stats.maxEligible ?? 0) > 0 ? 'success' : 'default',
+            badge: {
+              text: `${Math.round(((stats.maxEligible ?? stats.maxUsers ?? 0) / (stats.totalUsers || 1)) * 100)}% базы`,
+              variant: 'outline'
+            }
+          },
+          {
+            title: 'Без мессенджера',
+            value: (
+              stats.noMessenger ??
+              Math.max(
+                0,
+                stats.totalUsers -
+                  (stats.telegramUsers ?? 0) -
+                  (stats.maxUsers ?? 0)
+              )
+            ).toLocaleString('ru-RU'),
+            subtitle: 'Только телефон или email в CRM',
+            icon: Smartphone,
+            variant: 'default',
+            badge: {
+              text: `${Math.round(((stats.noMessenger ?? stats.totalUsers - (stats.telegramUsers ?? 0)) / (stats.totalUsers || 1)) * 100)}% базы`,
+              variant: 'secondary'
+            }
+          },
+          {
+            title: 'Общий баланс бонусов',
+            value: `${Number(stats.totalBonuses).toFixed(2)} бонусов`,
+            subtitle:
+              averageBonusPerUser > 0
+                ? `${averageBonusPerUser.toFixed(2)} на пользователя`
+                : undefined,
+            icon: Coins,
+            variant: 'success'
+          }
+        ]
+      : [
+          {
+            title: 'Всего пользователей',
+            value: stats.totalUsers.toLocaleString('ru-RU'),
+            subtitle: `${stats.activeUsers} активных`,
+            trend: stats.monthlyGrowth
+              ? {
+                  value: stats.monthlyGrowth,
+                  isPositive: stats.monthlyGrowth > 0
+                }
+              : undefined,
+            icon: Users,
+            variant: 'default',
+            badge:
+              stats.activeUsers > 0
+                ? {
+                    text: `${conversionRate}% активность`,
+                    variant: conversionRate > 50 ? 'default' : 'secondary'
+                  }
+                : undefined
+          },
+          {
+            title: 'Общий баланс бонусов',
+            value: `${Number(stats.totalBonuses).toFixed(2)} бонусов`,
+            subtitle:
+              averageBonusPerUser > 0
+                ? `${averageBonusPerUser.toFixed(2)} бонусов на пользователя`
+                : undefined,
+            icon: Coins,
+            variant: 'success'
+          },
+          {
+            title: 'Активные пользователи',
+            value: stats.activeUsers.toLocaleString('ru-RU'),
+            subtitle:
+              stats.totalUsers > 0
+                ? `${conversionRate}% от общего числа`
+                : undefined,
+            icon: Activity,
+            variant: stats.activeUsers > 0 ? 'default' : 'warning',
+            badge: {
+              text:
+                conversionRate > 70
+                  ? 'Отлично'
+                  : conversionRate > 40
+                    ? 'Хорошо'
+                    : 'Низкая активность',
+              variant:
+                conversionRate > 70
+                  ? 'default'
+                  : conversionRate > 40
+                    ? 'secondary'
+                    : 'destructive'
+            }
+          }
+        ];
 
     if (error) {
       return (

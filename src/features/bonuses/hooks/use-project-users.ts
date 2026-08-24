@@ -26,6 +26,8 @@ interface UseProjectUsersOptions {
   roles?: Array<'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR'>;
   /** Фильтр по организации (b2b). Передаётся как `?organizationId=<id>`. */
   organizationId?: string | null;
+  /** Фильтр по мессенджеру: 'telegram' | 'telegram_eligible' | 'max' | 'max_eligible' | 'none'. */
+  messenger?: string | null;
   /** Поле сортировки (серверная). Например `name`, `registeredAt`, `bonusBalance`. */
   sort?: string | null;
   /** Направление сортировки. */
@@ -38,6 +40,11 @@ interface UseProjectUsersReturn {
   error: string | null;
   totalUsers: number;
   activeUsers: number;
+  telegramUsers: number;
+  telegramEligible: number;
+  maxUsers: number;
+  maxEligible: number;
+  noMessenger: number;
   totalBonuses: number;
 
   // Pagination
@@ -61,6 +68,7 @@ export function useProjectUsers({
   searchTerm = '',
   roles,
   organizationId,
+  messenger,
   sort,
   order = 'desc'
 }: UseProjectUsersOptions = {}): UseProjectUsersReturn {
@@ -83,12 +91,22 @@ export function useProjectUsers({
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
+    telegramUsers: 0,
+    telegramEligible: 0,
+    maxUsers: 0,
+    maxEligible: 0,
+    noMessenger: 0,
     totalBonuses: 0
   });
 
   // Используем статистику из API
   const totalUsers = stats.totalUsers;
   const activeUsers = stats.activeUsers;
+  const telegramUsers = stats.telegramUsers;
+  const telegramEligible = stats.telegramEligible;
+  const maxUsers = stats.maxUsers;
+  const maxEligible = stats.maxEligible;
+  const noMessenger = stats.noMessenger;
   const totalBonuses = stats.totalBonuses;
 
   /**
@@ -146,6 +164,10 @@ export function useProjectUsers({
 
         if (organizationId) {
           params.set('organizationId', organizationId);
+        }
+
+        if (messenger && messenger !== 'all') {
+          params.set('messenger', messenger);
         }
 
         if (sort) {
@@ -209,6 +231,16 @@ export function useProjectUsers({
             currentLevel: user.currentLevel,
             telegramId: user.telegramId || null,
             telegramUsername: user.telegramUsername,
+            maxId: user.maxId || null,
+            maxUsername: user.maxUsername,
+            hasTelegram: Boolean(user.hasTelegram ?? user.telegramId),
+            hasMax: Boolean(user.hasMax ?? user.maxId),
+            isTelegramEligible: Boolean(
+              user.isTelegramEligible ?? (user.telegramId && user.isActive)
+            ),
+            isMaxEligible: Boolean(
+              user.isMaxEligible ?? (user.maxId && user.isActive)
+            ),
             isActive:
               user.isActive !== undefined ? Boolean(user.isActive) : false,
             referralCode: user.referralCode,
@@ -231,6 +263,11 @@ export function useProjectUsers({
           setStats({
             totalUsers: payload.stats.totalUsers || totalCount,
             activeUsers: payload.stats.activeUsers || 0,
+            telegramUsers: payload.stats.telegramUsers || 0,
+            telegramEligible: payload.stats.telegramEligible || 0,
+            maxUsers: payload.stats.maxUsers || 0,
+            maxEligible: payload.stats.maxEligible || 0,
+            noMessenger: payload.stats.noMessenger || 0,
             totalBonuses: payload.stats.totalBonuses || 0
           });
         }
@@ -481,6 +518,11 @@ export function useProjectUsers({
     error,
     totalUsers,
     activeUsers,
+    telegramUsers,
+    telegramEligible,
+    maxUsers,
+    maxEligible,
+    noMessenger,
     totalBonuses,
     currentPage,
     totalPages,

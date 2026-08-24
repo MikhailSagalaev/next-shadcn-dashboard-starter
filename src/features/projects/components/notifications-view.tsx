@@ -60,6 +60,14 @@ export default function NotificationsView({
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [audienceStats, setAudienceStats] = useState<{
+    totalUsers: number;
+    telegramEligible: number;
+    telegramTotal: number;
+    maxEligible: number;
+    maxTotal: number;
+    noMessenger: number;
+  } | null>(null);
 
   // Форма для отправки уведомления
   const [formData, setFormData] = useState({
@@ -79,12 +87,22 @@ export default function NotificationsView({
   const loadNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/projects/${projectId}/notifications`);
-      const data = await response.json();
+      const [notifResponse, statsResponse] = await Promise.all([
+        fetch(`/api/projects/${projectId}/notifications`),
+        fetch(`/api/projects/${projectId}/stats`)
+      ]);
 
+      const data = await notifResponse.json();
       if (data.success) {
         setTemplates(data.data.templates);
         setLogs(data.data.logs);
+      }
+
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        if (statsData && typeof statsData.totalUsers === 'number') {
+          setAudienceStats(statsData);
+        }
       }
     } catch (error) {
       toast.error('Ошибка загрузки уведомлений');
@@ -295,6 +313,50 @@ export default function NotificationsView({
                   </Select>
                 </div>
               </div>
+
+              {!formData.userId && audienceStats && (
+                <div className='bg-muted/40 space-y-1.5 rounded-lg border p-3.5 text-xs'>
+                  <div className='text-foreground flex items-center justify-between font-medium'>
+                    <span>Оценка аудитории канала</span>
+                    <span>
+                      Всего в базе:{' '}
+                      {audienceStats.totalUsers.toLocaleString('ru-RU')}
+                    </span>
+                  </div>
+                  {formData.channel === NotificationChannel.TELEGRAM && (
+                    <p className='text-muted-foreground leading-relaxed'>
+                      Уведомление получат:{' '}
+                      <strong className='text-foreground font-semibold'>
+                        {audienceStats.telegramEligible.toLocaleString('ru-RU')}
+                      </strong>{' '}
+                      из {audienceStats.telegramTotal.toLocaleString('ru-RU')}{' '}
+                      контактов, подключенных к Telegram. Контакты без
+                      запущенного Telegram-бота (
+                      {audienceStats.noMessenger.toLocaleString('ru-RU')}) не
+                      смогут получить сообщение.
+                    </p>
+                  )}
+                  {((formData.channel as string) === 'max' ||
+                    (formData.channel as string) === 'MAX') && (
+                    <p className='text-muted-foreground leading-relaxed'>
+                      Уведомление получат:{' '}
+                      <strong className='text-foreground font-semibold'>
+                        {audienceStats.maxEligible.toLocaleString('ru-RU')}
+                      </strong>{' '}
+                      из {audienceStats.maxTotal.toLocaleString('ru-RU')}{' '}
+                      контактов, подключенных к MAX.
+                    </p>
+                  )}
+                  {formData.channel !== NotificationChannel.TELEGRAM &&
+                    (formData.channel as string) !== 'max' &&
+                    (formData.channel as string) !== 'MAX' && (
+                      <p className='text-muted-foreground leading-relaxed'>
+                        Будет выполнена рассылка по выбранному каналу для всех
+                        пользователей с заполненными контактами.
+                      </p>
+                    )}
+                </div>
+              )}
 
               <div className='space-y-2'>
                 <Label htmlFor='title'>Заголовок</Label>

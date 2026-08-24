@@ -70,6 +70,29 @@ export function MailingFormDialog({
   >([]);
   const [parseMode, setParseMode] = useState<'HTML' | 'Markdown'>('HTML');
 
+  // Статистика доступной аудитории
+  const [audienceStats, setAudienceStats] = useState<{
+    totalUsers: number;
+    telegramEligible: number;
+    telegramTotal: number;
+    maxEligible: number;
+    maxTotal: number;
+    noMessenger: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (open && projectId) {
+      fetch(`/api/projects/${projectId}/stats`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && typeof data.totalUsers === 'number') {
+            setAudienceStats(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [open, projectId]);
+
   useEffect(() => {
     if (mailing) {
       setName(mailing.name);
@@ -250,6 +273,43 @@ export function MailingFormDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {audienceStats && (
+            <div className='bg-muted/40 space-y-1.5 rounded-lg border p-3.5 text-xs'>
+              <div className='text-foreground flex items-center justify-between font-medium'>
+                <span>Оценка аудитории канала</span>
+                <span>
+                  Всего в базе:{' '}
+                  {audienceStats.totalUsers.toLocaleString('ru-RU')}
+                </span>
+              </div>
+              {type === 'TELEGRAM' && (
+                <p className='text-muted-foreground leading-relaxed'>
+                  Сообщение получат:{' '}
+                  <strong className='text-foreground font-semibold'>
+                    {audienceStats.telegramEligible.toLocaleString('ru-RU')}
+                  </strong>{' '}
+                  из {audienceStats.telegramTotal.toLocaleString('ru-RU')}{' '}
+                  контактов, подключенных к Telegram. Контакты без активного
+                  Telegram-бота (
+                  {audienceStats.noMessenger.toLocaleString('ru-RU')}) не смогут
+                  получить рассылку через этот канал.
+                </p>
+              )}
+              {type === 'WHATSAPP' && (
+                <p className='text-muted-foreground leading-relaxed'>
+                  Рассылка будет направлена контактам с указанным номером
+                  телефона.
+                </p>
+              )}
+              {type === 'EMAIL' && (
+                <p className='text-muted-foreground leading-relaxed'>
+                  Рассылка будет направлена контактам с указанным email-адресом.
+                </p>
+              )}
+            </div>
+          )}
+
           {type === 'TELEGRAM' ? (
             <TelegramMailingEditor
               messageText={body}

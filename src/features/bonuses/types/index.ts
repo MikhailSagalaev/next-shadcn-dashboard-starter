@@ -21,7 +21,14 @@ export interface DisplayUser {
   totalPurchases?: number;
   projectId?: string;
   birthDate?: Date | null;
-  registeredAt?: Date;
+  /** Привязка к MAX */
+  maxId?: string | null;
+  maxUsername?: string | null;
+  /** Флаги доступности каналов рассылок */
+  hasTelegram?: boolean;
+  hasMax?: boolean;
+  isTelegramEligible?: boolean;
+  isMaxEligible?: boolean;
   /** Партнёрская роль (b2b-referral-hierarchy). По умолчанию `CLIENT`. */
   partnerRole?: 'CLIENT' | 'TRAINER' | 'MANAGER' | 'DIRECTOR';
   /** Outbound-план комиссий, который применяется к приглашённым этим партнёром. */
