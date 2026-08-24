@@ -29,22 +29,23 @@ export async function GET(
       totalUsers,
       activeUsers,
       telegramTotal,
-      telegramEligible,
       maxTotal,
-      maxEligible,
       noMessenger,
       totalTransactions
     ] = await Promise.all([
       db.user.count({ where: { projectId: id } }),
-      db.user.count({ where: { projectId: id, isActive: true } }),
+      db.user.count({
+        where: {
+          projectId: id,
+          OR: [
+            { isActive: true },
+            { telegramId: { not: null } },
+            { maxId: { not: null } }
+          ]
+        }
+      }),
       db.user.count({ where: { projectId: id, telegramId: { not: null } } }),
-      db.user.count({
-        where: { projectId: id, telegramId: { not: null }, isActive: true }
-      }),
       db.user.count({ where: { projectId: id, maxId: { not: null } } }),
-      db.user.count({
-        where: { projectId: id, maxId: { not: null }, isActive: true }
-      }),
       db.user.count({
         where: { projectId: id, telegramId: null, maxId: null }
       }),
@@ -52,6 +53,9 @@ export async function GET(
         where: { user: { projectId: id } }
       })
     ]);
+
+    const telegramEligible = telegramTotal;
+    const maxEligible = maxTotal;
 
     return NextResponse.json({
       totalUsers,

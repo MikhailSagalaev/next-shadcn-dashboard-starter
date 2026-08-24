@@ -257,7 +257,6 @@ export class MailingService {
       db.user.findMany({
         where: {
           projectId: data.projectId,
-          isActive: true,
           telegramId: { not: null }
         },
         select: {
@@ -270,9 +269,7 @@ export class MailingService {
     ]);
 
     if (eligibleUsers.length === 0) {
-      throw new Error(
-        'В проекте нет активных пользователей, привязанных к Telegram.'
-      );
+      throw new Error('В проекте нет пользователей, привязанных к Telegram.');
     }
 
     const mailing = await db.mailing.create({
@@ -450,11 +447,11 @@ export class MailingService {
           mailing.type === 'TELEGRAM'
             ? { telegramId: { not: null } }
             : mailing.type === 'EMAIL'
-              ? { email: { not: null } }
-              : { phone: { not: null } };
+              ? { email: { not: null }, isActive: true }
+              : { phone: { not: null }, isActive: true };
         recipients = await db.user
           .findMany({
-            where: { projectId, isActive: true, ...channelWhere },
+            where: { projectId, ...channelWhere },
             select: { id: true, email: true, phone: true, telegramId: true }
           })
           .then((users) =>

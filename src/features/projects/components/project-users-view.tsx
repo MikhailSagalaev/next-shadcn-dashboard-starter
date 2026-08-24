@@ -30,7 +30,8 @@ import {
   Upload,
   Smartphone,
   Send,
-  MessageSquare
+  MessageSquare,
+  BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -173,6 +174,8 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [isSelectAllMode, setIsSelectAllMode] = useState(false);
+  // Состояние отображения карточек аналитики аудитории (по умолчанию скрыты для чистоты интерфейса)
+  const [showStats, setShowStats] = useState(false);
 
   // Phase 2 b2b-referral-hierarchy: фильтр по партнёрской роли (мульти-выбор).
   // Когда у проекта `enablePartnerRoles = false`, фильтр скрывается и не применяется.
@@ -1111,6 +1114,13 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               Создать группу ({selectedUsers.length})
             </Button>
           )}
+          <Button
+            variant={showStats ? 'secondary' : 'outline'}
+            onClick={() => setShowStats((prev) => !prev)}
+          >
+            <BarChart3 className='mr-2 h-4 w-4' />
+            {showStats ? 'Скрыть аналитику' : 'Аналитика аудитории'}
+          </Button>
           <Button variant='outline' onClick={() => setShowImportDialog(true)}>
             <Upload className='mr-2 h-4 w-4' />
             Импорт CSV
@@ -1124,12 +1134,14 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
 
       <Separator />
 
-      {/* Statistics */}
-      <BonusStatsCards
-        stats={statsData}
-        isLoading={usersLoading}
-        error={usersError}
-      />
+      {/* Statistics (скрывается/раскрывается по кнопке) */}
+      {showStats && (
+        <BonusStatsCards
+          stats={statsData}
+          isLoading={usersLoading}
+          error={usersError}
+        />
+      )}
 
       {/* Legacy Stats Cards - temporarily hidden */}
       {/*

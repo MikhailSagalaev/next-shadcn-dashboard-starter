@@ -101,13 +101,18 @@ export const BonusStatsCards = memo<BonusStatsCardsProps>(
               stats.telegramUsers ??
               0
             ).toLocaleString('ru-RU'),
-            subtitle: `из ${(stats.telegramUsers ?? 0).toLocaleString('ru-RU')} запустивших бота`,
+            subtitle: 'доступно для рассылок',
             icon: Send,
-            variant: (stats.telegramEligible ?? 0) > 0 ? 'success' : 'default',
+            variant:
+              (stats.telegramEligible ?? stats.telegramUsers ?? 0) > 0
+                ? 'success'
+                : 'default',
             badge: {
               text: `${Math.round(((stats.telegramEligible ?? stats.telegramUsers ?? 0) / (stats.totalUsers || 1)) * 100)}% базы`,
               variant:
-                (stats.telegramEligible ?? 0) > 0 ? 'default' : 'secondary'
+                (stats.telegramEligible ?? stats.telegramUsers ?? 0) > 0
+                  ? 'default'
+                  : 'secondary'
             }
           },
           {
@@ -115,9 +120,12 @@ export const BonusStatsCards = memo<BonusStatsCardsProps>(
             value: (stats.maxEligible ?? stats.maxUsers ?? 0).toLocaleString(
               'ru-RU'
             ),
-            subtitle: `из ${(stats.maxUsers ?? 0).toLocaleString('ru-RU')} запустивших бота`,
+            subtitle: 'доступно для рассылок',
             icon: MessageSquare,
-            variant: (stats.maxEligible ?? 0) > 0 ? 'success' : 'default',
+            variant:
+              (stats.maxEligible ?? stats.maxUsers ?? 0) > 0
+                ? 'success'
+                : 'default',
             badge: {
               text: `${Math.round(((stats.maxEligible ?? stats.maxUsers ?? 0) / (stats.totalUsers || 1)) * 100)}% базы`,
               variant: 'outline'
@@ -229,7 +237,9 @@ export const BonusStatsCards = memo<BonusStatsCardsProps>(
     }
 
     return (
-      <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
+      <div
+        className={`grid gap-3 ${hasAudienceStats ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}
+      >
         {statCards.map((card, index) => (
           <StatCard key={`stat-${index}`} card={card} isLoading={isLoading} />
         ))}
@@ -252,30 +262,30 @@ const StatCard = memo<StatCardProps>(({ card, isLoading }) => {
   const Icon = card.icon;
 
   const getCardClassName = (variant: StatCard['variant']) => {
-    const baseClasses = 'relative overflow-hidden';
+    const baseClasses = 'relative overflow-hidden shadow-sm';
 
     switch (variant) {
       case 'success':
-        return `${baseClasses} border-green-200 bg-green-50/50`;
+        return `${baseClasses} border-green-200/80 bg-green-50/40 dark:bg-green-950/20`;
       case 'warning':
-        return `${baseClasses} border-yellow-200 bg-yellow-50/50`;
+        return `${baseClasses} border-yellow-200/80 bg-yellow-50/40 dark:bg-yellow-950/20`;
       case 'destructive':
-        return `${baseClasses} border-red-200 bg-red-50/50`;
+        return `${baseClasses} border-red-200/80 bg-red-50/40 dark:bg-red-950/20`;
       default:
         return baseClasses;
     }
   };
 
   const getIconClassName = (variant: StatCard['variant']) => {
-    const baseClasses = 'h-4 w-4';
+    const baseClasses = 'h-3.5 w-3.5 shrink-0';
 
     switch (variant) {
       case 'success':
-        return `${baseClasses} text-green-600`;
+        return `${baseClasses} text-green-600 dark:text-green-400`;
       case 'warning':
-        return `${baseClasses} text-yellow-600`;
+        return `${baseClasses} text-yellow-600 dark:text-yellow-400`;
       case 'destructive':
-        return `${baseClasses} text-red-600`;
+        return `${baseClasses} text-red-600 dark:text-red-400`;
       default:
         return `${baseClasses} text-muted-foreground`;
     }
@@ -284,13 +294,13 @@ const StatCard = memo<StatCardProps>(({ card, isLoading }) => {
   if (isLoading) {
     return (
       <Card className='relative overflow-hidden'>
-        <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-          <div className='bg-muted h-4 w-24 animate-pulse rounded' />
-          <div className='bg-muted h-4 w-4 animate-pulse rounded' />
+        <CardHeader className='flex flex-row items-center justify-between space-y-0 p-3 pb-1'>
+          <div className='bg-muted h-3 w-20 animate-pulse rounded' />
+          <div className='bg-muted h-3.5 w-3.5 animate-pulse rounded' />
         </CardHeader>
-        <CardContent>
-          <div className='bg-muted mb-1 h-8 w-16 animate-pulse rounded' />
-          <div className='bg-muted h-3 w-32 animate-pulse rounded' />
+        <CardContent className='p-3 pt-1'>
+          <div className='bg-muted mb-1 h-6 w-16 animate-pulse rounded' />
+          <div className='bg-muted h-2.5 w-24 animate-pulse rounded' />
         </CardContent>
       </Card>
     );
@@ -298,58 +308,30 @@ const StatCard = memo<StatCardProps>(({ card, isLoading }) => {
 
   return (
     <Card className={getCardClassName(card.variant)}>
-      <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-        <CardTitle className='text-muted-foreground text-sm font-medium'>
+      <CardHeader className='flex flex-row items-center justify-between space-y-0 p-3.5 pb-1'>
+        <CardTitle className='text-muted-foreground truncate pr-1 text-xs font-medium'>
           {card.title}
         </CardTitle>
         <Icon className={getIconClassName(card.variant)} />
       </CardHeader>
-      <CardContent>
-        <div className='flex items-end justify-between'>
-          <div className='flex-1'>
-            <div className='mb-1 text-2xl leading-none font-bold'>
-              {card.value}
-            </div>
-            {card.subtitle && (
-              <p className='text-muted-foreground text-xs'>{card.subtitle}</p>
-            )}
+      <CardContent className='p-3.5 pt-0'>
+        <div className='flex items-baseline justify-between gap-1'>
+          <div className='text-lg leading-tight font-bold tracking-tight'>
+            {card.value}
           </div>
-
-          <div className='flex flex-col items-end space-y-1'>
-            {card.badge && (
-              <Badge variant={card.badge.variant} className='text-xs'>
-                {card.badge.text}
-              </Badge>
-            )}
-
-            {card.trend && (
-              <div
-                className={`flex items-center text-xs ${
-                  card.trend.isPositive ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
-                <TrendingUp
-                  className={`mr-1 h-3 w-3 ${
-                    !card.trend.isPositive ? 'rotate-180' : ''
-                  }`}
-                />
-                {Math.abs(card.trend.value)}%
-              </div>
-            )}
-          </div>
+          {card.badge && (
+            <Badge
+              variant={card.badge.variant}
+              className='shrink-0 px-1.5 py-0 text-[10px] font-normal'
+            >
+              {card.badge.text}
+            </Badge>
+          )}
         </div>
-
-        {/* Декоративная полоса для индикации варианта */}
-        {card.variant !== 'default' && (
-          <div
-            className={`absolute right-0 bottom-0 left-0 h-1 ${
-              card.variant === 'success'
-                ? 'bg-green-500'
-                : card.variant === 'warning'
-                  ? 'bg-yellow-500'
-                  : 'bg-red-500'
-            }`}
-          />
+        {card.subtitle && (
+          <p className='text-muted-foreground mt-0.5 truncate text-[11px] leading-tight'>
+            {card.subtitle}
+          </p>
         )}
       </CardContent>
     </Card>

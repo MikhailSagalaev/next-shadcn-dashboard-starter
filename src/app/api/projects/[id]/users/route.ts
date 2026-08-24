@@ -240,13 +240,7 @@ async function getHandler(
             });
 
             // Пользователи Telegram, доступные для рассылки
-            const telegramEligibleCount = await tx.user.count({
-              where: {
-                projectId: id,
-                telegramId: { not: null },
-                isActive: true
-              }
-            });
+            const telegramEligibleCount = telegramUsersCount;
 
             // Пользователи MAX
             const maxUsersCount = await tx.user.count({
@@ -257,13 +251,7 @@ async function getHandler(
             });
 
             // Пользователи MAX, доступные для рассылки
-            const maxEligibleCount = await tx.user.count({
-              where: {
-                projectId: id,
-                maxId: { not: null },
-                isActive: true
-              }
-            });
+            const maxEligibleCount = maxUsersCount;
 
             // Пользователи без мессенджеров
             const noMessengerCount = await tx.user.count({
