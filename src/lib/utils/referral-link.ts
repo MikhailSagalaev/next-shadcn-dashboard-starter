@@ -61,6 +61,13 @@ export function buildOrganizationReferralLink(
 ): string | null {
   if (!domain?.trim() || !orgSlug.trim()) return null;
   const url = new URL(normalizeProjectDomain(domain));
+  const currentPath = url.pathname.replace(/\/+$/, '');
+
+  // QR организации предназначен именно для регистрации. Прямая ссылка не
+  // зависит от того, сохраняют ли кнопки на внешнем лендинге исходные UTM.
+  if (!currentPath.endsWith('/members/signup')) {
+    url.pathname = `${currentPath}/members/signup`;
+  }
   url.searchParams.set('utm_org', orgSlug.trim());
   return url.toString();
 }

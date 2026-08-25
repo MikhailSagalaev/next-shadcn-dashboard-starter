@@ -7,8 +7,17 @@ describe('referral-link utilities', () => {
   it('строит org-only ссылку без персонального utm_ref', () => {
     const result = buildOrganizationReferralLink('example.com/shop', 'xfit');
 
-    expect(result).toBe('https://example.com/shop?utm_org=xfit');
+    expect(result).toBe('https://example.com/shop/members/signup?utm_org=xfit');
     expect(result).not.toContain('utm_ref');
+  });
+
+  it('не дублирует маршрут регистрации в настроенном домене', () => {
+    expect(
+      buildOrganizationReferralLink(
+        'https://example.com/members/signup',
+        'xfit'
+      )
+    ).toBe('https://example.com/members/signup?utm_org=xfit');
   });
 
   it('сохраняет персональную ссылку отдельным сценарием', () => {

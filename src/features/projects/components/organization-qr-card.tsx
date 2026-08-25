@@ -63,9 +63,9 @@ export function OrganizationQrCard({
                   Без привязки к конкретному человеку
                 </p>
                 <p className='text-muted-foreground mt-1 text-sm'>
-                  Разместите QR на стойке, афише или визитке. Новый клиент
-                  попадёт в эту организацию по метке <code>utm_org={slug}</code>
-                  .
+                  Разместите QR на стойке, афише или визитке. Он ведёт сразу на
+                  регистрацию, а новый клиент попадёт в эту организацию по метке{' '}
+                  <code>utm_org={slug}</code>.
                 </p>
               </div>
               <div className='bg-muted/50 flex min-w-0 items-center gap-2 rounded-md border p-2'>
