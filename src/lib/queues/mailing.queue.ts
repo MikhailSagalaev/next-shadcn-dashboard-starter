@@ -27,6 +27,7 @@ export interface MailingJobData {
     userId?: string;
     email?: string;
     phone?: string;
+    maxId?: string;
   };
   subject?: string;
   body: string;
@@ -90,15 +91,21 @@ async function deliverMailingJob(
   const { type, recipient, body, metadata } = job.data;
 
   if (type === 'EMAIL') {
-    return recipient.email
-      ? { success: true }
-      : { success: false, error: 'Email не указан' };
+    return {
+      success: false,
+      error: recipient.email
+        ? 'Отправка Email ещё не подключена'
+        : 'Email не указан'
+    };
   }
 
   if (type === 'SMS') {
-    return recipient.phone
-      ? { success: true }
-      : { success: false, error: 'Телефон не указан' };
+    return {
+      success: false,
+      error: recipient.phone
+        ? 'Отправка SMS ещё не подключена'
+        : 'Телефон не указан'
+    };
   }
 
   if (type === 'TELEGRAM') {
@@ -116,8 +123,7 @@ async function deliverMailingJob(
         job.data.mailingId,
         job.data.recipientId,
         body,
-        rawButtons,
-        'telegram'
+        rawButtons
       );
 
     const imageUrl =
@@ -125,7 +131,13 @@ async function deliverMailingJob(
     const parseMode = metadata?.parseMode === 'Markdown' ? 'Markdown' : 'HTML';
     const result = await sendRichBroadcastMessage(
       projectId,
-      { message: wrappedBody, imageUrl, buttons: wrappedButtons, parseMode },
+      {
+        message: wrappedBody,
+        imageUrl,
+        buttons: wrappedButtons,
+        parseMode,
+        disableLinkPreview: true
+      },
       [recipient.userId]
     );
 
@@ -147,6 +159,45 @@ async function deliverMailingJob(
       retryAfter: recipientResult?.retryAfter,
       transient: recipientResult?.transient ?? false
     };
+  }
+
+  if (type === 'MAX') {
+    if (!recipient.maxId) {
+      return { success: false, error: 'Пользователь не привязан к MAX' };
+    }
+    const rawButtons = Array.isArray(metadata?.buttons)
+      ? metadata.buttons.filter(isMailingButton)
+      : undefined;
+    const { text: wrappedBody, buttons: wrappedButtons } =
+      await MailingTrackerService.wrapMessageForRecipient(
+        job.data.mailingId,
+        job.data.recipientId,
+        body,
+        rawButtons
+      );
+    const { maxBotManager } = await import('@/lib/max-bot/bot-manager');
+    await maxBotManager.getBotForWebhook(projectId);
+    const success = await maxBotManager.sendMessageToUser(
+      projectId,
+      Number(recipient.maxId),
+      wrappedBody,
+      {
+        format: metadata?.parseMode === 'Markdown' ? 'markdown' : 'html',
+        disableLinkPreview: true,
+        buttons: wrappedButtons?.map((button) => ({
+          text: button.text,
+          ...(button.url ? { url: button.url } : {}),
+          ...(button.callback_data ? { payload: button.callback_data } : {})
+        }))
+      }
+    );
+    return success
+      ? {
+          success: true,
+          hasImage: false,
+          buttonsCount: wrappedButtons?.length ?? 0
+        }
+      : { success: false, error: 'Ошибка отправки в MAX' };
   }
 
   return {
@@ -247,12 +298,15 @@ export function getMailingWorker(): Worker<MailingJobData> | null {
           }),
           db.mailingRecipient.findUnique({
             where: { id: recipientId },
-            select: { status: true }
+            select: { status: true, mailingId: true }
           })
         ]);
 
         if (!mailing) throw new Error('Рассылка не найдена');
         if (!recipientRecord) throw new Error('Получатель рассылки не найден');
+        if (recipientRecord.mailingId !== mailingId) {
+          throw new Error('Получатель не принадлежит этой рассылке');
+        }
         if (mailing.status === 'CANCELLED') {
           logger.info('Mailing job skipped because mailing was cancelled', {
             jobId: job.id,

@@ -79,6 +79,7 @@ interface HierarchyTreeProps {
   period: HierarchyPeriod;
   organizationId?: string | null;
   onPeriodChange: (period: HierarchyPeriod) => void;
+  onMemberOpen?: (userId: string) => void;
 }
 
 const PERIOD_LABEL: Record<HierarchyPeriod, string> = {
@@ -184,6 +185,7 @@ interface NodeRowProps {
   isHighlighted: boolean;
   query: string;
   onToggle: () => void;
+  onOpen?: () => void;
   depth: number;
 }
 
@@ -194,6 +196,7 @@ function NodeRow({
   isHighlighted,
   query,
   onToggle,
+  onOpen,
   depth
 }: NodeRowProps) {
   return (
@@ -227,9 +230,20 @@ function NodeRow({
           </button>
           <div className='min-w-0 flex-1'>
             <div className='flex flex-wrap items-center gap-2'>
-              <span className='font-medium'>
-                <Highlight text={node.name} query={query} />
-              </span>
+              {onOpen ? (
+                <button
+                  type='button'
+                  className='hover:text-primary focus-visible:ring-ring rounded-sm text-start font-medium underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
+                  onClick={onOpen}
+                  aria-label={`Открыть карточку участника: ${node.name}`}
+                >
+                  <Highlight text={node.name} query={query} />
+                </button>
+              ) : (
+                <span className='font-medium'>
+                  <Highlight text={node.name} query={query} />
+                </span>
+              )}
               {node.organizationTitle ? (
                 <Badge variant='outline'>{node.organizationTitle}</Badge>
               ) : node.organizationLevel ? (
@@ -358,7 +372,8 @@ export function HierarchyTree({
   rootIds,
   period,
   organizationId,
-  onPeriodChange
+  onPeriodChange,
+  onMemberOpen
 }: HierarchyTreeProps) {
   const [search, setSearch] = React.useState('');
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
@@ -599,6 +614,9 @@ export function HierarchyTree({
                     isHighlighted={matchedIds.has(node.id)}
                     query={debouncedSearch}
                     onToggle={() => toggleId(node.id)}
+                    onOpen={
+                      onMemberOpen ? () => onMemberOpen(node.id) : undefined
+                    }
                   />
                 ))
               ) : (

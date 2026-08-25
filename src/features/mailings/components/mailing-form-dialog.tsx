@@ -38,7 +38,7 @@ interface MailingFormDialogProps {
   mailing?: {
     id: string;
     name: string;
-    type: 'EMAIL' | 'SMS' | 'TELEGRAM' | 'WHATSAPP' | 'VIBER';
+    type: 'EMAIL' | 'SMS' | 'TELEGRAM' | 'MAX' | 'WHATSAPP' | 'VIBER';
     segmentId?: string | null;
     templateId?: string | null;
   } | null;
@@ -57,7 +57,7 @@ export function MailingFormDialog({
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<
-    'EMAIL' | 'SMS' | 'TELEGRAM' | 'WHATSAPP' | 'VIBER'
+    'EMAIL' | 'SMS' | 'TELEGRAM' | 'MAX' | 'WHATSAPP' | 'VIBER'
   >('EMAIL');
   const [segmentId, setSegmentId] = useState<string>('');
   const [subject, setSubject] = useState('');
@@ -108,7 +108,7 @@ export function MailingFormDialog({
               data.template.body || data.messageText || data.messageHtml || ''
             );
           }
-          // Загружаем Telegram метаданные из statistics
+          // Загружаем метаданные мессенджера из statistics
           if (data.statistics && typeof data.statistics === 'object') {
             if (data.statistics.imageUrl) setImageUrl(data.statistics.imageUrl);
             if (data.statistics.buttons) setButtons(data.statistics.buttons);
@@ -174,12 +174,12 @@ export function MailingFormDialog({
         templateId: templateId || undefined
       };
 
-      // Для Telegram рассылок добавляем метаданные
-      if (type === 'TELEGRAM') {
+      // Telegram и MAX используют общий формат текста и кнопок.
+      if (type === 'TELEGRAM' || type === 'MAX') {
         mailingData.messageText = body;
         mailingData.messageHtml = body;
         mailingData.statistics = {
-          imageUrl: imageUrl || undefined,
+          imageUrl: type === 'TELEGRAM' ? imageUrl || undefined : undefined,
           buttons: buttons.length > 0 ? buttons : undefined,
           parseMode: parseMode
         };
@@ -202,7 +202,7 @@ export function MailingFormDialog({
 
       onOpenChange(false);
       router.refresh();
-    } catch (error) {
+    } catch {
       toast({
         title: 'Ошибка',
         description: 'Не удалось сохранить рассылку',
@@ -248,11 +248,20 @@ export function MailingFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value='EMAIL'>Email</SelectItem>
-                  <SelectItem value='SMS'>SMS</SelectItem>
+                  <SelectItem value='EMAIL' disabled>
+                    Email — не подключено
+                  </SelectItem>
+                  <SelectItem value='SMS' disabled>
+                    SMS — не подключено
+                  </SelectItem>
                   <SelectItem value='TELEGRAM'>Telegram</SelectItem>
-                  <SelectItem value='WHATSAPP'>WhatsApp</SelectItem>
-                  <SelectItem value='VIBER'>Viber</SelectItem>
+                  <SelectItem value='MAX'>MAX</SelectItem>
+                  <SelectItem value='WHATSAPP' disabled>
+                    WhatsApp — не подключено
+                  </SelectItem>
+                  <SelectItem value='VIBER' disabled>
+                    Viber — не подключено
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -296,6 +305,16 @@ export function MailingFormDialog({
                   получить рассылку через этот канал.
                 </p>
               )}
+              {type === 'MAX' && (
+                <p className='text-muted-foreground leading-relaxed'>
+                  Сообщение получат:{' '}
+                  <strong className='text-foreground font-semibold'>
+                    {audienceStats.maxEligible.toLocaleString('ru-RU')}
+                  </strong>{' '}
+                  из {audienceStats.maxTotal.toLocaleString('ru-RU')} контактов,
+                  подключённых к MAX.
+                </p>
+              )}
               {type === 'WHATSAPP' && (
                 <p className='text-muted-foreground leading-relaxed'>
                   Рассылка будет направлена контактам с указанным номером
@@ -310,8 +329,10 @@ export function MailingFormDialog({
             </div>
           )}
 
-          {type === 'TELEGRAM' ? (
+          {type === 'TELEGRAM' || type === 'MAX' ? (
             <TelegramMailingEditor
+              channel={type === 'MAX' ? 'MAX' : 'Telegram'}
+              supportsImage={type === 'TELEGRAM'}
               messageText={body}
               imageUrl={imageUrl}
               buttons={buttons}
@@ -340,7 +361,10 @@ export function MailingFormDialog({
             <Button
               type='submit'
               disabled={
-                loading || !name || !body || (type !== 'TELEGRAM' && !subject)
+                loading ||
+                !name ||
+                !body ||
+                (type !== 'TELEGRAM' && type !== 'MAX' && !subject)
               }
             >
               {loading ? 'Сохранение...' : mailing ? 'Сохранить' : 'Создать'}

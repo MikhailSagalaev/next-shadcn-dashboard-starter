@@ -145,6 +145,29 @@ export class UserService {
         }
       });
 
+      // `utm_org` может прийти без персонального `utm_ref` (например, с QR
+      // на стойке клуба). В таком сценарии пользователь всё равно должен
+      // появиться в современной multi-org модели и в статистике организации.
+      // Для заявки, ожидающей одобрения реферера, членство создаст approval-
+      // процесс — до решения менеджера преждевременно добавлять его нельзя.
+      if (organizationId && !pendingReferral) {
+        await db.partnerOrganizationMembership.upsert({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId: user.id
+            }
+          },
+          update: {},
+          create: {
+            projectId: data.projectId,
+            organizationId,
+            userId: user.id,
+            level: null
+          }
+        });
+      }
+
       // Реферальные коды больше не используются для ссылок — пропускаем генерацию
 
       logger.info('Создан новый пользователь', {

@@ -68,6 +68,9 @@ describe('OrganizationFinancialMetricsService', () => {
         referralAttribution: { organizationId: 'org-a' }
       }
     ]);
+    (mockDb.order.groupBy as jest.Mock).mockResolvedValue([
+      { userId: 'member-a', _sum: { accountedPurchaseAmount: 100 } }
+    ]);
 
     const metrics = await OrganizationFinancialMetricsService.getMany({
       projectId: 'project',
@@ -94,7 +97,19 @@ describe('OrganizationFinancialMetricsService', () => {
       totalPurchases: 0,
       referralBonusEarned: 25
     });
-    expect(mockDb.order.groupBy).not.toHaveBeenCalled();
+    expect(mockDb.order.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          projectId: 'project',
+          userId: { in: ['member-a', 'member-b'] },
+          accountingState: 'APPLIED',
+          OR: [
+            { organizationId: 'org-a' },
+            { organizationId: null, userId: { in: ['member-a'] } }
+          ]
+        })
+      })
+    );
   });
 
   it('для периода считает только применённые заказы целевой организации', async () => {
@@ -122,8 +137,12 @@ describe('OrganizationFinancialMetricsService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           projectId: 'project',
-          userId: { in: ['member-a'] },
+          userId: { in: ['member-a', 'member-b'] },
           accountingState: 'APPLIED',
+          OR: [
+            { organizationId: 'org-a' },
+            { organizationId: null, userId: { in: ['member-a'] } }
+          ],
           accountedAt: { gte: since }
         })
       })

@@ -1,6 +1,6 @@
 /**
  * @file: src/lib/services/mailing-tracker.service.ts
- * @description: Сервис для генерации трекинг-ссылок, учета переходов (CTR), прочтений и конверсий рассылок
+ * @description: Сервис для генерации трекинг-ссылок и достоверного учета переходов (CTR) рассылок
  * @project: SaaS Bonus System
  */
 
@@ -131,8 +131,7 @@ export class MailingTrackerService {
     mailingId: string,
     recipientId: string,
     text: string,
-    buttons?: MailingButton[],
-    channel: 'telegram' | 'max' = 'telegram'
+    buttons?: MailingButton[]
   ): Promise<{ text: string; buttons?: MailingButton[] }> {
     try {
       const urlMap = await this.registerMailingLinks(mailingId, text, buttons);
@@ -208,63 +207,61 @@ export class MailingTrackerService {
     let recipient: any = null;
 
     if (recipientId) {
-      recipient = await db.mailingRecipient.findUnique({
-        where: { id: recipientId }
+      recipient = await db.mailingRecipient.findFirst({
+        where: { id: recipientId, mailingId: link.mailingId }
       });
     }
 
     try {
-      // 1. Записываем клик в MailingLinkClick
+      // Клик является доказуемым действием, но не read receipt: Telegram/MAX
+      // Bot API не сообщают, что пользователь просто открыл сообщение.
       if (recipient) {
-        await db.mailingLinkClick.create({
-          data: {
-            mailingId: link.mailingId,
-            recipientId: recipient.id,
-            url: link.originalUrl,
-            clickedAt: now,
-            userAgent: userAgent ? userAgent.slice(0, 500) : undefined,
-            ipAddress: ipAddress ? ipAddress.slice(0, 100) : undefined
-          }
-        });
-
-        // 2. Обновляем статус получателя (клик + автоматическое подтверждение прочтения)
-        await db.mailingRecipient.update({
-          where: { id: recipient.id },
-          data: {
-            clickedAt: recipient.clickedAt ?? now,
-            clickCount: { increment: 1 },
-            openedAt: recipient.openedAt ?? now,
-            openCount: { increment: 1 }
-          }
-        });
-
-        // 3. Записываем в историю событий рассылки
-        await db.mailingHistory.create({
-          data: {
-            mailingId: link.mailingId,
-            recipientId: recipient.id,
-            userId: recipient.userId,
-            linkId: link.id,
-            type: 'CLICKED',
-            timestamp: now,
-            metadata: {
-              shortCode,
-              userAgent: userAgent ? userAgent.slice(0, 100) : undefined,
-              ipAddress: ipAddress ? ipAddress.slice(0, 45) : undefined
+        await db.$transaction(async (tx) => {
+          const firstClick = await tx.mailingRecipient.updateMany({
+            where: {
+              id: recipient.id,
+              mailingId: link.mailingId,
+              clickedAt: null
+            },
+            data: { clickedAt: now }
+          });
+          await tx.mailingRecipient.update({
+            where: { id: recipient.id },
+            data: { clickCount: { increment: 1 } }
+          });
+          await tx.mailingLinkClick.create({
+            data: {
+              mailingId: link.mailingId,
+              recipientId: recipient.id,
+              url: link.originalUrl,
+              clickedAt: now,
+              userAgent: userAgent ? userAgent.slice(0, 500) : undefined,
+              ipAddress: ipAddress ? ipAddress.slice(0, 100) : undefined
             }
+          });
+          await tx.mailingHistory.create({
+            data: {
+              mailingId: link.mailingId,
+              recipientId: recipient.id,
+              userId: recipient.userId,
+              linkId: link.id,
+              type: 'CLICKED',
+              timestamp: now,
+              metadata: {
+                shortCode,
+                userAgent: userAgent ? userAgent.slice(0, 100) : undefined,
+                ipAddress: ipAddress ? ipAddress.slice(0, 45) : undefined
+              }
+            }
+          });
+          if (firstClick.count === 1) {
+            await tx.mailing.update({
+              where: { id: link.mailingId },
+              data: { clickedCount: { increment: 1 } }
+            });
           }
         });
       }
-
-      // 4. Инкрементируем общие счетчики рассылки
-      await db.mailing.update({
-        where: { id: link.mailingId },
-        data: {
-          clickedCount: { increment: 1 },
-          openedCount:
-            recipient && !recipient.openedAt ? { increment: 1 } : undefined
-        }
-      });
     } catch (dbErr) {
       logger.error('Ошибка записи статистики клика', {
         shortCode,
@@ -273,7 +270,7 @@ export class MailingTrackerService {
       });
     }
 
-    // 5. Формируем целевой URL с UTM-метками
+    // Формируем целевой URL с UTM-метками даже для неперсонального перехода.
     const destinationUrl = this.appendUtmParameters(
       link.originalUrl,
       link.mailing,
@@ -302,10 +299,7 @@ export class MailingTrackerService {
 
       // Добавляем UTM только если они еще не заданы вручную в ссылке
       if (!url.searchParams.has('utm_source')) {
-        url.searchParams.set(
-          'utm_source',
-          mailing.type.toLowerCase() === 'telegram' ? 'telegram' : 'max'
-        );
+        url.searchParams.set('utm_source', mailing.type.toLowerCase());
       }
       if (!url.searchParams.has('utm_medium')) {
         url.searchParams.set('utm_medium', 'broadcast');

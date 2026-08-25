@@ -148,10 +148,27 @@ export class OrderProcessingService {
       }
     }
 
+    // Фиксируем организацию на заказе вместе с пользователем. Это исторический
+    // снимок: последующий перенос пользователя не должен переносить покупку и
+    // связанные с ней суммы в другую B2B-организацию.
+    const organizationSnapshot = await db.user.findFirst({
+      where: { id: user.id, projectId },
+      select: {
+        organizationId: true,
+        referralAttribution: { select: { organizationId: true } }
+      }
+    });
+
     // Link first; accounting refuses unlinked orders.
     await db.order.update({
       where: { id: savedOrder.id },
-      data: { userId: user.id }
+      data: {
+        userId: user.id,
+        organizationId:
+          organizationSnapshot?.referralAttribution?.organizationId ??
+          organizationSnapshot?.organizationId ??
+          null
+      }
     });
 
     let accountedOrder = await db.order.findUniqueOrThrow({

@@ -239,122 +239,6 @@ export class MailingService {
   }
 
   /**
-   * Получение рассылки по ID
-   */
-  static async getMailing(projectId: string, mailingId: string) {
-    try {
-      const mailing = await db.mailing.findFirst({
-        where: { id: mailingId, projectId },
-        include: {
-          template: true,
-          segment: true,
-          _count: {
-            select: {
-              recipients: true
-            }
-          }
-        }
-      });
-
-      return mailing;
-    } catch (error) {
-      logger.error('Ошибка получения рассылки', {
-        mailingId,
-        projectId,
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service'
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Обновление рассылки
-   */
-  static async updateMailing(
-    projectId: string,
-    mailingId: string,
-    data: {
-      name?: string;
-      segmentId?: string;
-      templateId?: string;
-      scheduledAt?: Date;
-      status?: MailingStatus;
-      messageText?: string;
-      messageHtml?: string;
-      statistics?: Record<string, any>;
-    }
-  ) {
-    try {
-      const mailing = await db.mailing.update({
-        where: { id: mailingId },
-        data: {
-          ...(data.name && { name: data.name }),
-          ...(data.segmentId !== undefined && { segmentId: data.segmentId }),
-          ...(data.templateId !== undefined && { templateId: data.templateId }),
-          ...(data.scheduledAt !== undefined && {
-            scheduledAt: data.scheduledAt
-          }),
-          ...(data.status && { status: data.status }),
-          ...(data.messageText !== undefined && {
-            messageText: data.messageText
-          }),
-          ...(data.messageHtml !== undefined && {
-            messageHtml: data.messageHtml
-          }),
-          ...(data.statistics !== undefined && {
-            statistics: toPrismaJson(data.statistics)
-          })
-        },
-        include: {
-          template: true,
-          segment: true,
-          _count: {
-            select: {
-              recipients: true
-            }
-          }
-        }
-      });
-
-      return mailing;
-    } catch (error) {
-      logger.error('Ошибка обновления рассылки', {
-        mailingId,
-        projectId,
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service'
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Удаление рассылки
-   */
-  static async deleteMailing(projectId: string, mailingId: string) {
-    try {
-      await db.$transaction([
-        db.mailingRecipient.deleteMany({ where: { mailingId } }),
-        db.mailingHistory.deleteMany({ where: { mailingId } }),
-        db.mailingLinkClick.deleteMany({ where: { mailingId } }),
-        db.mailingLink.deleteMany({ where: { mailingId } }),
-        db.mailing.delete({ where: { id: mailingId, projectId } })
-      ]);
-
-      return { success: true };
-    } catch (error) {
-      logger.error('Ошибка удаления рассылки', {
-        mailingId,
-        projectId,
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка',
-        component: 'mailing-service'
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Очистка недействительных привязок Telegram по результатам рассылки (403, 400)
    */
   static async cleanUnavailableRecipients(
@@ -362,6 +246,14 @@ export class MailingService {
     mailingId: string
   ) {
     try {
+      const mailing = await db.mailing.findFirst({
+        where: { id: mailingId, projectId },
+        select: { id: true, type: true }
+      });
+      if (!mailing) throw new Error('Рассылка не найдена');
+      if (mailing.type !== 'TELEGRAM') {
+        throw new Error('Автоочистка доступна только для Telegram');
+      }
       const failedRecipients = await db.mailingRecipient.findMany({
         where: {
           mailingId,
@@ -589,6 +481,7 @@ export class MailingService {
         email?: string;
         phone?: string;
         telegramId?: string;
+        maxId?: string;
       }> = [];
 
       if (mailing.segment) {
@@ -598,8 +491,10 @@ export class MailingService {
               user.projectId === projectId &&
               user.isActive &&
               ((mailing.type === 'TELEGRAM' && user.telegramId !== null) ||
+                (mailing.type === 'MAX' && user.maxId !== null) ||
                 (mailing.type === 'EMAIL' && Boolean(user.email)) ||
                 (mailing.type !== 'TELEGRAM' &&
+                  mailing.type !== 'MAX' &&
                   mailing.type !== 'EMAIL' &&
                   Boolean(user.phone)))
           )
@@ -607,33 +502,44 @@ export class MailingService {
             userId: user.id,
             email: user.email || undefined,
             phone: user.phone || undefined,
-            telegramId: user.telegramId?.toString()
+            telegramId: user.telegramId?.toString(),
+            maxId: user.maxId?.toString()
           }));
       } else if (mailing.recipients.length > 0) {
         recipients = mailing.recipients.map((r) => ({
           userId: r.userId || undefined,
           email: r.email || undefined,
           phone: r.phone || undefined,
-          telegramId: r.telegramId || undefined
+          telegramId: r.telegramId || undefined,
+          maxId: r.maxId || undefined
         }));
       } else {
         const channelWhere: Prisma.UserWhereInput =
           mailing.type === 'TELEGRAM'
             ? { telegramId: { not: null } }
-            : mailing.type === 'EMAIL'
-              ? { email: { not: null }, isActive: true }
-              : { phone: { not: null }, isActive: true };
+            : mailing.type === 'MAX'
+              ? { maxId: { not: null } }
+              : mailing.type === 'EMAIL'
+                ? { email: { not: null }, isActive: true }
+                : { phone: { not: null }, isActive: true };
         recipients = await db.user
           .findMany({
             where: { projectId, ...channelWhere },
-            select: { id: true, email: true, phone: true, telegramId: true }
+            select: {
+              id: true,
+              email: true,
+              phone: true,
+              telegramId: true,
+              maxId: true
+            }
           })
           .then((users) =>
             users.map((user) => ({
               userId: user.id,
               email: user.email || undefined,
               phone: user.phone || undefined,
-              telegramId: user.telegramId?.toString()
+              telegramId: user.telegramId?.toString(),
+              maxId: user.maxId?.toString()
             }))
           );
       }
@@ -660,6 +566,7 @@ export class MailingService {
               email: recipient.email,
               phone: recipient.phone,
               telegramId: recipient.telegramId,
+              maxId: recipient.maxId,
               status: 'PENDING'
             }))
           });
@@ -678,20 +585,19 @@ export class MailingService {
         mailing.messageHtml ||
         '';
 
-      // Извлекаем метаданные для Telegram рассылок
+      // Telegram и MAX используют общий редактор текста и кнопок.
       const mailingMetadata = (mailing.statistics as Record<string, any>) || {};
-      const telegramMetadata: Record<string, any> = {};
+      const messengerMetadata: Record<string, any> = {};
 
-      if (mailing.type === 'TELEGRAM') {
-        // Извлекаем данные для Telegram из statistics
-        if (mailingMetadata.imageUrl) {
-          telegramMetadata.imageUrl = mailingMetadata.imageUrl;
+      if (mailing.type === 'TELEGRAM' || mailing.type === 'MAX') {
+        if (mailing.type === 'TELEGRAM' && mailingMetadata.imageUrl) {
+          messengerMetadata.imageUrl = mailingMetadata.imageUrl;
         }
         if (mailingMetadata.buttons) {
-          telegramMetadata.buttons = mailingMetadata.buttons;
+          messengerMetadata.buttons = mailingMetadata.buttons;
         }
         if (mailingMetadata.parseMode) {
-          telegramMetadata.parseMode = mailingMetadata.parseMode;
+          messengerMetadata.parseMode = mailingMetadata.parseMode;
         }
       }
 
@@ -699,7 +605,7 @@ export class MailingService {
         if (recipient.status === 'PENDING') {
           // Объединяем метаданные рассылки с метаданными получателя
           const combinedMetadata = {
-            ...telegramMetadata,
+            ...messengerMetadata,
             ...((recipient.metadata as Record<string, any>) || {})
           };
 
@@ -712,7 +618,8 @@ export class MailingService {
               recipient: {
                 userId: recipient.userId || undefined,
                 email: recipient.email || undefined,
-                phone: recipient.phone || undefined
+                phone: recipient.phone || undefined,
+                maxId: recipient.maxId || undefined
               },
               subject,
               body,
@@ -757,16 +664,12 @@ export class MailingService {
   /**
    * Получение статистики рассылки
    */
-  static async getMailingStats(mailingId: string) {
+  static async getMailingStats(projectId: string, mailingId: string) {
     try {
-      const mailing = await db.mailing.findUnique({
-        where: { id: mailingId },
+      const mailing = await db.mailing.findFirst({
+        where: { id: mailingId, projectId },
         include: {
-          recipients: true,
-          history: {
-            orderBy: { timestamp: 'desc' },
-            take: 100
-          }
+          recipients: true
         }
       });
 
@@ -775,59 +678,21 @@ export class MailingService {
       }
 
       const recipients = mailing.recipients;
-      const history = mailing.history;
 
-      // Базовые статистики
+      // Telegram/MAX подтверждают приём сообщения API, но не отдают боту
+      // персональные read receipts. Поэтому здесь нет фиктивного Open Rate:
+      // доказуемое действие после отправки — переход по отслеживаемой ссылке.
       const stats = {
         total: recipients.length,
         sent: recipients.filter((r) => r.status === 'SENT').length,
         failed: recipients.filter((r) => r.status === 'FAILED').length,
         pending: recipients.filter((r) => r.status === 'PENDING').length,
         bounced: recipients.filter((r) => r.status === 'BOUNCED').length,
-        opened: recipients.filter((r) => r.openedAt !== null).length,
         clicked: recipients.filter((r) => r.clickedAt !== null).length
       };
 
-      // Статистика из истории
-      const historyStats = {
-        sent: history.filter((h) => h.type === 'SENT').length,
-        opened: history.filter((h) => h.type === 'OPENED').length,
-        clicked: history.filter((h) => h.type === 'CLICKED').length,
-        failed: history.filter((h) => h.type === 'FAILED').length
-      };
-
-      // Конверсии
-      const openRate = stats.sent > 0 ? (stats.opened / stats.sent) * 100 : 0;
-      const clickRate =
-        stats.opened > 0 ? (stats.clicked / stats.opened) * 100 : 0;
       const clickThroughRate =
         stats.sent > 0 ? (stats.clicked / stats.sent) * 100 : 0;
-
-      // График по времени
-      const timelineData = history.reduce(
-        (acc, event) => {
-          const date = new Date(event.timestamp).toISOString().split('T')[0];
-          if (!acc[date]) {
-            acc[date] = { sent: 0, opened: 0, clicked: 0, failed: 0 };
-          }
-          acc[date][event.type.toLowerCase() as keyof (typeof acc)[string]]++;
-          return acc;
-        },
-        {} as Record<
-          string,
-          { sent: number; opened: number; clicked: number; failed: number }
-        >
-      );
-
-      const timeline = Object.entries(timelineData)
-        .map(([date, counts]) => ({
-          date,
-          sent: counts.sent,
-          opened: counts.opened,
-          clicked: counts.clicked,
-          failed: counts.failed
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date));
 
       const errorsBreakdown: Record<string, number> = {};
       let blockedCount = 0;
@@ -889,40 +754,15 @@ export class MailingService {
         };
       });
 
-      // Обновляем статистику в рассылке
-      await db.mailing.update({
-        where: { id: mailingId },
-        data: {
-          openedCount: stats.opened,
-          clickedCount: stats.clicked,
-          statistics: {
-            ...stats,
-            historyStats,
-            openRate: Math.round(openRate * 100) / 100,
-            clickRate: Math.round(clickRate * 100) / 100,
-            clickThroughRate: Math.round(clickThroughRate * 100) / 100,
-            errorsBreakdown,
-            blockedCount,
-            deactivatedCount,
-            chatNotFoundCount,
-            linksAnalytics
-          },
-          status: stats.pending === 0 ? 'COMPLETED' : undefined
-        }
-      });
-
       return {
         ...stats,
-        historyStats,
-        openRate: Math.round(openRate * 100) / 100,
-        clickRate: Math.round(clickRate * 100) / 100,
         clickThroughRate: Math.round(clickThroughRate * 100) / 100,
+        readTrackingAvailable: false,
         errorsBreakdown,
         blockedCount,
         deactivatedCount,
         chatNotFoundCount,
-        linksAnalytics,
-        timeline
+        linksAnalytics
       };
     } catch (error) {
       logger.error('Ошибка получения статистики рассылки', {
@@ -938,6 +778,7 @@ export class MailingService {
    * Получение истории рассылки
    */
   static async getMailingHistory(
+    projectId: string,
     mailingId: string,
     options?: {
       limit?: number;
@@ -949,6 +790,7 @@ export class MailingService {
       const history = await db.mailingHistory.findMany({
         where: {
           mailingId,
+          mailing: { projectId },
           ...(options?.eventType
             ? {
                 type: options.eventType as
@@ -965,14 +807,17 @@ export class MailingService {
               id: true,
               email: true,
               phone: true,
-              telegramId: true
+              telegramId: true,
+              maxId: true
             }
           },
           recipient: {
             select: {
               id: true,
               email: true,
-              phone: true
+              phone: true,
+              telegramId: true,
+              maxId: true
             }
           }
         },
@@ -985,6 +830,7 @@ export class MailingService {
     } catch (error) {
       logger.error('Ошибка получения истории рассылки', {
         mailingId,
+        projectId,
         error: error instanceof Error ? error.message : 'Неизвестная ошибка',
         component: 'mailing-service'
       });

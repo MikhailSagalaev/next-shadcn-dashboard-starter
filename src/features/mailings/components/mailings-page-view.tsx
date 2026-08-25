@@ -1,6 +1,6 @@
 /**
  * @file: src/features/mailings/components/mailings-page-view-new.tsx
- * @description: Полностью переработанная страница управления рассылками Telegram
+ * @description: Управление достоверной отправкой и CTR рассылок Telegram/MAX
  * @project: SaaS Bonus System
  * @created: 2025-01-31
  * @author: AI Assistant
@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Send,
@@ -26,10 +26,8 @@ import {
   MoreVertical,
   Edit,
   Trash2,
-  Copy,
   Play,
-  Pause,
-  Eye
+  MousePointerClick
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,15 +93,10 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
     completed: mailings.filter((m) => m.status === 'COMPLETED').length,
     draft: mailings.filter((m) => m.status === 'DRAFT').length,
     totalSent: mailings.reduce((sum, m) => sum + (m.sentCount || 0), 0),
-    totalOpened: mailings.reduce((sum, m) => sum + (m.openedCount || 0), 0),
     totalClicked: mailings.reduce((sum, m) => sum + (m.clickedCount || 0), 0)
   };
 
-  useEffect(() => {
-    loadData();
-  }, [projectId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [mailingsRes, segmentsRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/mailings`),
@@ -119,12 +112,16 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
 
       setMailings(mailingsData.mailings || []);
       setSegments(segmentsData.segments || []);
-    } catch (error) {
+    } catch {
       toast.error('Ошибка загрузки данных');
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const filteredMailings = mailings.filter((mailing) => {
     const matchesSearch =
@@ -261,7 +258,7 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
       <div className='flex items-center justify-between'>
         <div>
           <h1 className='text-3xl font-bold tracking-tight'>
-            Рассылки Telegram
+            Рассылки Telegram и MAX
           </h1>
           <p className='text-muted-foreground mt-1'>
             Управление массовыми рассылками и аналитика
@@ -305,25 +302,8 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
 
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Открыто</CardTitle>
-            <Eye className='text-muted-foreground h-4 w-4' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>
-              {stats.totalOpened.toLocaleString()}
-            </div>
-            <p className='text-muted-foreground text-xs'>
-              {stats.totalSent > 0
-                ? `${((stats.totalOpened / stats.totalSent) * 100).toFixed(1)}%`
-                : '0%'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Кликов</CardTitle>
-            <BarChart3 className='text-muted-foreground h-4 w-4' />
+            <CardTitle className='text-sm font-medium'>Перешли</CardTitle>
+            <MousePointerClick className='text-muted-foreground h-4 w-4' />
           </CardHeader>
           <CardContent>
             <div className='text-2xl font-bold'>
@@ -331,8 +311,25 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
             </div>
             <p className='text-muted-foreground text-xs'>
               {stats.totalSent > 0
+                ? `${((stats.totalClicked / stats.totalSent) * 100).toFixed(1)}% от отправленных`
+                : '0%'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+            <CardTitle className='text-sm font-medium'>CTR</CardTitle>
+            <BarChart3 className='text-muted-foreground h-4 w-4' />
+          </CardHeader>
+          <CardContent>
+            <div className='text-2xl font-bold'>
+              {stats.totalSent > 0
                 ? `${((stats.totalClicked / stats.totalSent) * 100).toFixed(1)}%`
                 : '0%'}
+            </div>
+            <p className='text-muted-foreground text-xs'>
+              уникальные переходы по ссылкам
             </p>
           </CardContent>
         </Card>
@@ -502,22 +499,13 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
                           получателей
                         </span>
                       </div>
-                      {mailing.openedCount > 0 && (
-                        <div className='flex items-center gap-2'>
-                          <Eye className='text-muted-foreground h-4 w-4' />
-                          <span className='font-medium'>
-                            {mailing.openedCount}
-                          </span>
-                          <span className='text-muted-foreground'>открыто</span>
-                        </div>
-                      )}
                       {mailing.clickedCount > 0 && (
                         <div className='flex items-center gap-2'>
                           <BarChart3 className='text-muted-foreground h-4 w-4' />
                           <span className='font-medium'>
                             {mailing.clickedCount}
                           </span>
-                          <span className='text-muted-foreground'>кликов</span>
+                          <span className='text-muted-foreground'>перешли</span>
                         </div>
                       )}
                     </div>
@@ -586,7 +574,7 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
                     <TableHead>Канал</TableHead>
                     <TableHead>Статус</TableHead>
                     <TableHead>Получатели</TableHead>
-                    <TableHead>Доставлено</TableHead>
+                    <TableHead>Отправлено</TableHead>
                     <TableHead>Дата создания</TableHead>
                     <TableHead className='text-right'>Действия</TableHead>
                   </TableRow>

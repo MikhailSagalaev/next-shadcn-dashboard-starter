@@ -49,3 +49,18 @@ export function buildReferralLink(
   }
   return link;
 }
+
+/**
+ * Ссылка организации без персонального реферера. Используется для офлайн-QR:
+ * новый клиент привязывается к сети через `utm_org`, но не к конкретному
+ * участнику.
+ */
+export function buildOrganizationReferralLink(
+  domain: string | null | undefined,
+  orgSlug: string
+): string | null {
+  if (!domain?.trim() || !orgSlug.trim()) return null;
+  const url = new URL(normalizeProjectDomain(domain));
+  url.searchParams.set('utm_org', orgSlug.trim());
+  return url.toString();
+}

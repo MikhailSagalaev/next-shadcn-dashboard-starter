@@ -150,7 +150,7 @@ class MaxBotManager {
       // Определение режима: Webhook или Polling
       const isWebhookCapable = this.webhookBaseUrl.startsWith('https://');
       const isLocalDevelopment = process.env.NODE_ENV === 'development';
-      
+
       let useWebhook = !isLocalDevelopment && isWebhookCapable;
       if (process.env.MAX_BOT_USE_WEBHOOK !== undefined) {
         useWebhook = process.env.MAX_BOT_USE_WEBHOOK === 'true';
@@ -169,10 +169,13 @@ class MaxBotManager {
         try {
           // Инициализируем botInfo для бота, чтобы handleUpdate мог создавать Context корректно
           bot.botInfo = await bot.api.getMyInfo();
-          logger.info(`✅ [MAX] Информация о боте получена: @${bot.botInfo.username}`, {
-            projectId,
-            component: 'max-bot-manager'
-          });
+          logger.info(
+            `✅ [MAX] Информация о боте получена: @${bot.botInfo.username}`,
+            {
+              projectId,
+              component: 'max-bot-manager'
+            }
+          );
 
           // Подписываемся на события вебхука
           const response = await (bot.api.raw as any).client.call({
@@ -181,18 +184,25 @@ class MaxBotManager {
               method: 'POST',
               body: {
                 url: webhookUrl,
-                update_types: ['message_created', 'message_callback', 'bot_started']
+                update_types: [
+                  'message_created',
+                  'message_callback',
+                  'bot_started'
+                ]
               }
             }
           });
 
-          logger.info(`✅ [MAX] Webhook успешно зарегистрирован на MAX платформе`, {
-            projectId,
-            webhookUrl,
-            status: response.status,
-            data: response.data,
-            component: 'max-bot-manager'
-          });
+          logger.info(
+            `✅ [MAX] Webhook успешно зарегистрирован на MAX платформе`,
+            {
+              projectId,
+              webhookUrl,
+              status: response.status,
+              data: response.data,
+              component: 'max-bot-manager'
+            }
+          );
         } catch (error) {
           logger.error(`❌ [MAX] Ошибка регистрации Webhook`, {
             projectId,
@@ -217,15 +227,21 @@ class MaxBotManager {
               query: { url: webhookUrl }
             }
           });
-          logger.info(`✅ [MAX] Предыдущий Webhook удален (если был) перед запуском Polling`, {
-            projectId,
-            component: 'max-bot-manager'
-          });
+          logger.info(
+            `✅ [MAX] Предыдущий Webhook удален (если был) перед запуском Polling`,
+            {
+              projectId,
+              component: 'max-bot-manager'
+            }
+          );
         } catch (error) {
-          logger.debug(`[MAX] Ошибка удаления Webhook перед Polling (возможно, подписка отсутствовала)`, {
-            projectId,
-            error: error instanceof Error ? error.message : 'Unknown'
-          });
+          logger.debug(
+            `[MAX] Ошибка удаления Webhook перед Polling (возможно, подписка отсутствовала)`,
+            {
+              projectId,
+              error: error instanceof Error ? error.message : 'Unknown'
+            }
+          );
         }
 
         try {
@@ -279,10 +295,13 @@ class MaxBotManager {
     let instance = this.bots.get(projectId);
 
     if (!instance || !instance.isActive) {
-      logger.info(`🔍 [MAX] Бот не найден в памяти, пробуем инициализировать (lazy-loading)`, {
-        projectId,
-        component: 'max-bot-manager'
-      });
+      logger.info(
+        `🔍 [MAX] Бот не найден в памяти, пробуем инициализировать (lazy-loading)`,
+        {
+          projectId,
+          component: 'max-bot-manager'
+        }
+      );
 
       try {
         const project = await db.project.findUnique({
@@ -456,6 +475,8 @@ class MaxBotManager {
     text: string,
     options: {
       buttons?: Array<{ text: string; url?: string; payload?: string }>;
+      format?: 'html' | 'markdown';
+      disableLinkPreview?: boolean;
     } = {}
   ): Promise<boolean> {
     const instance = this.bots.get(projectId);
@@ -470,7 +491,8 @@ class MaxBotManager {
     try {
       // Формируем extra (SendMessageExtra) с форматом и клавиатурой
       let extra: any = {
-        format: 'html' as const
+        format: options.format ?? ('html' as const),
+        ...(options.disableLinkPreview ? { disable_link_preview: true } : {})
       };
 
       if (options.buttons && options.buttons.length > 0) {

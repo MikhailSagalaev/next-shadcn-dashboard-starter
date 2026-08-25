@@ -269,6 +269,8 @@ export class OrderAccountingService {
         select: {
           totalPurchases: true,
           firstPurchaseDiscountRedeemedAt: true,
+          organizationId: true,
+          referralAttribution: { select: { organizationId: true } },
           organization: {
             select: {
               isActive: true,
@@ -312,6 +314,11 @@ export class OrderAccountingService {
       await tx.order.update({
         where: { id: orderId },
         data: {
+          organizationId:
+            order.organizationId ??
+            currentUser.referralAttribution?.organizationId ??
+            currentUser.organizationId ??
+            null,
           accountedPurchaseAmount: totalAmount,
           ...(discountEligibility?.available
             ? {

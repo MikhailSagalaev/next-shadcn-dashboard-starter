@@ -42,13 +42,22 @@ export class OrderService {
     data: CreateOrderInput
   ): Promise<OrderWithRelations> {
     try {
+      let organizationId: string | null = null;
       if (data.userId) {
         const user = await db.user.findFirst({
           where: { id: data.userId, projectId: data.projectId },
-          select: { id: true }
+          select: {
+            id: true,
+            organizationId: true,
+            referralAttribution: { select: { organizationId: true } }
+          }
         });
         if (!user)
           throw new Error('Пользователь не принадлежит проекту заказа');
+        organizationId =
+          user.referralAttribution?.organizationId ??
+          user.organizationId ??
+          null;
       }
 
       const productIds = data.items
@@ -99,6 +108,7 @@ export class OrderService {
         data: {
           projectId: data.projectId,
           userId: data.userId,
+          organizationId,
           orderNumber,
           status: 'PENDING',
           totalAmount: data.totalAmount,

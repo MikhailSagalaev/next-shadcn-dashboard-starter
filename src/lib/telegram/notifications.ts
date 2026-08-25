@@ -244,6 +244,7 @@ export interface RichNotification {
     callback_data?: string;
   }>;
   parseMode?: 'Markdown' | 'HTML';
+  disableLinkPreview?: boolean;
 }
 
 export interface BroadcastRecipientResult {
@@ -341,7 +342,8 @@ export async function sendRichBroadcastMessage(
           userId,
           text: notification.message,
           parseMode: notification.parseMode ?? 'Markdown',
-          replyMarkup
+          replyMarkup,
+          disableLinkPreview: notification.disableLinkPreview
         });
       }
 
@@ -361,7 +363,8 @@ export async function sendRichBroadcastMessage(
           userId,
           text: notification.message,
           parseMode: notification.parseMode ?? 'Markdown',
-          replyMarkup
+          replyMarkup,
+          disableLinkPreview: notification.disableLinkPreview
         });
       }
 

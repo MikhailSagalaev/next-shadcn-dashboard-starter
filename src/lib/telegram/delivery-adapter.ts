@@ -39,6 +39,7 @@ interface TelegramTextDelivery {
   text: string;
   parseMode?: TelegramParseMode;
   replyMarkup?: TelegramTextReplyMarkup;
+  disableLinkPreview?: boolean;
 }
 interface TelegramMediaDelivery {
   kind: 'photo' | 'video' | 'document';
@@ -300,7 +301,10 @@ async function sendOnce(
       ...(includeParseMode && request.parseMode
         ? { parse_mode: request.parseMode }
         : {}),
-      ...(request.replyMarkup ? { reply_markup: request.replyMarkup } : {})
+      ...(request.replyMarkup ? { reply_markup: request.replyMarkup } : {}),
+      ...(request.disableLinkPreview
+        ? { link_preview_options: { is_disabled: true } }
+        : {})
     });
     return sent.message_id;
   }

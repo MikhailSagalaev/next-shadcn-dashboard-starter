@@ -27,7 +27,7 @@ export async function GET(
     const { id: projectId, mailingId } = await context.params;
     await ProjectService.verifyProjectAccess(projectId, admin.sub);
 
-    const stats = await MailingService.getMailingStats(mailingId);
+    const stats = await MailingService.getMailingStats(projectId, mailingId);
 
     return NextResponse.json(stats);
   } catch (error) {

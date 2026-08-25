@@ -16,6 +16,7 @@
 import { UserService } from '@/lib/services/user.service';
 import { db } from '@/lib/db';
 import { PartnerTeamService } from '@/lib/services/partner-team.service';
+import { PartnerOrganizationService } from '@/lib/services/partner-organization.service';
 import { ReferralService } from '@/lib/services/referral.service';
 
 jest.mock('@/lib/db');
@@ -44,6 +45,7 @@ jest.mock('@/lib/services/referral.service', () => ({
 const mockDb = db as jest.Mocked<typeof db>;
 const projectId = 'project-1';
 const referrerId = 'referrer-1';
+const organizationId = 'org-1';
 
 function mockProject(overrides: Record<string, unknown>) {
   (mockDb as any).project = {
@@ -59,9 +61,16 @@ function mockProject(overrides: Record<string, unknown>) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  Object.defineProperty(mockDb, 'partnerOrganizationMembership', {
+    configurable: true,
+    value: { upsert: jest.fn() }
+  });
   (ReferralService.findReferrer as jest.Mock).mockResolvedValue({
     id: referrerId
   });
+  (
+    PartnerOrganizationService.resolveOrganizationIdForRegistration as jest.Mock
+  ).mockResolvedValue(null);
   (PartnerTeamService.getProjectPartnerFlags as jest.Mock).mockResolvedValue({
     enablePartnerRoles: true,
     enablePartnerTeamManagement: true,
@@ -70,6 +79,42 @@ beforeEach(() => {
 });
 
 describe('UserService.createUser — отложенная заявка (WITH_BOT + требуется одобрение)', () => {
+  it('добавляет регистрацию по org-only QR в membership без персонального реферера', async () => {
+    mockProject({ operationMode: 'WITHOUT_BOT' });
+    (
+      PartnerOrganizationService.resolveOrganizationIdForRegistration as jest.Mock
+    ).mockResolvedValueOnce(organizationId);
+    mockDb.user.create = jest.fn().mockResolvedValue({
+      id: 'user-org-qr',
+      projectId,
+      organizationId
+    });
+    mockDb.partnerOrganizationMembership.upsert = jest
+      .fn()
+      .mockResolvedValue({ id: 'membership-1' } as any);
+    await UserService.createUser({
+      projectId,
+      email: 'xfit-client@example.com',
+      utmOrg: 'xfit'
+    } as any);
+
+    expect(mockDb.partnerOrganizationMembership.upsert).toHaveBeenCalledWith({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: 'user-org-qr'
+        }
+      },
+      update: {},
+      create: {
+        projectId,
+        organizationId,
+        userId: 'user-org-qr',
+        level: null
+      }
+    });
+  });
+
   it('НЕ создаёт заявку сразу, а кладёт pendingReferral в metadata', async () => {
     mockProject({ operationMode: 'WITH_BOT' });
     mockDb.user.create = jest.fn().mockResolvedValue({

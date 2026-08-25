@@ -183,6 +183,7 @@ model PartnerOrganization {
   memberships                   PartnerOrganizationMembership[]
   referralLinks                 PartnerReferralLink[]
   referralAttributions          ReferralAttribution[]
+  orders                        Order[]
 
   @@unique([projectId, slug])
   @@index([projectId])
@@ -627,6 +628,7 @@ model Transaction {
   bonus Bonus? @relation(fields: [bonusId], references: [id])
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, createdAt])
   @@index([moySkladSaleId])
   @@map("transactions")
 }
@@ -1408,6 +1410,7 @@ model Order {
   id                        String                @id @default(cuid())
   projectId                 String                @map("project_id")
   userId                    String?               @map("user_id")
+  organizationId            String?               @map("organization_id")
   orderNumber               String                @unique @map("order_number")
   externalOrderId           String?               @map("external_order_id")
   paymentProvider           String?               @map("payment_provider")
@@ -1448,12 +1451,14 @@ model Order {
   updatedAt                 DateTime              @updatedAt @map("updated_at")
   project                   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user                      User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization              PartnerOrganization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
   @@index([projectId, createdAt])
   @@index([projectId, paymentStatus])
   @@index([projectId, fulfillmentState])
   @@index([userId])
+  @@index([organizationId, accountedAt])
   @@index([orderNumber])
   @@map("orders")
 }
@@ -2017,6 +2022,7 @@ enum MailingType {
   EMAIL
   SMS
   TELEGRAM
+  MAX
   WHATSAPP
   VIBER
 }
@@ -2093,6 +2099,7 @@ model MailingRecipient {
   email             String?
   phone             String?
   telegramId        String?            @map("telegram_id")
+  maxId             String?            @map("max_id")
   status            String             @default("PENDING") // PENDING, SENT, FAILED, BOUNCED, DELIVERED
   sentAt            DateTime?          @map("sent_at")
   deliveredAt       DateTime?          @map("delivered_at")
@@ -2120,6 +2127,7 @@ model MailingRecipient {
   @@index([mailingId, status, lastAttemptAt])
   @@index([userId])
   @@index([telegramId])
+  @@index([maxId])
   @@map("mailing_recipients")
 }
 

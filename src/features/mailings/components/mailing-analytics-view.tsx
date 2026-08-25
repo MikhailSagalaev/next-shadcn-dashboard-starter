@@ -1,6 +1,6 @@
 /**
  * @file: src/features/mailings/components/mailing-analytics-view.tsx
- * @description: Детальная сквозная аналитика рассылки с воронкой конверсий, трекингом ссылок, Open Rate, CTR и получателями
+ * @description: Достоверная аналитика отправки и переходов Telegram/MAX без фиктивного Open Rate
  * @project: SaaS Bonus System
  */
 
@@ -8,27 +8,20 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   ArrowLeft,
   Send,
   XCircle,
-  Users,
-  Calendar,
-  Clock,
   RefreshCw,
   CheckCircle2,
-  AlertCircle,
   Trash2,
-  Search,
-  Eye,
   MousePointerClick,
   ExternalLink,
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  Link as LinkIcon,
-  Layers,
-  BarChart3
+  Link as LinkIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -119,7 +112,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
         const statsData = await statsRes.json();
         setStats(statsData);
       }
-    } catch (error) {
+    } catch {
       toast.error('Ошибка загрузки аналитики');
     } finally {
       setLoading(false);
@@ -148,8 +141,8 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
         setRecipientsTotalPages(data.pagination?.totalPages || 1);
         setRecipientsTotal(data.pagination?.total || 0);
       }
-    } catch (error) {
-      console.error('Failed to load recipients', error);
+    } catch {
+      toast.error('Ошибка загрузки получателей');
     } finally {
       setRecipientsLoading(false);
     }
@@ -204,7 +197,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
       } else {
         toast.error(data.error || 'Ошибка очистки контактов');
       }
-    } catch (error) {
+    } catch {
       toast.error('Не удалось выполнить очистку контактов');
     } finally {
       setCleaning(false);
@@ -250,20 +243,22 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
   const sent = stats?.sent || mailing.sentCount || 0;
   const failed = stats?.failed || mailing.failedCount || 0;
   const pending = stats?.pending || 0;
-  const opened = stats?.opened || mailing.openedCount || 0;
   const clicked = stats?.clicked || mailing.clickedCount || 0;
 
   const successRate = total > 0 ? (sent / total) * 100 : 0;
   const failRate = total > 0 ? (failed / total) * 100 : 0;
-  const openRate = sent > 0 ? (opened / sent) * 100 : 0;
   const clickRate = sent > 0 ? (clicked / sent) * 100 : 0;
 
   const errorsBreakdown = stats?.errorsBreakdown || {};
   const linksAnalytics =
     stats?.linksAnalytics || mailing.statistics?.linksAnalytics || [];
+  const totalClicks = linksAnalytics.reduce(
+    (sum: number, linkItem: any) => sum + Number(linkItem.totalClicks || 0),
+    0
+  );
 
   const pieData = [
-    { name: 'Доставлено', value: sent, color: PIE_COLORS[0] },
+    { name: 'Отправлено', value: sent, color: PIE_COLORS[0] },
     { name: 'Ошибок', value: failed, color: PIE_COLORS[1] },
     ...(pending > 0
       ? [{ name: 'В процессе', value: pending, color: PIE_COLORS[2] }]
@@ -312,14 +307,13 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
               </Badge>
             </div>
             <p className='text-muted-foreground mt-0.5 text-xs'>
-              Сквозная аналитика: доставляемость, открытия, клики по ссылкам и
-              воронка конверсий
+              Проверяемые статусы отправки, ошибки и переходы по ссылкам
             </p>
           </div>
         </div>
 
         <div className='flex flex-wrap items-center gap-2'>
-          {failed > 0 && (
+          {failed > 0 && mailing.type === 'TELEGRAM' && (
             <Button
               variant='outline'
               size='sm'
@@ -347,11 +341,11 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
 
       {/* Карточки ключевых показателей */}
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-        {/* Карточка 1: Доставлено */}
+        {/* Карточка 1: отправлено */}
         <Card className='border-green-200/80 bg-green-50/30 p-4 shadow-sm dark:bg-green-950/20'>
           <div className='flex items-center justify-between pb-1'>
             <span className='text-muted-foreground text-xs font-medium'>
-              Успешно доставлено
+              Принято каналом
             </span>
             <Send className='h-4 w-4 text-green-600 dark:text-green-400' />
           </div>
@@ -371,50 +365,50 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
           </p>
         </Card>
 
-        {/* Карточка 2: Прочитано / Открыто */}
+        {/* Карточка 2: уникальные переходы */}
         <Card className='border-blue-200/80 bg-blue-50/30 p-4 shadow-sm dark:bg-blue-950/20'>
           <div className='flex items-center justify-between pb-1'>
             <span className='text-muted-foreground text-xs font-medium'>
-              Прочитали / Открыли
+              Перешли по ссылке
             </span>
-            <Eye className='h-4 w-4 text-blue-600 dark:text-blue-400' />
+            <MousePointerClick className='h-4 w-4 text-blue-600 dark:text-blue-400' />
           </div>
           <div className='flex items-baseline justify-between'>
             <div className='text-2xl font-bold tracking-tight text-blue-600 dark:text-blue-400'>
-              {opened.toLocaleString('ru-RU')}
+              {clicked.toLocaleString('ru-RU')}
             </div>
             <Badge variant='secondary' className='text-[10px] font-normal'>
-              Open Rate: {openRate.toFixed(1)}%
+              CTR: {clickRate.toFixed(1)}%
             </Badge>
           </div>
           <div className='mt-2'>
             <Progress
-              value={openRate}
+              value={clickRate}
               className='h-1.5 bg-blue-100 dark:bg-blue-950'
             />
           </div>
           <p className='text-muted-foreground mt-1 text-[11px]'>
-            активных прочтений сообщения
+            уникальных получателей
           </p>
         </Card>
 
-        {/* Карточка 3: Клики по ссылкам */}
+        {/* Карточка 3: все клики */}
         <Card className='border-purple-200/80 bg-purple-50/30 p-4 shadow-sm dark:bg-purple-950/20'>
           <div className='flex items-center justify-between pb-1'>
             <span className='text-muted-foreground text-xs font-medium'>
-              Перешли по ссылкам
+              Всего кликов
             </span>
-            <MousePointerClick className='h-4 w-4 text-purple-600 dark:text-purple-400' />
+            <TrendingUp className='h-4 w-4 text-purple-600 dark:text-purple-400' />
           </div>
           <div className='flex items-baseline justify-between'>
             <div className='text-2xl font-bold tracking-tight text-purple-600 dark:text-purple-400'>
-              {clicked.toLocaleString('ru-RU')}
+              {totalClicks.toLocaleString('ru-RU')}
             </div>
             <Badge
               variant='outline'
               className='border-purple-300 text-[10px] font-normal text-purple-700 dark:text-purple-300'
             >
-              CTR: {clickRate.toFixed(1)}%
+              включая повторные
             </Badge>
           </div>
           <div className='mt-2'>
@@ -424,15 +418,15 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
             />
           </div>
           <p className='text-muted-foreground mt-1 text-[11px]'>
-            переходов на целевые страницы
+            по всем отслеживаемым ссылкам
           </p>
         </Card>
 
-        {/* Карточка 4: Ошибки доставки */}
+        {/* Карточка 4: ошибки отправки */}
         <Card className='border-red-200/80 bg-red-50/30 p-4 shadow-sm dark:bg-red-950/20'>
           <div className='flex items-center justify-between pb-1'>
             <span className='text-muted-foreground text-xs font-medium'>
-              Ошибок доставки
+              Ошибок отправки
             </span>
             <XCircle className='h-4 w-4 text-red-600 dark:text-red-400' />
           </div>
@@ -451,9 +445,19 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
             />
           </div>
           <p className='text-muted-foreground mt-1 text-[11px]'>
-            заблокировали бота или удалены
+            постоянные и исчерпанные временные ошибки
           </p>
         </Card>
+      </div>
+
+      <div className='bg-muted/40 rounded-lg border p-3 text-xs'>
+        <p className='font-medium'>Ограничение каналов</p>
+        <p className='text-muted-foreground mt-1'>
+          Telegram и MAX не передают боту персональный факт открытия или
+          прочтения сообщения. Поэтому экран не рисует фиктивный Open Rate:
+          подтверждёнными считаются отправка через API и действия по
+          отслеживаемым ссылкам.
+        </p>
       </div>
 
       {/* Вкладки аналитики */}
@@ -482,7 +486,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className='p-4 pt-2'>
-              <div className='grid gap-3 sm:grid-cols-4'>
+              <div className='grid gap-3 sm:grid-cols-3'>
                 <div className='bg-muted/20 rounded-lg border p-3'>
                   <span className='text-muted-foreground text-xs font-medium'>
                     1. База получателей
@@ -497,7 +501,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
 
                 <div className='rounded-lg border bg-green-50/40 p-3 dark:bg-green-950/20'>
                   <span className='text-muted-foreground text-xs font-medium'>
-                    2. Доставлено
+                    2. Отправлено
                   </span>
                   <div className='mt-1 text-xl font-bold text-green-600 dark:text-green-400'>
                     {sent.toLocaleString('ru-RU')}
@@ -507,27 +511,15 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                   </div>
                 </div>
 
-                <div className='rounded-lg border bg-blue-50/40 p-3 dark:bg-blue-950/20'>
-                  <span className='text-muted-foreground text-xs font-medium'>
-                    3. Прочитано (Open)
-                  </span>
-                  <div className='mt-1 text-xl font-bold text-blue-600 dark:text-blue-400'>
-                    {opened.toLocaleString('ru-RU')}
-                  </div>
-                  <div className='mt-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400'>
-                    {openRate.toFixed(1)}% от доставленных
-                  </div>
-                </div>
-
                 <div className='rounded-lg border bg-purple-50/40 p-3 dark:bg-purple-950/20'>
                   <span className='text-muted-foreground text-xs font-medium'>
-                    4. Перешли (CTR)
+                    3. Перешли (CTR)
                   </span>
                   <div className='mt-1 text-xl font-bold text-purple-600 dark:text-purple-400'>
                     {clicked.toLocaleString('ru-RU')}
                   </div>
                   <div className='mt-0.5 text-[11px] font-medium text-purple-600 dark:text-purple-400'>
-                    {clickRate.toFixed(1)}% от доставленных
+                    {clickRate.toFixed(1)}% от отправленных
                   </div>
                 </div>
               </div>
@@ -539,10 +531,10 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
             <Card>
               <CardHeader className='p-4 pb-2'>
                 <CardTitle className='text-sm font-medium'>
-                  Распределение результатов доставки
+                  Результаты отправки
                 </CardTitle>
                 <CardDescription className='text-xs'>
-                  Соотношение успешно доставленных сообщений и ошибок
+                  Соотношение принятых каналом сообщений и ошибок
                 </CardDescription>
               </CardHeader>
               <CardContent className='p-4 pt-0'>
@@ -580,10 +572,10 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
             <Card>
               <CardHeader className='p-4 pb-2'>
                 <CardTitle className='text-sm font-medium'>
-                  Причины ошибок доставки
+                  Причины ошибок отправки
                 </CardTitle>
                 <CardDescription className='text-xs'>
-                  Ответы Telegram API по недоставленным контактам
+                  Ответы API канала по неотправленным контактам
                 </CardDescription>
               </CardHeader>
               <CardContent className='space-y-3 p-4 pt-0'>
@@ -611,7 +603,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                 ) : (
                   <div className='text-muted-foreground flex h-[180px] flex-col items-center justify-center text-center text-xs'>
                     <CheckCircle2 className='mb-2 h-8 w-8 text-green-500' />
-                    Ошибок доставки не зафиксировано
+                    Ошибок отправки не зафиксировано
                   </div>
                 )}
               </CardContent>
@@ -716,7 +708,7 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value='all'>Все статусы</SelectItem>
-                  <SelectItem value='sent'>Доставлено</SelectItem>
+                  <SelectItem value='sent'>Отправлено</SelectItem>
                   <SelectItem value='failed'>Ошибка</SelectItem>
                   <SelectItem value='pending'>В очереди</SelectItem>
                 </SelectContent>
@@ -729,10 +721,12 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Получатель</TableHead>
-                  <TableHead>Telegram ID</TableHead>
-                  <TableHead>Доставка</TableHead>
-                  <TableHead>Прочитано</TableHead>
-                  <TableHead>Клики по ссылкам</TableHead>
+                  <TableHead>
+                    {mailing.type === 'MAX' ? 'MAX ID' : 'Telegram ID'}
+                  </TableHead>
+                  <TableHead>Отправка</TableHead>
+                  <TableHead>Первый переход</TableHead>
+                  <TableHead>Всего кликов</TableHead>
                   <TableHead className='text-right'>Время</TableHead>
                 </TableRow>
               </TableHeader>
@@ -758,15 +752,16 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                 ) : (
                   recipients.map((r) => {
                     const isSuccess = r.status === 'SENT';
+                    const isPending = r.status === 'PENDING';
                     const user = r.user;
                     const displayName = user
                       ? `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
                         user.telegramUsername ||
+                        user.maxUsername ||
                         user.phone ||
                         'Пользователь'
                       : 'Пользователь';
 
-                    const hasOpened = Boolean(r.openedAt || r.openCount > 0);
                     const hasClicked = Boolean(r.clickedAt || r.clickCount > 0);
 
                     return (
@@ -775,19 +770,25 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                           <div className='text-xs font-medium'>
                             {displayName}
                           </div>
-                          {user?.telegramUsername && (
+                          {(user?.telegramUsername || user?.maxUsername) && (
                             <div className='text-muted-foreground text-[11px]'>
-                              @{user.telegramUsername}
+                              @
+                              {mailing.type === 'MAX'
+                                ? user.maxUsername || user.telegramUsername
+                                : user.telegramUsername || user.maxUsername}
                             </div>
                           )}
-                          {!user?.telegramUsername && user?.phone && (
-                            <div className='text-muted-foreground text-[11px]'>
-                              {user.phone}
-                            </div>
-                          )}
+                          {!user?.telegramUsername &&
+                            !user?.maxUsername &&
+                            user?.phone && (
+                              <div className='text-muted-foreground text-[11px]'>
+                                {user.phone}
+                              </div>
+                            )}
                         </TableCell>
                         <TableCell className='text-muted-foreground font-mono text-xs'>
-                          {r.telegramId || '—'}
+                          {(mailing.type === 'MAX' ? r.maxId : r.telegramId) ||
+                            '—'}
                         </TableCell>
                         <TableCell>
                           {isSuccess ? (
@@ -795,8 +796,10 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                               variant='default'
                               className='bg-green-600 px-2 py-0.5 text-[10px] font-normal hover:bg-green-700'
                             >
-                              Доставлено
+                              Отправлено
                             </Badge>
+                          ) : isPending ? (
+                            <Badge variant='secondary'>В очереди</Badge>
                           ) : (
                             <div className='space-y-0.5'>
                               <Badge
@@ -814,10 +817,18 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                           )}
                         </TableCell>
                         <TableCell>
-                          {hasOpened ? (
+                          {hasClicked ? (
                             <div className='flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400'>
-                              <Eye className='h-3.5 w-3.5' />
-                              <span>Да</span>
+                              <MousePointerClick className='h-3.5 w-3.5' />
+                              <span>
+                                {r.clickedAt
+                                  ? format(
+                                      new Date(r.clickedAt),
+                                      'dd.MM HH:mm',
+                                      { locale: ru }
+                                    )
+                                  : 'Зафиксирован'}
+                              </span>
                             </div>
                           ) : (
                             <span className='text-muted-foreground text-xs'>
@@ -916,9 +927,12 @@ export function MailingAnalyticsView({ params }: MailingAnalyticsViewProps) {
                   <p className='text-muted-foreground mb-1.5 font-medium'>
                     Прикрепленное изображение:
                   </p>
-                  <img
+                  <Image
                     src={mailing.statistics.imageUrl}
                     alt='Медиа рассылки'
+                    width={640}
+                    height={360}
+                    unoptimized
                     className='max-h-64 rounded-lg border object-contain'
                   />
                 </div>

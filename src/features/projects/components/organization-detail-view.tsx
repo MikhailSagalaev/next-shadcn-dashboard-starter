@@ -18,6 +18,7 @@ import {
   Building2,
   Copy,
   Loader2,
+  List,
   MoreHorizontal,
   Network,
   Pencil,
@@ -75,10 +76,18 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
 import { buildReferralLink } from '@/lib/utils/referral-link';
+import type {
+  HierarchyNode,
+  HierarchyPeriod
+} from '@/app/dashboard/projects/[id]/referral/hierarchy/data-access';
 
 import { PartnerUserCombobox, type PartnerUser } from './partner-user-combobox';
+import { HierarchyTree } from './hierarchy-tree';
+import { OrganizationMemberSheet } from './organization-member-sheet';
+import { OrganizationQrCard } from './organization-qr-card';
 
 type PlanOption = { id: string; name: string };
 
@@ -173,6 +182,11 @@ type HierarchyWarning = {
   message: string;
   userId?: string;
   userName?: string;
+};
+
+type OrganizationHierarchyData = {
+  rootIds: string[];
+  nodes: HierarchyNode[];
 };
 
 function memberToPartnerUser(member: Member | undefined): PartnerUser | null {
@@ -501,6 +515,17 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   const [memberSortField, setMemberSortField] =
     useState<MemberSortField>('joinedAt');
   const [memberSortOrder, setMemberSortOrder] = useState<SortOrder>('desc');
+  const [memberView, setMemberView] = useState<'hierarchy' | 'list'>(
+    'hierarchy'
+  );
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [hierarchyPeriod, setHierarchyPeriod] =
+    useState<HierarchyPeriod>('30d');
+  const [hierarchyData, setHierarchyData] =
+    useState<OrganizationHierarchyData | null>(null);
+  const [hierarchyLoading, setHierarchyLoading] = useState(true);
+  const [hierarchyError, setHierarchyError] = useState('');
+  const [hierarchyRefreshKey, setHierarchyRefreshKey] = useState(0);
 
   const [memberLevel, setMemberLevel] = useState('');
   const [memberTitle, setMemberTitle] = useState('');
@@ -553,6 +578,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         if (membersRes.ok) {
           const data = await membersRes.json();
           setMembers(data.members ?? []);
+          setHierarchyRefreshKey((current) => current + 1);
         }
         if (organizationsRes.ok) {
           const data = await organizationsRes.json();
@@ -584,6 +610,39 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadHierarchy = useCallback(async () => {
+    setHierarchyLoading(true);
+    try {
+      setHierarchyError('');
+      const params = new URLSearchParams({
+        period: hierarchyPeriod,
+        organizationId
+      });
+      const response = await fetch(
+        `/api/projects/${projectId}/hierarchy?${params.toString()}`,
+        { cache: 'no-store' }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Не удалось загрузить иерархию');
+      }
+      setHierarchyData({
+        rootIds: data.rootIds ?? [],
+        nodes: data.nodes ?? []
+      });
+    } catch (error) {
+      setHierarchyError(
+        error instanceof Error ? error.message : 'Не удалось загрузить иерархию'
+      );
+    } finally {
+      setHierarchyLoading(false);
+    }
+  }, [hierarchyPeriod, organizationId, projectId]);
+
+  useEffect(() => {
+    void loadHierarchy();
+  }, [loadHierarchy, hierarchyRefreshKey]);
 
   const openEdit = () => {
     if (!organization) return;
@@ -918,6 +977,9 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         outboundReferralPlanId: null
       }
     : null;
+  const selectedMember = selectedMemberId
+    ? (members.find((member) => member.id === selectedMemberId) ?? null)
+    : null;
   const query = memberSearch.trim().toLocaleLowerCase('ru-RU');
   const searchedMembers = query
     ? members.filter((member) =>
@@ -1007,14 +1069,6 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             <Pencil className='mr-2 h-4 w-4' />
             Настройки
           </Button>
-          <Button variant='outline' size='sm' asChild>
-            <Link
-              href={`/dashboard/projects/${projectId}/referral?tab=hierarchy&organizationId=${organizationId}&organizationName=${encodeURIComponent(organization.name)}`}
-            >
-              <Network className='mr-2 h-4 w-4' />
-              Иерархия
-            </Link>
-          </Button>
         </div>
       </div>
 
@@ -1081,273 +1135,359 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
             </Button>
           </div>
 
-          <Card>
-            <CardContent className='p-0'>
-              {members.length === 0 ? (
-                <p className='text-muted-foreground p-6 text-center text-sm'>
-                  Участников пока нет. Добавьте партнёров или клиентов в эту
-                  сеть.
-                </p>
-              ) : (
-                <>
-                  <div className='border-b p-4'>
-                    <div className='relative max-w-sm'>
-                      <Label htmlFor='member-search' className='sr-only'>
-                        Поиск участников
-                      </Label>
-                      <Search
-                        className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2'
-                        aria-hidden='true'
-                      />
-                      <Input
-                        id='member-search'
-                        value={memberSearch}
-                        onChange={(event) =>
-                          setMemberSearch(event.target.value)
-                        }
-                        placeholder='Поиск по имени, email или телефону…'
-                        className='pl-9'
-                      />
+          <div className='flex flex-wrap items-center justify-between gap-3'>
+            <div>
+              <p className='text-sm font-medium'>Представление участников</p>
+              <p className='text-muted-foreground text-xs'>
+                Иерархия сохраняет ветки; список сортирует всех участников
+                целиком.
+              </p>
+            </div>
+            <ToggleGroup
+              type='single'
+              variant='outline'
+              size='sm'
+              value={memberView}
+              onValueChange={(value) => {
+                if (value === 'hierarchy' || value === 'list') {
+                  setMemberView(value);
+                }
+              }}
+              aria-label='Представление участников'
+            >
+              <ToggleGroupItem value='hierarchy' aria-label='Иерархия'>
+                <Network aria-hidden='true' />
+                Иерархия
+              </ToggleGroupItem>
+              <ToggleGroupItem value='list' aria-label='Список'>
+                <List aria-hidden='true' />
+                Список
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          {memberView === 'hierarchy' ? (
+            hierarchyLoading && !hierarchyData ? (
+              <div className='flex items-center justify-center rounded-lg border py-16'>
+                <Loader2 className='text-muted-foreground h-6 w-6 animate-spin' />
+                <span className='sr-only'>Загрузка иерархии</span>
+              </div>
+            ) : hierarchyError ? (
+              <Alert variant='destructive'>
+                <AlertTitle>Не удалось загрузить иерархию</AlertTitle>
+                <AlertDescription className='mt-2 space-y-3'>
+                  <p>{hierarchyError}</p>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => void loadHierarchy()}
+                  >
+                    Повторить
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : hierarchyData ? (
+              <HierarchyTree
+                projectId={projectId}
+                nodes={hierarchyData.nodes}
+                rootIds={hierarchyData.rootIds}
+                period={hierarchyPeriod}
+                organizationId={organizationId}
+                onPeriodChange={setHierarchyPeriod}
+                onMemberOpen={setSelectedMemberId}
+              />
+            ) : null
+          ) : (
+            <Card>
+              <CardContent className='p-0'>
+                {members.length === 0 ? (
+                  <p className='text-muted-foreground p-6 text-center text-sm'>
+                    Участников пока нет. Добавьте партнёров или клиентов в эту
+                    сеть.
+                  </p>
+                ) : (
+                  <>
+                    <div className='border-b p-4'>
+                      <div className='relative max-w-sm'>
+                        <Label htmlFor='member-search' className='sr-only'>
+                          Поиск участников
+                        </Label>
+                        <Search
+                          className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2'
+                          aria-hidden='true'
+                        />
+                        <Input
+                          id='member-search'
+                          value={memberSearch}
+                          onChange={(event) =>
+                            setMemberSearch(event.target.value)
+                          }
+                          placeholder='Поиск по имени, email или телефону…'
+                          className='pl-9'
+                        />
+                      </div>
+                      <p className='text-muted-foreground mt-2 text-xs md:hidden'>
+                        Таблица прокручивается по горизонтали; действия
+                        закреплены справа.
+                      </p>
                     </div>
-                    <p className='text-muted-foreground mt-2 text-xs md:hidden'>
-                      Таблица прокручивается по горизонтали; действия закреплены
-                      справа.
-                    </p>
-                  </div>
-                  <Table className='min-w-[1540px]'>
-                    <TableHeader>
-                      <TableRow>
-                        <SortableMemberHead
-                          field='name'
-                          label='Участник'
-                          activeField={memberSortField}
-                          order={memberSortOrder}
-                          onSort={handleMemberSort}
-                        />
-                        <TableHead>Уровень и доступ</TableHead>
-                        <TableHead>Кто привёл</TableHead>
-                        <TableHead>Рефереры</TableHead>
-                        <SortableMemberHead
-                          field='directReferrals'
-                          label='Рефералы'
-                          activeField={memberSortField}
-                          order={memberSortOrder}
-                          onSort={handleMemberSort}
-                        />
-                        <TableHead>План комиссии</TableHead>
-                        <SortableMemberHead
-                          field='joinedAt'
-                          label='Добавлен'
-                          activeField={memberSortField}
-                          order={memberSortOrder}
-                          onSort={handleMemberSort}
-                        />
-                        <SortableMemberHead
-                          field='totalPurchases'
-                          label='Покупки'
-                          activeField={memberSortField}
-                          order={memberSortOrder}
-                          align='end'
-                          onSort={handleMemberSort}
-                        />
-                        <SortableMemberHead
-                          field='referralBonusEarned'
-                          label='Реф. бонусы'
-                          activeField={memberSortField}
-                          order={memberSortOrder}
-                          align='end'
-                          onSort={handleMemberSort}
-                        />
-                        <TableHead className='bg-background sticky right-0 z-10 w-[72px] shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
-                          <span className='sr-only'>Действия</span>
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredMembers.map((m) => (
-                        <TableRow key={m.id}>
-                          <TableCell className='min-w-[220px]'>
-                            <div className='flex items-center gap-2 font-medium'>
-                              <span>{m.name}</span>
-                              {!m.isActive && (
-                                <Badge variant='secondary'>Неактивен</Badge>
+                    <Table className='min-w-[1540px]'>
+                      <TableHeader>
+                        <TableRow>
+                          <SortableMemberHead
+                            field='name'
+                            label='Участник'
+                            activeField={memberSortField}
+                            order={memberSortOrder}
+                            onSort={handleMemberSort}
+                          />
+                          <TableHead>Уровень и доступ</TableHead>
+                          <TableHead>Кто привёл</TableHead>
+                          <TableHead>Рефереры</TableHead>
+                          <SortableMemberHead
+                            field='directReferrals'
+                            label='Рефералы'
+                            activeField={memberSortField}
+                            order={memberSortOrder}
+                            onSort={handleMemberSort}
+                          />
+                          <TableHead>План комиссии</TableHead>
+                          <SortableMemberHead
+                            field='joinedAt'
+                            label='Добавлен'
+                            activeField={memberSortField}
+                            order={memberSortOrder}
+                            onSort={handleMemberSort}
+                          />
+                          <SortableMemberHead
+                            field='totalPurchases'
+                            label='Покупки'
+                            activeField={memberSortField}
+                            order={memberSortOrder}
+                            align='end'
+                            onSort={handleMemberSort}
+                          />
+                          <SortableMemberHead
+                            field='referralBonusEarned'
+                            label='Реф. бонусы'
+                            activeField={memberSortField}
+                            order={memberSortOrder}
+                            align='end'
+                            onSort={handleMemberSort}
+                          />
+                          <TableHead className='bg-background sticky right-0 z-10 w-[72px] shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
+                            <span className='sr-only'>Действия</span>
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredMembers.map((m) => (
+                          <TableRow key={m.id}>
+                            <TableCell className='min-w-[220px]'>
+                              <div className='flex items-center gap-2 font-medium'>
+                                <button
+                                  type='button'
+                                  className='hover:text-primary focus-visible:ring-ring rounded-sm text-start underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
+                                  onClick={() => setSelectedMemberId(m.id)}
+                                  aria-label={`Открыть карточку участника: ${m.name}`}
+                                >
+                                  {m.name}
+                                </button>
+                                {!m.isActive && (
+                                  <Badge variant='secondary'>Неактивен</Badge>
+                                )}
+                              </div>
+                              <div className='text-muted-foreground text-xs'>
+                                {m.email || m.phone}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className='flex flex-wrap items-center gap-1.5'>
+                                {m.level ? (
+                                  <Badge variant='outline'>
+                                    Уровень {m.level}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant='outline'>Клиент</Badge>
+                                )}
+                                {m.canManage && (
+                                  <Badge variant='secondary'>Управляющий</Badge>
+                                )}
+                              </div>
+                              {m.title && (
+                                <div className='text-muted-foreground mt-1 text-xs'>
+                                  {m.title}
+                                </div>
                               )}
-                            </div>
-                            <div className='text-muted-foreground text-xs'>
-                              {m.email || m.phone}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className='flex flex-wrap items-center gap-1.5'>
-                              {m.level ? (
-                                <Badge variant='outline'>
-                                  Уровень {m.level}
-                                </Badge>
+                            </TableCell>
+                            <TableCell className='max-w-[200px] whitespace-normal'>
+                              {m.invitedByName ? (
+                                <>
+                                  <div className='text-sm'>
+                                    {m.invitedByName}
+                                  </div>
+                                  <div className='text-muted-foreground text-xs'>
+                                    при регистрации
+                                  </div>
+                                </>
                               ) : (
-                                <Badge variant='outline'>Клиент</Badge>
+                                '—'
                               )}
-                              {m.canManage && (
-                                <Badge variant='secondary'>Управляющий</Badge>
+                            </TableCell>
+                            <TableCell className='max-w-[260px] whitespace-normal'>
+                              {m.referrerLinks.length > 0 ? (
+                                <div className='space-y-1'>
+                                  {m.referrerLinks.map((link) => (
+                                    <div key={link.referrerId}>
+                                      {link.referrerName} · {link.sharePercent}%
+                                      {link.isPrimary ? ' · основной' : ''}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                '—'
                               )}
-                            </div>
-                            {m.title && (
-                              <div className='text-muted-foreground mt-1 text-xs'>
-                                {m.title}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className='max-w-[200px] whitespace-normal'>
-                            {m.invitedByName ? (
-                              <>
-                                <div className='text-sm'>{m.invitedByName}</div>
-                                <div className='text-muted-foreground text-xs'>
-                                  при регистрации
+                            </TableCell>
+                            <TableCell className='max-w-[240px] whitespace-normal'>
+                              {m.directReferrals.length > 0 ? (
+                                <div className='space-y-1'>
+                                  <Badge variant='secondary'>
+                                    {m.directReferrals.length}
+                                  </Badge>
+                                  {m.directReferrals.map((referral) => (
+                                    <div key={referral.id} className='text-xs'>
+                                      {referral.name}
+                                    </div>
+                                  ))}
                                 </div>
-                              </>
-                            ) : (
-                              '—'
-                            )}
-                          </TableCell>
-                          <TableCell className='max-w-[260px] whitespace-normal'>
-                            {m.referrerLinks.length > 0 ? (
-                              <div className='space-y-1'>
-                                {m.referrerLinks.map((link) => (
-                                  <div key={link.referrerId}>
-                                    {link.referrerName} · {link.sharePercent}%
-                                    {link.isPrimary ? ' · основной' : ''}
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                            <TableCell className='max-w-[220px] whitespace-normal'>
+                              {m.outboundPlanName ? (
+                                <>
+                                  <div>{m.outboundPlanName}</div>
+                                  <div className='text-muted-foreground text-xs'>
+                                    {m.outboundPlanInherited
+                                      ? 'по умолчанию организации'
+                                      : 'для приглашений'}
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              '—'
-                            )}
-                          </TableCell>
-                          <TableCell className='max-w-[240px] whitespace-normal'>
-                            {m.directReferrals.length > 0 ? (
-                              <div className='space-y-1'>
-                                <Badge variant='secondary'>
-                                  {m.directReferrals.length}
-                                </Badge>
-                                {m.directReferrals.map((referral) => (
-                                  <div key={referral.id} className='text-xs'>
-                                    {referral.name}
+                                </>
+                              ) : m.attributionPlanName ? (
+                                <>
+                                  <div>{m.attributionPlanName}</div>
+                                  <div className='text-muted-foreground text-xs'>
+                                    по регистрации
                                   </div>
-                                ))}
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                            <TableCell className='text-sm'>
+                              <div>{formatDate(m.joinedAt)}</div>
+                              <div className='text-muted-foreground text-xs'>
+                                регистрация {formatDate(m.registeredAt)}
                               </div>
-                            ) : (
-                              '—'
-                            )}
-                          </TableCell>
-                          <TableCell className='max-w-[220px] whitespace-normal'>
-                            {m.outboundPlanName ? (
-                              <>
-                                <div>{m.outboundPlanName}</div>
-                                <div className='text-muted-foreground text-xs'>
-                                  {m.outboundPlanInherited
-                                    ? 'по умолчанию организации'
-                                    : 'для приглашений'}
-                                </div>
-                              </>
-                            ) : m.attributionPlanName ? (
-                              <>
-                                <div>{m.attributionPlanName}</div>
-                                <div className='text-muted-foreground text-xs'>
-                                  по регистрации
-                                </div>
-                              </>
-                            ) : (
-                              '—'
-                            )}
-                          </TableCell>
-                          <TableCell className='text-sm'>
-                            <div>{formatDate(m.joinedAt)}</div>
-                            <div className='text-muted-foreground text-xs'>
-                              регистрация {formatDate(m.registeredAt)}
-                            </div>
-                          </TableCell>
-                          <TableCell className='text-right text-sm font-medium tabular-nums'>
-                            {formatRub(m.totalPurchases)}
-                          </TableCell>
-                          <TableCell className='text-right text-sm font-medium tabular-nums'>
-                            {formatRub(m.referralBonusEarned)}
-                          </TableCell>
-                          <TableCell className='bg-background sticky right-0 z-10 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
-                            <div className='flex justify-end'>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant='ghost'
-                                    size='icon'
-                                    aria-label={`Действия: ${m.name}`}
-                                  >
-                                    <MoreHorizontal />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align='end'>
-                                  <DropdownMenuGroup>
-                                    <DropdownMenuItem
-                                      onSelect={() => openEditMember(m)}
+                            </TableCell>
+                            <TableCell className='text-right text-sm font-medium tabular-nums'>
+                              {formatRub(m.totalPurchases)}
+                            </TableCell>
+                            <TableCell className='text-right text-sm font-medium tabular-nums'>
+                              {formatRub(m.referralBonusEarned)}
+                            </TableCell>
+                            <TableCell className='bg-background sticky right-0 z-10 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]'>
+                              <div className='flex justify-end'>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant='ghost'
+                                      size='icon'
+                                      aria-label={`Действия: ${m.name}`}
                                     >
-                                      <Pencil />
-                                      Редактировать
-                                    </DropdownMenuItem>
-                                    {(Boolean(m.level) || m.canManage) && (
+                                      <MoreHorizontal />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align='end'>
+                                    <DropdownMenuGroup>
                                       <DropdownMenuItem
+                                        onSelect={() => openEditMember(m)}
+                                      >
+                                        <Pencil />
+                                        Редактировать
+                                      </DropdownMenuItem>
+                                      {(Boolean(m.level) || m.canManage) && (
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            void copyMemberReferralLink(m)
+                                          }
+                                        >
+                                          <Copy />
+                                          Копировать реферальную ссылку
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem
+                                        onSelect={() => openTransferMember(m)}
+                                      >
+                                        <ArrowRightLeft />
+                                        Перенести
+                                      </DropdownMenuItem>
+                                    </DropdownMenuGroup>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuGroup>
+                                      <DropdownMenuItem
+                                        variant='destructive'
                                         onSelect={() =>
-                                          void copyMemberReferralLink(m)
+                                          setRemoveMemberTarget(m)
                                         }
                                       >
-                                        <Copy />
-                                        Копировать реферальную ссылку
+                                        <UserMinus />
+                                        Убрать из организации
                                       </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem
-                                      onSelect={() => openTransferMember(m)}
-                                    >
-                                      <ArrowRightLeft />
-                                      Перенести
-                                    </DropdownMenuItem>
-                                  </DropdownMenuGroup>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuGroup>
-                                    <DropdownMenuItem
-                                      variant='destructive'
-                                      onSelect={() => setRemoveMemberTarget(m)}
-                                    >
-                                      <UserMinus />
-                                      Убрать из организации
-                                    </DropdownMenuItem>
-                                  </DropdownMenuGroup>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredMembers.length === 0 && (
-                        <TableRow>
-                          <TableCell
-                            colSpan={10}
-                            className='text-muted-foreground h-24 text-center'
-                          >
-                            По вашему запросу участники не найдены
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                  {filteredMembers.length === 0 && (
-                    <p className='text-muted-foreground p-6 text-center text-sm'>
-                      По этому запросу участников не найдено.
-                    </p>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                                    </DropdownMenuGroup>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {filteredMembers.length === 0 && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={10}
+                              className='text-muted-foreground h-24 text-center'
+                            >
+                              По вашему запросу участники не найдены
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                    {filteredMembers.length === 0 && (
+                      <p className='text-muted-foreground p-6 text-center text-sm'>
+                        По этому запросу участников не найдено.
+                      </p>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value='about' className='mt-4 space-y-4'>
+          <OrganizationQrCard
+            projectId={projectId}
+            organizationId={organizationId}
+            organizationName={organization.name}
+            slug={organization.slug}
+            domain={organization.project?.domain}
+            firstPurchaseDiscountPercent={
+              organization.firstPurchaseDiscountPercent
+            }
+          />
           <Card>
             <CardHeader>
               <CardTitle>Описание</CardTitle>
@@ -1376,6 +1516,34 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <OrganizationMemberSheet
+        projectId={projectId}
+        organizationId={organizationId}
+        member={selectedMember}
+        open={Boolean(selectedMember)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedMemberId(null);
+        }}
+        onEdit={(member) => {
+          const target = members.find(
+            (candidate) => candidate.id === member.id
+          );
+          if (target) openEditMember(target);
+        }}
+        onTransfer={(member) => {
+          const target = members.find(
+            (candidate) => candidate.id === member.id
+          );
+          if (target) openTransferMember(target);
+        }}
+        onRemove={(member) => {
+          const target = members.find(
+            (candidate) => candidate.id === member.id
+          );
+          if (target) setRemoveMemberTarget(target);
+        }}
+      />
 
       {/* Edit org dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

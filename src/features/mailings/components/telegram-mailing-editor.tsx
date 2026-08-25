@@ -14,16 +14,9 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Plus, Trash2, ExternalLink, MessageSquare } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 interface TelegramButton {
@@ -33,6 +26,8 @@ interface TelegramButton {
 }
 
 interface TelegramMailingEditorProps {
+  channel?: 'Telegram' | 'MAX';
+  supportsImage?: boolean;
   messageText: string;
   imageUrl?: string;
   buttons?: TelegramButton[];
@@ -44,6 +39,8 @@ interface TelegramMailingEditorProps {
 }
 
 export function TelegramMailingEditor({
+  channel = 'Telegram',
+  supportsImage = true,
   messageText,
   imageUrl = '',
   buttons = [],
@@ -149,23 +146,25 @@ export function TelegramMailingEditor({
               required
             />
             <p className='text-muted-foreground mt-1 text-xs'>
-              Максимум 4096 символов
+              Максимум {channel === 'MAX' ? '4000' : '4096'} символов
             </p>
           </div>
 
-          <div>
-            <Label htmlFor='imageUrl'>URL изображения (необязательно)</Label>
-            <Input
-              id='imageUrl'
-              type='url'
-              value={imageUrl}
-              onChange={(e) => onImageUrlChange(e.target.value)}
-              placeholder='https://example.com/image.jpg'
-            />
-            <p className='text-muted-foreground mt-1 text-xs'>
-              Прямая ссылка на изображение (JPG, PNG, GIF)
-            </p>
-          </div>
+          {supportsImage && (
+            <div>
+              <Label htmlFor='imageUrl'>URL изображения (необязательно)</Label>
+              <Input
+                id='imageUrl'
+                type='url'
+                value={imageUrl}
+                onChange={(e) => onImageUrlChange(e.target.value)}
+                placeholder='https://example.com/image.jpg'
+              />
+              <p className='text-muted-foreground mt-1 text-xs'>
+                Прямая ссылка на изображение (JPG, PNG, GIF)
+              </p>
+            </div>
+          )}
 
           <Separator />
 
@@ -245,11 +244,11 @@ export function TelegramMailingEditor({
             <CardHeader className='pb-3'>
               <CardTitle className='flex items-center gap-2 text-sm'>
                 <MessageSquare className='h-4 w-4' />
-                Telegram сообщение
+                {channel} сообщение
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-4'>
-              {imageUrl && (
+              {supportsImage && imageUrl && (
                 <div className='bg-muted flex aspect-video items-center justify-center rounded-md border-2 border-dashed'>
                   <div className='text-muted-foreground text-center text-sm'>
                     <div className='mb-2 text-2xl'>🖼️</div>
@@ -263,13 +262,8 @@ export function TelegramMailingEditor({
 
               <div className='bg-muted/50 min-h-[150px] rounded-lg p-4'>
                 {messageText ? (
-                  <div
-                    className='text-sm whitespace-pre-wrap'
-                    dangerouslySetInnerHTML={
-                      parseMode === 'HTML' ? { __html: messageText } : undefined
-                    }
-                  >
-                    {parseMode === 'Markdown' ? messageText : undefined}
+                  <div className='text-sm whitespace-pre-wrap'>
+                    {messageText}
                   </div>
                 ) : (
                   <div className='text-muted-foreground text-sm italic'>
@@ -299,11 +293,13 @@ export function TelegramMailingEditor({
                 </div>
               )}
 
-              {!messageText && !imageUrl && buttons.length === 0 && (
-                <div className='text-muted-foreground py-8 text-center text-sm'>
-                  Превью появится после заполнения полей
-                </div>
-              )}
+              {!messageText &&
+                (!supportsImage || !imageUrl) &&
+                buttons.length === 0 && (
+                  <div className='text-muted-foreground py-8 text-center text-sm'>
+                    Превью появится после заполнения полей
+                  </div>
+                )}
             </CardContent>
           </Card>
         </div>

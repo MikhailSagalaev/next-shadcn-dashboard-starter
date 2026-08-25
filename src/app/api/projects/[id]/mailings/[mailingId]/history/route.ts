@@ -32,11 +32,15 @@ export async function GET(
     const offset = parseInt(url.searchParams.get('offset') || '0', 10);
     const eventType = url.searchParams.get('eventType') || undefined;
 
-    const history = await MailingService.getMailingHistory(mailingId, {
-      limit,
-      offset,
-      eventType
-    });
+    const history = await MailingService.getMailingHistory(
+      projectId,
+      mailingId,
+      {
+        limit,
+        offset,
+        eventType
+      }
+    );
 
     return NextResponse.json({ history });
   } catch (error) {

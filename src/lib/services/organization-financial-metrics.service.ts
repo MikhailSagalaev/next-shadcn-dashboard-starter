@@ -88,42 +88,58 @@ export class OrganizationFinancialMetricsService {
           null
       ])
     );
-    const purchaseSubjectIds = organizationId
-      ? subjectIds.filter(
-          (subjectId) => subjectOrgByUserId.get(subjectId) === organizationId
-        )
-      : subjectIds;
-
-    if (since) {
-      if (purchaseSubjectIds.length > 0) {
-        const purchases = await db.order.groupBy({
-          by: ['userId'],
-          where: {
-            projectId,
-            userId: { in: purchaseSubjectIds },
-            accountingState: 'APPLIED',
-            accountedAt: { gte: since }
-          },
-          _sum: { accountedPurchaseAmount: true }
-        });
-        for (const row of purchases) {
-          if (!row.userId) continue;
-          const metric = metrics.get(row.userId);
-          if (metric) {
-            metric.totalPurchases = Number(
-              row._sum.accountedPurchaseAmount ?? 0
-            );
-          }
+    if (organizationId) {
+      const legacyPurchaseSubjectIds = subjectIds.filter(
+        (subjectId) => subjectOrgByUserId.get(subjectId) === organizationId
+      );
+      const purchases = await db.order.groupBy({
+        by: ['userId'],
+        where: {
+          projectId,
+          userId: { in: subjectIds },
+          accountingState: 'APPLIED',
+          OR: [
+            { organizationId },
+            ...(legacyPurchaseSubjectIds.length > 0
+              ? [
+                  {
+                    organizationId: null,
+                    userId: { in: legacyPurchaseSubjectIds }
+                  }
+                ]
+              : [])
+          ],
+          ...(since ? { accountedAt: { gte: since } } : {})
+        },
+        _sum: { accountedPurchaseAmount: true }
+      });
+      for (const row of purchases) {
+        if (!row.userId) continue;
+        const metric = metrics.get(row.userId);
+        if (metric) {
+          metric.totalPurchases = Number(row._sum.accountedPurchaseAmount ?? 0);
+        }
+      }
+    } else if (since) {
+      const purchases = await db.order.groupBy({
+        by: ['userId'],
+        where: {
+          projectId,
+          userId: { in: subjectIds },
+          accountingState: 'APPLIED',
+          accountedAt: { gte: since }
+        },
+        _sum: { accountedPurchaseAmount: true }
+      });
+      for (const row of purchases) {
+        if (!row.userId) continue;
+        const metric = metrics.get(row.userId);
+        if (metric) {
+          metric.totalPurchases = Number(row._sum.accountedPurchaseAmount ?? 0);
         }
       }
     } else {
       for (const subject of subjects) {
-        if (
-          organizationId &&
-          subjectOrgByUserId.get(subject.id) !== organizationId
-        ) {
-          continue;
-        }
         const metric = metrics.get(subject.id);
         if (metric) metric.totalPurchases = Number(subject.totalPurchases ?? 0);
       }
