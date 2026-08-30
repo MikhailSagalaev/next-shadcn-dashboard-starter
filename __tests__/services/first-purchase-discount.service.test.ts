@@ -13,6 +13,7 @@ const buildSubject = (
     firstPurchaseDiscountPercent: 10
   },
   project: {
+    enablePartnerRoles: true,
     welcomeRewardType: 'BONUS' as const,
     firstPurchaseDiscountPercent: 0
   },
@@ -28,7 +29,7 @@ describe('resolveFirstPurchaseDiscount', () => {
     });
   });
 
-  it('falls back to the project discount when the organization has none', () => {
+  it('does not fall back to the project discount in B2B mode', () => {
     expect(
       resolveFirstPurchaseDiscount(
         buildSubject({
@@ -37,16 +38,28 @@ describe('resolveFirstPurchaseDiscount', () => {
             firstPurchaseDiscountPercent: 0
           },
           project: {
+            enablePartnerRoles: true,
             welcomeRewardType: 'DISCOUNT',
             firstPurchaseDiscountPercent: 7
           }
         })
       )
-    ).toEqual({
-      available: true,
-      discountPercent: 7,
-      source: 'PROJECT'
-    });
+    ).toEqual({ available: false, discountPercent: 0, source: null });
+  });
+
+  it('keeps the project discount for a C2C project', () => {
+    expect(
+      resolveFirstPurchaseDiscount(
+        buildSubject({
+          organization: null,
+          project: {
+            enablePartnerRoles: false,
+            welcomeRewardType: 'DISCOUNT',
+            firstPurchaseDiscountPercent: 7
+          }
+        })
+      )
+    ).toEqual({ available: true, discountPercent: 7, source: 'PROJECT' });
   });
 
   it('does not use a discount from an inactive organization', () => {

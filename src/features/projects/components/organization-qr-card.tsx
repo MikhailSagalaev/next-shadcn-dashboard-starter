@@ -5,7 +5,13 @@ import { Download, ExternalLink, QrCode } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
 import { CopyButton } from '@/components/ui/copy-button';
 import { buildOrganizationReferralLink } from '@/lib/utils/referral-link';
 
@@ -22,11 +28,10 @@ export function OrganizationQrCard({
   projectId,
   organizationId,
   organizationName,
-  slug,
   domain,
   firstPurchaseDiscountPercent
 }: OrganizationQrCardProps) {
-  const destinationUrl = buildOrganizationReferralLink(domain, slug);
+  const destinationUrl = buildOrganizationReferralLink(domain, organizationId);
   const qrEndpoint = `/api/projects/${projectId}/organizations/${organizationId}/qr`;
 
   return (
@@ -34,15 +39,18 @@ export function OrganizationQrCard({
       <CardHeader className='pb-3'>
         <div className='flex flex-wrap items-center justify-between gap-2'>
           <CardTitle className='flex items-center gap-2'>
-            <QrCode className='h-5 w-5' aria-hidden='true' />
+            <QrCode aria-hidden='true' />
             QR-код организации
           </CardTitle>
           {firstPurchaseDiscountPercent > 0 ? (
             <Badge>{firstPurchaseDiscountPercent}% на первую покупку</Badge>
           ) : (
-            <Badge variant='outline'>Скидка по настройкам проекта</Badge>
+            <Badge variant='outline'>Скидка выключена</Badge>
           )}
         </div>
+        <CardDescription>
+          Для регистрации новых клиентов и однократной скидки организации.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {destinationUrl ? (
@@ -64,8 +72,8 @@ export function OrganizationQrCard({
                 </p>
                 <p className='text-muted-foreground mt-1 text-sm'>
                   Разместите QR на стойке, афише или визитке. Он ведёт сразу на
-                  регистрацию, а новый клиент попадёт в эту организацию по метке{' '}
-                  <code>utm_org={slug}</code>.
+                  регистрацию. Новый клиент попадёт в эту организацию, но не
+                  получит доступ к партнёрскому кабинету.
                 </p>
               </div>
               <div className='bg-muted/50 flex min-w-0 items-center gap-2 rounded-md border p-2'>
@@ -77,21 +85,22 @@ export function OrganizationQrCard({
               <div className='flex flex-wrap gap-2'>
                 <Button variant='outline' size='sm' asChild>
                   <a href={destinationUrl} target='_blank' rel='noreferrer'>
-                    <ExternalLink aria-hidden='true' />
+                    <ExternalLink data-icon='inline-start' aria-hidden='true' />
                     Проверить ссылку
                   </a>
                 </Button>
                 <Button variant='outline' size='sm' asChild>
                   <a href={`${qrEndpoint}?format=png&download=1`} download>
-                    <Download aria-hidden='true' />
+                    <Download data-icon='inline-start' aria-hidden='true' />
                     Скачать PNG
                   </a>
                 </Button>
               </div>
               <p className='text-muted-foreground text-xs'>
-                Скидка проверяется сервером и применяется один раз. Если у
-                организации указано 0%, используется общая настройка проекта,
-                когда она включена.
+                Скидка проверяется сервером и применяется один раз. Значение 0%
+                означает, что скидка выключена. Существующие клиенты не
+                перепривязываются автоматически. QR продолжит работать после
+                переименования организации.
               </p>
             </div>
           </div>

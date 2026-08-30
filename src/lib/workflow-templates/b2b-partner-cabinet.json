@@ -507,21 +507,12 @@
     },
     {
       "id": "show-referrals-stats",
-      "type": "message",
+      "type": "action.menu_command",
       "position": { "x": 1140, "y": 1160 },
       "data": {
-        "label": "Показать рефералы",
+        "label": "Проверить доступ и показать рефералы",
         "config": {
-          "message": {
-            "text": "<b>👥 Реферальная программа</b>\n\n👤 <b>Приглашено:</b> {user.referralCount}\n💰 <b>Бонусов от рефералов:</b> {user.referralBonusTotalFormatted}\n\nℹ️ В B2B-режиме реферальная ссылка доступна партнёрам уровней 1–3.",
-            "parseMode": "HTML",
-            "keyboard": {
-              "type": "inline",
-              "buttons": [
-                [{ "text": "⬅️ В меню", "callback_data": "back_to_menu" }]
-              ]
-            }
-          }
+          "action.menu_command": { "command": "menu_referrals" }
         }
       }
     },
@@ -538,21 +529,12 @@
     },
     {
       "id": "show-help-info",
-      "type": "message",
+      "type": "action.menu_command",
       "position": { "x": 1140, "y": 1280 },
       "data": {
-        "label": "Показать помощь",
+        "label": "Показать помощь по доступной роли",
         "config": {
-          "message": {
-            "text": "<b>❓ Помощь</b>\n\n/start — главное меню\n💰 Баланс · 📜 История · 🏆 Уровень\n\nПартнёрам уровней 1–3: 👉 МОЯ ССЫЛКА 👈 · 👥 команда · 💵 выплаты\nПартнёру уровня 3: 📊 сводка по организации",
-            "parseMode": "HTML",
-            "keyboard": {
-              "type": "inline",
-              "buttons": [
-                [{ "text": "⬅️ В меню", "callback_data": "back_to_menu" }]
-              ]
-            }
-          }
+          "action.menu_command": { "command": "menu_help" }
         }
       }
     },

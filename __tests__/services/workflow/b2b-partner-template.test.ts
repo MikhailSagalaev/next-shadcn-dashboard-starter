@@ -48,4 +48,18 @@ describe('B2B partner workflow template', () => {
       '{{telegram.callback.params[2]}}'
     );
   });
+
+  it('checks referral and help visibility at runtime', () => {
+    const referrals = nodes.find((node) => node.id === 'show-referrals-stats');
+    const help = nodes.find((node) => node.id === 'show-help-info');
+
+    expect(referrals?.type).toBe('action.menu_command');
+    expect(referrals?.data?.config?.['action.menu_command']?.command).toBe(
+      'menu_referrals'
+    );
+    expect(help?.type).toBe('action.menu_command');
+    expect(help?.data?.config?.['action.menu_command']?.command).toBe(
+      'menu_help'
+    );
+  });
 });

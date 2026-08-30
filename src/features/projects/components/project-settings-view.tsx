@@ -169,7 +169,7 @@ export function ProjectSettingsView({
           welcomeRewardType: (projectData.welcomeRewardType ||
             'BONUS') as WelcomeRewardType,
           firstPurchaseDiscountPercent:
-            projectData.firstPurchaseDiscountPercent || 10,
+            projectData.firstPurchaseDiscountPercent ?? 10,
           maxPaymentPercentage: Number(projectData.maxPaymentPercentage) || 100
         });
       } else if (projectResponse.status === 403) {
@@ -206,7 +206,7 @@ export function ProjectSettingsView({
       formData.welcomeBonusAmount !== Number(project.welcomeBonus || 0) ||
       formData.welcomeRewardType !== (project.welcomeRewardType || 'BONUS') ||
       formData.firstPurchaseDiscountPercent !==
-        (project.firstPurchaseDiscountPercent || 10) ||
+        (project.firstPurchaseDiscountPercent ?? 10) ||
       formData.maxPaymentPercentage !==
         Number(project.maxPaymentPercentage || 100);
 
@@ -253,7 +253,15 @@ export function ProjectSettingsView({
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          ...(project.enablePartnerRoles
+            ? {
+                welcomeRewardType: 'BONUS' as const,
+                firstPurchaseDiscountPercent: 0
+              }
+            : {})
+        })
       });
 
       if (response.ok) {
@@ -408,12 +416,20 @@ export function ProjectSettingsView({
                         </span>
                       </Label>
                       <p className='mt-1 text-sm text-gray-600'>
-                        Выберите тип вознаграждения для новых пользователей
+                        {project.enablePartnerRoles
+                          ? 'Скидка на первую покупку настраивается в карточке организации'
+                          : 'Выберите тип вознаграждения для новых пользователей'}
                       </p>
                     </div>
 
                     {/* Переключатель типа */}
-                    <div className='grid grid-cols-2 gap-3'>
+                    <div
+                      className={
+                        project.enablePartnerRoles
+                          ? 'grid grid-cols-1 gap-3'
+                          : 'grid grid-cols-2 gap-3'
+                      }
+                    >
                       <button
                         type='button'
                         onClick={() =>
@@ -423,6 +439,7 @@ export function ProjectSettingsView({
                           })
                         }
                         className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                          project.enablePartnerRoles ||
                           formData.welcomeRewardType === 'BONUS'
                             ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
                             : 'border-gray-200 hover:border-gray-300'
@@ -436,32 +453,35 @@ export function ProjectSettingsView({
                           Начислить фиксированную сумму бонусов
                         </p>
                       </button>
-                      <button
-                        type='button'
-                        onClick={() =>
-                          setFormData({
-                            ...formData,
-                            welcomeRewardType: 'DISCOUNT'
-                          })
-                        }
-                        className={`rounded-lg border-2 p-3 text-left transition-colors ${
-                          formData.welcomeRewardType === 'DISCOUNT'
-                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-950'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className='flex items-center space-x-2'>
-                          <Percent className='h-5 w-5 text-purple-600' />
-                          <span className='font-medium'>Скидка</span>
-                        </div>
-                        <p className='mt-1 text-xs text-gray-600'>
-                          Процентная скидка на первую покупку
-                        </p>
-                      </button>
+                      {!project.enablePartnerRoles && (
+                        <button
+                          type='button'
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              welcomeRewardType: 'DISCOUNT'
+                            })
+                          }
+                          className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                            formData.welcomeRewardType === 'DISCOUNT'
+                              ? 'border-purple-500 bg-purple-50 dark:bg-purple-950'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className='flex items-center space-x-2'>
+                            <Percent className='h-5 w-5 text-purple-600' />
+                            <span className='font-medium'>Скидка</span>
+                          </div>
+                          <p className='mt-1 text-xs text-gray-600'>
+                            Процентная скидка на первую покупку
+                          </p>
+                        </button>
+                      )}
                     </div>
 
                     {/* Поле значения в зависимости от типа */}
-                    {formData.welcomeRewardType === 'BONUS' ? (
+                    {project.enablePartnerRoles ||
+                    formData.welcomeRewardType === 'BONUS' ? (
                       <div className='space-y-2'>
                         <Label htmlFor='welcomeBonusAmount'>
                           Сумма приветственных бонусов
@@ -482,8 +502,9 @@ export function ProjectSettingsView({
                           placeholder='0'
                         />
                         <p className='text-xs text-gray-600'>
-                          Фиксированное начисление при регистрации. Срок
-                          действия — как указано выше.
+                          {project.enablePartnerRoles
+                            ? 'Фиксированное начисление при регистрации. Скидка на первую покупку задаётся в организации.'
+                            : 'Фиксированное начисление при регистрации. Срок действия — как указано выше.'}
                         </p>
                       </div>
                     ) : (

@@ -16,6 +16,7 @@ export interface FirstPurchaseDiscountSubject {
     firstPurchaseDiscountPercent: number;
   } | null;
   project: {
+    enablePartnerRoles: boolean;
     welcomeRewardType: 'BONUS' | 'DISCOUNT';
     firstPurchaseDiscountPercent: number;
   };
@@ -55,6 +56,7 @@ export function resolveFirstPurchaseDiscount(
   }
 
   const projectPercent =
+    !subject.project.enablePartnerRoles &&
     subject.project.welcomeRewardType === 'DISCOUNT'
       ? validPercent(subject.project.firstPurchaseDiscountPercent)
       : 0;
@@ -87,6 +89,7 @@ export class FirstPurchaseDiscountService {
         },
         project: {
           select: {
+            enablePartnerRoles: true,
             welcomeRewardType: true,
             firstPurchaseDiscountPercent: true
           }
@@ -108,6 +111,7 @@ export class FirstPurchaseDiscountService {
                 }
               : null,
             project: {
+              enablePartnerRoles: user.project.enablePartnerRoles,
               welcomeRewardType: user.project.welcomeRewardType,
               firstPurchaseDiscountPercent:
                 user.project.firstPurchaseDiscountPercent

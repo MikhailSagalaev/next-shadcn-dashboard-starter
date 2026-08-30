@@ -27,7 +27,7 @@ export const GET = withProjectAccess<OrganizationQrParams>(
 
     const destinationUrl = buildOrganizationReferralLink(
       organization.project.domain,
-      organization.slug
+      organizationId
     );
     if (!destinationUrl) {
       return NextResponse.json(

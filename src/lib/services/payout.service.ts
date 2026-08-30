@@ -16,6 +16,7 @@ import type { Payout, PayoutStatus } from '@prisma/client';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { BonusService } from './user.service';
+import { resolvePartnerAccess } from './partner-access';
 import type { CreateBonusInput } from '@/types/bonus';
 
 export interface RequestPayoutInput {
@@ -59,25 +60,29 @@ export class PayoutService {
     }
 
     const user = await db.user.findFirst({
-      where: {
-        id: userId,
-        projectId,
-        isActive: true,
-        OR: [
-          { partnerRole: { not: 'CLIENT' } },
-          {
-            organizationMemberships: {
-              some: {
-                projectId,
-                OR: [{ level: { not: null } }, { canManage: true }]
-              }
-            }
-          }
-        ]
-      },
-      select: { id: true }
+      where: { id: userId, projectId, isActive: true },
+      select: {
+        id: true,
+        partnerRole: true,
+        project: { select: { enablePartnerRoles: true } },
+        organizationMemberships: {
+          where: { projectId, organization: { isActive: true } },
+          select: { level: true, canManage: true }
+        }
+      }
     });
-    if (!user) throw new Error('Партнёр не принадлежит активному проекту');
+    const access = user
+      ? resolvePartnerAccess({
+          enablePartnerRoles: user.project.enablePartnerRoles,
+          partnerRole: user.partnerRole,
+          memberships: user.organizationMemberships
+        })
+      : null;
+    if (!user || !access?.isPartner) {
+      throw new Error(
+        'Выплаты доступны только участникам партнёрской программы'
+      );
+    }
 
     // Порог вывода из настроек b2b-программы (план 007, 0 = без порога).
     const program = await db.referralProgram.findUnique({

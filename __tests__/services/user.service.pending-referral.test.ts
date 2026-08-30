@@ -89,30 +89,23 @@ describe('UserService.createUser — отложенная заявка (WITH_BOT
       projectId,
       organizationId
     });
-    mockDb.partnerOrganizationMembership.upsert = jest
-      .fn()
-      .mockResolvedValue({ id: 'membership-1' } as any);
     await UserService.createUser({
       projectId,
       email: 'xfit-client@example.com',
       utmOrg: 'xfit'
     } as any);
 
-    expect(mockDb.partnerOrganizationMembership.upsert).toHaveBeenCalledWith({
-      where: {
-        organizationId_userId: {
+    expect(mockDb.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
           organizationId,
-          userId: 'user-org-qr'
-        }
-      },
-      update: {},
-      create: {
-        projectId,
-        organizationId,
-        userId: 'user-org-qr',
-        level: null
-      }
-    });
+          organizationMemberships: {
+            create: { projectId, organizationId, level: null }
+          }
+        })
+      })
+    );
+    expect(mockDb.partnerOrganizationMembership.upsert).not.toHaveBeenCalled();
   });
 
   it('НЕ создаёт заявку сразу, а кладёт pendingReferral в metadata', async () => {

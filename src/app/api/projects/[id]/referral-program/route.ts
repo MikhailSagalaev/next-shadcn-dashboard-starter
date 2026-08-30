@@ -41,6 +41,13 @@ const ReferralProgramPayloadSchema = z.object({
   minPurchaseAmount: z.number().min(0).optional(),
   cookieLifetime: z.number().int().min(1).max(365).optional(),
   welcomeBonus: z.number().min(0).optional(),
+  welcomeRewardType: z.enum(['BONUS', 'DISCOUNT']).optional(),
+  firstPurchaseDiscountPercent: z
+    .number()
+    .int()
+    .min(0, 'Скидка не может быть отрицательной')
+    .max(100, 'Скидка не может быть больше 100%')
+    .optional(),
   payoutMinAmount: z.number().min(0).optional(),
   payoutHoldDays: z.number().int().min(0).max(365).optional(),
   description: z.string().max(500).optional(),
@@ -152,6 +159,8 @@ export async function PUT(
       minPurchaseAmount: payload.minPurchaseAmount ?? 0,
       cookieLifetime: payload.cookieLifetime ?? 30,
       welcomeBonus: payload.welcomeBonus ?? 0,
+      welcomeRewardType: payload.welcomeRewardType,
+      firstPurchaseDiscountPercent: payload.firstPurchaseDiscountPercent,
       // НЕ коалесить в 0 — эти два поля больше не приходят с формы c2c
       // настроек (переехали в b2b-вкладку «Выплаты»), а buildProgramData
       // уже умеет сохранять текущее значение, если input === undefined.

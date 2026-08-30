@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 import { ReferralService } from '../referral.service';
 import { BonusLevelService } from '../bonus-level.service';
 import { PartnerReferralGraphService } from '../partner-referral-graph.service';
+import { resolvePartnerAccess } from '../partner-access';
 
 export interface UserProfileData {
   // Основная информация
@@ -537,26 +538,22 @@ export class UserVariablesService {
       const memberships = user.organizationMemberships.filter(
         (membership) => membership.organization.isActive
       );
-      const primaryMembership = memberships[0] ?? null;
-      const canManageOrganization = memberships.some(
-        (membership) => membership.canManage
-      );
-      const isOrganizationMember = memberships.length > 0;
-      const partnerMenuKind = canManageOrganization
-        ? 'MANAGER'
-        : isOrganizationMember || legacyRole !== 'CLIENT'
-          ? 'MEMBER'
-          : 'CLIENT';
-      const partnerRole = canManageOrganization
+      const access = resolvePartnerAccess({
+        enablePartnerRoles: enabled,
+        partnerRole: legacyRole,
+        memberships
+      });
+      const primaryMembership = access.partnerMemberships[0] ?? null;
+      const partnerRole = access.canManageOrganization
         ? 'DIRECTOR'
-        : partnerMenuKind === 'MEMBER'
+        : access.isPartner
           ? 'TRAINER'
           : 'CLIENT';
       const organizationPosition =
         primaryMembership?.title ||
         (primaryMembership?.level
           ? `Уровень ${primaryMembership.level}`
-          : isOrganizationMember
+          : primaryMembership
             ? 'Участник организации'
             : 'Клиент');
 
@@ -573,7 +570,11 @@ export class UserVariablesService {
         };
       }
 
-      const canRefer = partnerMenuKind !== 'CLIENT';
+      // Клиентская B2B-атрибуция не только скрывает партнёрский интерфейс,
+      // но и не загружает команду/комиссии в переменные workflow.
+      if (!access.isPartner) return defaults;
+
+      const canRefer = access.canUseReferralProgram;
 
       // Считаем direct + descendants и комиссии параллельно.
       const [team, totalAgg, monthAgg] = await Promise.all([
@@ -601,10 +602,12 @@ export class UserVariablesService {
 
       return {
         'user.partnerRole': partnerRole,
-        'user.partnerMenuKind': partnerMenuKind,
-        'user.isOrganizationMember': isOrganizationMember,
-        'user.canManageOrganization': canManageOrganization,
-        'user.organizationCount': memberships.length,
+        'user.partnerMenuKind': access.partnerMenuKind,
+        // В workflow это флаг партнёрского membership. Клиентская атрибуция
+        // организации не должна открывать или показывать B2B-интерфейс.
+        'user.isOrganizationMember': access.partnerMemberships.length > 0,
+        'user.canManageOrganization': access.canManageOrganization,
+        'user.organizationCount': access.partnerMemberships.length,
         'user.organizationPosition': organizationPosition,
         'user.canRefer': canRefer,
         'user.directReferralsCount': directCount,

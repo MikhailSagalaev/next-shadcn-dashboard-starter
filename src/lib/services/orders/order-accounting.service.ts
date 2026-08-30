@@ -279,6 +279,7 @@ export class OrderAccountingService {
           },
           project: {
             select: {
+              enablePartnerRoles: true,
               welcomeRewardType: true,
               firstPurchaseDiscountPercent: true
             }

@@ -275,6 +275,20 @@ export async function PUT(
       );
     }
 
+    if (
+      body.firstPurchaseDiscountPercent !== undefined &&
+      (!Number.isInteger(body.firstPurchaseDiscountPercent) ||
+        body.firstPurchaseDiscountPercent < 0 ||
+        body.firstPurchaseDiscountPercent > 100)
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Скидка на первую покупку должна быть целым числом от 0 до 100'
+        },
+        { status: 400 }
+      );
+    }
+
     // Строим объект данных для обновления
     // domain обновляем только если он реально изменился (во избежание unique constraint ошибок)
     const domainUpdate =

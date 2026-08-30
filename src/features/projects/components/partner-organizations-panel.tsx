@@ -32,9 +32,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue
@@ -74,6 +76,13 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
   const [description, setDescription] = useState('');
   const [defaultPlanId, setDefaultPlanId] = useState('');
   const [directorUserId, setDirectorUserId] = useState('');
+  const [firstPurchaseDiscountPercent, setFirstPurchaseDiscountPercent] =
+    useState('0');
+  const hasDiscountError =
+    firstPurchaseDiscountPercent !== '' &&
+    (!Number.isInteger(Number(firstPurchaseDiscountPercent)) ||
+      Number(firstPurchaseDiscountPercent) < 0 ||
+      Number(firstPurchaseDiscountPercent) > 100);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,11 +121,21 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
     setDescription('');
     setDefaultPlanId('');
     setDirectorUserId('');
+    setFirstPurchaseDiscountPercent('0');
   };
 
   const handleCreate = async () => {
     if (!name.trim()) {
       toast.error('Укажите название');
+      return;
+    }
+    const discountPercent = Number(firstPurchaseDiscountPercent);
+    if (
+      !Number.isInteger(discountPercent) ||
+      discountPercent < 0 ||
+      discountPercent > 100
+    ) {
+      toast.error('Укажите скидку целым числом от 0 до 100');
       return;
     }
     setSaving(true);
@@ -128,6 +147,7 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
           name: name.trim(),
           slug: slug.trim() || undefined,
           description: description.trim() || undefined,
+          firstPurchaseDiscountPercent: discountPercent,
           defaultReferralCommissionPlanId: defaultPlanId || null,
           directorUserId: directorUserId || null
         })
@@ -184,7 +204,7 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className='mr-2 h-4 w-4' />
+              <Plus data-icon='inline-start' />
               Новая организация
             </Button>
           </DialogTrigger>
@@ -223,6 +243,43 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
                   rows={2}
                 />
               </div>
+              <Field data-invalid={hasDiscountError}>
+                <FieldLabel htmlFor='new-org-discount'>
+                  Скидка новому клиенту
+                </FieldLabel>
+                <Input
+                  id='new-org-discount'
+                  name='firstPurchaseDiscountPercent'
+                  type='number'
+                  inputMode='numeric'
+                  min='0'
+                  max='100'
+                  step='1'
+                  value={firstPurchaseDiscountPercent}
+                  onChange={(event) =>
+                    setFirstPurchaseDiscountPercent(event.target.value)
+                  }
+                  aria-invalid={hasDiscountError}
+                  aria-describedby={
+                    hasDiscountError
+                      ? 'new-org-discount-help new-org-discount-error'
+                      : 'new-org-discount-help'
+                  }
+                />
+                <FieldDescription id='new-org-discount-help'>
+                  Применяется один раз после регистрации по QR. Укажите 0, чтобы
+                  выключить скидку.
+                </FieldDescription>
+                {hasDiscountError && (
+                  <p
+                    id='new-org-discount-error'
+                    role='alert'
+                    className='text-destructive text-sm'
+                  >
+                    Укажите целое число от 0 до 100.
+                  </p>
+                )}
+              </Field>
               <div className='space-y-2'>
                 <Label htmlFor='new-org-plan'>
                   Партнёрский план по умолчанию
@@ -237,12 +294,14 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='__none__'>Не выбран</SelectItem>
-                    {plans.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectItem value='__none__'>Не выбран</SelectItem>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>
@@ -263,8 +322,8 @@ export function PartnerOrganizationsPanel({ projectId }: Props) {
                 Отмена
               </Button>
               <Button onClick={handleCreate} disabled={saving}>
-                {saving && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-                Создать
+                {saving && <Loader2 data-icon='inline-start' />}
+                Создать организацию
               </Button>
             </DialogFooter>
           </DialogContent>

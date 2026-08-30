@@ -53,13 +53,14 @@ export function buildReferralLink(
 /**
  * Ссылка организации без персонального реферера. Используется для офлайн-QR:
  * новый клиент привязывается к сети через `utm_org`, но не к конкретному
- * участнику.
+ * участнику. Для печатного QR передаётся постоянный id организации, поэтому
+ * ссылка не ломается после изменения названия или slug.
  */
 export function buildOrganizationReferralLink(
   domain: string | null | undefined,
-  orgSlug: string
+  organizationId: string
 ): string | null {
-  if (!domain?.trim() || !orgSlug.trim()) return null;
+  if (!domain?.trim() || !organizationId.trim()) return null;
   const url = new URL(normalizeProjectDomain(domain));
   const currentPath = url.pathname.replace(/\/+$/, '');
 
@@ -68,6 +69,6 @@ export function buildOrganizationReferralLink(
   if (!currentPath.endsWith('/members/signup')) {
     url.pathname = `${currentPath}/members/signup`;
   }
-  url.searchParams.set('utm_org', orgSlug.trim());
+  url.searchParams.set('utm_org', organizationId.trim());
   return url.toString();
 }

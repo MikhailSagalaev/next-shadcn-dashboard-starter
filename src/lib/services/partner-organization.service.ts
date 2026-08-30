@@ -832,6 +832,21 @@ export class PartnerOrganizationService {
     });
   }
 
+  static async resolveByPublicKey(
+    projectId: string,
+    publicKey: string | null | undefined
+  ) {
+    const value = publicKey?.trim();
+    if (!value) return null;
+    return db.partnerOrganization.findFirst({
+      where: {
+        projectId,
+        isActive: true,
+        OR: [{ id: value }, { slug: value.toLowerCase() }]
+      }
+    });
+  }
+
   static async create(input: CreateOrganizationInput) {
     const slug = (input.slug?.trim() || slugify(input.name)).toLowerCase();
 
@@ -1165,9 +1180,12 @@ export class PartnerOrganizationService {
     const { projectId, utmOrgSlug, referrerId } = params;
 
     if (utmOrgSlug) {
-      const bySlug = await this.resolveBySlug(projectId, utmOrgSlug);
-      if (bySlug) return bySlug.id;
-      logger.warn('utm_org slug not found', { projectId, utmOrgSlug });
+      const byPublicKey = await this.resolveByPublicKey(projectId, utmOrgSlug);
+      if (byPublicKey) return byPublicKey.id;
+      logger.warn('utm_org organization not found', {
+        projectId,
+        utmOrg: utmOrgSlug
+      });
     }
 
     if (referrerId) {

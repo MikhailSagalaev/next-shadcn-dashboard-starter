@@ -160,7 +160,13 @@ export function ReferralSettingsForm({
         data.referrerBonus;
       const payload = {
         ...data,
-        referrerBonus: levelOnePercent
+        referrerBonus: levelOnePercent,
+        ...(project?.enablePartnerRoles
+          ? {
+              welcomeRewardType: 'BONUS' as const,
+              firstPurchaseDiscountPercent: 0
+            }
+          : {})
       };
 
       const response = await fetch(
@@ -210,10 +216,9 @@ export function ReferralSettingsForm({
         <Alert>
           <Users className='h-4 w-4' />
           <AlertDescription className='text-sm'>
-            Эта вкладка настраивает <strong>вознаграждение для клиентов</strong>{' '}
-            (приветственные бонусы, % с первой покупки). Вознаграждения для
-            партнёров уровней 1–3 настраиваются во вкладке{' '}
-            <strong>«Планы партнёров»</strong>.
+            Здесь настраиваются приветственные бонусы клиентам. Скидка на первую
+            покупку задаётся отдельно в каждой организации, а вознаграждения
+            партнёров — во вкладке <strong>«Планы партнёров»</strong>.
           </AlertDescription>
         </Alert>
       )}
@@ -287,17 +292,25 @@ export function ReferralSettingsForm({
                     <span>Приветственное вознаграждение</span>
                   </Label>
                   <p className='mt-1 text-sm text-gray-600'>
-                    Выберите тип вознаграждения для новых пользователей при
-                    регистрации
+                    {project?.enablePartnerRoles
+                      ? 'Скидка на первую покупку настраивается в карточке организации'
+                      : 'Выберите тип вознаграждения для новых пользователей при регистрации'}
                   </p>
                 </div>
 
                 {/* Reward Type Selector */}
-                <div className='grid grid-cols-2 gap-3'>
+                <div
+                  className={
+                    project?.enablePartnerRoles
+                      ? 'grid grid-cols-1 gap-3'
+                      : 'grid grid-cols-2 gap-3'
+                  }
+                >
                   <button
                     type='button'
                     onClick={() => setValue('welcomeRewardType', 'BONUS')}
                     className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                      project?.enablePartnerRoles ||
                       watch('welcomeRewardType') === 'BONUS'
                         ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
                         : 'border-gray-200 hover:border-gray-300'
@@ -311,27 +324,30 @@ export function ReferralSettingsForm({
                       Начислить фиксированную сумму бонусов при регистрации
                     </p>
                   </button>
-                  <button
-                    type='button'
-                    onClick={() => setValue('welcomeRewardType', 'DISCOUNT')}
-                    className={`rounded-lg border-2 p-3 text-left transition-colors ${
-                      watch('welcomeRewardType') === 'DISCOUNT'
-                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-950'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className='flex items-center space-x-2'>
-                      <Percent className='h-5 w-5 text-purple-600' />
-                      <span className='font-medium'>Скидка</span>
-                    </div>
-                    <p className='mt-1 text-xs text-gray-600'>
-                      Процентная скидка на первую покупку
-                    </p>
-                  </button>
+                  {!project?.enablePartnerRoles && (
+                    <button
+                      type='button'
+                      onClick={() => setValue('welcomeRewardType', 'DISCOUNT')}
+                      className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                        watch('welcomeRewardType') === 'DISCOUNT'
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-950'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className='flex items-center space-x-2'>
+                        <Percent className='h-5 w-5 text-purple-600' />
+                        <span className='font-medium'>Скидка</span>
+                      </div>
+                      <p className='mt-1 text-xs text-gray-600'>
+                        Процентная скидка на первую покупку
+                      </p>
+                    </button>
+                  )}
                 </div>
 
                 {/* Conditional Fields */}
-                {watch('welcomeRewardType') === 'BONUS' ? (
+                {project?.enablePartnerRoles ||
+                watch('welcomeRewardType') === 'BONUS' ? (
                   <div className='space-y-2'>
                     <Label htmlFor='welcomeBonus'>
                       Сумма приветственных бонусов

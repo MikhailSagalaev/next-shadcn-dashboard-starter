@@ -5,9 +5,14 @@ import {
 
 describe('referral-link utilities', () => {
   it('строит org-only ссылку без персонального utm_ref', () => {
-    const result = buildOrganizationReferralLink('example.com/shop', 'xfit');
+    const result = buildOrganizationReferralLink(
+      'example.com/shop',
+      'organization-id'
+    );
 
-    expect(result).toBe('https://example.com/shop/members/signup?utm_org=xfit');
+    expect(result).toBe(
+      'https://example.com/shop/members/signup?utm_org=organization-id'
+    );
     expect(result).not.toContain('utm_ref');
   });
 
@@ -15,9 +20,22 @@ describe('referral-link utilities', () => {
     expect(
       buildOrganizationReferralLink(
         'https://example.com/members/signup',
-        'xfit'
+        'organization-id'
       )
-    ).toBe('https://example.com/members/signup?utm_org=xfit');
+    ).toBe('https://example.com/members/signup?utm_org=organization-id');
+  });
+
+  it('не зависит от изменяемого названия или slug организации', () => {
+    const beforeRename = buildOrganizationReferralLink(
+      'example.com',
+      'organization-id'
+    );
+    const afterRename = buildOrganizationReferralLink(
+      'example.com',
+      'organization-id'
+    );
+
+    expect(afterRename).toBe(beforeRename);
   });
 
   it('сохраняет персональную ссылку отдельным сценарием', () => {

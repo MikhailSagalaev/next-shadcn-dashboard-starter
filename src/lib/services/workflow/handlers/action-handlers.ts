@@ -32,6 +32,7 @@ import {
   PartnerTeamService,
   type TeamListFilter
 } from '@/lib/services/partner-team.service';
+import { resolvePartnerAccess } from '@/lib/services/partner-access';
 
 /**
  * Обработчик для action.database_query
@@ -1763,6 +1764,26 @@ ${userVariables['user.referralLink']}
           break;
 
         case 'menu_help':
+          if (userVariables['user.canRefer'] === false) {
+            messageText = `<b>❓ Помощь</b>
+
+/start — главное меню
+💰 Баланс — доступные бонусы
+🛍️ Покупки — ваши заказы
+📜 История — начисления и списания
+🏆 Уровень — условия программы лояльности`;
+            break;
+          }
+          if (userVariables['user.partnerMenuKind'] !== 'CLIENT') {
+            messageText = `<b>❓ Помощь</b>
+
+/start — главное меню
+💰 Баланс · 🛍️ Покупки · 📜 История · 🏆 Уровень
+👉 Ссылка — пригласить клиента
+👥 Команда — участники вашей структуры
+💵 Выплаты — партнёрские начисления`;
+            break;
+          }
           messageText = `<b>❓ Помощь</b>
 
 <b>🎯 Как работает бонусная система:</b>
@@ -1960,6 +1981,7 @@ export class PartnerHomeHandler extends BaseNodeHandler {
         where: { id: userId, projectId: context.projectId, isActive: true },
         select: {
           firstName: true,
+          partnerRole: true,
           totalPurchases: true,
           currentLevel: true,
           project: {
@@ -1990,20 +2012,21 @@ export class PartnerHomeHandler extends BaseNodeHandler {
         return null;
       }
 
-      const memberships = user.organizationMemberships;
-      const primary = memberships[0] ?? null;
-      const isMember = memberships.length > 0;
-      const canManage = memberships.some((membership) => membership.canManage);
       const b2bEnabled = Boolean(user.project?.enablePartnerRoles);
+      const access = resolvePartnerAccess({
+        enablePartnerRoles: b2bEnabled,
+        partnerRole: user.partnerRole,
+        memberships: user.organizationMemberships
+      });
+      const memberships = access.partnerMemberships;
+      const primary = memberships[0] ?? null;
+      const isPartner = access.isPartner;
+      const canManage = access.canManageOrganization;
       const teamEnabled =
         b2bEnabled &&
         Boolean(user.project?.enablePartnerTeamManagement) &&
-        isMember;
-      const canRefer = b2bEnabled
-        ? memberships.some(
-            (membership) => membership.canManage || membership.level !== null
-          )
-        : true;
+        memberships.length > 0;
+      const canRefer = access.canUseReferralProgram;
       const position = primary
         ? primary.title ||
           (primary.canManage
@@ -2013,7 +2036,7 @@ export class PartnerHomeHandler extends BaseNodeHandler {
               : 'Клиент организации')
         : 'Клиент';
 
-      const commission = isMember
+      const commission = isPartner
         ? await db.transaction.aggregate({
             where: {
               userId,
@@ -2037,7 +2060,7 @@ export class PartnerHomeHandler extends BaseNodeHandler {
         '<b>👋 Личный кабинет</b>',
         '',
         'Здравствуйте, ' + escapeHtml(user.firstName || 'пользователь') + '!',
-        isMember
+        memberships.length > 0
           ? '🏢 ' +
             escapeHtml(primary?.organization.name || 'Организация') +
             ' · <b>' +
@@ -2055,7 +2078,7 @@ export class PartnerHomeHandler extends BaseNodeHandler {
         '💰 Бонусный баланс: <b>' +
           formatRub(Number(balanceAgg._sum.amount ?? 0)) +
           '</b>',
-        isMember
+        isPartner
           ? '💵 Партнёрский доход: <b>' +
             formatRub(Number(commission?._sum.amount ?? 0)) +
             '</b>'
@@ -2123,7 +2146,7 @@ export class PartnerHomeHandler extends BaseNodeHandler {
       });
       this.logStep(context, node, 'partner_home rendered', 'info', {
         userId,
-        isMember,
+        isPartner,
         canManage,
         memberships: memberships.length
       });
@@ -2184,12 +2207,34 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       const me = await db.user.findFirst({
         where: { id: userId, projectId: context.projectId },
         select: {
+          partnerRole: true,
+          project: { select: { enablePartnerRoles: true } },
           organizationMemberships: {
             where: { projectId: context.projectId },
-            select: { id: true, canManage: true }
+            select: { id: true, level: true, canManage: true }
           }
         }
       });
+
+      const access = resolvePartnerAccess({
+        enablePartnerRoles: Boolean(me?.project?.enablePartnerRoles),
+        partnerRole: me?.partnerRole,
+        memberships: me?.organizationMemberships ?? []
+      });
+      if (me?.project?.enablePartnerRoles && !access.isPartner) {
+        await sendPlatformMessage(
+          context,
+          '🔒 Команда доступна только участникам партнёрской программы.',
+          {
+            replyMarkup: {
+              inline_keyboard: [
+                [{ text: '⬅️ В меню', callback_data: 'back_to_menu' }]
+              ]
+            }
+          }
+        );
+        return null;
+      }
 
       const rawFilter =
         config.filter !== undefined
@@ -2202,12 +2247,8 @@ export class PartnerTeamHandler extends BaseNodeHandler {
       ).includes(rawFilter as TeamListFilter)
         ? (rawFilter as TeamListFilter)
         : PartnerTeamService.getDefaultTeamFilter({
-            isOrganizationMember: Boolean(me?.organizationMemberships.length),
-            managesOrganization: Boolean(
-              me?.organizationMemberships.some(
-                (membership) => membership.canManage
-              )
-            )
+            isOrganizationMember: access.partnerMemberships.length > 0,
+            managesOrganization: access.canManageOrganization
           });
 
       const organizationId =
@@ -2574,6 +2615,40 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
       }
 
       const db: PrismaClient = context.services.db as PrismaClient;
+
+      const profile = await db.user.findFirst({
+        where: { id: userId, projectId: context.projectId },
+        select: {
+          partnerRole: true,
+          project: { select: { enablePartnerRoles: true } },
+          organizationMemberships: {
+            where: {
+              projectId: context.projectId,
+              organization: { isActive: true }
+            },
+            select: { level: true, canManage: true }
+          }
+        }
+      });
+      const access = resolvePartnerAccess({
+        enablePartnerRoles: Boolean(profile?.project?.enablePartnerRoles),
+        partnerRole: profile?.partnerRole,
+        memberships: profile?.organizationMemberships ?? []
+      });
+      if (profile?.project?.enablePartnerRoles && !access.isPartner) {
+        await sendPlatformMessage(
+          context,
+          '🔒 Выплаты доступны только участникам партнёрской программы.',
+          {
+            replyMarkup: {
+              inline_keyboard: [
+                [{ text: '⬅️ В меню', callback_data: 'back_to_menu' }]
+              ]
+            }
+          }
+        );
+        return null;
+      }
 
       // Доступно к выводу = активные (непотраченные, неистёкшие) бонусы.
       const balanceAgg = await db.bonus.aggregate({

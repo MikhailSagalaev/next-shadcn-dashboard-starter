@@ -42,7 +42,12 @@ beforeEach(() => {
       .mockResolvedValue({ payoutMinAmount: 0, payoutHoldDays: 0 })
   };
   (mockDb as any).user = {
-    findFirst: jest.fn().mockResolvedValue({ id: userId })
+    findFirst: jest.fn().mockResolvedValue({
+      id: userId,
+      partnerRole: 'TRAINER',
+      project: { enablePartnerRoles: true },
+      organizationMemberships: [{ level: 1, canManage: false }]
+    })
   };
   (mockDb as any).payout = {
     findUnique: jest.fn().mockResolvedValue(null),
@@ -85,6 +90,20 @@ describe('PayoutService.requestPayout', () => {
     await expect(
       PayoutService.requestPayout({ projectId, userId, amount: 0 })
     ).rejects.toThrow('больше 0');
+    expect(mockUser.spendBonuses).not.toHaveBeenCalled();
+  });
+
+  it('не разрешает вывод B2B-клиенту даже при устаревшей партнёрской роли', async () => {
+    (mockDb as any).user.findFirst = jest.fn().mockResolvedValue({
+      id: userId,
+      partnerRole: 'TRAINER',
+      project: { enablePartnerRoles: true },
+      organizationMemberships: [{ level: null, canManage: false }]
+    });
+
+    await expect(
+      PayoutService.requestPayout({ projectId, userId, amount: 500 })
+    ).rejects.toThrow('только участникам партнёрской программы');
     expect(mockUser.spendBonuses).not.toHaveBeenCalled();
   });
 

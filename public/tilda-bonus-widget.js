@@ -160,7 +160,7 @@
           var raw = localStorage.getItem(this.STORAGE_KEY);
           if (!raw) return null;
           var data = JSON.parse(raw);
-          if (!data || !data.ref) return null;
+          if (!data || (!data.ref && !data.org)) return null;
           if (data.expiresAt && Date.now() > data.expiresAt) {
             localStorage.removeItem(this.STORAGE_KEY);
             return null;
@@ -182,7 +182,7 @@
       },
 
       _saveStored: function (ref, org, widget) {
-        if (!ref) return;
+        if (!ref && !org) return;
         var ttlDays = this._ttlDays(widget);
         var payload = {
           ref: ref,
@@ -196,7 +196,7 @@
         } catch (e) {
           /* ignore */
         }
-        this._setCookie(this.COOKIE_REF, ref, widget);
+        if (ref) this._setCookie(this.COOKIE_REF, ref, widget);
         if (org) this._setCookie(this.COOKIE_ORG, org, widget);
         this._log(widget, 'saved', payload);
       },
@@ -208,7 +208,7 @@
         var ref = params.get('utm_ref') || params.get('utmRef');
         var org = params.get('utm_org') || params.get('utmOrg');
 
-        if (ref) {
+        if (ref || org) {
           this._saveStored(ref, org, widget);
           return;
         }
@@ -217,7 +217,8 @@
         if (!stored) {
           var cookieRef = this._getCookie(this.COOKIE_REF);
           var cookieOrg = this._getCookie(this.COOKIE_ORG);
-          if (cookieRef) this._saveStored(cookieRef, cookieOrg, widget);
+          if (cookieRef || cookieOrg)
+            this._saveStored(cookieRef, cookieOrg, widget);
         }
       },
 
@@ -243,12 +244,12 @@
         var org =
           (stored && stored.org) || this._getCookie(this.COOKIE_ORG) || null;
 
-        if (!ref) return;
+        if (!ref && !org) return;
 
         var forms = document.querySelectorAll('form');
         var self = this;
         forms.forEach(function (form) {
-          self._ensureHiddenInput(form, 'utm_ref', ref);
+          if (ref) self._ensureHiddenInput(form, 'utm_ref', ref);
           if (org) self._ensureHiddenInput(form, 'utm_org', org);
         });
 
