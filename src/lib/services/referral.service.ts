@@ -23,6 +23,7 @@ import type {
 } from '@/types/bonus';
 import { BonusService } from './user.service';
 import { PartnerReferralGraphService } from './partner-referral-graph.service';
+import { nonCashOrderWhere } from './orders/payment-method';
 // Crypto импорт только для server-side
 
 type ReferralProgramEntity = Prisma.ReferralProgramGetPayload<{
@@ -912,7 +913,12 @@ export class ReferralService {
           projectId,
           referredBy: { not: null },
           isActive: true,
-          totalPurchases: { gt: 0 }
+          orders: {
+            some: {
+              ...nonCashOrderWhere(),
+              accountingState: 'APPLIED'
+            }
+          }
         }
       });
 
@@ -952,21 +958,19 @@ export class ReferralService {
 
       const periodBonusPaid = Number(periodBonusSum._sum.amount || 0);
 
-      // Средний чек по проекту за период — по EARN из покупок (MANUAL/REFERRAL не учитываем)
-      const earmsForAvg = await db.transaction.findMany({
+      // Средний чек по реально учтённым безналичным заказам за период.
+      const averageOrder = await db.order.aggregate({
         where: {
-          user: { projectId },
-          type: 'EARN',
-          isReferralBonus: false,
-          createdAt: { gte: since }
+          projectId,
+          ...nonCashOrderWhere(),
+          accountingState: 'APPLIED',
+          accountedAt: { gte: since }
         },
-        select: { amount: true }
+        _avg: { accountedPurchaseAmount: true }
       });
-      const averageOrderValue =
-        earmsForAvg.length > 0
-          ? earmsForAvg.reduce((s: number, t: any) => s + Number(t.amount), 0) /
-            earmsForAvg.length
-          : 0;
+      const averageOrderValue = Number(
+        averageOrder._avg.accountedPurchaseAmount ?? 0
+      );
 
       // Топ рефереров
       const topReferrersRaw = await db.user.findMany({

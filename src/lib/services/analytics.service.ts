@@ -10,6 +10,7 @@
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { CacheService } from '@/lib/redis';
+import { nonCashOrderWhere } from '@/lib/services/orders/payment-method';
 
 export interface KPIMetrics {
   revenue: number;
@@ -63,6 +64,7 @@ export class AnalyticsService {
       const revenueResult = await db.order.aggregate({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           status: {
             in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
@@ -79,6 +81,7 @@ export class AnalyticsService {
       const orderCount = await db.order.count({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           ...dateFilter
         }
       });
@@ -107,6 +110,7 @@ export class AnalyticsService {
           projectId,
           orders: {
             some: {
+              ...nonCashOrderWhere(),
               ...dateFilter
             }
           }
@@ -288,6 +292,7 @@ export class AnalyticsService {
       const result = await db.order.aggregate({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           status: {
             in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
@@ -337,6 +342,7 @@ export class AnalyticsService {
       return await db.order.count({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           ...dateFilter
         }
       });
@@ -487,6 +493,7 @@ export class AnalyticsService {
           projectId,
           orders: {
             some: {
+              ...nonCashOrderWhere(),
               status: {
                 in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
               }
@@ -498,6 +505,7 @@ export class AnalyticsService {
           registeredAt: true,
           orders: {
             where: {
+              ...nonCashOrderWhere(),
               status: {
                 in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
               }
@@ -690,6 +698,7 @@ export class AnalyticsService {
       const orders = await db.order.findMany({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           status: {
             in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
@@ -829,6 +838,7 @@ export class AnalyticsService {
       const orders = await db.order.findMany({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           status: {
             in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
           },
@@ -928,6 +938,7 @@ export class AnalyticsService {
           orders: {
             where: {
               projectId,
+              ...nonCashOrderWhere(),
               status: {
                 in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
               }
@@ -1018,77 +1029,89 @@ export class AnalyticsService {
     }>;
   }> {
     try {
-      const totalReferrals = await db.user.count({
+      const referredUsers = await db.user.findMany({
         where: {
           projectId,
           referredBy: { not: null }
+        },
+        select: { id: true, referredBy: true }
+      });
+      const totalReferrals = referredUsers.length;
+      const referredUserIds = referredUsers.map((user) => user.id);
+      const revenueByReferredUser =
+        referredUserIds.length > 0
+          ? await db.order.groupBy({
+              by: ['userId'],
+              where: {
+                projectId,
+                ...nonCashOrderWhere(),
+                userId: { in: referredUserIds },
+                status: {
+                  in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
+                }
+              },
+              _sum: { totalAmount: true }
+            })
+          : [];
+      const revenueByUserId = new Map(
+        revenueByReferredUser.map((row) => [
+          row.userId,
+          Number(row._sum.totalAmount ?? 0)
+        ])
+      );
+      const totalRevenue = revenueByReferredUser.reduce(
+        (sum, row) => sum + Number(row._sum.totalAmount ?? 0),
+        0
+      );
+
+      const referralCountByReferrer = new Map<string, number>();
+      for (const user of referredUsers) {
+        if (!user.referredBy) continue;
+        referralCountByReferrer.set(
+          user.referredBy,
+          (referralCountByReferrer.get(user.referredBy) ?? 0) + 1
+        );
+      }
+      const topReferrerIds = [...referralCountByReferrer.entries()]
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 10)
+        .map(([referrerId]) => referrerId);
+      const referrers = await db.user.findMany({
+        where: {
+          projectId,
+          id: { in: topReferrerIds }
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true
         }
       });
-
-      const revenueResult = await db.user.aggregate({
-        where: {
-          projectId,
-          referredBy: { not: null }
-        },
-        _sum: {
-          totalPurchases: true
-        }
-      });
-      const totalRevenue = Number(revenueResult._sum.totalPurchases || 0);
-
-      const topReferrersGroup = await db.user.groupBy({
-        by: ['referredBy'],
-        where: {
-          projectId,
-          referredBy: { not: null }
-        },
-        _count: {
-          id: true
-        },
-        orderBy: {
-          _count: {
-            id: 'desc'
-          }
-        },
-        take: 10
-      });
-
-      const topReferrers = [];
-      for (const group of topReferrersGroup) {
-        if (!group.referredBy) continue;
-
-        const referrer = await db.user.findUnique({
-          where: { id: group.referredBy },
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        });
-
-        if (referrer) {
-          const refRevenue = await db.user.aggregate({
-            where: {
-              projectId,
-              referredBy: referrer.id
-            },
-            _sum: {
-              totalPurchases: true
-            }
-          });
-
-          topReferrers.push({
+      const referrerById = new Map(
+        referrers.map((referrer) => [referrer.id, referrer])
+      );
+      const topReferrers = topReferrerIds.flatMap((referrerId) => {
+        const referrer = referrerById.get(referrerId);
+        if (!referrer) return [];
+        const referralIds = referredUsers
+          .filter((user) => user.referredBy === referrerId)
+          .map((user) => user.id);
+        return [
+          {
             userId: referrer.id,
             name:
               `${referrer.firstName || ''} ${referrer.lastName || ''}`.trim() ||
               referrer.email ||
               'Unknown',
-            referrals: group._count.id,
-            revenue: Number(refRevenue._sum.totalPurchases || 0)
-          });
-        }
-      }
+            referrals: referralCountByReferrer.get(referrerId) ?? 0,
+            revenue: referralIds.reduce(
+              (sum, userId) => sum + (revenueByUserId.get(userId) ?? 0),
+              0
+            )
+          }
+        ];
+      });
 
       return {
         totalReferrals,
@@ -1123,6 +1146,7 @@ export class AnalyticsService {
           projectId,
           orders: {
             some: {
+              ...nonCashOrderWhere(),
               status: {
                 in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
               }

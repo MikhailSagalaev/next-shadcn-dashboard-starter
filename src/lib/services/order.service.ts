@@ -27,6 +27,7 @@ import {
   OrderAccountingService
 } from './orders/order-accounting.service';
 import { AdminNotificationService } from './admin-notification.service';
+import { normalizePaymentMethod } from './orders/payment-method';
 
 function toInputJson(
   value: Record<string, unknown> | undefined
@@ -115,7 +116,7 @@ export class OrderService {
           paidAmount: data.paidAmount || 0,
           bonusAmount: data.bonusAmount || 0,
           deliveryAddress: data.deliveryAddress,
-          paymentMethod: data.paymentMethod,
+          paymentMethod: normalizePaymentMethod(data.paymentMethod),
           deliveryMethod: data.deliveryMethod,
           metadata: toInputJson(data.metadata),
           items: {
@@ -449,6 +450,8 @@ export class OrderService {
       if (search) {
         where.OR = [
           { orderNumber: { contains: search, mode: 'insensitive' } },
+          { externalOrderId: { contains: search, mode: 'insensitive' } },
+          { providerPaymentId: { contains: search, mode: 'insensitive' } },
           { deliveryAddress: { contains: search, mode: 'insensitive' } },
           {
             user: {
@@ -582,7 +585,8 @@ export class OrderService {
       const changesEconomicFields =
         data.totalAmount !== undefined ||
         data.paidAmount !== undefined ||
-        data.bonusAmount !== undefined;
+        data.bonusAmount !== undefined ||
+        data.paymentMethod !== undefined;
       const accountingLockedStates = new Set([
         'APPLIED',
         'REVERSING',
@@ -600,6 +604,9 @@ export class OrderService {
 
       const updateData: Prisma.OrderUncheckedUpdateInput = {
         ...data,
+        ...(data.paymentMethod !== undefined
+          ? { paymentMethod: normalizePaymentMethod(data.paymentMethod) }
+          : {}),
         metadata: toInputJson(data.metadata)
       };
       const order = await db.order.update({

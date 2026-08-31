@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { nonCashOrderWhere } from './orders/payment-method';
 
 type FinancialSubject = {
   id: string;
@@ -29,9 +30,9 @@ function metadataOrganizationId(metadata: unknown): string | null {
 /**
  * Единый источник финансовых показателей для B2B-организации.
  *
- * `User.totalPurchases` остаётся legacy all-time счётчиком проекта. Поэтому
- * он допустим только после проверки организации зафиксированной атрибуции.
- * Для ограниченного периода покупки считаются по применённым заказам.
+ * `User.totalPurchases` остаётся legacy-счётчиком и не используется как
+ * источник статистики. Покупки считаются по применённым безналичным заказам.
+ * Наличные (`cash` / `наличные`) не входят в B2B-статистику.
  * Реферальное вознаграждение считается как EARN минус REFUND и обязательно
  * привязывается к организации события (metadata, затем legacy fallback).
  */
@@ -98,16 +99,21 @@ export class OrganizationFinancialMetricsService {
           projectId,
           userId: { in: subjectIds },
           accountingState: 'APPLIED',
-          OR: [
-            { organizationId },
-            ...(legacyPurchaseSubjectIds.length > 0
-              ? [
-                  {
-                    organizationId: null,
-                    userId: { in: legacyPurchaseSubjectIds }
-                  }
-                ]
-              : [])
+          AND: [
+            nonCashOrderWhere(),
+            {
+              OR: [
+                { organizationId },
+                ...(legacyPurchaseSubjectIds.length > 0
+                  ? [
+                      {
+                        organizationId: null,
+                        userId: { in: legacyPurchaseSubjectIds }
+                      }
+                    ]
+                  : [])
+              ]
+            }
           ],
           ...(since ? { accountedAt: { gte: since } } : {})
         },
@@ -120,14 +126,15 @@ export class OrganizationFinancialMetricsService {
           metric.totalPurchases = Number(row._sum.accountedPurchaseAmount ?? 0);
         }
       }
-    } else if (since) {
+    } else {
       const purchases = await db.order.groupBy({
         by: ['userId'],
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           userId: { in: subjectIds },
           accountingState: 'APPLIED',
-          accountedAt: { gte: since }
+          ...(since ? { accountedAt: { gte: since } } : {})
         },
         _sum: { accountedPurchaseAmount: true }
       });
@@ -137,11 +144,6 @@ export class OrganizationFinancialMetricsService {
         if (metric) {
           metric.totalPurchases = Number(row._sum.accountedPurchaseAmount ?? 0);
         }
-      }
-    } else {
-      for (const subject of subjects) {
-        const metric = metrics.get(subject.id);
-        if (metric) metric.totalPurchases = Number(subject.totalPurchases ?? 0);
       }
     }
 

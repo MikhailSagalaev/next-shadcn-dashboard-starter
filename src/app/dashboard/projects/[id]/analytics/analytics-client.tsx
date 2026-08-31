@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -25,15 +25,17 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AnalyticsOrderDetailsSheet,
+  type AnalyticsOrderDetails
+} from './analytics-order-details-sheet';
 import { motion } from 'framer-motion';
 import {
   ShoppingCart,
   Package,
   TrendingUp,
   DollarSign,
-  Calendar,
   Users,
-  GitFork,
   CreditCard
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -51,12 +53,14 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
   const [orgData, setOrgData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [orderDetails, setOrderDetails] =
+    useState<AnalyticsOrderDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const detailRequestIdRef = useRef(0);
 
-  useEffect(() => {
-    loadData();
-  }, [period, projectId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
@@ -90,6 +94,46 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
     } finally {
       setLoading(false);
     }
+  }, [period, projectId]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const openOrderDetails = async (orderId: string) => {
+    const requestId = ++detailRequestIdRef.current;
+    setDetailsOpen(true);
+    setDetailsLoading(true);
+    setDetailsError(null);
+    setOrderDetails(null);
+
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/orders/${orderId}`
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Не удалось загрузить заказ');
+      }
+      if (requestId === detailRequestIdRef.current) {
+        setOrderDetails(data);
+      }
+    } catch (error) {
+      if (requestId === detailRequestIdRef.current) {
+        setDetailsError(
+          error instanceof Error ? error.message : 'Не удалось загрузить заказ'
+        );
+      }
+    } finally {
+      if (requestId === detailRequestIdRef.current) {
+        setDetailsLoading(false);
+      }
+    }
+  };
+
+  const handleDetailsOpenChange = (open: boolean) => {
+    setDetailsOpen(open);
+    if (!open) detailRequestIdRef.current += 1;
   };
 
   if (loading) {
@@ -269,16 +313,25 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
                         })}
                       </p>
                     </div>
-                    <div className='text-right'>
-                      <p className='font-semibold'>
-                        {order.totalAmount.toLocaleString('ru-RU')} ₽
-                      </p>
-                      {order.bonusAmount > 0 && (
-                        <p className='text-xs text-amber-500'>
-                          -{order.bonusAmount.toLocaleString('ru-RU')} ₽
-                          бонусами
+                    <div className='flex items-center gap-3'>
+                      <div className='text-right'>
+                        <p className='font-semibold'>
+                          {order.totalAmount.toLocaleString('ru-RU')} ₽
                         </p>
-                      )}
+                        {order.bonusAmount > 0 && (
+                          <p className='text-xs text-amber-500'>
+                            -{order.bonusAmount.toLocaleString('ru-RU')} ₽
+                            бонусами
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        onClick={() => void openOrderDetails(order.id)}
+                      >
+                        Детали
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -587,6 +640,13 @@ export function AnalyticsClient({ projectId }: AnalyticsClientProps) {
           </TabsContent>
         )}
       </Tabs>
+      <AnalyticsOrderDetailsSheet
+        open={detailsOpen}
+        onOpenChange={handleDetailsOpenChange}
+        order={orderDetails}
+        loading={detailsLoading}
+        error={detailsError}
+      />
     </div>
   );
 }

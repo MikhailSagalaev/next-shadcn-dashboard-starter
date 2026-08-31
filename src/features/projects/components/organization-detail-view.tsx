@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -519,6 +519,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
     'hierarchy'
   );
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const memberTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [hierarchyPeriod, setHierarchyPeriod] =
     useState<HierarchyPeriod>('30d');
   const [hierarchyData, setHierarchyData] =
@@ -1006,6 +1007,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
     setMemberSortField(field);
     setMemberSortOrder(field === 'name' ? 'asc' : 'desc');
   };
+  const openMemberSheet = (memberId: string, trigger: HTMLButtonElement) => {
+    memberTriggerRef.current = trigger;
+    setSelectedMemberId(memberId);
+  };
 
   return (
     <div className='space-y-6'>
@@ -1195,7 +1200,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                 period={hierarchyPeriod}
                 organizationId={organizationId}
                 onPeriodChange={setHierarchyPeriod}
-                onMemberOpen={setSelectedMemberId}
+                onMemberOpen={openMemberSheet}
               />
             ) : null
           ) : (
@@ -1288,8 +1293,10 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                               <div className='flex items-center gap-2 font-medium'>
                                 <button
                                   type='button'
-                                  className='hover:text-primary focus-visible:ring-ring rounded-sm text-start underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
-                                  onClick={() => setSelectedMemberId(m.id)}
+                                  className='hover:text-primary focus-visible:ring-ring min-h-8 rounded-sm py-1 text-start underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
+                                  onClick={(event) =>
+                                    openMemberSheet(m.id, event.currentTarget)
+                                  }
                                   aria-label={`Открыть карточку участника: ${m.name}`}
                                 >
                                   {m.name}
@@ -1465,11 +1472,6 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                         )}
                       </TableBody>
                     </Table>
-                    {filteredMembers.length === 0 && (
-                      <p className='text-muted-foreground p-6 text-center text-sm'>
-                        По этому запросу участников не найдено.
-                      </p>
-                    )}
                   </>
                 )}
               </CardContent>
@@ -1522,6 +1524,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
         organizationId={organizationId}
         member={selectedMember}
         open={Boolean(selectedMember)}
+        returnFocusRef={memberTriggerRef}
         onOpenChange={(open) => {
           if (!open) setSelectedMemberId(null);
         }}

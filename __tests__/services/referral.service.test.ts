@@ -20,6 +20,10 @@ describe('ReferralService.getReferralStats', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.defineProperty(mockDb, 'order', {
+      configurable: true,
+      value: { aggregate: jest.fn() }
+    });
   });
 
   it('computes totals, period metrics and UTM sources', async () => {
@@ -33,9 +37,9 @@ describe('ReferralService.getReferralStats', () => {
       .mockResolvedValueOnce({ _sum: { amount: 123.45 } }) // totalReferralBonuses
       .mockResolvedValueOnce({ _sum: { amount: 23.45 } }); // periodBonus
 
-    mockDb.transaction.findMany = jest
-      .fn()
-      .mockResolvedValue([{ amount: 100 }, { amount: 50 }] as any);
+    mockDb.order.aggregate = jest.fn().mockResolvedValue({
+      _avg: { accountedPurchaseAmount: 75 }
+    } as any);
 
     mockDb.user.findMany = jest.fn().mockResolvedValue([] as any);
 
@@ -56,6 +60,19 @@ describe('ReferralService.getReferralStats', () => {
     expect(stats.periodBonusPaid).toBeCloseTo(23.45);
     expect(stats.averageOrderValue).toBeGreaterThan(0);
     expect(stats.utmSources[0].utm_source).toBe('ads');
+    expect(mockDb.user.count).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          orders: {
+            some: expect.objectContaining({
+              accountingState: 'APPLIED',
+              OR: expect.any(Array)
+            })
+          }
+        })
+      })
+    );
   });
 });
 

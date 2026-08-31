@@ -7,6 +7,7 @@ import { splitFullName } from '@/lib/user-display';
 import { logger } from '@/lib/logger';
 import { AdminNotificationService } from '@/lib/services/admin-notification.service';
 import { StockReservationService } from '@/lib/services/stock-reservation.service';
+import { isCashPaymentMethod, normalizePaymentMethod } from './payment-method';
 
 export interface OrderProcessingResult {
   success: boolean;
@@ -16,10 +17,9 @@ export interface OrderProcessingResult {
 
 export class OrderProcessingService {
   private static isCashPayment(order: NormalizedOrder): boolean {
-    const paymentSystem = String(order.raw?.payment?.sys ?? '')
-      .trim()
-      .toLocaleLowerCase('ru-RU');
-    return paymentSystem === 'наличные';
+    return isCashPaymentMethod(
+      order.paymentSystem ?? order.raw?.payment?.sys ?? null
+    );
   }
 
   static async processOrder(
@@ -240,7 +240,10 @@ export class OrderProcessingService {
           totalAmount: order.amount,
           paidAmount: isCashPayment ? 0 : order.amount,
           bonusAmount: 0,
-          paymentMethod: order.raw?.payment?.sys || 'unknown',
+          paymentMethod:
+            normalizePaymentMethod(
+              order.paymentSystem ?? order.raw?.payment?.sys
+            ) || 'unknown',
           deliveryMethod: order.raw?.payment?.delivery || null,
           deliveryAddress: order.raw?.payment?.delivery_address || null,
           metadata: {
@@ -249,6 +252,9 @@ export class OrderProcessingService {
             utmSource: order.utmSource,
             requestedBonusAmount: order.appliedBonuses,
             cashPending: isCashPayment,
+            // Храним исходный вебхук целиком, чтобы аналитика могла показать
+            // не только нормализованные поля, но и все данные от Tilda.
+            incomingPayload: order.raw ?? null,
 
             // Данные клиента
             customerName: order.name,

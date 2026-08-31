@@ -15,6 +15,7 @@ import { ReferralService } from '../referral.service';
 import { BonusLevelService } from '../bonus-level.service';
 import { PartnerReferralGraphService } from '../partner-referral-graph.service';
 import { resolvePartnerAccess } from '../partner-access';
+import { nonCashOrderWhere } from '../orders/payment-method';
 
 export interface UserProfileData {
   // Основная информация
@@ -116,6 +117,19 @@ export class UserVariablesService {
         return {};
       }
 
+      const purchaseAggregate = await db.order.aggregate({
+        where: {
+          projectId,
+          userId,
+          ...nonCashOrderWhere(),
+          accountingState: 'APPLIED'
+        },
+        _sum: { accountedPurchaseAmount: true }
+      });
+      const totalPurchases = Number(
+        purchaseAggregate._sum.accountedPurchaseAmount ?? 0
+      );
+
       logger.debug('✅ Profile data received', {
         firstName: profile.firstName,
         balance: profile.balance,
@@ -147,7 +161,7 @@ export class UserVariablesService {
       try {
         progressData = await BonusLevelService.calculateProgressToNextLevel(
           projectId,
-          profile.totalPurchases
+          totalPurchases
         );
         logger.info(
           `🚀 [PERF] calculateProgressToNextLevel took ${Date.now() - progressStartTime}ms`,
@@ -291,8 +305,8 @@ export class UserVariablesService {
         'user.totalEarnedFormatted': `${Number(profile.totalEarned).toFixed(2)} бонусов`,
         'user.totalSpent': profile.totalSpent,
         'user.totalSpentFormatted': `${Number(profile.totalSpent).toFixed(2)} бонусов`,
-        'user.totalPurchases': profile.totalPurchases,
-        'user.totalPurchasesFormatted': `${profile.totalPurchases} руб.`,
+        'user.totalPurchases': totalPurchases,
+        'user.totalPurchasesFormatted': `${totalPurchases} руб.`,
         'user.expiringBonuses': profile.expiringBonuses || 0, // ✨ НОВОЕ
         'user.expiringBonusesFormatted': `${Number(profile.expiringBonuses || 0)} бонусов`,
 

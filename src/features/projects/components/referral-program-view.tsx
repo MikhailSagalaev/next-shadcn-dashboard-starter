@@ -252,7 +252,8 @@ export function ReferralProgramView({ projectId }: ReferralProgramViewProps) {
             </Button>
           )}
           <Badge variant={referralProgram?.isActive ? 'default' : 'secondary'}>
-            {referralProgram?.isActive ? 'Активна' : 'Неактивна'}
+            Клиентская часть:{' '}
+            {referralProgram?.isActive ? 'активна' : 'неактивна'}
           </Badge>
         </div>
       </div>

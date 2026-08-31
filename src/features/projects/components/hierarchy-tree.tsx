@@ -79,7 +79,7 @@ interface HierarchyTreeProps {
   period: HierarchyPeriod;
   organizationId?: string | null;
   onPeriodChange: (period: HierarchyPeriod) => void;
-  onMemberOpen?: (userId: string) => void;
+  onMemberOpen?: (userId: string, trigger: HTMLButtonElement) => void;
 }
 
 const PERIOD_LABEL: Record<HierarchyPeriod, string> = {
@@ -185,7 +185,7 @@ interface NodeRowProps {
   isHighlighted: boolean;
   query: string;
   onToggle: () => void;
-  onOpen?: () => void;
+  onOpen?: (trigger: HTMLButtonElement) => void;
   depth: number;
 }
 
@@ -233,8 +233,8 @@ function NodeRow({
               {onOpen ? (
                 <button
                   type='button'
-                  className='hover:text-primary focus-visible:ring-ring rounded-sm text-start font-medium underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
-                  onClick={onOpen}
+                  className='hover:text-primary focus-visible:ring-ring min-h-8 rounded-sm py-1 text-start font-medium underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
+                  onClick={(event) => onOpen(event.currentTarget)}
                   aria-label={`Открыть карточку участника: ${node.name}`}
                 >
                   <Highlight text={node.name} query={query} />
@@ -615,7 +615,9 @@ export function HierarchyTree({
                     query={debouncedSearch}
                     onToggle={() => toggleId(node.id)}
                     onOpen={
-                      onMemberOpen ? () => onMemberOpen(node.id) : undefined
+                      onMemberOpen
+                        ? (trigger) => onMemberOpen(node.id, trigger)
+                        : undefined
                     }
                   />
                 ))

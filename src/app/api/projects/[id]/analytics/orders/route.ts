@@ -8,6 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCurrentAdmin } from '@/lib/auth';
+import {
+  NON_CASH_ORDER_SQL,
+  nonCashOrderWhere
+} from '@/lib/services/orders/payment-method';
 
 export async function GET(
   req: NextRequest,
@@ -57,6 +61,7 @@ export async function GET(
       db.order.findMany({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           createdAt: { gte: startDate }
         },
         include: {
@@ -83,6 +88,7 @@ export async function GET(
       db.order.aggregate({
         where: {
           projectId,
+          ...nonCashOrderWhere(),
           createdAt: { gte: startDate }
         },
         _count: { id: true },
@@ -102,6 +108,7 @@ export async function GET(
         where: {
           order: {
             projectId,
+            ...nonCashOrderWhere(),
             createdAt: { gte: startDate }
           }
         },
@@ -132,6 +139,7 @@ export async function GET(
       FROM orders
       WHERE project_id = ${projectId}
         AND created_at >= ${startDate}
+        AND ${NON_CASH_ORDER_SQL}
       GROUP BY DATE(created_at)
       ORDER BY date ASC
     `;

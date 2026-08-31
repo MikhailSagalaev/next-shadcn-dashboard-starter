@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject
+} from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
@@ -116,6 +122,7 @@ interface OrganizationMemberSheetProps {
   member: OrganizationMemberSheetMember | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   onEdit: (member: OrganizationMemberSheetMember) => void;
   onTransfer: (member: OrganizationMemberSheetMember) => void;
   onRemove: (member: OrganizationMemberSheetMember) => void;
@@ -173,6 +180,7 @@ export function OrganizationMemberSheet({
   member,
   open,
   onOpenChange,
+  returnFocusRef,
   onEdit,
   onTransfer,
   onRemove
@@ -250,7 +258,16 @@ export function OrganizationMemberSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className='w-full gap-0 sm:max-w-2xl'>
+      <SheetContent
+        className='w-full gap-0 sm:max-w-2xl'
+        onCloseAutoFocus={(event) => {
+          const target = returnFocusRef?.current;
+          if (target?.isConnected) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         <SheetHeader className='border-b px-5 py-4 pe-12'>
           <div className='flex flex-wrap items-center gap-2'>
             <SheetTitle className='text-lg'>

@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { BonusService, UserService } from '@/lib/services/user.service';
 import { ReferralService } from '@/lib/services/referral.service';
 import { resolveFirstPurchaseDiscount } from '@/lib/services/first-purchase-discount.service';
+import { isCashPaymentMethod } from './payment-method';
 
 export class OrderAccountingConflictError extends Error {
   readonly code = 'ORDER_ACCOUNTING_CONFLICT';
@@ -121,6 +122,35 @@ export class OrderAccountingService {
       where: { id: orderId, projectId }
     });
     if (!order) throw new Error('Заказ не найден');
+
+    // Cash orders remain operationally visible, but confirmation must not
+    // increase purchases, levels, bonuses, referral payouts or statistics.
+    if (
+      isCashPaymentMethod(order.paymentMethod) &&
+      order.accountingState === 'NOT_APPLIED' &&
+      input.status === 'CONFIRMED'
+    ) {
+      await db.$transaction([
+        db.order.update({
+          where: { id: order.id },
+          data: { status: input.status }
+        }),
+        db.orderHistory.create({
+          data: {
+            orderId: order.id,
+            status: input.status,
+            comment: input.comment,
+            changedBy: input.changedBy,
+            metadata: { accountingExcluded: true, reason: 'cash_payment' }
+          }
+        })
+      ]);
+
+      return db.order.findUniqueOrThrow({
+        where: { id: order.id },
+        include: orderInclude
+      });
+    }
 
     const isReversalTarget =
       input.status === 'CANCELLED' || input.status === 'REFUNDED';

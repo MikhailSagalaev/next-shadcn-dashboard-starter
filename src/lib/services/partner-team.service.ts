@@ -14,6 +14,7 @@ import { PartnerNotificationService } from './partner-notification.service';
 import { AdminNotificationService } from './admin-notification.service';
 import { ReferralCommissionService } from './referral-commission.service';
 import { PartnerReferralGraphService } from './partner-referral-graph.service';
+import { OrganizationFinancialMetricsService } from './organization-financial-metrics.service';
 
 export type TeamListFilter = 'direct' | 'clients' | 'partners' | 'all';
 
@@ -328,13 +329,22 @@ export class PartnerTeamService {
       targetIds.length > 0
         ? await db.user.findMany({
             where: { projectId, id: { in: targetIds } },
-            select: { id: true, totalPurchases: true }
+            select: { id: true, totalPurchases: true, organizationId: true }
           })
         : [];
+    const financialMetrics = await OrganizationFinancialMetricsService.getMany({
+      projectId,
+      organizationId,
+      subjects: summaryProfiles.map((profile) => ({
+        id: profile.id,
+        totalPurchases: profile.totalPurchases,
+        legacyOrganizationId: profile.organizationId
+      }))
+    });
     const purchasesById = new Map(
       summaryProfiles.map((profile) => [
         profile.id,
-        Number(profile.totalPurchases ?? 0)
+        financialMetrics.get(profile.id)?.totalPurchases ?? 0
       ])
     );
     const originalPosition = new Map(targetIds.map((id, index) => [id, index]));
@@ -361,7 +371,7 @@ export class PartnerTeamService {
         : null;
     const summary = {
       totalPurchases: summaryProfiles.reduce(
-        (sum, profile) => sum + Number(profile.totalPurchases ?? 0),
+        (sum, profile) => sum + (purchasesById.get(profile.id) ?? 0),
         0
       ),
       personalCommission: Number(personalCommission?._sum.amount ?? 0)
@@ -453,7 +463,7 @@ export class PartnerTeamService {
         canManageOrganization: membership?.canManage ?? false,
         registeredAt: p.registeredAt.toISOString(),
         isDirect: directSet.has(p.id),
-        totalPurchases: Number(p.totalPurchases ?? 0),
+        totalPurchases: purchasesById.get(p.id) ?? 0,
         commissionEarned: commissionByReferral.get(p.id) ?? 0
       });
     }

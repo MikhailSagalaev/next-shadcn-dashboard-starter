@@ -5,6 +5,7 @@ import { AnalyticsService } from '@/lib/services/analytics.service';
 import { logger } from '@/lib/logger';
 import { CacheService } from '@/lib/redis';
 import { requireProjectAccess } from '@/lib/with-project-access';
+import { nonCashOrderWhere } from '@/lib/services/orders/payment-method';
 
 export async function GET(
   request: NextRequest,
@@ -26,7 +27,7 @@ export async function GET(
     }
 
     const analytics = await CacheService.getOrSet(
-      `analytics:${id}:v2`, // Incremented cache version
+      `analytics:${id}:v3`, // cash orders excluded from purchase statistics
       async () => {
         const now = new Date();
         const thirtyDaysAgo = new Date(
@@ -209,28 +210,49 @@ export async function GET(
                   .slice(0, 10) // Берем только топ-10 после сортировки
             ),
           db.user
-            .groupBy({
-              by: ['currentLevel'],
+            .findMany({
               where: { projectId: id },
-              _count: { id: true },
-              _avg: { totalPurchases: true }
+              select: {
+                currentLevel: true,
+                orders: {
+                  where: {
+                    ...nonCashOrderWhere(),
+                    accountingState: 'APPLIED'
+                  },
+                  select: { accountedPurchaseAmount: true }
+                }
+              }
             })
-            .then(
-              (
-                levels: Array<{
-                  currentLevel: string | null;
-                  _count: { id: number };
-                  _avg: { totalPurchases: any };
-                }>
-              ) =>
-                levels
-                  .map((l) => ({
-                    level: l.currentLevel,
-                    user_count: l._count.id,
-                    avg_purchases: l._avg.totalPurchases
-                  }))
-                  .sort((a: any, b: any) => b.user_count - a.user_count)
-            ),
+            .then((users) => {
+              const levels = new Map<
+                string,
+                { userCount: number; purchaseTotal: number }
+              >();
+              for (const user of users) {
+                const level = user.currentLevel || 'Базовый';
+                const current = levels.get(level) ?? {
+                  userCount: 0,
+                  purchaseTotal: 0
+                };
+                current.userCount += 1;
+                current.purchaseTotal += user.orders.reduce(
+                  (sum, order) =>
+                    sum + Number(order.accountedPurchaseAmount ?? 0),
+                  0
+                );
+                levels.set(level, current);
+              }
+              return [...levels.entries()]
+                .map(([level, value]) => ({
+                  level,
+                  user_count: value.userCount,
+                  avg_purchases:
+                    value.userCount > 0
+                      ? value.purchaseTotal / value.userCount
+                      : 0
+                }))
+                .sort((left, right) => right.user_count - left.user_count);
+            }),
           db.bonusLevel.findMany({
             where: { projectId: id, isActive: true },
             select: {

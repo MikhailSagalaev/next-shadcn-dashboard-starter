@@ -8,6 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCurrentAdmin } from '@/lib/auth';
+import {
+  NON_CASH_ORDER_SQL,
+  nonCashOrderWhere
+} from '@/lib/services/orders/payment-method';
 
 export async function GET(
   req: NextRequest,
@@ -58,6 +62,7 @@ export async function GET(
         items: {
           where: {
             order: {
+              ...nonCashOrderWhere(),
               createdAt: { gte: startDate }
             }
           },
@@ -125,6 +130,7 @@ export async function GET(
       INNER JOIN orders o ON o.id = oi.order_id
       WHERE pc.project_id = ${projectId}
         AND o.created_at >= ${startDate}
+        AND ${NON_CASH_ORDER_SQL}
       GROUP BY pc.id, pc.name
       ORDER BY total DESC
     `;

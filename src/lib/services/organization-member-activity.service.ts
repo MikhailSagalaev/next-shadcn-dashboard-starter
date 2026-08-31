@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { nonCashOrderWhere } from './orders/payment-method';
 
 export type OrganizationActivityPeriod = 'today' | '7d' | '30d' | 'all';
 
@@ -264,9 +265,14 @@ export class OrganizationMemberActivityService {
             where: {
               projectId: params.projectId,
               userId: params.userId,
-              OR: [
-                { organizationId: params.organizationId },
-                { organizationId: null }
+              AND: [
+                nonCashOrderWhere(),
+                {
+                  OR: [
+                    { organizationId: params.organizationId },
+                    { organizationId: null }
+                  ]
+                }
               ],
               ...(since ? { createdAt: { gte: since } } : {})
             },
@@ -285,6 +291,7 @@ export class OrganizationMemberActivityService {
         : db.order.findMany({
             where: {
               projectId: params.projectId,
+              ...nonCashOrderWhere(),
               userId: params.userId,
               organizationId: params.organizationId,
               ...(since ? { createdAt: { gte: since } } : {})
@@ -339,9 +346,14 @@ export class OrganizationMemberActivityService {
         ? db.order.findMany({
             where: {
               projectId: params.projectId,
-              OR: [
-                { id: { in: orderReferences } },
-                { orderNumber: { in: orderReferences } }
+              AND: [
+                nonCashOrderWhere(),
+                {
+                  OR: [
+                    { id: { in: orderReferences } },
+                    { orderNumber: { in: orderReferences } }
+                  ]
+                }
               ]
             },
             select: {

@@ -33,6 +33,8 @@ import {
   type TeamListFilter
 } from '@/lib/services/partner-team.service';
 import { resolvePartnerAccess } from '@/lib/services/partner-access';
+import { nonCashOrderWhere } from '@/lib/services/orders/payment-method';
+import { OrganizationFinancialMetricsService } from '@/lib/services/organization-financial-metrics.service';
 
 /**
  * Обработчик для action.database_query
@@ -2055,6 +2057,15 @@ export class PartnerHomeHandler extends BaseNodeHandler {
         },
         _sum: { amount: true }
       });
+      const purchaseAgg = await db.order.aggregate({
+        where: {
+          projectId: context.projectId,
+          userId,
+          ...nonCashOrderWhere(),
+          accountingState: 'APPLIED'
+        },
+        _sum: { accountedPurchaseAmount: true }
+      });
 
       const lines = [
         '<b>👋 Личный кабинет</b>',
@@ -2071,7 +2082,9 @@ export class PartnerHomeHandler extends BaseNodeHandler {
           ? 'Связанных организаций: <b>' + memberships.length + '</b>'
           : '',
         '',
-        '🛍️ Покупки: <b>' + formatRub(Number(user.totalPurchases)) + '</b>',
+        '🛍️ Покупки: <b>' +
+          formatRub(Number(purchaseAgg._sum.accountedPurchaseAmount ?? 0)) +
+          '</b>',
         '🏆 Уровень лояльности: <b>' +
           escapeHtml(user.currentLevel || 'Базовый') +
           '</b>',
@@ -2496,6 +2509,7 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
             phone: true,
             email: true,
             partnerRole: true,
+            organizationId: true,
             registeredAt: true,
             totalPurchases: true,
             currentLevel: true
@@ -2523,6 +2537,20 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
 
       const commissionEarned = Number(commissionAgg._sum.amount ?? 0);
       const commissionTxCount = commissionAgg._count._all ?? 0;
+      const subjectFinancialMetrics =
+        await OrganizationFinancialMetricsService.getMany({
+          projectId: context.projectId,
+          organizationId: organizationId || null,
+          subjects: [
+            {
+              id: subject.id,
+              totalPurchases: subject.totalPurchases,
+              legacyOrganizationId: subject.organizationId
+            }
+          ]
+        });
+      const subjectPurchases =
+        subjectFinancialMetrics.get(subject.id)?.totalPurchases ?? 0;
       const registered = new Intl.DateTimeFormat('ru-RU', {
         day: '2-digit',
         month: '2-digit',
@@ -2537,7 +2565,7 @@ export class PartnerSubjectStatsHandler extends BaseNodeHandler {
         `Регистрация: ${registered}`,
         `Уровень: ${subject.currentLevel || 'Базовый'}`,
         '',
-        `💼 Оборот: <b>${formatRub(Number(subject.totalPurchases))}</b>`,
+        `💼 Оборот: <b>${formatRub(subjectPurchases)}</b>`,
         `👥 Прямых рефералов: <b>${directCount}</b>`,
         `💰 Ваша комиссия с этого подопечного: <b>${formatRub(commissionEarned)}</b> (${commissionTxCount} начислений)`
       ].filter(Boolean);
@@ -3028,17 +3056,29 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
               firstName: true,
               lastName: true,
               phone: true,
-              totalPurchases: true
+              totalPurchases: true,
+              organizationId: true
             }
           }
         }
       });
 
       const levelCounts = new Map<number, number>();
+      const financialMetrics =
+        await OrganizationFinancialMetricsService.getMany({
+          projectId: context.projectId,
+          organizationId: selectedOrganization.organizationId,
+          subjects: memberships.map((membership) => ({
+            id: membership.user.id,
+            totalPurchases: membership.user.totalPurchases,
+            legacyOrganizationId: membership.user.organizationId
+          }))
+        });
       let clientCount = 0;
       let totalPurchases = 0;
       for (const membership of memberships) {
-        totalPurchases += Number(membership.user.totalPurchases);
+        totalPurchases +=
+          financialMetrics.get(membership.user.id)?.totalPurchases ?? 0;
         if (membership.level === null && !membership.canManage) {
           clientCount += 1;
           continue;
@@ -3072,7 +3112,8 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
         .filter((membership) => membership.level !== null)
         .sort(
           (left, right) =>
-            Number(right.user.totalPurchases) - Number(left.user.totalPurchases)
+            (financialMetrics.get(right.user.id)?.totalPurchases ?? 0) -
+            (financialMetrics.get(left.user.id)?.totalPurchases ?? 0)
         )
         .slice(0, topLimit);
       if (topMembers.length > 0) {
@@ -3084,7 +3125,9 @@ export class PartnerOrgSummaryHandler extends BaseNodeHandler {
               '. ' +
               escapeHtml(formatName(membership.user)) +
               ' — ' +
-              formatRub(Number(membership.user.totalPurchases))
+              formatRub(
+                financialMetrics.get(membership.user.id)?.totalPurchases ?? 0
+              )
           );
         });
       }

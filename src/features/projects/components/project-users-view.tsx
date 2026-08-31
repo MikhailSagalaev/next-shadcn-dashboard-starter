@@ -146,6 +146,59 @@ interface UserWithBonuses extends User {
   };
 }
 
+interface CustomerOrderPreview {
+  id: string;
+  orderNumber: string;
+  status: string;
+  totalAmount: number | string;
+  paidAmount: number | string;
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  createdAt: string;
+  items: Array<{ id: string }>;
+}
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Новый',
+  CONFIRMED: 'Подтверждён',
+  PROCESSING: 'В обработке',
+  SHIPPED: 'Отправлен',
+  DELIVERED: 'Доставлен',
+  CANCELLED: 'Отменён',
+  REFUNDED: 'Возвращён'
+};
+
+function getTransactionOrderReference(transaction: {
+  description?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): string | null {
+  const metadata = transaction.metadata;
+  const reference =
+    metadata?.orderInternalId ??
+    metadata?.orderId ??
+    metadata?.orderNumber ??
+    metadata?.externalOrderId;
+
+  if (typeof reference === 'string' && reference.trim()) {
+    return reference.trim();
+  }
+
+  if (typeof reference === 'number') {
+    return String(reference);
+  }
+
+  const descriptionMatch = transaction.description?.match(
+    /(?:order|заказ)\s*#?\s*([a-z0-9_-]+)/i
+  );
+
+  return descriptionMatch?.[1] ?? null;
+}
+
+function isCashOrder(order: CustomerOrderPreview) {
+  const paymentMethod = order.paymentMethod?.trim().toLocaleLowerCase('ru-RU');
+  return paymentMethod === 'cash' || paymentMethod === 'наличные';
+}
+
 export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -171,6 +224,12 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     'bonus_award' | 'bonus_deduct' | 'notification'
   >('bonus_award');
   const [profileUser, setProfileUser] = useState<UserWithBonuses | null>(null);
+  const [profileOrders, setProfileOrders] = useState<CustomerOrderPreview[]>(
+    []
+  );
+  const [profileOrdersTotal, setProfileOrdersTotal] = useState(0);
+  const [profileOrdersPage, setProfileOrdersPage] = useState(1);
+  const [profileOrdersLoading, setProfileOrdersLoading] = useState(false);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [isSelectAllMode, setIsSelectAllMode] = useState(false);
@@ -285,10 +344,47 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
     sortOrder
   ]);
 
+  const loadProfileOrders = useCallback(
+    async (userId: string, page = 1) => {
+      setProfileOrdersLoading(true);
+      setProfileOrdersPage(page);
+
+      try {
+        const response = await fetch(
+          `/api/projects/${projectId}/orders?userId=${encodeURIComponent(userId)}&page=${page}&pageSize=20`,
+          { cache: 'no-store' }
+        );
+
+        if (!response.ok) {
+          throw new Error('Не удалось загрузить заказы покупателя');
+        }
+
+        const data = await response.json();
+        setProfileOrders(data.orders || []);
+        setProfileOrdersTotal(data.total || 0);
+      } catch (error) {
+        console.error('Ошибка загрузки заказов покупателя:', error);
+        setProfileOrders([]);
+        setProfileOrdersTotal(0);
+        toast({
+          title: 'Не удалось загрузить заказы',
+          description: 'Попробуйте обновить вкладку ещё раз.',
+          variant: 'destructive'
+        });
+      } finally {
+        setProfileOrdersLoading(false);
+      }
+    },
+    [projectId, toast]
+  );
+
   const handleUserProfile = useCallback(
     async (user: DisplayUser) => {
       // Устанавливаем базовые данные пользователя
       setProfileUser(user as unknown as UserWithBonuses);
+      setProfileOrders([]);
+      setProfileOrdersTotal(0);
+      void loadProfileOrders(user.id);
 
       // Phase 2: подтянем актуальные роль и outbound-план из единого GET
       // /api/projects/[id]/users/[userId] — список может быть кэширован.
@@ -373,7 +469,7 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
         }
       }
     },
-    [projectId, project]
+    [projectId, project, loadProfileOrders]
   );
 
   // Stats data. expiringSoonBonuses/monthlyGrowth опущены — реальных данных
@@ -996,6 +1092,65 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
       setHistoryLoading(false);
     }
   };
+
+  const handleOpenOrder = useCallback(
+    async (orderReference: string) => {
+      const encodedReference = encodeURIComponent(orderReference);
+
+      try {
+        // Новые операции могут хранить внутренний ID заказа. Старые чаще
+        // содержат только его номер, поэтому после прямой проверки ищем по номеру.
+        const directResponse = await fetch(
+          `/api/projects/${projectId}/orders/${encodedReference}`,
+          { cache: 'no-store' }
+        );
+
+        if (directResponse.ok) {
+          const order = await directResponse.json();
+          setShowHistoryDialog(false);
+          setProfileUser(null);
+          router.push(`/dashboard/projects/${projectId}/orders/${order.id}`);
+          return;
+        }
+
+        const searchResponse = await fetch(
+          `/api/projects/${projectId}/orders?search=${encodedReference}&pageSize=20`,
+          { cache: 'no-store' }
+        );
+
+        if (!searchResponse.ok) {
+          throw new Error('Не удалось найти заказ');
+        }
+
+        const data = await searchResponse.json();
+        const order = (data.orders || []).find(
+          (item: CustomerOrderPreview) =>
+            item.orderNumber === orderReference || item.id === orderReference
+        );
+
+        if (!order) {
+          toast({
+            title: 'Заказ не найден',
+            description: `Не удалось найти заказ ${orderReference}.`,
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        setShowHistoryDialog(false);
+        setProfileUser(null);
+        router.push(`/dashboard/projects/${projectId}/orders/${order.id}`);
+      } catch (error) {
+        console.error('Ошибка открытия заказа:', error);
+        toast({
+          title: 'Не удалось открыть заказ',
+          description: 'Попробуйте ещё раз.',
+          variant: 'destructive'
+        });
+      }
+    },
+    [projectId, router, toast]
+  );
 
   const handleOpenDeductionDialog = (user: DisplayUser) => {
     setSelectedUser(user as unknown as UserWithBonuses);
@@ -1646,8 +1801,9 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
               </div>
 
               <Tabs defaultValue='profile' className='w-full'>
-                <TabsList className='grid w-full grid-cols-3'>
+                <TabsList className='grid w-full grid-cols-2 sm:grid-cols-4'>
                   <TabsTrigger value='profile'>Профиль</TabsTrigger>
+                  <TabsTrigger value='orders'>Заказы</TabsTrigger>
                   <TabsTrigger value='partnership'>Партнёрство</TabsTrigger>
                   <TabsTrigger value='referrals'>Рефералы</TabsTrigger>
                 </TabsList>
@@ -1752,6 +1908,131 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                     projectId={projectId}
                     readOnly={false}
                   />
+                </TabsContent>
+
+                <TabsContent value='orders' className='pt-4'>
+                  <div className='flex flex-col gap-3'>
+                    <div className='flex flex-wrap items-baseline justify-between gap-2'>
+                      <div>
+                        <h4 className='font-medium'>Заказы покупателя</h4>
+                        <p className='text-muted-foreground text-sm'>
+                          Все поступившие заказы. Наличные видны здесь, но не
+                          учитываются в аналитике и бонусах.
+                        </p>
+                      </div>
+                      <span className='text-muted-foreground text-sm'>
+                        Всего: {profileOrdersTotal}
+                      </span>
+                    </div>
+
+                    {profileOrdersLoading ? (
+                      <div className='text-muted-foreground rounded-md border p-6 text-center text-sm'>
+                        Загружаем заказы...
+                      </div>
+                    ) : profileOrders.length === 0 ? (
+                      <div className='text-muted-foreground rounded-md border p-6 text-center text-sm'>
+                        У покупателя пока нет заказов.
+                      </div>
+                    ) : (
+                      <div className='flex flex-col gap-2'>
+                        {profileOrders.map((order) => (
+                          <div
+                            key={order.id}
+                            className='flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between'
+                          >
+                            <div className='flex min-w-0 flex-col gap-1'>
+                              <div className='flex flex-wrap items-center gap-2'>
+                                <span className='font-medium'>
+                                  Заказ #{order.orderNumber}
+                                </span>
+                                <Badge variant='secondary'>
+                                  {ORDER_STATUS_LABELS[order.status] ||
+                                    order.status}
+                                </Badge>
+                                {isCashOrder(order) && (
+                                  <Badge variant='outline'>
+                                    Наличные · не в статистике
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className='text-muted-foreground text-sm'>
+                                {new Date(order.createdAt).toLocaleString(
+                                  'ru-RU'
+                                )}
+                                {' · '}
+                                {order.items.length}{' '}
+                                {order.items.length === 1 ? 'товар' : 'товаров'}
+                                {order.paymentMethod
+                                  ? ` · ${order.paymentMethod}`
+                                  : ''}
+                              </span>
+                            </div>
+                            <div className='flex flex-wrap items-center gap-3 sm:justify-end'>
+                              <span className='font-medium'>
+                                {Number(order.totalAmount).toLocaleString(
+                                  'ru-RU',
+                                  {
+                                    style: 'currency',
+                                    currency: 'RUB',
+                                    maximumFractionDigits: 2
+                                  }
+                                )}
+                              </span>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={() => handleOpenOrder(order.id)}
+                              >
+                                Открыть заказ
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {profileOrdersTotal > 20 && (
+                      <div className='flex items-center justify-between border-t pt-3 text-sm'>
+                        <span className='text-muted-foreground'>
+                          Показано {(profileOrdersPage - 1) * 20 + 1}–
+                          {Math.min(profileOrdersPage * 20, profileOrdersTotal)}
+                        </span>
+                        <div className='flex items-center gap-2'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            disabled={
+                              profileOrdersLoading || profileOrdersPage <= 1
+                            }
+                            onClick={() =>
+                              loadProfileOrders(
+                                profileUser.id,
+                                profileOrdersPage - 1
+                              )
+                            }
+                          >
+                            Назад
+                          </Button>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            disabled={
+                              profileOrdersLoading ||
+                              profileOrdersPage * 20 >= profileOrdersTotal
+                            }
+                            onClick={() =>
+                              loadProfileOrders(
+                                profileUser.id,
+                                profileOrdersPage + 1
+                              )
+                            }
+                          >
+                            Вперёд
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </TabsContent>
 
                 <TabsContent value='partnership' className='space-y-4 pt-4'>
@@ -2178,92 +2459,112 @@ export function ProjectUsersView({ projectId }: ProjectUsersViewProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {historyItems.map((t) => (
-                        <TableRow key={t.id}>
-                          <TableCell className='text-sm'>
-                            {new Date(t.createdAt).toLocaleString('ru-RU')}
-                          </TableCell>
-                          <TableCell className='text-center'>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                t.type === 'EARN'
-                                  ? 'bg-green-100 text-green-800'
+                      {historyItems.map((t) => {
+                        const orderReference = getTransactionOrderReference(t);
+
+                        return (
+                          <TableRow key={t.id}>
+                            <TableCell className='text-sm'>
+                              {new Date(t.createdAt).toLocaleString('ru-RU')}
+                            </TableCell>
+                            <TableCell className='text-center'>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                  t.type === 'EARN'
+                                    ? 'bg-green-100 text-green-800'
+                                    : t.type === 'SPEND'
+                                      ? 'bg-red-100 text-red-800'
+                                      : t.type === 'EXPIRE'
+                                        ? 'bg-gray-100 text-gray-800'
+                                        : 'bg-blue-100 text-blue-800'
+                                }`}
+                              >
+                                {t.type === 'EARN'
+                                  ? 'Начисление'
                                   : t.type === 'SPEND'
-                                    ? 'bg-red-100 text-red-800'
+                                    ? 'Списание'
                                     : t.type === 'EXPIRE'
-                                      ? 'bg-gray-100 text-gray-800'
-                                      : 'bg-blue-100 text-blue-800'
-                              }`}
-                            >
-                              {t.type === 'EARN'
-                                ? 'Начисление'
-                                : t.type === 'SPEND'
-                                  ? 'Списание'
-                                  : t.type === 'EXPIRE'
-                                    ? 'Истечение'
-                                    : 'Коррекция'}
-                            </span>
-                          </TableCell>
-                          <TableCell className='text-right font-medium'>
-                            {t.type === 'EARN' ? '+' : '-'}
-                            {Number(t.amount).toFixed(2)} бонусов
-                          </TableCell>
-                          <TableCell
-                            className='text-sm break-words'
-                            title={t.description || ''}
-                          >
-                            {t.description || '-'}
-                            {t.metadata?.spendAggregatedCount ? (
-                              <span className='text-muted-foreground ml-2 text-xs'>
-                                (совмещено {t.metadata.spendAggregatedCount}{' '}
-                                операций)
+                                      ? 'Истечение'
+                                      : 'Коррекция'}
                               </span>
-                            ) : null}
-                            {t.type === 'EARN' &&
-                            (t.userLevel ||
-                              (t.metadata &&
-                                (t.metadata.bonusPercent ||
-                                  t.metadata.appliedPercent))) ? (
-                              <div className='text-muted-foreground mt-1 text-xs'>
-                                Уровень:{' '}
-                                <span className='text-primary font-medium'>
-                                  {t.userLevel || 'Базовый'}
+                            </TableCell>
+                            <TableCell className='text-right font-medium'>
+                              {t.type === 'EARN' ? '+' : '-'}
+                              {Number(t.amount).toFixed(2)} бонусов
+                            </TableCell>
+                            <TableCell
+                              className='text-sm break-words'
+                              title={t.description || ''}
+                            >
+                              {orderReference ? (
+                                <Button
+                                  variant='link'
+                                  size='sm'
+                                  className='h-auto p-0 text-left font-normal'
+                                  onClick={() =>
+                                    handleOpenOrder(orderReference)
+                                  }
+                                >
+                                  {t.description || `Заказ #${orderReference}`}
+                                </Button>
+                              ) : (
+                                t.description || '-'
+                              )}
+                              {t.metadata?.spendAggregatedCount ? (
+                                <span className='text-muted-foreground ml-2 text-xs'>
+                                  (совмещено {t.metadata.spendAggregatedCount}{' '}
+                                  операций)
                                 </span>
-                                {t.metadata?.bonusPercent ||
-                                t.metadata?.appliedPercent
-                                  ? ` (${t.metadata.bonusPercent || t.metadata.appliedPercent}% от ${t.metadata.orderTotal || 'заказа'})`
-                                  : ''}
-                              </div>
-                            ) : null}
-                            {Array.isArray(t.aggregatedTransactions) &&
-                            t.aggregatedTransactions.length > 0 ? (
-                              <div className='border-muted-foreground/30 bg-muted/50 text-muted-foreground mt-2 space-y-1 rounded-md border border-dashed p-2 text-xs'>
-                                {t.aggregatedTransactions.map((child: any) => (
-                                  <div
-                                    key={child.id}
-                                    className='flex flex-wrap items-center justify-between gap-2'
-                                  >
-                                    <span>
-                                      {new Date(child.createdAt).toLocaleString(
-                                        'ru-RU'
-                                      )}
-                                    </span>
-                                    <span className='text-destructive font-medium'>
-                                      -{Number(child.amount).toFixed(2)} бонусов
-                                    </span>
-                                    {child.metadata?.spentFromBonusId ? (
-                                      <span className='opacity-70'>
-                                        ID бонуса:{' '}
-                                        {child.metadata.spentFromBonusId}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                              ) : null}
+                              {t.type === 'EARN' &&
+                              (t.userLevel ||
+                                (t.metadata &&
+                                  (t.metadata.bonusPercent ||
+                                    t.metadata.appliedPercent))) ? (
+                                <div className='text-muted-foreground mt-1 text-xs'>
+                                  Уровень:{' '}
+                                  <span className='text-primary font-medium'>
+                                    {t.userLevel || 'Базовый'}
+                                  </span>
+                                  {t.metadata?.bonusPercent ||
+                                  t.metadata?.appliedPercent
+                                    ? ` (${t.metadata.bonusPercent || t.metadata.appliedPercent}% от ${t.metadata.orderTotal || 'заказа'})`
+                                    : ''}
+                                </div>
+                              ) : null}
+                              {Array.isArray(t.aggregatedTransactions) &&
+                              t.aggregatedTransactions.length > 0 ? (
+                                <div className='border-muted-foreground/30 bg-muted/50 text-muted-foreground mt-2 space-y-1 rounded-md border border-dashed p-2 text-xs'>
+                                  {t.aggregatedTransactions.map(
+                                    (child: any) => (
+                                      <div
+                                        key={child.id}
+                                        className='flex flex-wrap items-center justify-between gap-2'
+                                      >
+                                        <span>
+                                          {new Date(
+                                            child.createdAt
+                                          ).toLocaleString('ru-RU')}
+                                        </span>
+                                        <span className='text-destructive font-medium'>
+                                          -{Number(child.amount).toFixed(2)}{' '}
+                                          бонусов
+                                        </span>
+                                        {child.metadata?.spentFromBonusId ? (
+                                          <span className='opacity-70'>
+                                            ID бонуса:{' '}
+                                            {child.metadata.spentFromBonusId}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

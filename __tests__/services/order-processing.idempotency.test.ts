@@ -46,6 +46,8 @@ describe('OrderProcessingService.processOrder idempotency', () => {
     (mockDb as any).bonus = (mockDb as any).bonus || {};
     (mockDb as any).project = (mockDb as any).project || {};
     (mockDb as any).analyticsEvent = (mockDb as any).analyticsEvent || {};
+    (mockDb as any).complianceIntegration =
+      (mockDb as any).complianceIntegration || {};
 
     mockDb.project.findUnique = jest.fn().mockResolvedValue({
       id: projectId,
@@ -59,6 +61,9 @@ describe('OrderProcessingService.processOrder idempotency', () => {
     mockDb.bonus.findUnique = jest
       .fn()
       .mockResolvedValue({ amount: 50 } as any);
+    mockDb.complianceIntegration.findUnique = jest
+      .fn()
+      .mockResolvedValue(null as any);
     jest.spyOn(OrderAccountingService, 'transition').mockResolvedValue({
       accountedSpentBonusAmount: 0
     } as any);
@@ -79,7 +84,6 @@ describe('OrderProcessingService.processOrder idempotency', () => {
       .fn()
       .mockResolvedValue({ id: 'saved-order-1' } as any);
     mockDb.analyticsEvent.create = jest.fn().mockResolvedValue({} as any);
-
     jest.spyOn(UserService, 'findUserByContact').mockResolvedValue(null as any);
     jest
       .spyOn(UserService, 'createUser')
@@ -99,6 +103,49 @@ describe('OrderProcessingService.processOrder idempotency', () => {
       projectId,
       'saved-order-1',
       expect.objectContaining({ status: 'CONFIRMED' })
+    );
+  });
+
+  it('cash order is stored as unpaid and never enters purchase accounting', async () => {
+    mockDb.order.findFirst = jest.fn().mockResolvedValue(null);
+    mockDb.order.update = jest.fn().mockResolvedValue({} as any);
+    mockDb.order.create = jest
+      .fn()
+      .mockResolvedValue({ id: 'saved-cash-order' } as any);
+    mockDb.analyticsEvent.create = jest.fn().mockResolvedValue({} as any);
+    mockDb.order.findUniqueOrThrow = jest.fn().mockResolvedValue({
+      id: 'saved-cash-order',
+      accountedSpentBonusAmount: 0
+    } as any);
+
+    jest.spyOn(UserService, 'findUserByContact').mockResolvedValue(null as any);
+    jest
+      .spyOn(UserService, 'createUser')
+      .mockResolvedValue({ id: 'user-1', projectId } as any);
+
+    const result = await OrderProcessingService.processOrder(
+      projectId,
+      buildOrder({
+        paymentSystem: 'cash',
+        raw: { payment: { sys: 'cash' } } as any
+      })
+    );
+
+    expect(result.success).toBe(true);
+    expect(OrderAccountingService.transition).not.toHaveBeenCalled();
+    expect(mockDb.bonus.findUnique).not.toHaveBeenCalled();
+    expect(mockDb.order.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentMethod: 'cash',
+          paymentStatus: 'UNPAID',
+          paidAmount: 0,
+          metadata: expect.objectContaining({
+            cashPending: true,
+            incomingPayload: { payment: { sys: 'cash' } }
+          })
+        })
+      })
     );
   });
 

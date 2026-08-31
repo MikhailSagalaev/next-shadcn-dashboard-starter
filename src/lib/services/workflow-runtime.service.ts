@@ -1643,7 +1643,7 @@ export class WorkflowRuntimeService {
     projectId: string,
     userId: string
   ): string {
-    return `workflow:user-variables:${projectId}:${userId}`;
+    return `workflow:user-variables:v2:${projectId}:${userId}`;
   }
 
   /**

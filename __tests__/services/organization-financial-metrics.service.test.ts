@@ -103,10 +103,15 @@ describe('OrganizationFinancialMetricsService', () => {
           projectId: 'project',
           userId: { in: ['member-a', 'member-b'] },
           accountingState: 'APPLIED',
-          OR: [
-            { organizationId: 'org-a' },
-            { organizationId: null, userId: { in: ['member-a'] } }
-          ]
+          AND: expect.arrayContaining([
+            expect.objectContaining({ OR: expect.any(Array) }),
+            {
+              OR: [
+                { organizationId: 'org-a' },
+                { organizationId: null, userId: { in: ['member-a'] } }
+              ]
+            }
+          ])
         })
       })
     );
@@ -139,15 +144,45 @@ describe('OrganizationFinancialMetricsService', () => {
           projectId: 'project',
           userId: { in: ['member-a', 'member-b'] },
           accountingState: 'APPLIED',
-          OR: [
-            { organizationId: 'org-a' },
-            { organizationId: null, userId: { in: ['member-a'] } }
-          ],
+          AND: expect.arrayContaining([
+            expect.objectContaining({ OR: expect.any(Array) }),
+            {
+              OR: [
+                { organizationId: 'org-a' },
+                { organizationId: null, userId: { in: ['member-a'] } }
+              ]
+            }
+          ]),
           accountedAt: { gte: since }
         })
       })
     );
     expect(metrics.get('member-a')?.totalPurchases).toBe(33);
     expect(metrics.get('member-b')?.totalPurchases).toBe(0);
+  });
+
+  it('без организации не использует legacy-счётчик и считает только заказы', async () => {
+    (mockDb.referralAttribution.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.transaction.findMany as jest.Mock).mockResolvedValue([]);
+    (mockDb.order.groupBy as jest.Mock).mockResolvedValue([
+      { userId: 'member-a', _sum: { accountedPurchaseAmount: 75 } }
+    ]);
+
+    const metrics = await OrganizationFinancialMetricsService.getMany({
+      projectId: 'project',
+      subjects: [{ id: 'member-a', totalPurchases: 999 }]
+    });
+
+    expect(metrics.get('member-a')?.totalPurchases).toBe(75);
+    expect(mockDb.order.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          projectId: 'project',
+          userId: { in: ['member-a'] },
+          accountingState: 'APPLIED',
+          OR: expect.any(Array)
+        })
+      })
+    );
   });
 });
