@@ -10,13 +10,11 @@ describe('referral-link utilities', () => {
       'organization-id'
     );
 
-    expect(result).toBe(
-      'https://example.com/shop/members/signup?utm_org=organization-id'
-    );
+    expect(result).toBe('https://example.com/shop?utm_org=organization-id');
     expect(result).not.toContain('utm_ref');
   });
 
-  it('не дублирует маршрут регистрации в настроенном домене', () => {
+  it('сохраняет путь настроенной витрины', () => {
     expect(
       buildOrganizationReferralLink(
         'https://example.com/members/signup',

@@ -13,11 +13,12 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { Logo } from '@/components/ui/logo';
 import { Mail } from 'lucide-react';
+import { getSafeAuthRedirect } from '@/lib/auth-redirect';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Введите корректный email' }),
@@ -60,6 +61,7 @@ export default function SignInViewPage() {
 
 function AuthForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showResendOption, setShowResendOption] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const form = useForm<FormValues>({
@@ -108,8 +110,7 @@ function AuthForm() {
 
       setShowResendOption(false);
       toast.success('Вход выполнен успешно');
-      router.push('/dashboard');
-      router.refresh();
+      router.replace(getSafeAuthRedirect(searchParams.get('redirect_url')));
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Ошибка входа';
       toast.error(message);

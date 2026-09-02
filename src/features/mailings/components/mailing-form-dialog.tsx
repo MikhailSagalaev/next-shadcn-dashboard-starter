@@ -31,14 +31,19 @@ import { MailingTemplateEditor } from './mailing-template-editor';
 import { TelegramMailingEditor } from './telegram-mailing-editor';
 import { useToast } from '@/hooks/use-toast';
 
+type MailingType = 'EMAIL' | 'SMS' | 'TELEGRAM' | 'MAX' | 'WHATSAPP' | 'VIBER';
+
+const ALL_USERS_SEGMENT = '__all_users__';
+
 interface MailingFormDialogProps {
   projectId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSaved?: () => void | Promise<void>;
   mailing?: {
     id: string;
     name: string;
-    type: 'EMAIL' | 'SMS' | 'TELEGRAM' | 'MAX' | 'WHATSAPP' | 'VIBER';
+    type: MailingType;
     segmentId?: string | null;
     templateId?: string | null;
   } | null;
@@ -49,6 +54,7 @@ export function MailingFormDialog({
   projectId,
   open,
   onOpenChange,
+  onSaved,
   mailing,
   segments = []
 }: MailingFormDialogProps) {
@@ -56,9 +62,7 @@ export function MailingFormDialog({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
-  const [type, setType] = useState<
-    'EMAIL' | 'SMS' | 'TELEGRAM' | 'MAX' | 'WHATSAPP' | 'VIBER'
-  >('EMAIL');
+  const [type, setType] = useState<MailingType>('EMAIL');
   const [segmentId, setSegmentId] = useState<string>('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -201,6 +205,7 @@ export function MailingFormDialog({
       });
 
       onOpenChange(false);
+      await onSaved?.();
       router.refresh();
     } catch {
       toast({
@@ -215,7 +220,7 @@ export function MailingFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[90vh] max-w-4xl overflow-y-auto'>
+      <DialogContent className='max-h-[calc(100dvh-2rem)] max-w-4xl overflow-y-auto overscroll-contain'>
         <DialogHeader>
           <DialogTitle>
             {mailing ? 'Редактировать рассылку' : 'Создать рассылку'}
@@ -227,7 +232,7 @@ export function MailingFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className='space-y-6'>
-          <div className='grid grid-cols-2 gap-4'>
+          <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
             <div>
               <Label htmlFor='name'>Название *</Label>
               <Input
@@ -242,9 +247,9 @@ export function MailingFormDialog({
               <Label htmlFor='type'>Тип рассылки</Label>
               <Select
                 value={type}
-                onValueChange={(value: any) => setType(value)}
+                onValueChange={(value) => setType(value as MailingType)}
               >
-                <SelectTrigger>
+                <SelectTrigger id='type'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -268,12 +273,19 @@ export function MailingFormDialog({
           </div>
           <div>
             <Label htmlFor='segmentId'>Сегмент</Label>
-            <Select value={segmentId} onValueChange={setSegmentId}>
-              <SelectTrigger>
+            <Select
+              value={segmentId || ALL_USERS_SEGMENT}
+              onValueChange={(value) =>
+                setSegmentId(value === ALL_USERS_SEGMENT ? '' : value)
+              }
+            >
+              <SelectTrigger id='segmentId'>
                 <SelectValue placeholder='Выберите сегмент (необязательно)' />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value=''>Все пользователи</SelectItem>
+                <SelectItem value={ALL_USERS_SEGMENT}>
+                  Все пользователи
+                </SelectItem>
                 {segments.map((segment) => (
                   <SelectItem key={segment.id} value={segment.id}>
                     {segment.name}
@@ -281,6 +293,10 @@ export function MailingFormDialog({
                 ))}
               </SelectContent>
             </Select>
+            <p className='text-muted-foreground mt-1.5 text-xs'>
+              Доступны подтверждение отправки и переходы по ссылкам. Telegram и
+              MAX не передают ботам персональные отметки прочтения.
+            </p>
           </div>
 
           {audienceStats && (

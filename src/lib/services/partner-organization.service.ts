@@ -246,6 +246,7 @@ export class PartnerOrganizationService {
             phone: true,
             partnerRole: true,
             referredBy: true,
+            metadata: true,
             registeredAt: true,
             totalPurchases: true,
             organizationId: true,
@@ -374,6 +375,19 @@ export class PartnerOrganizationService {
         totalPurchases: 0,
         referralBonusEarned: 0
       };
+      const metadata = (user.metadata as Record<string, unknown> | null) ?? {};
+      const pendingReferral = metadata.pendingReferral as
+        | { referrerId?: string }
+        | undefined;
+      const acquisitionSource =
+        primaryLink ||
+        attribution ||
+        user.referredBy ||
+        pendingReferral?.referrerId
+          ? 'REFERRAL'
+          : metadata.utmOrg
+            ? 'QR'
+            : 'MANUAL';
       return {
         id: user.id,
         name: displayName(user),
@@ -406,6 +420,7 @@ export class PartnerOrganizationService {
           : null,
         invitedById: attribution?.referrerId ?? null,
         invitedByName: invitedByUser ? displayName(invitedByUser) : null,
+        acquisitionSource,
         directReferrals,
         joinedAt: membership.createdAt.toISOString(),
         registeredAt: user.registeredAt.toISOString(),

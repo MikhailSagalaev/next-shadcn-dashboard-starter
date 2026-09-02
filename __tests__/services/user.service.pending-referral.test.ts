@@ -133,6 +133,38 @@ describe('UserService.createUser — отложенная заявка (WITH_BOT
     });
   });
 
+  it('сразу добавляет клиента в организацию, но откладывает только реферала', async () => {
+    mockProject({ operationMode: 'WITH_BOT' });
+    (
+      PartnerOrganizationService.resolveOrganizationIdForRegistration as jest.Mock
+    ).mockResolvedValueOnce(organizationId);
+    mockDb.user.create = jest.fn().mockResolvedValue({
+      id: 'user-pending-org',
+      projectId,
+      organizationId
+    });
+
+    await UserService.createUser({
+      projectId,
+      email: 'customer@example.com',
+      utmSource: referrerId,
+      utmOrg: 'xfit'
+    } as any);
+
+    const createCall = (mockDb.user.create as jest.Mock).mock.calls[0][0];
+    expect(createCall.data).toMatchObject({
+      referredBy: undefined,
+      organizationId,
+      organizationMemberships: {
+        create: { projectId, organizationId, level: null }
+      },
+      metadata: {
+        utmOrg: 'xfit',
+        pendingReferral: { referrerId, organizationId }
+      }
+    });
+  });
+
   it('WITHOUT_BOT (isActive=true сразу) — создаёт заявку немедленно, как раньше', async () => {
     mockProject({ operationMode: 'WITHOUT_BOT' });
     mockDb.user.create = jest.fn().mockResolvedValue({
@@ -270,4 +302,27 @@ describe('UserService.resolvePendingReferralOnActivation', () => {
       expect(updateCall.data.metadata).toEqual({ utmOrg: 'blog15' });
     }
   );
+
+  it('не считает ожидаемую организацию ручной правкой', async () => {
+    mockDb.user.findUnique = jest.fn().mockResolvedValue({
+      id: 'user-1',
+      projectId,
+      referredBy: null,
+      organizationId: 'org-1',
+      partnerRole: 'CLIENT',
+      metadata: {
+        pendingReferral: { referrerId, organizationId: 'org-1' }
+      }
+    });
+    mockDb.user.update = jest.fn().mockResolvedValue({});
+
+    await UserService.resolvePendingReferralOnActivation('user-1');
+
+    expect(PartnerTeamService.linkReferralWithPolicy).toHaveBeenCalledWith({
+      userId: 'user-1',
+      projectId,
+      referrerId,
+      organizationId: 'org-1'
+    });
+  });
 });

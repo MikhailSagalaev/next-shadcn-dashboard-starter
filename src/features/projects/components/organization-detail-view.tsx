@@ -152,6 +152,7 @@ type Member = {
   attributionPlanName: string | null;
   invitedById: string | null;
   invitedByName: string | null;
+  acquisitionSource: 'QR' | 'REFERRAL' | 'MANUAL';
   directReferrals: Array<{ id: string; name: string }>;
   joinedAt: string;
   registeredAt: string;
@@ -1248,6 +1249,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                             onSort={handleMemberSort}
                           />
                           <TableHead>Уровень и доступ</TableHead>
+                          <TableHead>Источник</TableHead>
                           <TableHead>Кто привёл</TableHead>
                           <TableHead>Рефереры</TableHead>
                           <SortableMemberHead
@@ -1326,6 +1328,21 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                                 <div className='text-muted-foreground mt-1 text-xs'>
                                   {m.title}
                                 </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {m.acquisitionSource === 'QR' ? (
+                                <Badge variant='secondary'>
+                                  QR организации
+                                </Badge>
+                              ) : m.acquisitionSource === 'REFERRAL' ? (
+                                <Badge variant='outline'>
+                                  Реферальная ссылка
+                                </Badge>
+                              ) : (
+                                <span className='text-muted-foreground text-sm'>
+                                  Добавлен вручную
+                                </span>
                               )}
                             </TableCell>
                             <TableCell className='max-w-[200px] whitespace-normal'>
@@ -1463,7 +1480,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                         {filteredMembers.length === 0 && (
                           <TableRow>
                             <TableCell
-                              colSpan={10}
+                              colSpan={11}
                               className='text-muted-foreground h-24 text-center'
                             >
                               По вашему запросу участники не найдены

@@ -68,7 +68,12 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const signInUrl = new URL('/auth/sign-in', req.url);
-    signInUrl.searchParams.set('redirect_url', req.url);
+    // Передаём относительный маршрут: reverse proxy может подставить во
+    // внутренний req.url адрес вроде 0.0.0.0:3000.
+    signInUrl.searchParams.set(
+      'redirect_url',
+      `${req.nextUrl.pathname}${req.nextUrl.search}`
+    );
     return NextResponse.redirect(signInUrl);
   }
 

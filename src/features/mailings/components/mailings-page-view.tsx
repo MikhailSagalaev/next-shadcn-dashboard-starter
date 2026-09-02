@@ -656,6 +656,7 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
                                   variant='ghost'
                                   size='icon'
                                   className='h-8 w-8'
+                                  aria-label={`Действия: ${m.name}`}
                                 >
                                   <MoreVertical className='h-4 w-4' />
                                 </Button>
@@ -701,6 +702,7 @@ export function MailingsPageView({ projectId }: MailingsPageViewProps) {
         projectId={projectId}
         open={formOpen}
         onOpenChange={setFormOpen}
+        onSaved={loadData}
         mailing={editingMailing}
         segments={segments}
       />

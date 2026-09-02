@@ -122,12 +122,15 @@ export class UserService {
           ...userFields,
           email: normalizedEmail,
           phone: normalizedPhone,
+          // При ожидании одобрения откладываем только партнёрскую связь с
+          // реферером. Клиент уже должен быть виден в организации: это нужно
+          // для истории покупок, скидки организации и аналитики QR.
           referredBy: pendingReferral ? undefined : referrerId,
-          organizationId: pendingReferral ? undefined : organizationId,
+          organizationId,
           isActive,
           totalPurchases: 0,
           currentLevel: 'Базовый',
-          ...(organizationId && !pendingReferral
+          ...(organizationId
             ? {
                 organizationMemberships: {
                   create: {
@@ -158,7 +161,8 @@ export class UserService {
 
       // `utm_org` может прийти без персонального `utm_ref` (например, с QR
       // на стойке клуба). Membership создаётся вложенно вместе с user выше:
-      // обе записи атомарны и не могут разойтись при частичном сбое.
+      // обе записи атомарны и не могут разойтись при частичном сбое. Даже
+      // при ожидающем одобрении пользователь остаётся клиентом (level=null).
 
       // Реферальные коды больше не используются для ссылок — пропускаем генерацию
 
@@ -363,7 +367,13 @@ export class UserService {
       // снимаем маркер, не трогая привязку.
       const alreadyHandledManually =
         Boolean(user.referredBy) ||
-        Boolean(user.organizationId) ||
+        // При создании клиента мы уже записываем ожидаемую организацию, это
+        // не ручная правка и не должно отменять создание заявки. Другая
+        // организация (либо организация при отсутствии ожидаемой) — явный
+        // ручной выбор, который сохраняем.
+        Boolean(
+          user.organizationId && user.organizationId !== pending.organizationId
+        ) ||
         user.partnerRole !== 'CLIENT';
       if (alreadyHandledManually) {
         logger.info(

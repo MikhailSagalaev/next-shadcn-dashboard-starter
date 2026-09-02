@@ -62,13 +62,9 @@ export function buildOrganizationReferralLink(
 ): string | null {
   if (!domain?.trim() || !organizationId.trim()) return null;
   const url = new URL(normalizeProjectDomain(domain));
-  const currentPath = url.pathname.replace(/\/+$/, '');
-
-  // QR организации предназначен именно для регистрации. Прямая ссылка не
-  // зависит от того, сохраняют ли кнопки на внешнем лендинге исходные UTM.
-  if (!currentPath.endsWith('/members/signup')) {
-    url.pathname = `${currentPath}/members/signup`;
-  }
+  // QR должен открывать реальную витрину проекта. Регистрация у проектов на
+  // Tilda проходит внутри сайта, а не на маршруте админки `/members/signup`.
+  // Путь домена сохраняем: так QR работает и для витрины в подпапке.
   url.searchParams.set('utm_org', organizationId.trim());
   return url.toString();
 }
