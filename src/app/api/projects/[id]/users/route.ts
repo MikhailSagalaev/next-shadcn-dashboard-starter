@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { normalizePhone, isValidNormalizedPhone } from '@/lib/phone';
 import { getCurrentAdmin } from '@/lib/auth';
 import { ProjectService } from '@/lib/services/project.service';
+import { resolveWelcomeRewardSettings } from '@/lib/services/welcome-reward-settings';
 
 const getQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1).optional(),
@@ -554,10 +555,12 @@ async function postHandler(
         })
       ]);
       const meta = (settings?.functionalSettings as any) || {};
-      const welcomeAmount = Number(
-        meta.welcomeBonusAmount ?? referralProgram?.welcomeBonus ?? 0
-      );
-      if (welcomeAmount > 0) {
+      const welcomeReward = resolveWelcomeRewardSettings(project, {
+        welcomeBonus: meta.welcomeBonusAmount ?? referralProgram?.welcomeBonus,
+        welcomeRewardType: project.welcomeRewardType
+      });
+      const welcomeAmount = welcomeReward.amount;
+      if (welcomeReward.type === 'BONUS' && welcomeAmount > 0) {
         const expiresAt = new Date();
         expiresAt.setDate(
           expiresAt.getDate() + Number(project.bonusExpiryDays || 365)
@@ -567,7 +570,7 @@ async function postHandler(
           data: {
             userId: newUser.id,
             amount: welcomeAmount,
-            type: 'MANUAL',
+            type: 'WELCOME',
             description: 'Приветственный бонус при регистрации',
             expiresAt
           }

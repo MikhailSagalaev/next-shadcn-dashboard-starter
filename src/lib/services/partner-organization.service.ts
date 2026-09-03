@@ -14,6 +14,10 @@ import {
 } from './partner-referral-graph.service';
 import { ReferrerAssignmentService } from './referrer-assignment.service';
 import { OrganizationFinancialMetricsService } from './organization-financial-metrics.service';
+import {
+  readPendingReferrerId,
+  resolveReferralSource
+} from './referral-source';
 
 export interface CreateOrganizationInput {
   projectId: string;
@@ -246,6 +250,7 @@ export class PartnerOrganizationService {
             phone: true,
             partnerRole: true,
             referredBy: true,
+            utmSource: true,
             metadata: true,
             registeredAt: true,
             totalPurchases: true,
@@ -313,9 +318,26 @@ export class PartnerOrganizationService {
           .filter((id): id is string => Boolean(id))
       )
     ];
+    const memberIdSet = new Set(userIds);
+    const inferredReferrerIds = memberships.flatMap((membership) => {
+      const metadata =
+        (membership.user.metadata as Record<string, unknown> | null) ?? {};
+      const pendingReferrerId = readPendingReferrerId(metadata);
+      const legacyReferrerId =
+        membership.user.utmSource && memberIdSet.has(membership.user.utmSource)
+          ? membership.user.utmSource
+          : null;
+      return [
+        membership.user.referredBy,
+        pendingReferrerId,
+        legacyReferrerId
+      ].filter((id): id is string => Boolean(id));
+    });
     const invitedByIds = [
       ...new Set(
-        scopedAttributions.map((attribution) => attribution.referrerId)
+        scopedAttributions
+          .map((attribution) => attribution.referrerId)
+          .concat(inferredReferrerIds)
       )
     ];
     const [plans, invitedByUsers, financialMetrics] = await Promise.all([
@@ -376,18 +398,20 @@ export class PartnerOrganizationService {
         referralBonusEarned: 0
       };
       const metadata = (user.metadata as Record<string, unknown> | null) ?? {};
-      const pendingReferral = metadata.pendingReferral as
-        | { referrerId?: string }
-        | undefined;
-      const acquisitionSource =
-        primaryLink ||
-        attribution ||
-        user.referredBy ||
-        pendingReferral?.referrerId
-          ? 'REFERRAL'
-          : metadata.utmOrg
-            ? 'QR'
-            : 'MANUAL';
+      const referralSource = resolveReferralSource({
+        primaryReferrerId: primaryLink?.referrerUserId,
+        attributionReferrerId: attribution?.referrerId,
+        storedReferrerId: user.referredBy,
+        pendingReferrerId: readPendingReferrerId(metadata),
+        utmSource: user.utmSource,
+        hasOrganizationMarker: Boolean(metadata.utmOrg),
+        validReferrerIds: memberIdSet
+      });
+      const effectiveReferrerId = referralSource.referrerId;
+      const effectiveReferrer = effectiveReferrerId
+        ? (invitedByUserMap.get(effectiveReferrerId) ??
+          memberById.get(effectiveReferrerId))
+        : null;
       return {
         id: user.id,
         name: displayName(user),
@@ -397,8 +421,12 @@ export class PartnerOrganizationService {
         level: membership.level,
         title: membership.title,
         canManage: membership.canManage,
-        referredBy: primaryLink?.referrerUserId ?? null,
-        referrerName: primaryLink ? displayName(primaryLink.referrer) : null,
+        referredBy: effectiveReferrerId ?? null,
+        referrerName: primaryLink
+          ? displayName(primaryLink.referrer)
+          : effectiveReferrer
+            ? displayName(effectiveReferrer)
+            : null,
         referrerLinks: memberLinks.map((link) => ({
           referrerId: link.referrerUserId,
           referrerName: displayName(link.referrer),
@@ -418,9 +446,14 @@ export class PartnerOrganizationService {
         attributionPlanName: attributionByUserId.get(user.id)
           ? (planMap.get(attributionByUserId.get(user.id)!) ?? null)
           : null,
-        invitedById: attribution?.referrerId ?? null,
-        invitedByName: invitedByUser ? displayName(invitedByUser) : null,
-        acquisitionSource,
+        invitedById: effectiveReferrerId ?? null,
+        invitedByName: effectiveReferrer
+          ? displayName(effectiveReferrer)
+          : invitedByUser
+            ? displayName(invitedByUser)
+            : null,
+        acquisitionSource: referralSource.acquisitionSource,
+        referralStatus: referralSource.status,
         directReferrals,
         joinedAt: membership.createdAt.toISOString(),
         registeredAt: user.registeredAt.toISOString(),

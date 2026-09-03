@@ -83,6 +83,7 @@ import type {
   HierarchyNode,
   HierarchyPeriod
 } from '@/app/dashboard/projects/[id]/referral/hierarchy/data-access';
+import { OrganizationLevelBadge } from './organization-level-badge';
 
 import { PartnerUserCombobox, type PartnerUser } from './partner-user-combobox';
 import { HierarchyTree } from './hierarchy-tree';
@@ -153,6 +154,7 @@ type Member = {
   invitedById: string | null;
   invitedByName: string | null;
   acquisitionSource: 'QR' | 'REFERRAL' | 'MANUAL';
+  referralStatus: 'CONFIRMED' | 'PENDING' | 'INFERRED' | null;
   directReferrals: Array<{ id: string; name: string }>;
   joinedAt: string;
   registeredAt: string;
@@ -1313,13 +1315,7 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                             </TableCell>
                             <TableCell>
                               <div className='flex flex-wrap items-center gap-1.5'>
-                                {m.level ? (
-                                  <Badge variant='outline'>
-                                    Уровень {m.level}
-                                  </Badge>
-                                ) : (
-                                  <Badge variant='outline'>Клиент</Badge>
-                                )}
+                                <OrganizationLevelBadge level={m.level} />
                                 {m.canManage && (
                                   <Badge variant='secondary'>Управляющий</Badge>
                                 )}
@@ -1352,7 +1348,11 @@ export function OrganizationDetailView({ projectId, organizationId }: Props) {
                                     {m.invitedByName}
                                   </div>
                                   <div className='text-muted-foreground text-xs'>
-                                    при регистрации
+                                    {m.referralStatus === 'PENDING'
+                                      ? 'ожидает подтверждения'
+                                      : m.referralStatus === 'INFERRED'
+                                        ? 'по сохранённой реферальной ссылке'
+                                        : 'при регистрации'}
                                   </div>
                                 </>
                               ) : (

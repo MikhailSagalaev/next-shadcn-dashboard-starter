@@ -193,7 +193,7 @@
         "label": "Убрать reply-клавиатуру",
         "config": {
           "message": {
-            "text": "✅ Telegram привязан. Открываю меню…",
+            "text": "✅ Telegram привязан. Открываю меню…\n\nСсылка на сайт доступна в меню ниже.",
             "parseMode": "HTML",
             "keyboard": {
               "type": "remove"

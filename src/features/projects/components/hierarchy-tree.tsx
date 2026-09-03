@@ -67,6 +67,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { PartnerRoleBadge } from '@/features/bonuses/components/partner-role-badge';
+import { OrganizationLevelBadge } from './organization-level-badge';
 import type {
   HierarchyNode,
   HierarchyPeriod
@@ -244,14 +245,13 @@ function NodeRow({
                   <Highlight text={node.name} query={query} />
                 </span>
               )}
-              {node.organizationTitle ? (
-                <Badge variant='outline'>{node.organizationTitle}</Badge>
-              ) : node.organizationLevel ? (
-                <Badge variant='outline'>
-                  Уровень {node.organizationLevel}
-                </Badge>
+              {node.organizationLevel ? (
+                <OrganizationLevelBadge level={node.organizationLevel} />
               ) : (
                 <PartnerRoleBadge role={node.partnerRole} />
+              )}
+              {node.organizationTitle && (
+                <Badge variant='outline'>{node.organizationTitle}</Badge>
               )}
               {node.canManageOrganization && (
                 <Badge variant='secondary'>Управляющий</Badge>
@@ -282,8 +282,14 @@ function NodeRow({
           <div className='space-y-1 text-xs'>
             {node.referrerLinks.map((link) => (
               <div key={link.referrerId}>
-                {link.referrerName} · {link.sharePercent}%
-                {link.isPrimary ? ' · основной' : ''}
+                {link.referrerName}
+                {link.sharePercent !== null
+                  ? ` · ${link.sharePercent}%${link.isPrimary ? ' · основной' : ''}`
+                  : link.status === 'PENDING'
+                    ? ' · ожидает подтверждения'
+                    : link.status === 'CONFIRMED'
+                      ? ' · подтверждённая связь'
+                      : ' · по сохранённой реферальной ссылке'}
               </div>
             ))}
           </div>

@@ -1989,7 +1989,8 @@ export class PartnerHomeHandler extends BaseNodeHandler {
           project: {
             select: {
               enablePartnerRoles: true,
-              enablePartnerTeamManagement: true
+              enablePartnerTeamManagement: true,
+              domain: true
             }
           },
           organizationMemberships: {
@@ -2098,7 +2099,9 @@ export class PartnerHomeHandler extends BaseNodeHandler {
           : ''
       ].filter(Boolean);
 
-      const buttons: Array<Array<{ text: string; callback_data: string }>> = [
+      const buttons: Array<
+        Array<{ text: string; callback_data?: string; url?: string }>
+      > = [
         [
           { text: '💰 Баланс', callback_data: 'menu_balance' },
           { text: '🛍️ Покупки', callback_data: 'menu_purchases' }
@@ -2151,6 +2154,13 @@ export class PartnerHomeHandler extends BaseNodeHandler {
         buttons.push([
           { text: '👥 Реферальная программа', callback_data: 'menu_referrals' }
         ]);
+      }
+      const projectDomain = user.project?.domain?.trim();
+      if (projectDomain) {
+        const siteUrl = /^https?:\/\//i.test(projectDomain)
+          ? projectDomain
+          : `https://${projectDomain}`;
+        buttons.push([{ text: '🌐 Перейти на сайт', url: siteUrl }]);
       }
       buttons.push([{ text: '❓ Помощь', callback_data: 'menu_help' }]);
 
@@ -2678,20 +2688,42 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
         return null;
       }
 
-      // Доступно к выводу = активные (непотраченные, неистёкшие) бонусы.
+      const payoutSettings = await db.referralProgram.findUnique({
+        where: { projectId: context.projectId },
+        select: { payoutMinAmount: true, payoutHoldDays: true }
+      });
+      const minPayout = Number(payoutSettings?.payoutMinAmount ?? 0);
+      const holdDays = Math.max(0, payoutSettings?.payoutHoldDays ?? 0);
+      const createdBefore = new Date(
+        Date.now() - holdDays * 24 * 60 * 60 * 1000
+      );
+
+      // К выводу относится только партнёрская комиссия. Покупочные и
+      // приветственные бонусы можно тратить в магазине, но нельзя выводить.
       const balanceAgg = await db.bonus.aggregate({
         where: {
           userId,
+          type: 'REFERRAL',
           isUsed: false,
+          createdAt: { lte: createdBefore },
           OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
         },
         _sum: { amount: true }
       });
       const available = Number(balanceAgg._sum.amount ?? 0);
+      const thresholdReached = minPayout <= 0 || available >= minPayout;
       const withdrawButton =
-        available > 0
+        available > 0 && thresholdReached
           ? [{ text: '💸 Вывести деньги', callback_data: 'payout_request' }]
           : null;
+      const payoutRules = [
+        minPayout > 0
+          ? `Минимальная сумма: <b>${formatRub(minPayout)}</b>`
+          : 'Минимальной суммы нет',
+        holdDays > 0 ? `Срок ожидания: <b>${holdDays} дн.</b>` : ''
+      ]
+        .filter(Boolean)
+        .join('\n');
 
       const txs = await db.transaction.findMany({
         where: { userId, type: 'EARN', isReferralBonus: true },
@@ -2715,8 +2747,8 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
         await sendPlatformMessage(
           context,
           available > 0
-            ? `💵 <b>Мои выплаты</b>\n\nДоступно к выводу: <b>${formatRub(available)}</b>\nИстория выплат пока пуста.`
-            : '💵 <b>Мои выплаты</b>\n\nПока пусто. Комиссии появятся, когда подопечные начнут делать покупки.',
+            ? `💵 <b>Мои выплаты</b>\n\nДоступно к выводу: <b>${formatRub(available)}</b>\n${payoutRules}\nИстория выплат пока пуста.`
+            : `💵 <b>Мои выплаты</b>\n\nПока пусто. Комиссии появятся, когда подопечные начнут делать покупки.\n${payoutRules}`,
           { replyMarkup: { inline_keyboard: emptyKeyboard } }
         );
         return null;
@@ -2763,6 +2795,7 @@ export class PartnerPayoutsHandler extends BaseNodeHandler {
       if (available > 0) {
         lines.push(`Доступно к выводу: <b>${formatRub(available)}</b>`);
       }
+      lines.push(payoutRules);
 
       await sendPlatformMessage(context, lines.join('\n'), {
         replyMarkup: {

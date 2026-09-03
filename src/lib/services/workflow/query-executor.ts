@@ -9,6 +9,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { logger } from '@/lib/logger';
+import { resolveWelcomeRewardSettings } from '@/lib/services/welcome-reward-settings';
 
 /**
  * Типы для параметров запросов
@@ -1191,11 +1192,12 @@ export const SAFE_QUERIES = {
     try {
       const program = await db.referralProgram.findUnique({
         where: { projectId: user.projectId },
-        select: { welcomeBonus: true }
+        select: { welcomeBonus: true, welcomeRewardType: true }
       });
-      const welcomeAmount = Number(program?.welcomeBonus || 0);
+      const welcomeReward = resolveWelcomeRewardSettings(user.project, program);
+      const welcomeAmount = welcomeReward.amount;
 
-      if (welcomeAmount > 0) {
+      if (welcomeReward.type === 'BONUS' && welcomeAmount > 0) {
         // Проверяем, не начислены ли уже приветственные бонусы
         const existingWelcomeBonus = await db.bonus.findFirst({
           where: {
@@ -1235,7 +1237,8 @@ export const SAFE_QUERIES = {
 
           logger.info('Welcome bonus automatically awarded on activation', {
             userId: params.userId,
-            amount: welcomeAmount
+            amount: welcomeAmount,
+            settingsSource: welcomeReward.source
           });
         }
       }

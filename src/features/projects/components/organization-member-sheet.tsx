@@ -49,6 +49,7 @@ import type {
   OrganizationActivityKind,
   OrganizationActivityPeriod
 } from '@/lib/services/organization-member-activity.service';
+import { OrganizationLevelBadge } from './organization-level-badge';
 
 export interface OrganizationMemberSheetMember {
   id: string;
@@ -276,11 +277,7 @@ export function OrganizationMemberSheet({
             {member && !member.isActive && (
               <Badge variant='secondary'>Неактивен</Badge>
             )}
-            {member?.level ? (
-              <Badge variant='outline'>Уровень {member.level}</Badge>
-            ) : (
-              <Badge variant='outline'>Клиент</Badge>
-            )}
+            <OrganizationLevelBadge level={member?.level} />
             {member?.canManage && (
               <Badge variant='secondary'>Управляющий</Badge>
             )}

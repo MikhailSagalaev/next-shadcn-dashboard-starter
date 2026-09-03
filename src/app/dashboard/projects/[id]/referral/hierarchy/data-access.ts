@@ -24,6 +24,10 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { cachedGetDescendantTree } from '@/lib/services/referral-commission.service';
 import { OrganizationFinancialMetricsService } from '@/lib/services/organization-financial-metrics.service';
+import {
+  readPendingReferrerId,
+  resolveReferralSource
+} from '@/lib/services/referral-source';
 
 export type HierarchyPeriod = 'today' | '7d' | '30d' | 'all';
 
@@ -41,8 +45,9 @@ export interface HierarchyNode {
   referrerLinks: Array<{
     referrerId: string;
     referrerName: string;
-    sharePercent: number;
+    sharePercent: number | null;
     isPrimary: boolean;
+    status?: 'CONFIRMED' | 'PENDING' | 'INFERRED';
   }>;
   registeredAt: string; // ISO
   /** Сколько прямых рефералов у этого узла (depth=1). */
@@ -124,6 +129,7 @@ export async function getHierarchyTree(
     phone: string | null;
     partnerRole: string;
     referredBy: string | null;
+    referralStatus: 'CONFIRMED' | 'PENDING' | 'INFERRED' | null;
     registeredAt: Date;
     totalPurchases: unknown;
     legacyOrganizationId: string | null;
@@ -161,6 +167,8 @@ export async function getHierarchyTree(
               phone: true,
               partnerRole: true,
               referredBy: true,
+              utmSource: true,
+              metadata: true,
               registeredAt: true,
               totalPurchases: true,
               organizationId: true
@@ -190,14 +198,41 @@ export async function getHierarchyTree(
         .filter((link) => link.isPrimary)
         .map((link) => [link.childUserId, link.referrerUserId])
     );
-    partners = memberships.map((membership) => ({
-      ...membership.user,
-      referredBy: primaryByChild.get(membership.userId) ?? null,
-      organizationLevel: membership.level,
-      organizationTitle: membership.title,
-      canManageOrganization: membership.canManage,
-      legacyOrganizationId: membership.user.organizationId
-    }));
+    const membershipUserIds = new Set(
+      memberships.map((membership) => membership.userId)
+    );
+    partners = memberships.map((membership) => {
+      const metadata =
+        (membership.user.metadata as Record<string, unknown> | null) ?? {};
+      const primaryReferrerId = primaryByChild.get(membership.userId) ?? null;
+      const storedReferrerId =
+        membership.user.referredBy &&
+        membershipUserIds.has(membership.user.referredBy)
+          ? membership.user.referredBy
+          : null;
+      const pendingCandidate = readPendingReferrerId(metadata);
+      const pendingReferrerId =
+        pendingCandidate && membershipUserIds.has(pendingCandidate)
+          ? pendingCandidate
+          : null;
+      const referralSource = resolveReferralSource({
+        primaryReferrerId,
+        storedReferrerId,
+        pendingReferrerId,
+        utmSource: membership.user.utmSource,
+        hasOrganizationMarker: Boolean(metadata.utmOrg),
+        validReferrerIds: membershipUserIds
+      });
+      return {
+        ...membership.user,
+        referredBy: referralSource.referrerId,
+        referralStatus: referralSource.status,
+        organizationLevel: membership.level,
+        organizationTitle: membership.title,
+        canManageOrganization: membership.canManage,
+        legacyOrganizationId: membership.user.organizationId
+      };
+    });
   } else {
     const users = await db.user.findMany({
       where: {
@@ -222,6 +257,7 @@ export async function getHierarchyTree(
     });
     partners = users.map((user) => ({
       ...user,
+      referralStatus: user.referredBy ? ('CONFIRMED' as const) : null,
       organizationLevel: null,
       organizationTitle: null,
       canManageOrganization: false,
@@ -251,11 +287,13 @@ export async function getHierarchyTree(
   const directCountByParent = new Map<string, number>();
   if (organizationId) {
     const childrenByParent = new Map<string, Set<string>>();
-    for (const link of organizationLinks) {
+    for (const partner of partners) {
+      if (!partner.referredBy || !partnerIdSet.has(partner.referredBy))
+        continue;
       const children =
-        childrenByParent.get(link.referrerUserId) ?? new Set<string>();
-      children.add(link.childUserId);
-      childrenByParent.set(link.referrerUserId, children);
+        childrenByParent.get(partner.referredBy) ?? new Set<string>();
+      children.add(partner.id);
+      childrenByParent.set(partner.referredBy, children);
     }
     for (const [parentId, children] of childrenByParent) {
       directCountByParent.set(parentId, children.size);
@@ -279,10 +317,12 @@ export async function getHierarchyTree(
   const subtreeSizeById = new Map<string, number>();
   if (organizationId) {
     const childrenByParent = new Map<string, string[]>();
-    for (const link of organizationLinks) {
-      const children = childrenByParent.get(link.referrerUserId) ?? [];
-      children.push(link.childUserId);
-      childrenByParent.set(link.referrerUserId, children);
+    for (const partner of partners) {
+      if (!partner.referredBy || !partnerIdSet.has(partner.referredBy))
+        continue;
+      const children = childrenByParent.get(partner.referredBy) ?? [];
+      children.push(partner.id);
+      childrenByParent.set(partner.referredBy, children);
     }
     for (const partner of partners) {
       const visited = new Set<string>([partner.id]);
@@ -326,6 +366,7 @@ export async function getHierarchyTree(
     childLinks.push(link);
     linksByChild.set(link.childUserId, childLinks);
   }
+  const partnerById = new Map(partners.map((partner) => [partner.id, partner]));
 
   const nodes: HierarchyNode[] = partners.map((p) => {
     const parentInTree = p.referredBy && partnerIdSet.has(p.referredBy);
@@ -340,22 +381,49 @@ export async function getHierarchyTree(
       organizationLevel: p.organizationLevel,
       organizationTitle: p.organizationTitle,
       canManageOrganization: p.canManageOrganization,
-      referrerLinks: (linksByChild.get(p.id) ?? []).map((link) => {
+      referrerLinks: (() => {
+        const persistedLinks = linksByChild.get(p.id) ?? [];
+        if (persistedLinks.length > 0) {
+          return persistedLinks.map((link) => {
+            const referrerName =
+              [link.referrer.firstName, link.referrer.lastName]
+                .filter(Boolean)
+                .join(' ')
+                .trim() ||
+              link.referrer.email ||
+              link.referrer.phone ||
+              link.referrer.id.slice(0, 8);
+            return {
+              referrerId: link.referrerUserId,
+              referrerName,
+              sharePercent: Number(link.sharePercent),
+              isPrimary: link.isPrimary
+            };
+          });
+        }
+
+        const inferredReferrer = p.referredBy
+          ? partnerById.get(p.referredBy)
+          : null;
+        if (!p.referredBy || !inferredReferrer) return [];
         const referrerName =
-          [link.referrer.firstName, link.referrer.lastName]
+          [inferredReferrer.firstName, inferredReferrer.lastName]
             .filter(Boolean)
             .join(' ')
             .trim() ||
-          link.referrer.email ||
-          link.referrer.phone ||
-          link.referrer.id.slice(0, 8);
-        return {
-          referrerId: link.referrerUserId,
-          referrerName,
-          sharePercent: Number(link.sharePercent),
-          isPrimary: link.isPrimary
-        };
-      }),
+          inferredReferrer.email ||
+          inferredReferrer.phone ||
+          inferredReferrer.id.slice(0, 8);
+        return [
+          {
+            referrerId: p.referredBy,
+            referrerName,
+            sharePercent: null,
+            isPrimary: true,
+            status: p.referralStatus ?? ('INFERRED' as const)
+          }
+        ];
+      })(),
       registeredAt: p.registeredAt.toISOString(),
       directCount: directCountByParent.get(p.id) ?? 0,
       subtreeSize: subtreeSizeById.get(p.id) ?? 0,

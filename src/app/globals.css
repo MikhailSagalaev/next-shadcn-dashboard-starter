@@ -126,6 +126,32 @@
   .glass-card {
     @apply bg-white/60 backdrop-blur-xl supports-[backdrop-filter]:bg-white/40 dark:bg-zinc-900/60 supports-[backdrop-filter]:dark:bg-zinc-900/40;
   }
+
+  .organization-level-badge {
+    color: oklch(0.34 0.045 var(--organization-level-hue));
+    background-color: oklch(0.96 0.018 var(--organization-level-hue));
+    border-color: oklch(0.72 0.06 var(--organization-level-hue));
+  }
+
+  .dark .organization-level-badge {
+    color: oklch(0.9 0.025 var(--organization-level-hue));
+    background-color: oklch(0.26 0.018 var(--organization-level-hue));
+    border-color: oklch(0.55 0.045 var(--organization-level-hue));
+  }
+
+  @media (prefers-contrast: more) {
+    .organization-level-badge {
+      color: oklch(0.22 0.035 var(--organization-level-hue));
+      background-color: oklch(0.97 0.008 var(--organization-level-hue));
+      border-color: oklch(0.42 0.045 var(--organization-level-hue));
+    }
+
+    .dark .organization-level-badge {
+      color: oklch(0.97 0.008 var(--organization-level-hue));
+      background-color: oklch(0.18 0.01 var(--organization-level-hue));
+      border-color: oklch(0.72 0.035 var(--organization-level-hue));
+    }
+  }
 }
 
 /* View Transition Wave Effect */

@@ -29,6 +29,7 @@ import {
   sendBonusSpentNotification
 } from '@/lib/telegram/notifications';
 import { logger } from '@/lib/logger';
+import { resolveWelcomeRewardSettings } from './welcome-reward-settings';
 
 export class UserService {
   // Создание нового пользователя с поддержкой UTM меток и реферальной системы
@@ -227,20 +228,16 @@ export class UserService {
         });
 
         if (fullProject) {
-          // Приоритет: ReferralProgram.welcomeBonus > Project.welcomeBonus
-          const welcomeBonus = fullProject.referralProgram?.welcomeBonus
-            ? Number(fullProject.referralProgram.welcomeBonus)
-            : Number(fullProject.welcomeBonus);
-
-          const welcomeRewardType =
-            fullProject.referralProgram?.welcomeRewardType ||
-            fullProject.welcomeRewardType;
+          const welcomeReward = resolveWelcomeRewardSettings(
+            fullProject,
+            fullProject.referralProgram
+          );
 
           // Начисляем только если тип BONUS и сумма > 0
-          if (welcomeRewardType === 'BONUS' && welcomeBonus > 0) {
+          if (welcomeReward.type === 'BONUS' && welcomeReward.amount > 0) {
             await BonusService.awardBonus({
               userId: user.id,
-              amount: welcomeBonus,
+              amount: welcomeReward.amount,
               type: 'WELCOME',
               description: `Приветственный бонус`,
               metadata: {
@@ -252,7 +249,8 @@ export class UserService {
             logger.info('Начислены приветственные бонусы', {
               userId: user.id,
               projectId: data.projectId,
-              amount: welcomeBonus,
+              amount: welcomeReward.amount,
+              settingsSource: welcomeReward.source,
               component: 'user-service'
             });
           }
