@@ -196,7 +196,7 @@ export class PartnerTeamService {
     if (!reviewer) return false;
 
     if (organizationId) {
-      const managedMembership =
+      const reviewerMembership =
         await db.partnerOrganizationMembership.findUnique({
           where: {
             organizationId_userId: {
@@ -204,12 +204,17 @@ export class PartnerTeamService {
               userId: reviewerUserId
             }
           },
-          select: { canManage: true }
+          select: { level: true, canManage: true }
         });
       // Organization-scoped requests must be reviewed with organization-
-      // scoped authority. Global compatibility roles are not proof of access
-      // when a user belongs to several organizations.
-      return managedMembership?.canManage === true;
+      // scoped authority. The exact referrer owns their request and may review
+      // it when they are a partner in this organization. Organization managers
+      // may additionally review any request in the organization. Global
+      // compatibility roles are not proof of access when a user belongs to
+      // several organizations.
+      if (!reviewerMembership) return false;
+      if (reviewerMembership.canManage) return true;
+      return reviewerUserId === referrerId && reviewerMembership.level !== null;
     }
 
     // Legacy requests without an organization retain role-based behavior.
